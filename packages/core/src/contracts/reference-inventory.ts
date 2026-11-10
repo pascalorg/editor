@@ -1074,7 +1074,6 @@ export const METADATA_NON_REFERENCES: readonly { path: string; reason: string }[
     'porch',
     'renderPass',
     'role',
-    'showTrimPlanes',
     'storyShell',
     'suppressedDimensionSegmentIndexes',
   ]),

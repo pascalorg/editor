@@ -169,6 +169,26 @@ export class IfcModel {
     return solid
   }
 
+  /**
+   * `solid` with everything above a plane cut away. The plane passes through `point` and rises
+   * `slope` per unit of local +X; its normal points up into the removed half-space, which an
+   * AgreementFlag of false places on the normal's side.
+   */
+  clipAboveSlope(solid: StepRef, point: Vec3, slope: number): StepRef {
+    const length = Math.hypot(1, slope)
+    const plane = this.step.add(
+      'IFCPLANE',
+      this.step.add(
+        'IFCAXIS2PLACEMENT3D',
+        this.point3(point),
+        this.direction([-slope / length, 0, 1 / length]),
+        this.direction([1 / length, 0, slope / length]),
+      ),
+    )
+    const halfSpace = this.step.add('IFCHALFSPACESOLID', plane, false)
+    return this.step.add('IFCBOOLEANCLIPPINGRESULT', enumValue('DIFFERENCE'), solid, halfSpace)
+  }
+
   triangulatedFaceSet(set: TriangleSet): StepRef | null {
     const { positions, indices } = set
     const vertexCount = Math.floor(positions.length / 3)
@@ -224,7 +244,7 @@ export class IfcModel {
     return this.step.add('IFCPRODUCTDEFINITIONSHAPE', null, null, representations)
   }
 
-  bodyRepresentation(type: 'SweptSolid' | 'Tessellation', items: StepRef[]): StepRef {
+  bodyRepresentation(type: 'SweptSolid' | 'Clipping' | 'Tessellation', items: StepRef[]): StepRef {
     return this.step.add('IFCSHAPEREPRESENTATION', this.bodyContext, 'Body', type, items)
   }
 

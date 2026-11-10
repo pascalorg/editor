@@ -86,6 +86,7 @@ function seed(modes: { item?: SnappingMode; rotation?: SnappingMode } = {}) {
     mode: 'select',
     tool: null,
     gridSnapStep: 0.5,
+    magneticSnap: true,
     snappingModeByContext: {
       wall: 'grid',
       polygon: 'grid',

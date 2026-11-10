@@ -12,7 +12,9 @@ import {
 } from '@pascal-app/core'
 import {
   consumePlacementDragRelease,
+  isGridSnapActive,
   markToolCancelConsumed,
+  stripPlacementMetadataFlags,
   triggerSFX,
   useEditor,
 } from '@pascal-app/editor'
@@ -93,7 +95,7 @@ export default function MoveGutterTool({ node }: { node: GutterNode }) {
     const resolveTarget = (event: RoofEvent): GutterDragTarget | null => {
       const rawTarget = roofDrag.resolve(event)
       if (!rawTarget) return null
-      const target = snapRelativeRoofDragTarget(rawTarget, event.nativeEvent?.shiftKey === true)
+      const target = snapRelativeRoofDragTarget(rawTarget, event.nativeEvent?.altKey === true)
       return {
         segment: target.segment,
         snap: resolveEaveSnap(target.segment, target.localX, target.localZ),
@@ -119,7 +121,8 @@ export default function MoveGutterTool({ node }: { node: GutterNode }) {
       const sx = Math.round(snap.eaveX * 20) / 20
       const sz = Math.round(snap.eaveZ * 20) / 20
       if (
-        event.nativeEvent?.shiftKey !== true &&
+        isGridSnapActive() &&
+        event.nativeEvent?.altKey !== true &&
         (!lastSnap || lastSnap[0] !== sx || lastSnap[1] !== sz)
       ) {
         triggerSFX('sfx:grid-snap')
@@ -180,7 +183,7 @@ export default function MoveGutterTool({ node }: { node: GutterNode }) {
         position: [snap.eaveX, snap.eaveY, snap.eaveZ],
         rotation: snap.rotation,
         visible: true,
-        metadata: {},
+        metadata: stripPlacementMetadataFlags(original.metadata),
       })
       useScene.temporal.getState().pause()
 

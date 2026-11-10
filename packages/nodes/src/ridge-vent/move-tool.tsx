@@ -12,7 +12,9 @@ import {
 } from '@pascal-app/core'
 import {
   consumePlacementDragRelease,
+  isGridSnapActive,
   markToolCancelConsumed,
+  stripPlacementMetadataFlags,
   triggerSFX,
   useEditor,
 } from '@pascal-app/editor'
@@ -86,7 +88,7 @@ export default function MoveRidgeVentTool({ node }: { node: RidgeVentNode }) {
     const resolveTarget = (event: RoofEvent): RidgeVentDragTarget | null => {
       const rawTarget = roofDrag.resolve(event)
       if (!rawTarget) return null
-      const target = snapRelativeRoofDragTarget(rawTarget, event.nativeEvent?.shiftKey === true)
+      const target = snapRelativeRoofDragTarget(rawTarget, event.nativeEvent?.altKey === true)
       const snap = resolveRidgeSnap(target.segment, target.localX, target.localZ)
       if (!snap) return null
       const yOffset = original.position[1] ?? 0
@@ -110,7 +112,8 @@ export default function MoveRidgeVentTool({ node }: { node: RidgeVentNode }) {
       const sx = Math.round(target.localX * 20) / 20
       const sz = Math.round(target.localZ * 20) / 20
       if (
-        event.nativeEvent?.shiftKey !== true &&
+        isGridSnapActive() &&
+        event.nativeEvent?.altKey !== true &&
         (!lastSnap || lastSnap[0] !== sx || lastSnap[1] !== sz)
       ) {
         triggerSFX('sfx:grid-snap')
@@ -167,7 +170,7 @@ export default function MoveRidgeVentTool({ node }: { node: RidgeVentNode }) {
         position: [target.localX, original.position[1] ?? 0, target.localZ],
         rotation: target.rotation,
         visible: true,
-        metadata: {},
+        metadata: stripPlacementMetadataFlags(original.metadata),
       })
       useScene.temporal.getState().pause()
 

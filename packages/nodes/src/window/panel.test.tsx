@@ -1,8 +1,20 @@
-import { expect, test } from 'bun:test'
+import { afterEach, beforeEach, expect, test } from 'bun:test'
 import { type AnyNode, type AnyNodeId, useScene, WallNode, WindowNode } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { control, renderPanelControls, sections } from '../__tests__/panel-controls'
 import WindowPanel from './panel'
+
+let restoreViewer: ReturnType<typeof useViewer.getState>
+let restoreScene: ReturnType<typeof useScene.getState>
+beforeEach(() => {
+  restoreViewer = useViewer.getState()
+  restoreScene = useScene.getState()
+  useViewer.setState({ unit: 'metric' })
+})
+afterEach(() => {
+  useViewer.setState(restoreViewer)
+  useScene.setState(restoreScene)
+})
 
 const INCH = 0.0254
 

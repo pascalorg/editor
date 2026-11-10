@@ -8,11 +8,15 @@ import {
   DEFAULT_LEVEL_HEIGHT,
   emitter,
   formatNumber,
+  getAreaUnitLabel,
+  type LinearUnit,
   type PascalI18n,
   type Polygon,
   polygonInteriorPoint,
   type Ring,
+  roomFloorElevation,
   sceneRegistry,
+  squareMetersToAreaUnit,
   useLocale,
   usePascalI18n,
   useScene,
@@ -48,8 +52,6 @@ import {
 } from 'three'
 import { useShallow } from 'zustand/react/shallow'
 import { useRoomRecords } from '../../hooks/use-selected-room'
-import { getAreaUnitLabel, type LinearUnit, squareMetersToAreaUnit } from '../../lib/measurements'
-import { roomFloorElevation } from '../../lib/room-handle-drag'
 import { displayRoomName } from '../../lib/room-name-messages'
 import type { RoomSelectionRecord } from '../../lib/room-selection'
 import { clickZoneArea, hoverZoneArea, leaveZoneArea } from '../../lib/room-zone-routing'

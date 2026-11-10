@@ -9,6 +9,7 @@ import {
   collectAlignmentAnchors,
   emitter,
   findLevelAncestorId,
+  formatLinearMeasurement,
   type GridEvent,
   getScaledDimensions,
   getWallBodyCenterOffset,
@@ -49,7 +50,6 @@ import {
   publishPlacementSurface,
 } from '../../../lib/active-placement-surface'
 import { EDITOR_LAYER } from '../../../lib/constants'
-import { formatLinearMeasurement } from '../../../lib/measurements'
 import { isFreshPlacementMetadata } from '../../../lib/placement-metadata'
 import { createMovementSfxTick } from '../../../lib/sfx/movement-tick'
 import { sfxEmitter } from '../../../lib/sfx-bus'

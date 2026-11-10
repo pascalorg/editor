@@ -8,6 +8,7 @@ import {
   DEFAULT_ANGLE_STEP,
   type FloorplanGeometry,
   type FloorplanPalette,
+  formatLinearMeasurement,
   pauseSceneHistory,
   pauseSpaceDetection,
   resumeSceneHistory,
@@ -23,7 +24,6 @@ import { GROUP_MOVE_DRAG_LABEL, GROUP_ROTATE_DRAG_LABEL } from '../../lib/contex
 import { applyFloorplanAlignment } from '../../lib/floorplan/apply-alignment'
 import { clientToPlan } from '../../lib/floorplan/plan-coords'
 import { isHistoryShortcut } from '../../lib/history'
-import { formatLinearMeasurement } from '../../lib/measurements'
 import type { WallGroupPush } from '../../lib/room-handle-drag'
 import { useRoomHandleDrag } from '../../lib/room-handle-drag'
 import { sfxEmitter } from '../../lib/sfx-bus'

@@ -3,6 +3,7 @@
 import {
   type AnyNode,
   type AnyNodeId,
+  formatLinearMeasurement,
   getBoundarySurfaces,
   getLevelDisplayName,
   type LevelNode,
@@ -33,7 +34,6 @@ import {
   ActionButton,
   ActionGroup,
   duplicateNodeAndPickUp,
-  formatLinearMeasurement,
   getStairLevelOptions,
   MetricControl,
   PanelSection,

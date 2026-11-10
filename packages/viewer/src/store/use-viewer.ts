@@ -14,7 +14,7 @@ import type {
 import type { Object3D } from 'three'
 
 import { create } from 'zustand'
-import { persist } from 'zustand/middleware'
+import { createJSONStorage, persist } from 'zustand/middleware'
 import type { LatLng } from '../lib/daylight/location'
 import type { Weather } from '../lib/daylight/sky'
 import type { TimeOfDay } from '../lib/daylight/solar'
@@ -26,6 +26,7 @@ import {
   SCENE_THEME_IDS,
   type SceneTheme,
 } from '../lib/scene-themes'
+import { viewerPreferenceStorage } from '../lib/viewer-preference-storage'
 
 export type RenderContext = 'editor' | 'viewer'
 export type RenderQuality = 'low' | 'medium' | 'high'
@@ -950,6 +951,7 @@ const useViewer = create<ViewerState>()(
     }),
     {
       name: 'viewer-preferences',
+      storage: createJSONStorage(() => viewerPreferenceStorage),
       merge: (persistedState, currentState) => {
         const persisted = normalizePersistedViewerState(persistedState)
         const renderQualityChoice =

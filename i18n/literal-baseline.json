@@ -416,9 +416,6 @@
       "part",
       "parts"
     ],
-    "packages/editor/src/components/ui/controls/slider-control.tsx": [
-      "Mixed"
-    ],
     "packages/editor/src/components/ui/controls/terrain-sculpt-panel.tsx": [
       "Clear terrain",
       "Click the ground to pick its height as the target.",

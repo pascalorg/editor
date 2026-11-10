@@ -1,5 +1,5 @@
 import type { AnyNode, DoorNode, SlabNode, WallNode, WindowNode } from '../schema'
-import { getWallTop } from '../services/storey'
+import { getWallTopOver } from '../services/storey'
 import {
   computeWallSlabSupport,
   type WallSlabSupport,
@@ -112,13 +112,20 @@ export function getOpeningFloorTarget(
 
 export function openingFitsAtDatum(
   wall: WallNode,
-  opening: Pick<DoorNode | WindowNode, 'position' | 'height'> &
+  opening: Pick<DoorNode | WindowNode, 'position' | 'width' | 'height'> &
     Partial<Pick<DoorNode, 'transomHeight' | 'doorType'>>,
   datum: number,
   nodes: Readonly<Record<string, AnyNode>>,
   support = wallSupportForNodes(wall, nodes),
 ): boolean {
-  const top = getWallTop(wall, wall.parentId!, nodes, support.elevation)
+  const top = getWallTopOver(
+    wall,
+    wall.parentId!,
+    nodes,
+    support.elevation,
+    opening.position[0] - opening.width / 2,
+    opening.position[0] + opening.width / 2,
+  )
   return (
     datum +
       opening.position[1] -

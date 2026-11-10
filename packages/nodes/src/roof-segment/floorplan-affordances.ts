@@ -3,6 +3,7 @@ import {
   type FloorplanAffordance,
   type FloorplanMoveTarget,
   getRoofSegmentResizePatch,
+  MIN_ROOF_SEGMENT_DIMENSION,
   type RoofNode,
   type RoofSegmentNode,
   snapScalar,
@@ -27,7 +28,7 @@ import {
 import { createFloorplanCursorResolver } from '../shared/floorplan-cursor'
 import { rotateAffordanceDelta } from '../shared/rotate-affordance'
 
-const MIN_ROOF_DIM = 1
+const MIN_ROOF_DIM = MIN_ROOF_SEGMENT_DIMENSION
 
 type RoofSegmentResizePayload = { mode: 'radial' } | { axis: 'x' | 'z'; side: 1 | -1 }
 

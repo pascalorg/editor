@@ -397,7 +397,7 @@ for (const mover of ['catalog', 'registry'] as const)
       const narrow = width.apply(scene.get(host.id)!, 0.1, scene, { altKey: false })
       expect(narrow.width).toBe(host.width)
       expect(planColumnEdit(host.id, { capitalStyle: 'none' } as never)).toBeNull()
-      const cap = planColumnEdit(host.id, { capitalStyle: 'stepped' } as never)!
+      const cap = planColumnEdit(host.id, { capitalStyle: 'stepped', height: 3.2 } as never)!
       expect(cap.some(([id]) => id === child.id)).toBe(true)
       await act(async () =>
         useScene.getState().updateNodes(cap.map(([id, data]) => ({ id, data }))),
@@ -405,6 +405,7 @@ for (const mover of ['catalog', 'registry'] as const)
       await settle(renderer)
       const resized = scene.get(host.id)!
       const top = getSurfaceProvider(resized).surfaces!(resized, { scene })[0]!
+      expect(top.position[1]).toBeCloseTo(3.2, 6)
       expect((scene.get(child.id) as ItemNode).position[1]).toBeCloseTo(top.position[1], 6)
       expect(sceneRegistry.nodes.get(child.id)!.getWorldPosition(new Vector3()).y).toBeCloseTo(
         top.position[1] + 0.4,

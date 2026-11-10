@@ -1,142 +1,20 @@
 import type { AnyNodeDefinition, Plugin } from '@pascal-app/core'
-import { beamDefinition } from './beam'
-import { blockDefinition } from './block/definition'
-import { boxVentDefinition } from './box-vent'
-import { buildingDefinition } from './building'
-import { cabinetDefinition, cabinetModuleDefinition } from './cabinet'
-import { ceilingDefinition } from './ceiling'
-import { chimneyDefinition } from './chimney'
-import { columnDefinition } from './column'
-import { constructionDimensionDefinition } from './construction-dimension'
-import { cupolaDefinition } from './cupola'
-import { doorDefinition } from './door'
-import { dormerDefinition } from './dormer'
-import { downspoutDefinition } from './downspout'
-import { ductFittingDefinition } from './duct-fitting'
-import { ductSegmentDefinition } from './duct-segment'
-import { ductTerminalDefinition } from './duct-terminal'
-import { elevatorDefinition } from './elevator'
-import { eyebrowVentDefinition } from './eyebrow-vent'
-import { fenceDefinition } from './fence'
-import { fenceGateDefinition, fenceOpeningDefinition } from './fence-feature/definition'
-import { floorOpeningDefinition } from './floor-opening/definition'
-import { guideDefinition } from './guide'
-import { gutterDefinition } from './gutter'
-import { hvacEquipmentDefinition } from './hvac-equipment'
-import { importedMeshDefinition } from './imported-mesh'
-import { itemDefinition } from './item'
-import { leanToExtensionDefinition } from './lean-to-extension'
-import { levelDefinition } from './level'
-import { linesetDefinition } from './lineset'
-import { liquidLineDefinition } from './liquid-line'
-import { measurementDefinition } from './measurement'
-import { pipeFittingDefinition } from './pipe-fitting'
-import { pipeSegmentDefinition } from './pipe-segment'
-import { pipeTrapDefinition } from './pipe-trap'
-import { proceduralItemDefinition } from './procedural-item/definition'
-import { ridgeVentDefinition } from './ridge-vent'
-import { roofDefinition } from './roof'
-import { roofSegmentDefinition } from './roof-segment'
-import { scanDefinition } from './scan'
-import { separatorDefinition } from './separator/definition'
-import { shelfDefinition } from './shelf'
-import { siteDefinition } from './site'
-import { skylightDefinition } from './skylight'
-import { slabDefinition } from './slab'
-import { solarPanelDefinition } from './solar-panel'
-import { spawnDefinition } from './spawn'
-import { stairDefinition } from './stair'
-import { stairSegmentDefinition } from './stair-segment'
-import { structuralGridDefinition } from './structural-grid'
-import { turbineVentDefinition } from './turbine-vent'
-import { unitDefinition } from './unit'
-import { wallDefinition } from './wall'
-import { windowDefinition } from './window'
-import { zoneDefinition } from './zone'
+import type { BuiltinKind } from './builtin-definitions'
+import { renderDefinitions } from './builtin-definitions'
+import { builtinEditContributions } from './builtin-edit-contributions'
+import { builtinPluginMetadata } from './builtin-plugin-metadata'
+import { composeNodeDefinition, type NodeEditContribution } from './definition-contributions'
 
-/**
- * Built-in plugin bundling every node kind shipped with the Pascal editor.
- *
- * Apps load this once at bootstrap (`loadPlugin(builtinPlugin)`) before
- * mounting the viewer. New built-in nodes are added by creating a folder
- * here under `src/<kind>/` and appending its `NodeDefinition` below.
- *
- * External plugins follow the exact same shape — same `Plugin` type, same
- * `loadPlugin` call path. This is intentional: the API is stress-tested
- * by built-ins before any third-party plugin lands.
- *
- * All kinds are registered unconditionally. Parity is verified by
- * comparing against deployed production rather than an in-app env-var
- * flag toggle. As of Phase 6 the legacy mount points in `viewer/` are
- * gone — every kind dispatches through the registry.
- */
 export const builtinPlugin: Plugin = {
-  id: 'pascal:core',
-  apiVersion: 1,
-  nodes: [
-    // Stage E-complete (full registry path)
-    shelfDefinition as unknown as AnyNodeDefinition,
-    blockDefinition as unknown as AnyNodeDefinition,
-    spawnDefinition as unknown as AnyNodeDefinition,
-    wallDefinition as unknown as AnyNodeDefinition,
-    separatorDefinition as unknown as AnyNodeDefinition,
-    floorOpeningDefinition as unknown as AnyNodeDefinition,
-    leanToExtensionDefinition as unknown as AnyNodeDefinition,
-    fenceDefinition as unknown as AnyNodeDefinition,
-    fenceGateDefinition as unknown as AnyNodeDefinition,
-    fenceOpeningDefinition as unknown as AnyNodeDefinition,
-    slabDefinition as unknown as AnyNodeDefinition,
-    ceilingDefinition as unknown as AnyNodeDefinition,
-    doorDefinition as unknown as AnyNodeDefinition,
-    windowDefinition as unknown as AnyNodeDefinition,
-    cabinetDefinition as unknown as AnyNodeDefinition,
-    cabinetModuleDefinition as unknown as AnyNodeDefinition,
-    itemDefinition as unknown as AnyNodeDefinition,
-    proceduralItemDefinition as unknown as AnyNodeDefinition,
-    importedMeshDefinition as unknown as AnyNodeDefinition,
-    // Stage A — wrap-exports the legacy renderer + system. Legacy
-    // panels / move tools / floorplan branches still serve these.
-    columnDefinition as unknown as AnyNodeDefinition,
-    beamDefinition as unknown as AnyNodeDefinition,
-    elevatorDefinition as unknown as AnyNodeDefinition,
-    unitDefinition as unknown as AnyNodeDefinition,
-    roofDefinition as unknown as AnyNodeDefinition,
-    roofSegmentDefinition as unknown as AnyNodeDefinition,
-    stairDefinition as unknown as AnyNodeDefinition,
-    stairSegmentDefinition as unknown as AnyNodeDefinition,
-    zoneDefinition as unknown as AnyNodeDefinition,
-    siteDefinition as unknown as AnyNodeDefinition,
-    buildingDefinition as unknown as AnyNodeDefinition,
-    levelDefinition as unknown as AnyNodeDefinition,
-    guideDefinition as unknown as AnyNodeDefinition,
-    scanDefinition as unknown as AnyNodeDefinition,
-    measurementDefinition as unknown as AnyNodeDefinition,
-    constructionDimensionDefinition as unknown as AnyNodeDefinition,
-    structuralGridDefinition as unknown as AnyNodeDefinition,
-    // Roof-mounted accessories (custom renderer + bespoke roof-event tool).
-    boxVentDefinition as unknown as AnyNodeDefinition,
-    ridgeVentDefinition as unknown as AnyNodeDefinition,
-    turbineVentDefinition as unknown as AnyNodeDefinition,
-    cupolaDefinition as unknown as AnyNodeDefinition,
-    eyebrowVentDefinition as unknown as AnyNodeDefinition,
-    chimneyDefinition as unknown as AnyNodeDefinition,
-    solarPanelDefinition as unknown as AnyNodeDefinition,
-    skylightDefinition as unknown as AnyNodeDefinition,
-    dormerDefinition as unknown as AnyNodeDefinition,
-    gutterDefinition as unknown as AnyNodeDefinition,
-    downspoutDefinition as unknown as AnyNodeDefinition,
-    // HVAC — Phase 1: round duct segment polyline. Phase 2: fittings + ports.
-    ductSegmentDefinition as unknown as AnyNodeDefinition,
-    ductFittingDefinition as unknown as AnyNodeDefinition,
-    ductTerminalDefinition as unknown as AnyNodeDefinition,
-    hvacEquipmentDefinition as unknown as AnyNodeDefinition,
-    linesetDefinition as unknown as AnyNodeDefinition,
-    liquidLineDefinition as unknown as AnyNodeDefinition,
-    // DWV plumbing — Phase 2 of the research doc's plan.
-    pipeSegmentDefinition as unknown as AnyNodeDefinition,
-    pipeFittingDefinition as unknown as AnyNodeDefinition,
-    pipeTrapDefinition as unknown as AnyNodeDefinition,
-  ],
+  ...builtinPluginMetadata,
+  nodes: renderDefinitions.map((render) =>
+    composeNodeDefinition(
+      render,
+      builtinEditContributions[render.kind as BuiltinKind] as unknown as NodeEditContribution<
+        AnyNodeDefinition['schema']
+      >,
+    ),
+  ),
 }
 
 export { beamDefinition } from './beam'
@@ -197,6 +75,7 @@ export { ductFittingDefinition } from './duct-fitting'
 export { ductSegmentDefinition } from './duct-segment'
 export { ductTerminalDefinition } from './duct-terminal'
 export { elevatorDefinition } from './elevator'
+export { ELEVATOR_PRESETS, elevatorPresetPatch } from './elevator/presets'
 export { eyebrowVentDefinition } from './eyebrow-vent'
 export { beginFenceFeaturePlacement, fenceDefinition } from './fence'
 export { fenceGateDefinition, fenceOpeningDefinition } from './fence-feature/definition'
@@ -223,6 +102,7 @@ export { type RoofFootprintSourceChoice, roofDefinition, useRoofFootprintSource 
 export { glazedRoofGeometryAdapter } from './roof/glazed-geometry'
 export { createGlazedRoofMaterials } from './roof/glazed-materials'
 export { createRoofGlazingPreview } from './roof/glazing-preview'
+export { RoofTypeThumbnail } from './roof/type-thumbnail'
 export { roofSegmentDefinition } from './roof-segment'
 export { scanDefinition } from './scan'
 export { separatorDefinition } from './separator/definition'

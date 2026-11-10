@@ -1659,9 +1659,17 @@ export type RendererSource<N> =
  * A collective renderer for the baked `/viewer` (see `NodeDefinition.bakeReplaceRenderer`):
  * a lazy module whose default export takes all of one level's `replace` nodes and
  * is portaled into that baked level. Three-free indirection, same as `system`.
+ *
+ * `resolve` looks up any node of the scene graph the artifact was baked from.
+ * The baked viewer never loads that graph into `useScene`, so a renderer that
+ * builds from other nodes (its parent site, its siblings) reads them here.
+ * `GlbScene` builds it from its `sceneNodes` prop and leaves it undefined when
+ * the host omits `sceneNodes`.
  */
 export type BakeReplaceRenderer<N> = {
-  module: () => Promise<{ default: ComponentType<{ nodes: N[] }> }>
+  module: () => Promise<{
+    default: ComponentType<{ nodes: N[]; resolve?: GeometryContext['resolve'] }>
+  }>
 }
 
 export type BakeGeometryBuilder<N> = (node: N, ctx: GeometryContext) => Object3D
@@ -1700,6 +1708,8 @@ export type DuplicableConfig = {
   /** 'with-children' preserves the root-only draft lifecycle for childless nodes. */
   subtree?: boolean | 'with-children'
   prepareSubtreeClone?: (args: DuplicateSubtreeCloneArgs) => DuplicateSubtreeCloneResult
+  /** Per-node opt-out, e.g. a post its lean-to generates and counts itself. */
+  allow?: (args: { node: AnyNode }) => boolean
 }
 
 // ─── Capabilities ────────────────────────────────────────────────────
@@ -2277,6 +2287,12 @@ export type CapabilityCtx = { node: AnyNode }
 export type CutsContext = { nodes: Readonly<Record<AnyNodeId, AnyNode>> }
 
 export type MovableConfig = {
+  /** Resolve the stored pose after snapping, during preview and again on commit. */
+  resolvePosition?: (args: {
+    node: AnyNode
+    position: [number, number, number]
+    nodes: Readonly<Record<string, AnyNode>>
+  }) => [number, number, number]
   axes: ReadonlyArray<'x' | 'y' | 'z'>
   gridSnap?: boolean
   /** Keep an existing floor-placed node on its current level and visual elevation while dragging. */

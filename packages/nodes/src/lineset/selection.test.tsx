@@ -2,6 +2,7 @@ import { beforeEach, expect, test } from 'bun:test'
 import {
   type AnyNodeId,
   BuildingNode,
+  getEffectiveNode,
   LevelNode,
   LinesetNode,
   SiteNode,
@@ -100,7 +101,8 @@ function seed() {
   return { first: first.id as AnyNodeId, second: second.id as AnyNodeId }
 }
 
-const pathOf = (id: AnyNodeId) => (useScene.getState().nodes[id] as LinesetNode).path
+const pathOf = (id: AnyNodeId) =>
+  getEffectiveNode(useScene.getState().nodes[id] as LinesetNode).path
 const history = () => useScene.temporal.getState()
 
 function client(point: Point) {

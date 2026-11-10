@@ -4,6 +4,7 @@ import {
   type AnyNode,
   type AnyNodeId,
   type FloorplanGeometry,
+  formatLinearMeasurement,
   nodeRegistry,
   type Point,
   roomDrawnFloor,
@@ -15,7 +16,7 @@ import { type PointerEvent as ReactPointerEvent, useMemo, useState } from 'react
 import { useShallow } from 'zustand/react/shallow'
 import { useRoomRecords, useSelectedRoom } from '../../hooks/use-selected-room'
 import { getFloorplanNodeExtension } from '../../lib/floorplan/floorplan-extension'
-import { formatLinearMeasurement, MEASUREMENT_FLOORPLAN_COLOR } from '../../lib/measurements'
+import { MEASUREMENT_FLOORPLAN_COLOR } from '../../lib/measurements'
 import {
   commitRoomFloorElevation,
   roomRelativeFloorHeight,

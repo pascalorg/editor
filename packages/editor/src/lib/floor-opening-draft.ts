@@ -7,6 +7,7 @@ import {
   generateId,
   type LevelNode,
   type MultiPolygon,
+  roomFloorElevation,
   type StructurePlan,
   structureChangeBatch,
   useScene,
@@ -31,7 +32,6 @@ import {
 import { type FloorRegionPoint, floorRegionSnapTargets } from './floor-region-snap'
 import { beginGesture, type GestureHandle } from './gesture-lifecycle'
 import { resolveRoomAssemblyHeights } from './room-assembly-overlay'
-import { roomFloorElevation } from './room-handle-drag'
 import { sfxEmitter } from './sfx-bus'
 
 // "Cut opening": draws an opening on a room's floor (or its ceiling) with the

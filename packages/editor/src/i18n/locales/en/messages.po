@@ -396,6 +396,10 @@ msgid "app.lib.buildPanelModel.toolCount"
 msgstr "{count, plural, one {# tool} other {# tools}}"
 
 #: apps/editor/lib/build-tab-state.ts
+msgid "app.lib.buildTabState.barrel"
+msgstr "Barrel"
+
+#: apps/editor/lib/build-tab-state.ts
 msgid "app.lib.buildTabState.conical"
 msgstr "Conical"
 
@@ -1543,6 +1547,14 @@ msgstr "{label}: {finish}"
 #: packages/editor/src/components/ui/controls/finish-swatch.tsx
 msgid "editor.controls.finishSwatch.default"
 msgstr "Default"
+
+#: packages/editor/src/components/ui/controls/slider-control.tsx
+msgid "editor.controls.sliderControl.editLabel"
+msgstr "Edit {label}"
+
+#: packages/editor/src/components/ui/controls/slider-control.tsx
+msgid "editor.controls.sliderControl.mixed"
+msgstr "Mixed"
 
 #: packages/editor/src/components/editor/index.tsx
 msgid "editor.dismiss"
@@ -8736,68 +8748,120 @@ msgid "node.column.panel.actions"
 msgstr "Actions"
 
 #: packages/nodes/src/column/panel.tsx
-msgid "node.column.panel.aFrame"
-msgstr "A-Frame"
-
-#: packages/nodes/src/column/panel.tsx
-msgid "node.column.panel.applyPreset"
-msgstr "Apply preset..."
+msgid "node.column.panel.all"
+msgstr "All"
 
 #: packages/nodes/src/column/panel.tsx
 msgid "node.column.panel.applyProportion"
 msgstr "Apply proportion..."
 
 #: packages/nodes/src/column/panel.tsx
-msgid "node.column.panel.bottomDepth"
-msgstr "Bottom Depth"
+msgid "node.column.panel.arched"
+msgstr "Arched"
 
 #: packages/nodes/src/column/panel.tsx
-msgid "node.column.panel.bottomHeight"
-msgstr "Bottom Height"
+msgid "node.column.panel.baluster"
+msgstr "Baluster"
+
+#: packages/nodes/src/column/panel.tsx
+msgid "node.column.panel.bandScale"
+msgstr "Band Scale"
+
+#: packages/nodes/src/column/panel.tsx
+msgid "node.column.panel.base"
+msgstr "Base"
+
+#: packages/nodes/src/column/panel.tsx
+msgid "node.column.panel.baseCarvingLevel"
+msgstr "Base Carving"
+
+#: packages/nodes/src/column/panel.tsx
+msgid "node.column.panel.baseHeight"
+msgstr "Base Height"
+
+#: packages/nodes/src/column/panel.tsx
+msgid "node.column.panel.baseRibCount"
+msgstr "Base Ribs"
+
+#: packages/nodes/src/column/panel.tsx
+msgid "node.column.panel.baseStyle"
+msgstr "Base style"
+
+#: packages/nodes/src/column/panel.tsx
+msgid "node.column.panel.bottomScale"
+msgstr "Bottom Scale"
 
 #: packages/nodes/src/column/panel.tsx
 msgid "node.column.panel.bottomSpread"
 msgstr "Bottom Spread"
 
 #: packages/nodes/src/column/panel.tsx
-msgid "node.column.panel.bottomStepSpread"
-msgstr "Bottom Step Spread"
+msgid "node.column.panel.bracketDepth"
+msgstr "Bracket Depth"
 
 #: packages/nodes/src/column/panel.tsx
-msgid "node.column.panel.bottomTiers"
-msgstr "Bottom Tiers"
-
-#: packages/nodes/src/column/panel.tsx
-msgid "node.column.panel.bottomWidth"
-msgstr "Bottom Width"
-
-#: packages/nodes/src/column/panel.tsx
-msgid "node.column.panel.boxFrame"
-msgstr "Box Frame"
-
-#: packages/nodes/src/column/panel.tsx
-msgid "node.column.panel.braceDepth"
-msgstr "Brace Depth"
-
-#: packages/nodes/src/column/panel.tsx
-msgid "node.column.panel.braceWidth"
-msgstr "Brace Width"
-
-#: packages/nodes/src/column/panel.tsx
-msgid "node.column.panel.bulge"
-msgstr "Bulge"
+msgid "node.column.panel.bracketTierCount"
+msgstr "Bracket Tiers"
 
 #: packages/nodes/src/column/panel.tsx
 msgid "node.column.panel.bulged"
 msgstr "Bulged"
 
 #: packages/nodes/src/column/panel.tsx
+msgid "node.column.panel.bulgeRatio"
+msgstr "Bulge Ratio"
+
+#: packages/nodes/src/column/panel.tsx
+msgid "node.column.panel.capital"
+msgstr "Capital"
+
+#: packages/nodes/src/column/panel.tsx
+msgid "node.column.panel.capitalCarvingLevel"
+msgstr "Capital Carving"
+
+#: packages/nodes/src/column/panel.tsx
+msgid "node.column.panel.capitalHeight"
+msgstr "Capital Height"
+
+#: packages/nodes/src/column/panel.tsx
+msgid "node.column.panel.capitalStyle"
+msgstr "Capital style"
+
+#: packages/nodes/src/column/panel.tsx
+msgid "node.column.panel.carvingPlacement"
+msgstr "Carving placement"
+
+#: packages/nodes/src/column/panel.tsx
+msgid "node.column.panel.chooseAMaterialThenClickThe"
+msgstr "Choose a material, then click the surface to paint."
+
+#: packages/nodes/src/column/panel.tsx
+msgid "node.column.panel.cluster"
+msgstr "Cluster"
+
+#: packages/nodes/src/column/panel.tsx
 msgid "node.column.panel.column"
 msgstr "Column"
 
 #: packages/nodes/src/column/panel.tsx
+msgid "node.column.panel.columnProportions"
+msgstr "Column proportions"
+
+#: packages/nodes/src/column/panel.tsx
+msgid "node.column.panel.columnStyle"
+msgstr "Column style"
+
+#: packages/nodes/src/column/panel.tsx
 msgid "node.column.panel.connectorPlates"
 msgstr "Connector Plates"
+
+#: packages/nodes/src/column/panel.tsx
+msgid "node.column.panel.corinthianLeaf"
+msgstr "Corinthian Leaf"
+
+#: packages/nodes/src/column/panel.tsx
+msgid "node.column.panel.crossSection"
+msgstr "Cross section"
 
 #: packages/nodes/src/column/panel.tsx
 msgid "node.column.panel.delete"
@@ -8808,24 +8872,68 @@ msgid "node.column.panel.depth"
 msgstr "Depth"
 
 #: packages/nodes/src/column/panel.tsx
-msgid "node.column.panel.dimensions"
-msgstr "Dimensions"
+msgid "node.column.panel.depthScale"
+msgstr "Depth Scale"
+
+#: packages/nodes/src/column/panel.tsx
+msgid "node.column.panel.depthSpan"
+msgstr "Depth Span"
+
+#: packages/nodes/src/column/panel.tsx
+msgid "node.column.panel.diameter"
+msgstr "Diameter"
+
+#: packages/nodes/src/column/panel.tsx
+msgid "node.column.panel.diamond"
+msgstr "Diamond"
+
+#: packages/nodes/src/column/panel.tsx
+msgid "node.column.panel.doric"
+msgstr "Doric"
+
+#: packages/nodes/src/column/panel.tsx
+msgid "node.column.panel.dravidianCarved"
+msgstr "Dravidian Carved"
 
 #: packages/nodes/src/column/panel.tsx
 msgid "node.column.panel.edgeSoftness"
 msgstr "Edge Softness"
 
 #: packages/nodes/src/column/panel.tsx
-msgid "node.column.panel.ends"
-msgstr "Ends"
+msgid "node.column.panel.endScale"
+msgstr "End Scale"
 
 #: packages/nodes/src/column/panel.tsx
-msgid "node.column.panel.endWidth"
-msgstr "End Width"
+msgid "node.column.panel.entireObject"
+msgstr "Entire Object"
+
+#: packages/nodes/src/column/panel.tsx
+msgid "node.column.panel.faceted"
+msgstr "Faceted"
+
+#: packages/nodes/src/column/panel.tsx
+msgid "node.column.panel.fluteCount"
+msgstr "Flute Count"
+
+#: packages/nodes/src/column/panel.tsx
+msgid "node.column.panel.fluted"
+msgstr "Fluted"
+
+#: packages/nodes/src/column/panel.tsx
+msgid "node.column.panel.fluteDepth"
+msgstr "Flute Depth"
+
+#: packages/nodes/src/column/panel.tsx
+msgid "node.column.panel.fluteWidth"
+msgstr "Flute Width"
 
 #: packages/nodes/src/column/panel.tsx
 msgid "node.column.panel.forkSpread"
 msgstr "Fork Spread"
+
+#: packages/nodes/src/column/panel.tsx
+msgid "node.column.panel.frame"
+msgstr "Frame"
 
 #: packages/nodes/src/column/panel.tsx
 msgid "node.column.panel.heavy"
@@ -8844,72 +8952,176 @@ msgid "node.column.panel.hourglass"
 msgstr "Hourglass"
 
 #: packages/nodes/src/column/panel.tsx
-msgid "node.column.panel.kBrace"
-msgstr "K Brace"
+msgid "node.column.panel.ionicVolute"
+msgstr "Ionic Volute"
+
+#: packages/nodes/src/column/panel.tsx
+msgid "node.column.panel.latheRingCount"
+msgstr "Lathe Rings"
+
+#: packages/nodes/src/column/panel.tsx
+msgid "node.column.panel.latheTurned"
+msgstr "Lathe Turned"
+
+#: packages/nodes/src/column/panel.tsx
+msgid "node.column.panel.leafCarved"
+msgstr "Leaf Carved"
+
+#: packages/nodes/src/column/panel.tsx
+msgid "node.column.panel.leafCount"
+msgstr "Leaves"
+
+#: packages/nodes/src/column/panel.tsx
+msgid "node.column.panel.leafRows"
+msgstr "Leaf Rows"
+
+#: packages/nodes/src/column/panel.tsx
+msgid "node.column.panel.lotus"
+msgstr "Lotus"
+
+#: packages/nodes/src/column/panel.tsx
+msgid "node.column.panel.materials"
+msgstr "Materials"
+
+#: packages/nodes/src/column/panel.tsx
+msgid "node.column.panel.memberDepth"
+msgstr "Member Depth"
+
+#: packages/nodes/src/column/panel.tsx
+msgid "node.column.panel.memberWidth"
+msgstr "Member Width"
 
 #: packages/nodes/src/column/panel.tsx
 msgid "node.column.panel.move"
 msgstr "Move"
 
 #: packages/nodes/src/column/panel.tsx
-msgid "node.column.panel.neckWidth"
-msgstr "Neck Width"
+msgid "node.column.panel.neckScale"
+msgstr "Neck Scale"
 
 #: packages/nodes/src/column/panel.tsx
-msgid "node.column.panel.noBottom"
-msgstr "No Bottom"
+msgid "node.column.panel.none"
+msgstr "None"
 
 #: packages/nodes/src/column/panel.tsx
-msgid "node.column.panel.noTop"
-msgstr "No Top"
+msgid "node.column.panel.octagonal"
+msgstr "Octagonal"
 
 #: packages/nodes/src/column/panel.tsx
-msgid "node.column.panel.plinthThickness"
-msgstr "Plinth Thickness"
+msgid "node.column.panel.paintMaterials"
+msgstr "Paint Materials"
 
 #: packages/nodes/src/column/panel.tsx
-msgid "node.column.panel.portalFrame"
-msgstr "Portal Frame"
+msgid "node.column.panel.panelCount"
+msgstr "Carved Panels"
 
 #: packages/nodes/src/column/panel.tsx
-msgid "node.column.panel.preset"
-msgstr "Preset"
+msgid "node.column.panel.panelInsetDepth"
+msgstr "Panel Relief"
+
+#: packages/nodes/src/column/panel.tsx
+msgid "node.column.panel.panelled"
+msgstr "Panelled"
+
+#: packages/nodes/src/column/panel.tsx
+msgid "node.column.panel.panelledPedestal"
+msgstr "Panelled Pedestal"
+
+#: packages/nodes/src/column/panel.tsx
+msgid "node.column.panel.panelShape"
+msgstr "Panel shape"
+
+#: packages/nodes/src/column/panel.tsx
+msgid "node.column.panel.pendantCount"
+msgstr "Pendants"
+
+#: packages/nodes/src/column/panel.tsx
+msgid "node.column.panel.plain"
+msgstr "Plain"
+
+#: packages/nodes/src/column/panel.tsx
+msgid "node.column.panel.plinthHeightFraction"
+msgstr "Plinth Height Fraction"
+
+#: packages/nodes/src/column/panel.tsx
+msgid "node.column.panel.profile"
+msgstr "Profile"
+
+#: packages/nodes/src/column/panel.tsx
+msgid "node.column.panel.rectangle"
+msgstr "Rectangle"
 
 #: packages/nodes/src/column/panel.tsx
 msgid "node.column.panel.rectangular"
 msgstr "Rectangular"
 
 #: packages/nodes/src/column/panel.tsx
+msgid "node.column.panel.resetBase"
+msgstr "Reset base"
+
+#: packages/nodes/src/column/panel.tsx
+msgid "node.column.panel.resetCapital"
+msgstr "Reset capital"
+
+#: packages/nodes/src/column/panel.tsx
+msgid "node.column.panel.resetMaterials"
+msgstr "Reset materials"
+
+#: packages/nodes/src/column/panel.tsx
+msgid "node.column.panel.resetProfile"
+msgstr "Reset profile"
+
+#: packages/nodes/src/column/panel.tsx
+msgid "node.column.panel.resetShape"
+msgstr "Reset shape"
+
+#: packages/nodes/src/column/panel.tsx
+msgid "node.column.panel.resetSize"
+msgstr "Reset size"
+
+#: packages/nodes/src/column/panel.tsx
+msgid "node.column.panel.resetSurfaceDetails"
+msgstr "Reset surface details"
+
+#: packages/nodes/src/column/panel.tsx
+msgid "node.column.panel.resetTransform"
+msgstr "Reset transform"
+
+#: packages/nodes/src/column/panel.tsx
+msgid "node.column.panel.ribbedLotus"
+msgstr "Ribbed Lotus"
+
+#: packages/nodes/src/column/panel.tsx
 msgid "node.column.panel.ringPairs"
 msgstr "Ring Pairs"
 
 #: packages/nodes/src/column/panel.tsx
-msgid "node.column.panel.ringSpread"
-msgstr "Ring Spread"
+msgid "node.column.panel.ringSpreadRatio"
+msgstr "Ring Spread Ratio"
 
 #: packages/nodes/src/column/panel.tsx
 msgid "node.column.panel.ringThickness"
 msgstr "Ring Thickness"
 
 #: packages/nodes/src/column/panel.tsx
+msgid "node.column.panel.rotation"
+msgstr "Rotation"
+
+#: packages/nodes/src/column/panel.tsx
 msgid "node.column.panel.round"
 msgstr "Round"
 
 #: packages/nodes/src/column/panel.tsx
-msgid "node.column.panel.roundBandWidth"
-msgstr "Round Band Width"
+msgid "node.column.panel.rounded"
+msgstr "Rounded"
 
 #: packages/nodes/src/column/panel.tsx
-msgid "node.column.panel.roundedBottom"
-msgstr "Rounded Bottom"
+msgid "node.column.panel.roundRings"
+msgstr "Round Rings"
 
 #: packages/nodes/src/column/panel.tsx
-msgid "node.column.panel.roundedTop"
-msgstr "Rounded Top"
-
-#: packages/nodes/src/column/panel.tsx
-msgid "node.column.panel.segmentTwist"
-msgstr "Segment Twist"
+msgid "node.column.panel.scalesMultiplyTheDimensionsInSize"
+msgstr "Scales multiply the dimensions in Size. A ratio of 0.2 means 20%."
 
 #: packages/nodes/src/column/panel.tsx
 msgid "node.column.panel.shaft"
@@ -8920,8 +9132,16 @@ msgid "node.column.panel.shaftCornerRadius"
 msgstr "Shaft Corner Radius"
 
 #: packages/nodes/src/column/panel.tsx
-msgid "node.column.panel.shaftWidth"
-msgstr "Shaft Width"
+msgid "node.column.panel.shaftDetail"
+msgstr "Shaft detail"
+
+#: packages/nodes/src/column/panel.tsx
+msgid "node.column.panel.shaftProfile"
+msgstr "Shaft profile"
+
+#: packages/nodes/src/column/panel.tsx
+msgid "node.column.panel.shaftScale"
+msgstr "Shaft Scale"
 
 #: packages/nodes/src/column/panel.tsx
 msgid "node.column.panel.shape"
@@ -8932,120 +9152,152 @@ msgid "node.column.panel.shortStout"
 msgstr "Short / Stout"
 
 #: packages/nodes/src/column/panel.tsx
-msgid "node.column.panel.simpleBlockBottom"
-msgstr "Simple Block Bottom"
+msgid "node.column.panel.simple"
+msgstr "Simple"
 
 #: packages/nodes/src/column/panel.tsx
-msgid "node.column.panel.simpleTop"
-msgstr "Simple Top"
+msgid "node.column.panel.simpleSlab"
+msgstr "Simple Slab"
 
 #: packages/nodes/src/column/panel.tsx
-msgid "node.column.panel.singleStrut"
-msgstr "Single Strut"
+msgid "node.column.panel.simpleSquare"
+msgstr "Simple Square"
+
+#: packages/nodes/src/column/panel.tsx
+msgid "node.column.panel.sixteenSided"
+msgstr "Sixteen Sided"
+
+#: packages/nodes/src/column/panel.tsx
+msgid "node.column.panel.size"
+msgstr "Size"
 
 #: packages/nodes/src/column/panel.tsx
 msgid "node.column.panel.slender"
 msgstr "Slender"
 
 #: packages/nodes/src/column/panel.tsx
+msgid "node.column.panel.southIndianBracket"
+msgstr "South Indian Bracket"
+
+#: packages/nodes/src/column/panel.tsx
+msgid "node.column.panel.spiral"
+msgstr "Spiral"
+
+#: packages/nodes/src/column/panel.tsx
+msgid "node.column.panel.spiralRibCount"
+msgstr "Spiral Ribs"
+
+#: packages/nodes/src/column/panel.tsx
+msgid "node.column.panel.spiralTwist"
+msgstr "Spiral Turns"
+
+#: packages/nodes/src/column/panel.tsx
 msgid "node.column.panel.square"
 msgstr "Square"
 
 #: packages/nodes/src/column/panel.tsx
-msgid "node.column.panel.squarePlinthBottom"
-msgstr "Square Plinth Bottom"
+msgid "node.column.panel.squarePlinth"
+msgstr "Square Plinth"
 
 #: packages/nodes/src/column/panel.tsx
 msgid "node.column.panel.standard"
 msgstr "Standard"
 
 #: packages/nodes/src/column/panel.tsx
-msgid "node.column.panel.steppedBottom"
-msgstr "Stepped Bottom"
+msgid "node.column.panel.stepped"
+msgstr "Stepped"
 
 #: packages/nodes/src/column/panel.tsx
-msgid "node.column.panel.steppedTop"
-msgstr "Stepped Top"
+msgid "node.column.panel.steppedSquare"
+msgstr "Stepped Square"
+
+#: packages/nodes/src/column/panel.tsx
+msgid "node.column.panel.stepScaleReduction"
+msgstr "Step Scale Reduction"
 
 #: packages/nodes/src/column/panel.tsx
 msgid "node.column.panel.straight"
 msgstr "Straight"
 
 #: packages/nodes/src/column/panel.tsx
-msgid "node.column.panel.taper"
-msgstr "Taper"
+msgid "node.column.panel.style"
+msgstr "Style"
+
+#: packages/nodes/src/column/panel.tsx
+msgid "node.column.panel.surfaceDetails"
+msgstr "Surface Details"
 
 #: packages/nodes/src/column/panel.tsx
 msgid "node.column.panel.tapered"
 msgstr "Tapered"
 
 #: packages/nodes/src/column/panel.tsx
-msgid "node.column.panel.topDepth"
-msgstr "Top Depth"
+msgid "node.column.panel.taperRatio"
+msgstr "Taper Ratio"
 
 #: packages/nodes/src/column/panel.tsx
-msgid "node.column.panel.topHeight"
-msgstr "Top Height"
+msgid "node.column.panel.tierCount"
+msgstr "Tier Count"
+
+#: packages/nodes/src/column/panel.tsx
+msgid "node.column.panel.topScale"
+msgstr "Top Scale"
 
 #: packages/nodes/src/column/panel.tsx
 msgid "node.column.panel.topSpread"
 msgstr "Top Spread"
 
 #: packages/nodes/src/column/panel.tsx
-msgid "node.column.panel.topStepSpread"
-msgstr "Top Step Spread"
-
-#: packages/nodes/src/column/panel.tsx
-msgid "node.column.panel.topTiers"
-msgstr "Top Tiers"
-
-#: packages/nodes/src/column/panel.tsx
-msgid "node.column.panel.topWidth"
-msgstr "Top Width"
-
-#: packages/nodes/src/column/panel.tsx
 msgid "node.column.panel.transform"
 msgstr "Transform"
 
 #: packages/nodes/src/column/panel.tsx
-msgid "node.column.panel.trestle"
-msgstr "Trestle"
-
-#: packages/nodes/src/column/panel.tsx
-msgid "node.column.panel.tripod"
-msgstr "Tripod"
+msgid "node.column.panel.twistPerSegment"
+msgstr "Twist per Segment"
 
 #: packages/nodes/src/column/panel.tsx
 msgid "node.column.panel.twistSegments"
 msgstr "Twist Segments"
 
 #: packages/nodes/src/column/panel.tsx
-msgid "node.column.panel.vertical"
-msgstr "Vertical"
+msgid "node.column.panel.volute"
+msgstr "Volute"
 
 #: packages/nodes/src/column/panel.tsx
-msgid "node.column.panel.vSupport"
-msgstr "V Support"
+msgid "node.column.panel.voluteCount"
+msgstr "Volutes"
 
 #: packages/nodes/src/column/panel.tsx
-msgid "node.column.panel.waist"
-msgstr "Waist"
+msgid "node.column.panel.voluteSize"
+msgstr "Volute Size"
+
+#: packages/nodes/src/column/panel.tsx
+msgid "node.column.panel.waistReductionRatio"
+msgstr "Waist Reduction Ratio"
 
 #: packages/nodes/src/column/panel.tsx
 msgid "node.column.panel.width"
 msgstr "Width"
 
 #: packages/nodes/src/column/panel.tsx
-msgid "node.column.panel.xBrace"
-msgstr "X Brace"
+msgid "node.column.panel.widthAndDepthScalesMultiplyThe"
+msgstr "Width and depth scales multiply the dimensions in Size."
 
 #: packages/nodes/src/column/panel.tsx
-msgid "node.column.panel.yaw"
-msgstr "Yaw"
+msgid "node.column.panel.widthAndDepthScalesUseSize"
+msgstr "Width and depth scales use Size. Band and neck scales use the base footprint."
 
 #: packages/nodes/src/column/panel.tsx
-msgid "node.column.panel.ySupport"
-msgstr "Y Support"
+msgid "node.column.panel.widthScale"
+msgstr "Width Scale"
+
+#: packages/nodes/src/column/panel.tsx
+msgid "node.column.panel.widthSpan"
+msgstr "Width Span"
+
+#: packages/nodes/src/column/panel.tsx
+msgid "node.column.panel.woodBracket"
+msgstr "Wood Bracket"
 
 #: packages/nodes/src/column/post-section.tsx
 msgid "node.column.postSection.aSizeDeckPostStandsNo"
@@ -9087,65 +9339,81 @@ msgstr "Treated"
 msgid "node.column.postSection.untreated"
 msgstr "Untreated"
 
-#: packages/nodes/src/column/panel.tsx
+#: packages/nodes/src/column/preset-gallery.tsx
 msgid "node.column.preset.aFrameSupport"
 msgstr "A-Frame Support"
 
-#: packages/nodes/src/column/panel.tsx
+#: packages/nodes/src/column/preset-gallery.tsx
 msgid "node.column.preset.basicPillar"
 msgstr "Straight Round"
 
-#: packages/nodes/src/column/panel.tsx
+#: packages/nodes/src/column/preset-gallery.tsx
 msgid "node.column.preset.boxFrameSupport"
 msgstr "Box Frame"
 
-#: packages/nodes/src/column/panel.tsx
+#: packages/nodes/src/column/preset-gallery.tsx
 msgid "node.column.preset.bulgedPillar"
 msgstr "Soft Bulged"
 
-#: packages/nodes/src/column/panel.tsx
+#: packages/nodes/src/column/preset-gallery.tsx
 msgid "node.column.preset.hourglassPillar"
 msgstr "Hourglass"
 
-#: packages/nodes/src/column/panel.tsx
+#: packages/nodes/src/column/preset-gallery.tsx
 msgid "node.column.preset.kBraceSupport"
 msgstr "K Brace"
 
-#: packages/nodes/src/column/panel.tsx
+#: packages/nodes/src/column/preset-gallery.tsx
 msgid "node.column.preset.portalFrameSupport"
 msgstr "Portal Frame"
 
-#: packages/nodes/src/column/panel.tsx
+#: packages/nodes/src/column/preset-gallery.tsx
 msgid "node.column.preset.singleStrutSupport"
 msgstr "Single Strut"
 
-#: packages/nodes/src/column/panel.tsx
+#: packages/nodes/src/column/preset-gallery.tsx
 msgid "node.column.preset.squarePillar"
 msgstr "Square Block"
 
-#: packages/nodes/src/column/panel.tsx
+#: packages/nodes/src/column/preset-gallery.tsx
 msgid "node.column.preset.taperedPillar"
 msgstr "Tapered Round"
 
-#: packages/nodes/src/column/panel.tsx
+#: packages/nodes/src/column/preset-gallery.tsx
 msgid "node.column.preset.trestleSupport"
 msgstr "Trestle Frame"
 
-#: packages/nodes/src/column/panel.tsx
+#: packages/nodes/src/column/preset-gallery.tsx
 msgid "node.column.preset.tripodSupport"
 msgstr "Tripod Support"
 
-#: packages/nodes/src/column/panel.tsx
+#: packages/nodes/src/column/preset-gallery.tsx
 msgid "node.column.preset.vFrameSupport"
 msgstr "V Support"
 
-#: packages/nodes/src/column/panel.tsx
+#: packages/nodes/src/column/preset-gallery.tsx
 msgid "node.column.preset.xBraceSupport"
 msgstr "X Brace"
 
-#: packages/nodes/src/column/panel.tsx
+#: packages/nodes/src/column/preset-gallery.tsx
 msgid "node.column.preset.yFrameSupport"
 msgstr "Y Support"
+
+#: packages/nodes/src/column/preset-gallery.tsx
+msgid "node.column.presetGallery.applyLabelShape"
+msgstr "Apply {label} shape"
+
+#: packages/nodes/src/column/preset-gallery.tsx
+msgid "node.column.presetGallery.chooseAShape"
+msgstr "Choose a shape"
+
+#: packages/nodes/src/column/preset-gallery.tsx
+msgid "node.column.presetGallery.hoverOrFocusToPreviewClick"
+msgstr "Hover or focus to preview; click to apply. Materials are kept. Escape cancels the preview."
+
+#: packages/nodes/src/column/preset-gallery.tsx
+msgid "node.column.presetGallery.shapePresets"
+msgstr "Shape presets"
 
 #: packages/nodes/src/i18n/definition-messages.ts
 msgid "node.constructionDimension.description"
@@ -10081,12 +10349,24 @@ msgid "node.elevator.panel.cabHeight"
 msgstr "Cab Height"
 
 #: packages/nodes/src/elevator/panel.tsx
+msgid "node.elevator.panel.cabInteriorAndDoorOpening"
+msgstr "Clear cab interior: {width} × {depth} × {height} m. Door opening: {doorWidth} × {doorHeight} m."
+
+#: packages/nodes/src/elevator/panel.tsx
 msgid "node.elevator.panel.centerOpening"
 msgstr "Center opening"
 
 #: packages/nodes/src/elevator/panel.tsx
+msgid "node.elevator.panel.cutawayShaft"
+msgstr "Cutaway shaft"
+
+#: packages/nodes/src/elevator/panel.tsx
 msgid "node.elevator.panel.defaultFloor"
 msgstr "Default Floor"
+
+#: packages/nodes/src/elevator/panel.tsx
+msgid "node.elevator.panel.defaultFloor2"
+msgstr "Default floor"
 
 #: packages/nodes/src/elevator/panel.tsx
 msgid "node.elevator.panel.delete"
@@ -10105,8 +10385,20 @@ msgid "node.elevator.panel.disabled"
 msgstr "Disabled"
 
 #: packages/nodes/src/elevator/panel.tsx
+msgid "node.elevator.panel.disableLevel"
+msgstr "Disable {level}"
+
+#: packages/nodes/src/elevator/panel.tsx
 msgid "node.elevator.panel.doorHeight"
 msgstr "Door Height"
+
+#: packages/nodes/src/elevator/panel.tsx
+msgid "node.elevator.panel.doorOpeningStyle"
+msgstr "Door opening style"
+
+#: packages/nodes/src/elevator/panel.tsx
+msgid "node.elevator.panel.doorPanelStyle"
+msgstr "Door panel style"
 
 #: packages/nodes/src/elevator/panel.tsx
 msgid "node.elevator.panel.doors"
@@ -10141,12 +10433,20 @@ msgid "node.elevator.panel.from"
 msgstr "From"
 
 #: packages/nodes/src/elevator/panel.tsx
+msgid "node.elevator.panel.fromLevel"
+msgstr "From level"
+
+#: packages/nodes/src/elevator/panel.tsx
 msgid "node.elevator.panel.glass"
 msgstr "Glass"
 
 #: packages/nodes/src/elevator/panel.tsx
 msgid "node.elevator.panel.glassFrame"
 msgstr "Glass frame"
+
+#: packages/nodes/src/elevator/panel.tsx
+msgid "node.elevator.panel.hoverOrFocusASectionTo"
+msgstr "Hover or focus a section to highlight its parts. Cutaway affects this inspection only."
 
 #: packages/nodes/src/elevator/panel.tsx
 msgid "node.elevator.panel.motion"
@@ -10165,6 +10465,14 @@ msgid "node.elevator.panel.position"
 msgstr "Position"
 
 #: packages/nodes/src/elevator/panel.tsx
+msgid "node.elevator.panel.presetsAndInspection"
+msgstr "Presets and inspection"
+
+#: packages/nodes/src/elevator/panel.tsx
+msgid "node.elevator.panel.resetSection"
+msgstr "Reset {section}"
+
+#: packages/nodes/src/elevator/panel.tsx
 msgid "node.elevator.panel.rotation"
 msgstr "Rotation"
 
@@ -10177,6 +10485,10 @@ msgid "node.elevator.panel.service"
 msgstr "Service"
 
 #: packages/nodes/src/elevator/panel.tsx
+msgid "node.elevator.panel.serviceOnlyAccessForLevel"
+msgstr "Service-only access for {level}"
+
+#: packages/nodes/src/elevator/panel.tsx
 msgid "node.elevator.panel.shaft"
 msgstr "Shaft"
 
@@ -10187,6 +10499,10 @@ msgstr "Shaft Depth"
 #: packages/nodes/src/elevator/panel.tsx
 msgid "node.elevator.panel.shaftStyle"
 msgstr "Shaft Style"
+
+#: packages/nodes/src/elevator/panel.tsx
+msgid "node.elevator.panel.shaftStyle2"
+msgstr "Shaft style"
 
 #: packages/nodes/src/elevator/panel.tsx
 msgid "node.elevator.panel.shaftWidth"
@@ -10217,8 +10533,16 @@ msgid "node.elevator.panel.stopStoporder"
 msgstr "Stop {stopOrder}"
 
 #: packages/nodes/src/elevator/panel.tsx
+msgid "node.elevator.panel.theCabNeedsMoreHeadroomThan"
+msgstr "The cab needs more headroom than one or more served floors provide. Check the floor heights."
+
+#: packages/nodes/src/elevator/panel.tsx
 msgid "node.elevator.panel.to"
 msgstr "To"
+
+#: packages/nodes/src/elevator/panel.tsx
+msgid "node.elevator.panel.toLevel"
+msgstr "To level"
 
 #: packages/nodes/src/elevator/panel.tsx
 msgid "node.elevator.panel.wallThickness"
@@ -10231,6 +10555,18 @@ msgstr "Width"
 #: packages/nodes/src/elevator/panel.tsx
 msgid "node.elevator.panel.yaw"
 msgstr "Yaw"
+
+#: packages/nodes/src/elevator/presets.ts
+msgid "node.elevator.preset.glass"
+msgstr "Glass"
+
+#: packages/nodes/src/elevator/presets.ts
+msgid "node.elevator.preset.passenger"
+msgstr "Passenger"
+
+#: packages/nodes/src/elevator/presets.ts
+msgid "node.elevator.preset.service"
+msgstr "Service"
 
 #: packages/nodes/src/i18n/definition-messages.ts
 msgid "node.eyebrowVent.description"
@@ -11174,6 +11510,18 @@ msgstr "Rise"
 #: packages/nodes/src/i18n/definition-messages.ts
 msgid "node.roof.description"
 msgstr "A pitched / hip / gable roof composed of one or more segments."
+
+#: packages/nodes/src/roof/geometry-notice.tsx
+msgid "node.roof.geometryNotice.retryRoofGeometry"
+msgstr "Retry roof geometry"
+
+#: packages/nodes/src/roof/geometry-notice.tsx
+msgid "node.roof.geometryNotice.roofGeometryCouldNotBeRebuilt"
+msgstr "Roof geometry could not be rebuilt. The previous shape is still shown. Adjust the dimensions or intersections and retry."
+
+#: packages/nodes/src/roof/geometry-notice.tsx
+msgid "node.roof.geometryNotice.roofGeometryIsInvalidThePrevious"
+msgstr "Roof geometry is invalid. The previous shape is still shown. Adjust the dimensions or intersections and retry."
 
 #: packages/nodes/src/roof/glazing-panel-editor.tsx
 msgid "node.roof.glazing.face.archBay"
@@ -14186,6 +14534,10 @@ msgstr "Dimensions"
 #: packages/nodes/src/wall/panel.tsx
 msgid "node.wall.panel.drywall"
 msgstr "Drywall"
+
+#: packages/nodes/src/wall/panel.tsx
+msgid "node.wall.panel.endHeightOffset"
+msgstr "End height offset"
 
 #: packages/nodes/src/wall/panel.tsx
 msgid "node.wall.panel.extendsDownwardToMeetTheTerrain"

@@ -496,6 +496,7 @@ const WindowTool: React.FC = () => {
       const slid = clampToWall(wall, localX, localY, width, height, nodes)
       const { clampedY } = slid
       let clampedX = slid.clampedX
+      let fits = slid.fits
       // The corner zone: the edge snaps to the corner, unless a curtain wall's margin keeps it off.
       const found = cornerSnapOn
         ? evaluateCorner(nodes, {
@@ -514,17 +515,13 @@ const WindowTool: React.FC = () => {
         if (Math.abs(settled.clampedX - snap.centreX) > 1e-6) {
           block = { reason: 'curtain', end: snap.end }
           snap = null
-        } else clampedX = snap.centreX
+        } else {
+          clampedX = snap.centreX
+          fits = settled.fits
+        }
       }
-      const valid = !hasWallChildOverlap(
-        wall.id,
-        nodes,
-        clampedX,
-        clampedY,
-        width,
-        height,
-        ignoreId,
-      )
+      const valid =
+        fits && !hasWallChildOverlap(wall.id, nodes, clampedX, clampedY, width, height, ignoreId)
       return { clampedX, clampedY, valid, snap, block }
     }
 

@@ -2,7 +2,9 @@ import { afterEach, beforeEach, expect, test } from 'bun:test'
 import {
   type AnyNode,
   type AnyNodeDefinition,
+  type AnyNodeId,
   BaseNode,
+  type GeometryContext,
   LevelNode,
   loadPlugin,
   type NodeDefinition,
@@ -16,6 +18,7 @@ import {
 } from '@pascal-app/core'
 import { useFrame } from '@react-three/fiber'
 import { act, create } from '@react-three/test-renderer'
+import { Suspense } from 'react'
 import { Group, Mesh } from 'three'
 import { GeometrySystem } from '../../systems/geometry/geometry-system'
 import { NodeRenderer } from '../renderers/node-renderer'
@@ -25,6 +28,7 @@ import {
   GlbReferenceNodes,
 } from './glb-reference-nodes'
 import { GlbReplaceInstances } from './glb-replace-instances'
+import { GlbScene } from './glb-scene'
 import { RegisteredSystems } from './registered-systems'
 
 // Plugin API v1 at dispatch: a synthetic plugin kind reaches the scene through
@@ -36,6 +40,8 @@ globalThis.requestAnimationFrame ??= (callback) => {
   return 0
 }
 globalThis.cancelAnimationFrame ??= () => {}
+// three's FileLoader reports progress with it; bun has no DOM.
+globalThis.ProgressEvent ??= class extends Event {} as typeof ProgressEvent
 
 const PLUGIN_ID = 'fixture:dispatch'
 const Lamp = BaseNode.extend({ id: objectId('fxlamp'), type: nodeType('fixture:lamp') })
@@ -112,8 +118,21 @@ const meadowDef: NodeDefinition<typeof Meadow> = {
   bake: 'replace',
   bakeReplaceRenderer: {
     module: async () => ({
-      default: ({ nodes }: { nodes: { id: string }[] }) => (
-        <group name={`meadow:${nodes.map((node) => node.id).join(',')}`} />
+      default: ({
+        nodes,
+        resolve,
+      }: {
+        nodes: { id: string; parentId: string | null }[]
+        resolve?: GeometryContext['resolve']
+      }) => (
+        <group name={`meadow:${nodes.map((node) => node.id).join(',')}`}>
+          {nodes.map((node) => (
+            <group
+              key={node.id}
+              name={`meadow-parent:${node.parentId ? (resolve?.(node.parentId as AnyNodeId)?.type ?? 'unresolved') : 'none'}`}
+            />
+          ))}
+        </group>
       ),
     }),
   },
@@ -301,5 +320,68 @@ test('the baked viewer restores strip nodes and mounts the replace renderer only
     expect(bakedLevel.getObjectByName(`meadow:${meadow.id}`)).toBeDefined()
   } finally {
     await renderer.unmount()
+  }
+})
+
+// The baked viewer never loads the scene graph into `useScene`, so a replace
+// renderer that builds from its parent (a site's polygon, its terrain) reads
+// the published graph through `resolve` instead.
+test('replace renderers resolve nodes from the published graph, not the scene store', async () => {
+  const { level, meadow, graph } = scene([PLUGIN_ID])
+  const replaceNodes = buildGlbReplaceNodes(graph)
+  useScene.getState().unloadScene()
+  const bakedLevel = new Group()
+  const identity = new Map([[level.id, bakedLevel]])
+  const resolve: GeometryContext['resolve'] = (id) =>
+    graph.nodes[id] as ReturnType<GeometryContext['resolve']>
+  const renderer = await create(
+    <>
+      <primitive object={bakedLevel} />
+      <GlbReplaceInstances identity={identity} nodes={replaceNodes} resolve={resolve} />
+    </>,
+  )
+  try {
+    await settle(renderer, 0)
+
+    expect(bakedLevel.getObjectByName(`meadow:${meadow.id}`)).toBeDefined()
+    expect(bakedLevel.getObjectByName('meadow-parent:level')).toBeDefined()
+  } finally {
+    await renderer.unmount()
+  }
+})
+
+test('GlbScene resolves replace renderers through its sceneNodes', async () => {
+  const { level, meadow, graph } = scene([PLUGIN_ID])
+  const replaceNodes = buildGlbReplaceNodes(graph)
+  useScene.getState().unloadScene()
+  const gltf = {
+    asset: { version: '2.0' },
+    scene: 0,
+    scenes: [{ nodes: [0] }],
+    nodes: [
+      { name: 'level', children: [1], extras: { pascalId: level.id, kind: 'level' } },
+      { name: 'meadow', extras: { pascalId: meadow.id, kind: 'fixture:meadow' } },
+    ],
+  }
+  const url = `data:model/gltf+json;base64,${Buffer.from(JSON.stringify(gltf)).toString('base64')}`
+  // GlbScene resets the page cursor on unmount; bun has no DOM.
+  const hadDocument = 'document' in globalThis
+  if (!hadDocument)
+    Object.assign(globalThis, { document: { body: { style: {} }, querySelector: () => null } })
+  const renderer = await create(
+    <Suspense fallback={null}>
+      <GlbScene replaceNodes={replaceNodes} sceneNodes={graph.nodes} url={url} />
+    </Suspense>,
+  )
+  try {
+    await settle(renderer, 0)
+    const root = renderer.scene.instance
+
+    expect(root.getObjectByName('meadow')?.visible).toBe(false)
+    expect(root.getObjectByName(`meadow:${meadow.id}`)).toBeDefined()
+    expect(root.getObjectByName('meadow-parent:level')).toBeDefined()
+  } finally {
+    await renderer.unmount()
+    if (!hadDocument) Reflect.deleteProperty(globalThis, 'document')
   }
 })

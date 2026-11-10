@@ -169,6 +169,7 @@ export {
   groundPitFloorY,
   terrainOverFloors,
 } from './lib/below-grade-footprints'
+export * from './lib/build-mode'
 export {
   CEILING_BUILD_UP_PRESETS,
   type CeilingBuildUpPreset,
@@ -266,6 +267,7 @@ export {
   planDeckFraming,
 } from './lib/deck-framing'
 export { deepestDrawnY, lowestGroundY } from './lib/deepest-drawn'
+export * from './lib/door-interaction'
 export { doorPositionForFacing, getDoorOpeningSize } from './lib/door-opening'
 export {
   clampDoorOperationState,
@@ -274,6 +276,11 @@ export {
   isOperationDoorType,
   SECTIONAL_GARAGE_RENDER_OPEN_SCALE,
 } from './lib/door-operation'
+export {
+  resolveElevatorNodeSupportY,
+  resolveElevatorSupportLevelId,
+  resolveElevatorSupportY,
+} from './lib/elevator-support'
 export {
   type FinishScriptHost,
   type FinishScriptInputs,
@@ -574,6 +581,7 @@ export {
 } from './lib/roof-overlap'
 export { type RoomDrawnFloor, roomDrawnFloor } from './lib/room-drawn-floor'
 export { type RoomFloorChoice, roomFloorChoices } from './lib/room-floor-choices'
+export * from './lib/room-floor-elevation'
 export {
   checkRoomFloor,
   clampRoomFloorHandle,
@@ -782,6 +790,7 @@ export {
   wallFaceScriptRecord,
   wallFaceScriptSkirtingGap,
 } from './lib/wall-face-script'
+export * from './lib/window-interaction'
 export { ZONE_COLOR_PALETTE, zoneColorForSeed } from './lib/zone-colors'
 export {
   deriveZoneQuantityReport,
@@ -835,7 +844,13 @@ export { useRegistryVersion } from './registry/use-registry-version'
 export * from './schema'
 export * from './schema/nodes/stair-defaults'
 export * from './services'
-export { isMovable, movePlanToward, moveToward, resolveMovable } from './services/movement'
+export {
+  isMovable,
+  isMoveLocked,
+  movePlanToward,
+  moveToward,
+  resolveMovable,
+} from './services/movement'
 export * from './services/project-file-sink'
 export {
   collectionIdsOf,
@@ -949,6 +964,9 @@ export {
 } from './store/use-scene'
 export { resolveElevatorDispatchTarget } from './systems/elevator/elevator-dispatch'
 export {
+  ELEVATOR_MIN_CAB_DIMENSION,
+  ELEVATOR_MIN_CAB_HEIGHT,
+  ELEVATOR_MIN_WALL_THICKNESS,
   type ElevatorDoorSide,
   getElevatorCabCenterZ,
   getElevatorCabDepth,
@@ -962,6 +980,8 @@ export {
   getResolvedElevatorDoorPanelStyle,
   getResolvedElevatorDoorStyle,
   getResolvedElevatorShaftStyle,
+  normalizeElevatorDimensions,
+  resolveElevatorDimensions,
 } from './systems/elevator/elevator-geometry'
 export { syncAutoElevatorOpenings } from './systems/elevator/elevator-opening-sync'
 export { ElevatorOpeningSystem } from './systems/elevator/elevator-opening-system'
@@ -1223,11 +1243,13 @@ export {
   getClampedWallCurveOffset,
   getMaxWallCurveOffset,
   getWallArcData,
+  getWallChordFractionAt,
   getWallChordFrame,
   getWallCurveFrameAt,
   getWallCurveLength,
   getWallCurveStationAtPoint,
   getWallMidpointHandlePoint,
+  getWallStationAtChordFraction,
   getWallStraightSnapOffset,
   getWallSurfacePolygon,
   isCurvedWall,
@@ -1312,6 +1334,8 @@ export { plannedWallIds, planWallPaint } from './systems/wall/wall-paint-plan'
 export { roomSideFaces } from './systems/wall/wall-room-sides'
 export { wallDoorStepRuns } from './systems/wall/wall-step-openings'
 export {
+  clampWallEndHeightOffset,
+  MIN_WALL_END_HEIGHT,
   MIN_WALL_HEIGHT,
   resolveWallEffectiveHeight,
   resolveWallTop,
@@ -1332,6 +1356,7 @@ export {
 export { wallTrimPatch } from './systems/wall/wall-trim'
 export type { SceneGraph } from './utils/clone-scene-graph'
 export { cloneLevelSubtree, cloneSceneGraph, forkSceneGraph } from './utils/clone-scene-graph'
+export * from './utils/measurement-format'
 export { areSemanticValuesEqual } from './utils/semantic-equal'
 export { isObject } from './utils/types'
 export {

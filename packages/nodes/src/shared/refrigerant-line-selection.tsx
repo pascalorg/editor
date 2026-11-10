@@ -5,6 +5,7 @@ import {
   type AnyNodeId,
   analyzePortConnectivity,
   type Cursor,
+  findLevelAncestorId,
   type LinesetNode,
   type LiquidLineNode,
   type PortConnectivity,
@@ -12,6 +13,7 @@ import {
   resolveConnectivityUpdates,
   resumeSceneHistory,
   sceneRegistry,
+  useLiveNodeOverrides,
   useScene,
 } from '@pascal-app/core'
 import {
@@ -28,8 +30,8 @@ import { Html } from '@react-three/drei'
 import { createPortal, type ThreeEvent, useFrame, useThree } from '@react-three/fiber'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { type Group, type Object3D, Plane, Raycaster, Vector2, Vector3 } from 'three'
-import { createFollowerFrames } from './follower-frames'
 import { useHandleDragScope } from './handle-drag-scope'
+import { createLivePreview } from './live-preview'
 import { REFRIGERANT_PORT_SYSTEMS } from './port-systems'
 import { HandleCube, MoveChevron } from './selection-handles'
 
@@ -121,6 +123,8 @@ function RefrigerantLineEndpointHandles({
   target: Object3D
 }) {
   const { camera, gl } = useThree()
+  const override = useLiveNodeOverrides((state) => state.overrides.get(line.id))
+  const displayLine = override ? ({ ...line, ...override } as RefrigerantLineNode) : line
   const outerRef = useRef<Group>(null)
   useFrame(() => {
     const outer = outerRef.current
@@ -247,9 +251,8 @@ function RefrigerantLineEndpointHandles({
     e.stopPropagation()
     const initialPath = line.path.map((p) => [...p] as Point)
     const startPoint = initialPath[index]!
-    const startNodes = useScene.getState().nodes
-    const connectivity = analyzePortConnectivity(line as AnyNode, startNodes)
-    const frame = createFollowerFrames(startNodes, line.id as AnyNodeId)
+    const connectivity = analyzePortConnectivity(line as AnyNode, useScene.getState().nodes)
+    const livePreview = createLivePreview()
     pauseSceneHistory(useScene)
     useViewer.getState().setInputDragging(true)
     document.body.style.cursor = kind.axis === 'y' ? 'ns-resize' : 'grabbing'
@@ -303,7 +306,13 @@ function RefrigerantLineEndpointHandles({
       if (isEndpoint) {
         const port = findNearestPortXZ(
           [next[0], next[1], next[2]],
-          collectScenePorts({ excludeNodeId: line.id, systems: REFRIGERANT_PORT_SYSTEMS }),
+          collectScenePorts({
+            excludeNodeId: line.id,
+            levelId: (findLevelAncestorId(line.id, useScene.getState().nodes) ?? undefined) as
+              | AnyNodeId
+              | undefined,
+            systems: REFRIGERANT_PORT_SYSTEMS,
+          }),
           PORT_SNAP_RADIUS_M,
         )
         if (port) next = [port.position[0], port.position[1], port.position[2]]
@@ -317,11 +326,10 @@ function RefrigerantLineEndpointHandles({
       drag.current = next
       drag.detached = detached
       if (step > 0) triggerSFX('sfx:grid-snap')
-      useScene
-        .getState()
-        .updateNodes(
-          frame([{ id: line.id as AnyNodeId, data: { path } as Partial<AnyNode> }, ...follow]),
-        )
+      livePreview.publish([
+        { id: line.id as AnyNodeId, data: { path } as Partial<AnyNode> },
+        ...follow,
+      ])
     }
 
     const finish = (commit: boolean) => {
@@ -334,17 +342,7 @@ function RefrigerantLineEndpointHandles({
       const finalPath = drag.initialPath.map((p, i) =>
         i === drag.index ? drag.current : p,
       ) as Point[]
-      const revert = (drag.connectivity?.connections ?? []).map((conn) =>
-        conn.kind === 'rigid-node'
-          ? { id: conn.nodeId, data: { position: conn.startPosition } as Partial<AnyNode> }
-          : { id: conn.nodeId, data: { path: conn.startPath } as Partial<AnyNode> },
-      )
-      useScene
-        .getState()
-        .updateNodes([
-          { id: line.id as AnyNodeId, data: { path: drag.initialPath } as Partial<AnyNode> },
-          ...revert.filter((u) => useScene.getState().nodes[u.id]),
-        ])
+      livePreview.clear()
       resumeSceneHistory(useScene)
       if (!commit) return
       const moved = finalPath[drag.index]!.some(
@@ -427,9 +425,9 @@ function RefrigerantLineEndpointHandles({
           )
         })}
       {draggingIndex !== null &&
-        line.path[draggingIndex] &&
+        displayLine.path[draggingIndex] &&
         (() => {
-          const point = line.path[draggingIndex]!
+          const point = displayLine.path[draggingIndex]!
           const origin = dragRef.current?.initialPath[draggingIndex] ?? point
           const deltas = [point[0] - origin[0], point[1] - origin[1], point[2] - origin[2]]
           const axes = ['x', 'y', 'z'] as const

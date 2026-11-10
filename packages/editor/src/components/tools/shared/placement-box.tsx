@@ -2,16 +2,12 @@
 
 import '../../../three-types'
 
+import { formatLinearMeasurement, type LinearUnit, type MetricNotation } from '@pascal-app/core'
 import { useEffect, useMemo } from 'react'
 import { PlaneGeometry } from 'three'
 import { distance, smoothstep, uv, vec2 } from 'three/tsl'
 import { LineBasicNodeMaterial, MeshBasicNodeMaterial } from 'three/webgpu'
 import { EDITOR_LAYER } from '../../../lib/constants'
-import {
-  formatLinearMeasurement,
-  type LinearUnit,
-  type MetricNotation,
-} from '../../../lib/measurements'
 import { Html } from '../../editor/localized-html'
 import { createLineGeometry, getBoxEdgePoints } from './placement-box-geometry'
 

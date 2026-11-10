@@ -1,6 +1,7 @@
 import {
   type FloorplanGeometry,
   type FloorplanPoint,
+  formatLinearMeasurement,
   type GeometryContext,
   getWallCurveFrameAt,
   getWallCurveLength,
@@ -8,11 +9,7 @@ import {
   isCurvedWall,
   type WallNode,
 } from '@pascal-app/core'
-import {
-  formatLinearMeasurement,
-  readFloorplanContext,
-  readFloorplanMetricNotationOverride,
-} from '@pascal-app/editor'
+import { readFloorplanContext, readFloorplanMetricNotationOverride } from '@pascal-app/editor'
 
 type WallHostedOpening = {
   position: readonly [number, number, number]

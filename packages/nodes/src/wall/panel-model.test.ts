@@ -45,6 +45,15 @@ function fixture() {
 }
 
 describe('Wall shared inspector', () => {
+  test('the end height offset has no static max; only the lower end is floored', () => {
+    const f = fixture()
+    f.change('end-height-offset', 2500)
+    expect(f.node.endHeightOffset).toBe(2500)
+    const height = getWallEffectiveHeightForNodes(f.node, f.nodes, 0)
+    f.change('end-height-offset', -100)
+    expect(f.node.endHeightOffset).toBeCloseTo(-(height - 0.01))
+  })
+
   test('height follows the level until explicitly detached; terrain infill preserves the top mode', () => {
     const f = fixture()
     const height = getWallEffectiveHeightForNodes(f.node, f.nodes)

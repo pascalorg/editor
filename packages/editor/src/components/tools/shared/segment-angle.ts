@@ -83,10 +83,6 @@ function getCurveTangentAtPoint(point: PlanPoint, segment: SegmentAngleLike): Pl
   return best.tangent
 }
 
-export function formatAngleRadians(angle: number) {
-  return `${Math.round((angle * 180) / Math.PI)}°`
-}
-
 export function getAngleBetweenVectors(first: PlanPoint, second: PlanPoint): number | null {
   const firstLength = Math.hypot(first[0], first[1])
   const secondLength = Math.hypot(second[0], second[1])

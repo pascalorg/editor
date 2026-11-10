@@ -1,6 +1,19 @@
-import { describe, expect, test } from 'bun:test'
-import { ColumnNode } from '@pascal-app/core'
+import { afterEach, describe, expect, test } from 'bun:test'
+import {
+  ColumnNode,
+  createSceneApi,
+  isMovable,
+  isMoveLocked,
+  isNodeDuplicable,
+  nodeRegistry,
+  registerNode,
+  useScene,
+} from '@pascal-app/core'
 import { columnDefinition } from './definition'
+import { columnEditPatch } from './edit-policy'
+
+const originalScene = useScene.getState()
+afterEach(() => useScene.setState(originalScene, true))
 
 describe('column definition', () => {
   test('keeps only user-owned handles for lean-to managed columns', () => {
@@ -37,4 +50,50 @@ describe('column definition', () => {
       'arc-resize',
     ])
   })
+})
+
+test('round handle edits keep inspector dimensions in sync without rewriting the loaded node', () => {
+  const column = ColumnNode.parse({ radius: 0.3, width: 0.44, depth: 0.44 })
+  const handles =
+    typeof columnDefinition.handles === 'function'
+      ? columnDefinition.handles(column)
+      : columnDefinition.handles!
+  const radius = handles.find((h) => h.kind === 'radial-resize')!
+  const scene = createSceneApi(useScene)
+  useScene.setState({ nodes: { [column.id]: column } })
+  expect(radius.apply(column, 0.5, scene)).toMatchObject({ radius: 0.5, width: 1, depth: 1 })
+  expect(column.width).toBe(0.44)
+})
+
+test('switching to square normalizes both axes, and managed posts reject layout edits', () => {
+  const column = ColumnNode.parse({ crossSection: 'rectangular', width: 1, depth: 2 })
+  expect(columnEditPatch(column, { crossSection: 'square' })).toMatchObject({ width: 1, depth: 1 })
+  const managed = { ...column, metadata: { managedByLeanTo: 'canopy', leanToRole: 'post' } }
+  expect(
+    columnEditPatch(managed, { width: 2, radius: 1, position: [1, 0, 0], rotation: 1 }),
+  ).toEqual({ rotation: 1 })
+  expect(columnDefinition.capabilities.movable?.override?.({ node: managed })).toEqual({
+    axes: [],
+    gridSnap: false,
+  })
+})
+
+test('a lean-to managed post is not movable; a free post is', () => {
+  if (!nodeRegistry.has('column')) registerNode(columnDefinition as never)
+  const free = ColumnNode.parse({})
+  const managed = ColumnNode.parse({ metadata: { managedByLeanTo: 'canopy', leanToRole: 'post' } })
+  expect(isMovable(free)).toBe(true)
+  expect(isMoveLocked(free)).toBe(false)
+  expect(isMovable(managed)).toBe(false)
+  expect(isMoveLocked(managed)).toBe(true)
+})
+
+test('a lean-to managed post cannot be duplicated; a free post can', () => {
+  if (!nodeRegistry.has('column')) registerNode(columnDefinition as never)
+  expect(isNodeDuplicable(ColumnNode.parse({}))).toBe(true)
+  expect(
+    isNodeDuplicable(
+      ColumnNode.parse({ metadata: { managedByLeanTo: 'canopy', leanToRole: 'post' } }),
+    ),
+  ).toBe(false)
 })

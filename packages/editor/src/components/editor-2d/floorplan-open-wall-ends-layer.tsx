@@ -1,7 +1,7 @@
 'use client'
 
 import type { AnyNodeId, OpenWallEnd } from '@pascal-app/core'
-import { useViewer } from '@pascal-app/viewer'
+import { MEASUREMENT_DANGLING_COLOR, useViewer } from '@pascal-app/viewer'
 import { memo, useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import {
@@ -10,7 +10,6 @@ import {
   useOpenWallEndsSuppressed,
 } from '../../hooks/use-open-wall-ends'
 import { openWallEndKey, openWallEndLabel } from '../../lib/floorplan/open-wall-ends'
-import { MEASUREMENT_DANGLING_COLOR } from '../../lib/measurements'
 import useEditor from '../../store/use-editor'
 import { isViewVisible, VIEW_2D } from '../../store/view-layout'
 import { JoinWallsPill } from '../editor/join-walls-pill'

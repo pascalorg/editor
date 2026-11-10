@@ -5,6 +5,8 @@ import {
   collectAlignmentAnchors,
   DEFAULT_LEVEL_HEIGHT,
   emitter,
+  formatAngleRadians,
+  formatLinearMeasurement,
   GROUND_SUPPORT_ID,
   type GridEvent,
   getWallMiterBoundaryPoints,
@@ -31,8 +33,6 @@ import {
   discardWallPolygonDraft,
   EDITOR_LAYER,
   endWallPullRun,
-  formatAngleRadians,
-  formatLinearMeasurement,
   formatWallDraftHeading,
   getAngleArcToSegmentReference,
   getAngleToSegmentReference,
@@ -1165,8 +1165,10 @@ const LineWallTool: React.FC = () => {
 
     const onCancel = () => {
       if (buildingState.current === 1) {
-        // A first Escape ends an open typed session; the next cancels the draft.
+        // A first cancel (Escape, ⌘Z, …) ends an open typed session; the next
+        // cancels the draft.
         if (usePlacementTyping.getState().isActive) {
+          markToolCancelConsumed()
           usePlacementTyping.getState().clear()
           return
         }

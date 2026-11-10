@@ -27,7 +27,7 @@ import { useViewer } from '@pascal-app/viewer'
 import { ArrowDown, ArrowUp, Plus, X } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { formatLayerThickness, parseLayerThickness } from '../../../lib/layer-thickness'
-import type { LinearUnit } from '../../../lib/measurements'
+import type { LinearUnit } from '@pascal-app/core'
 import { cn } from '../../../lib/utils'
 import {
   saveProjectWallType,

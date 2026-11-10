@@ -95,7 +95,7 @@ export { useAssetUrl } from './hooks/use-asset-url'
 export { useGLTFKTX2 } from './hooks/use-gltf-ktx2'
 export { useLibraryMaterialsVersion } from './hooks/use-library-materials-version'
 export { useNodeEvents } from './hooks/use-node-events'
-export { ASSETS_CDN_URL, resolveAssetUrl, resolveCdnUrl } from './lib/asset-url'
+export { resolveAssetUrl, resolveCdnUrl } from './lib/asset-url'
 export { backdropColors, backdropGradient, deepSkyColor, horizonHazeColor } from './lib/backdrop'
 export { applyWorldScaleBoxUVs } from './lib/box-uv'
 // CSG primitives — used by chimney's roof-trim and other kinds whose
@@ -232,6 +232,8 @@ export {
   setSlotDefaultOverrides,
   WHITE_PALETTE,
 } from './lib/materials'
+export * from './lib/measurement-label'
+export * from './lib/measurement-presentation'
 export { mergedOutline } from './lib/merged-outline-node'
 export { createNodeTopSurfaceHeightSampler } from './lib/node-top-surface-height'
 export * from './lib/perf-actions'
@@ -341,6 +343,12 @@ export {
   UNDERGROUND_RIM,
   undergroundAmbianceNode,
 } from './lib/underground-ambiance'
+export {
+  ASSETS_CDN_URL,
+  configureViewer,
+  getViewerConfig,
+  type ViewerConfig,
+} from './lib/viewer-config'
 export { createZoneShape, createZoneWallGeometry } from './lib/zone-geometry'
 export type { LightSource } from './store/use-item-light-pool'
 export { catalogLightSource, useItemLightPool } from './store/use-item-light-pool'
@@ -417,6 +425,11 @@ export { ElevatorInteractionSystem } from './systems/elevator/elevator-interacti
 // elevation under its footprint. Replaces the per-kind elevation block
 // that used to live inside `ItemSystem`.
 export { FloorElevationSystem } from './systems/floor-elevation/floor-elevation-system'
+export {
+  type GeometryFailure,
+  setGeometryFailure,
+  useGeometryStatus,
+} from './systems/geometry/geometry-status'
 export { GuideSystem } from './systems/guide/guide-system'
 export { InteractiveSystem } from './systems/interactive/interactive-system'
 export { openingSettled, proceduralSettled } from './systems/interactive/opening-settled'

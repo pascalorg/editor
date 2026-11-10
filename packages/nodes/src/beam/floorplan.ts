@@ -4,13 +4,10 @@ import {
   beamPlan,
   beamSizeLabel,
   type FloorplanGeometry,
+  formatLinearMeasurement,
   type GeometryContext,
 } from '@pascal-app/core'
-import {
-  floorplanGeometryMetadata,
-  formatLinearMeasurement,
-  readFloorplanMetricNotationOverride,
-} from '@pascal-app/editor'
+import { floorplanGeometryMetadata, readFloorplanMetricNotationOverride } from '@pascal-app/editor'
 
 /** Hidden work: a beam is over the plan's cut, so it is drawn dashed, as a framing plan draws it. */
 const HIDDEN_DASH = '8 4'

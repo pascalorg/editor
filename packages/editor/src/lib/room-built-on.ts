@@ -1,12 +1,12 @@
 import {
   type AnyNode,
   roomFloorChoices as coreRoomFloorChoices,
+  levelFootprints,
   type PascalI18n,
   roomDrawnFloor,
   type SlabNode,
   type ZoneNode,
 } from '@pascal-app/core'
-import { levelFootprints } from './floor-footprints'
 
 // "Built on": which floor a room stands on. By default a room is part of its
 // connected footprint's shared floor (`floor.footprint` absent); a floor key
@@ -59,20 +59,6 @@ export function roomFloorChoices(nodes: Nodes, zoneId: string): PlateChoice[] {
   return coreRoomFloorChoices(nodes, zoneId)
     .filter((choice) => !choice.drawn && !choice.mezzanine)
     .map(({ key, plateId, name }) => ({ key, plateId, name }))
-}
-
-/**
- * The plate a room on a separate floor stands on alone: its height is that
- * plate's floor height (nothing else stands on it). Null for a room on the
- * shared floor or sharing its separate floor with other rooms.
- */
-export function roomOwnPlate(nodes: Nodes, zoneId: string): SlabNode | null {
-  const zone = nodes[zoneId]
-  if (!isRoom(zone) || !zone.floor?.footprint || zone.floor.support === 'open') return null
-  const plate = listingPlate(nodes, zone)
-  if (!plate) return null
-  const alone = !(plate.zoneIds ?? []).some((id) => id !== zoneId && isGroundRoom(nodes[id]))
-  return alone ? plate : null
 }
 
 /**

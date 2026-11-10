@@ -93,6 +93,43 @@ describe('wall opening cutout', () => {
       wallMesh.geometry.dispose()
     }
   })
+  test('does not punch above sloped wall cap when opening height exceeds slope', () => {
+    const wall = WallNode.parse({
+      id: 'wall_sloped-opening-cutout',
+      start: [0, 0],
+      end: [2, 0],
+      height: 2.5,
+      endHeightOffset: -1.0, // Slopes from 2.5m at x=0 down to 1.5m at x=2
+      thickness: 0.1,
+    })
+    const door = DoorNode.parse({
+      id: 'door_sloped-opening-cutout',
+      wallId: wall.id,
+      position: [1.5, 1.0, 0],
+      width: 0.8,
+      height: 2.0, // Top at 2.0m exceeds the wall ceiling at x=1.5 (which is 1.75m)
+    })
+    const wallMesh = new THREE.Mesh()
+    sceneRegistry.nodes.set(wall.id, wallMesh)
+
+    try {
+      const geometry = generateExtrudedWall(wall, [door], calculateLevelMiters([wall]))
+      const position = geometry.getAttribute('position')
+      expect(position.count).toBeGreaterThan(0)
+      const topAt = (x: number) => {
+        let top = -Infinity
+        for (let i = 0; i < position.count; i++)
+          if (Math.abs(position.getX(i) - x) < 1e-4) top = Math.max(top, position.getY(i))
+        return top
+      }
+      expect(topAt(0)).toBeCloseTo(2.5, 5)
+      expect(topAt(2)).toBeCloseTo(1.5, 5)
+      geometry.dispose()
+    } finally {
+      sceneRegistry.nodes.delete(wall.id)
+      wallMesh.geometry.dispose()
+    }
+  })
 })
 
 test('curved walls cut rectangular and arched openings along the arc', () => {

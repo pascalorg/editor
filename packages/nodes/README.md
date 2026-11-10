@@ -8,12 +8,13 @@ Built-in node definitions for the Pascal viewer and editor.
 npm install @pascal-app/core @pascal-app/viewer @pascal-app/editor @pascal-app/nodes
 ```
 
-The package declares the remaining React, Next.js, Three.js, and UI libraries it needs as peer
-dependencies. Install any peers reported by your package manager.
+The full entry uses the editor and its Next.js and UI peers. Render-only hosts can omit
+`@pascal-app/editor` (an optional peer) and Next.js. Install the remaining React and Three.js peers
+reported by your package manager.
 
 ## Usage
 
-Load `builtinPlugin` once before mounting a Pascal viewer or editor:
+Editor hosts load `builtinPlugin` once before mounting:
 
 ```typescript
 import { loadPlugin } from '@pascal-app/core'
@@ -24,6 +25,19 @@ await loadPlugin(builtinPlugin)
 
 The plugin registers the built-in schemas, renderers, geometry builders, tools, and systems. Hosts
 can load additional plugins through the same `loadPlugin` API.
+
+For a render-only host, use the same plugin contract with all built-in kinds:
+
+```typescript
+import { loadPlugin } from '@pascal-app/core'
+import { renderPlugin } from '@pascal-app/nodes/render'
+
+await loadPlugin(renderPlugin)
+```
+
+Load exactly one built-in entry per runtime. Both use the `pascal:core` plugin id and API version 1;
+`renderPlugin` supplies schemas, geometry, renderers, systems and runtime interactions, while
+`builtinPlugin` also supplies tools, inspectors, paint and floor plans.
 
 See the
 [`@pascal-app/viewer` quick start](https://github.com/pascalorg/editor/tree/main/packages/viewer#usage)

@@ -1,0 +1,1776 @@
+import type {
+  AnyNode,
+  AnyNodeId,
+  CabinetModuleNode as CabinetModuleNodeType,
+  CabinetNode as CabinetNodeType,
+  HandleDescriptor,
+  LinearResizeHandle,
+  SceneApi,
+} from '@pascal-app/core'
+import type { NodeEditContribution } from '../definition-contributions'
+import {
+  type CabinetEditableNode,
+  cabinetDuplicateWorldPose,
+  cabinetLocalBounds,
+  composeCabinetDuplicatePose,
+  isCabinetModule,
+  isCabinetRun,
+} from './definition.render'
+import { buildCabinetFloorplan, buildCabinetModuleFloorplan } from './floorplan'
+import { cabinetModuleFloorplanMoveTarget } from './floorplan-move'
+import { cabinetFloorplanSiblingOverrides } from './floorplan-overrides'
+import { withCabinetHostedChildren } from './hosted-resize'
+import { toggleCabinetOperationState } from './interaction'
+import { cabinetPaint } from './paint'
+import { cabinetModuleUsesFixedApplianceWidth } from './panel-visibility'
+import { cabinetModuleParametrics, cabinetParametrics } from './parametrics'
+import { cabinetPlacementNotice } from './placement-notice'
+import useCabinetPlacementType from './placement-type'
+import { metadataForSelectedWidth, metadataWithPresetWidthDebt } from './preset-width-debt'
+import { cabinetQuickActions } from './quick-actions'
+import {
+  cabinetConnectedDepthBounds,
+  cabinetResizeUpperBound,
+  MAX_CABINET_DEPTH,
+  MAX_CABINET_WIDTH,
+  MIN_CABINET_DEPTH,
+  MIN_CABINET_WIDTH,
+} from './resize-limits'
+import {
+  moduleSideOpen,
+  reflowRunModules as reflowCabinetRunModules,
+  runWallConstraints,
+  sortRunModules,
+} from './run-layout'
+import {
+  backAlignedRunDepthOverrides,
+  backAlignZ,
+  buildWallCornerDepthIndex,
+  bumpCabinetRunLayoutRevision,
+  cabinetMetadataRecord,
+  cabinetModulesForRun,
+  totalCabinetHeight as cabinetTotalHeight,
+  cornerSourceWidthOverridesForDerivedDepth,
+  nestedCornerRunPositionOverrides,
+  previewCornerRunsFromRunSources,
+  resolveCabinetType,
+  runModuleBaseY,
+  syncCornerRunsFromRunSources,
+  syncCornerRunsFromSourceModule,
+  type WallCornerDepthIndex,
+  wallChildOf,
+  wallCornerWidthOverridesForDepthTargets,
+} from './run-ops'
+import type { CabinetModuleNode, CabinetNode } from './schema'
+import {
+  backAnchoredModuleZ,
+  isHoodCompartmentType,
+  minCabinetCarcassHeightForStack,
+  stackForCabinet,
+} from './stack'
+import { cabinetFloorplanAffectedIds } from './tree-structure'
+
+const SIDE_HANDLE_OFFSET = 0.18
+
+const HEIGHT_HANDLE_OFFSET = 0.22
+
+const ROTATE_CORNER_OFFSET = 0.32
+
+const ROTATE_RING_OFFSET = 0.04
+
+const MIN_CABINET_CARCASS_HEIGHT = 0.4
+
+const CABINET_ADJACENCY_EPSILON = 1e-4
+
+const CABINET_DEPTH_SNAP_THRESHOLD = 0.02
+
+const CABINET_WIDTH_SNAP_THRESHOLD = 0.08
+
+function cabinetModuleSideOpen(
+  module: CabinetModuleNodeType,
+  side: 'left' | 'right',
+  sceneApi: SceneApi,
+) {
+  const parent = module.parentId ? sceneApi.get(module.parentId as AnyNodeId) : undefined
+  if (!isCabinetRun(parent)) return true
+  return moduleSideOpen(
+    cabinetModulesForRun(parent, sceneApi.nodes()),
+    module.id,
+    side,
+    CABINET_ADJACENCY_EPSILON,
+  )
+}
+
+function cabinetModuleConnectedNeighbor(
+  module: CabinetModuleNodeType,
+  side: 'left' | 'right',
+  sceneApi: SceneApi,
+): CabinetModuleNodeType | undefined {
+  const parent = module.parentId ? sceneApi.get(module.parentId as AnyNodeId) : undefined
+  if (!isCabinetRun(parent)) return undefined
+  const modules = sortRunModules(cabinetModulesForRun(parent, sceneApi.nodes()))
+  const index = modules.findIndex((entry) => entry.id === module.id)
+  if (index < 0 || cabinetModuleSideOpen(module, side, sceneApi)) return undefined
+  return side === 'left' ? modules[index - 1] : modules[index + 1]
+}
+
+function cabinetWidthConnectedNeighbor(
+  module: CabinetModuleNodeType,
+  side: 'left' | 'right',
+  sceneApi: SceneApi,
+): CabinetModuleNodeType | undefined {
+  const parent = module.parentId ? sceneApi.get(module.parentId as AnyNodeId) : undefined
+  if (isCabinetRun(parent)) return cabinetModuleConnectedNeighbor(module, side, sceneApi)
+  if (!isCabinetModule(parent)) return undefined
+  if (wallChildOf(parent, sceneApi.nodes())?.id !== module.id) return undefined
+
+  const connectedHost = cabinetModuleConnectedNeighbor(parent, side, sceneApi)
+  if (!connectedHost || isCabinetWidthFiller(connectedHost)) return undefined
+  return wallChildOf(connectedHost, sceneApi.nodes()) ?? undefined
+}
+
+function cabinetModuleRunLocalCenterX(
+  module: CabinetModuleNodeType,
+  sceneApi: SceneApi,
+): number | null {
+  const parent = module.parentId ? sceneApi.get(module.parentId as AnyNodeId) : undefined
+  if (isCabinetRun(parent)) return module.position[0]
+  if (!isCabinetModule(parent)) return null
+  const run = parent.parentId ? sceneApi.get(parent.parentId as AnyNodeId) : undefined
+  return isCabinetRun(run) ? parent.position[0] + module.position[0] : null
+}
+
+function cabinetWallWidthGap(
+  module: CabinetModuleNodeType,
+  side: 'left' | 'right',
+  sceneApi: SceneApi,
+) {
+  const parent = module.parentId ? sceneApi.get(module.parentId as AnyNodeId) : undefined
+  const isWallModule =
+    (isCabinetRun(parent) && parent.runTier === 'wall') ||
+    (isCabinetModule(parent) && wallChildOf(parent, sceneApi.nodes())?.id === module.id)
+  if (!isWallModule) return 0
+
+  const connected = cabinetWidthConnectedNeighbor(module, side, sceneApi)
+  if (!connected || isCabinetWidthFiller(connected)) return 0
+  const moduleCenter = cabinetModuleRunLocalCenterX(module, sceneApi)
+  const connectedCenter = cabinetModuleRunLocalCenterX(connected, sceneApi)
+  if (moduleCenter === null || connectedCenter === null) return 0
+
+  const direction = side === 'right' ? 1 : -1
+  return Math.max(
+    0,
+    direction * (connectedCenter - moduleCenter) - (module.width + connected.width) / 2,
+  )
+}
+
+function isCabinetWidthFiller(module: CabinetModuleNodeType) {
+  return (
+    module.moduleKind !== 'standard' ||
+    module.name === 'Corner Filler' ||
+    module.name === 'Wall Bridge Filler' ||
+    module.name === 'Corner Wall Filler'
+  )
+}
+
+function cabinetNodeAttachedToAncestor(
+  node: CabinetNodeType,
+  ancestorId: AnyNodeId,
+  nodes: Readonly<Partial<Record<AnyNodeId, AnyNode>>>,
+) {
+  let current: CabinetNodeType | CabinetModuleNodeType = node
+  const visited = new Set<AnyNodeId>()
+  while (current.parentId) {
+    const currentId = current.id as AnyNodeId
+    if (visited.has(currentId)) return false
+    visited.add(currentId)
+    const parent: AnyNode | undefined = nodes[current.parentId as AnyNodeId]
+    if (parent?.type !== 'cabinet' && parent?.type !== 'cabinet-module') return false
+    if (!((parent.children ?? []) as readonly AnyNodeId[]).includes(currentId)) return false
+    if (parent.id === ancestorId) return true
+    current = parent
+  }
+  return false
+}
+
+function cabinetSubtreeHasNamedFiller(
+  root: CabinetModuleNodeType,
+  name: 'Corner Wall Filler',
+  sceneApi: SceneApi,
+) {
+  const pending = [...(root.children ?? [])] as AnyNodeId[]
+  const visited = new Set<AnyNodeId>()
+  while (pending.length > 0) {
+    const id = pending.pop()!
+    if (visited.has(id)) continue
+    visited.add(id)
+    const node = sceneApi.get(id)
+    if (!node) continue
+    if (node.type === 'cabinet-module' && isCabinetWidthFiller(node) && node.name === name) {
+      return true
+    }
+    if (node.type === 'cabinet' || node.type === 'cabinet-module') {
+      pending.push(...((node.children ?? []) as AnyNodeId[]))
+    }
+  }
+  return false
+}
+
+function wallCabinetSideHasFiller(
+  hostModule: CabinetModuleNodeType,
+  side: 'left' | 'right',
+  sceneApi: SceneApi,
+) {
+  const hostRun = hostModule.parentId
+    ? sceneApi.get<CabinetNodeType>(hostModule.parentId as AnyNodeId)
+    : undefined
+  if (!hostRun || !isCabinetRun(hostRun)) return false
+
+  const connected = cabinetModuleConnectedNeighbor(hostModule, side, sceneApi)
+  if (
+    connected &&
+    isCabinetWidthFiller(connected) &&
+    cabinetSubtreeHasNamedFiller(connected, 'Corner Wall Filler', sceneApi)
+  ) {
+    return true
+  }
+
+  const nodes = sceneApi.nodes()
+  for (const candidate of Object.values(nodes)) {
+    if (candidate?.type !== 'cabinet') continue
+    const derived = cabinetMetadataRecord(candidate.metadata).cabinetCornerDerivedRun
+    if (!derived || typeof derived !== 'object' || Array.isArray(derived)) continue
+    if (
+      (derived as { role?: unknown }).role !== 'bridge' ||
+      (derived as { side?: unknown }).side !== side ||
+      (derived as { sourceModuleId?: unknown }).sourceModuleId !== hostModule.id ||
+      (derived as { sourceRunId?: unknown }).sourceRunId !== hostRun.id ||
+      !cabinetNodeAttachedToAncestor(candidate, hostRun.id as AnyNodeId, nodes)
+    ) {
+      continue
+    }
+    if (
+      cabinetModulesForRun(candidate, nodes).some((entry) => entry.name === 'Wall Bridge Filler')
+    ) {
+      return true
+    }
+  }
+  return false
+}
+
+function cabinetModuleSideHasCornerFiller(
+  module: CabinetModuleNodeType,
+  side: 'left' | 'right',
+  sceneApi: SceneApi,
+) {
+  const parent = module.parentId ? sceneApi.get(module.parentId as AnyNodeId) : undefined
+  if (isCabinetModule(parent)) {
+    return wallCabinetSideHasFiller(parent, side, sceneApi)
+  }
+  if (!isCabinetRun(parent)) return false
+  const connected = cabinetModuleConnectedNeighbor(module, side, sceneApi)
+  if (connected && isCabinetWidthFiller(connected)) {
+    return true
+  }
+
+  for (const candidate of Object.values(sceneApi.nodes())) {
+    if (candidate?.type !== 'cabinet') continue
+    const derived = cabinetMetadataRecord(candidate.metadata).cabinetCornerDerivedRun
+    if (!derived || typeof derived !== 'object' || Array.isArray(derived)) continue
+    if (
+      candidate.parentId !== parent.id ||
+      !((parent.children ?? []) as readonly AnyNodeId[]).includes(candidate.id as AnyNodeId) ||
+      (derived as { role?: unknown }).role !== 'base-leg' ||
+      (derived as { side?: unknown }).side !== side ||
+      (derived as { sourceModuleId?: unknown }).sourceModuleId !== module.id ||
+      (derived as { sourceRunId?: unknown }).sourceRunId !== parent.id
+    ) {
+      continue
+    }
+    if (
+      cabinetModulesForRun(candidate, sceneApi.nodes()).some(
+        (entry) => entry.moduleKind === 'corner-filler',
+      )
+    ) {
+      return true
+    }
+  }
+  return false
+}
+
+function connectedCabinetWidthResize(
+  module: CabinetModuleNodeType,
+  side: 'left' | 'right',
+  delta: number,
+  sceneApi: SceneApi,
+): {
+  module: CabinetModuleNodeType
+  patch: Pick<CabinetModuleNodeType, 'position' | 'width'>
+} | null {
+  const connected = cabinetWidthConnectedNeighbor(module, side, sceneApi)
+  if (!connected || isCabinetWidthFiller(connected)) return null
+  const direction = side === 'right' ? 1 : -1
+  return {
+    module: connected,
+    patch: {
+      width: connected.width - delta,
+      position: [
+        connected.position[0] + (direction * delta) / 2,
+        connected.position[1],
+        connected.position[2],
+      ],
+    },
+  }
+}
+
+function wallCabinetWidthOverride(
+  module: CabinetModuleNodeType,
+  width: number,
+  sceneApi: SceneApi,
+): readonly [AnyNodeId, Partial<AnyNode>] | null {
+  const parent = module.parentId
+    ? sceneApi.get<CabinetNodeType>(module.parentId as AnyNodeId)
+    : undefined
+  if (!parent || !isCabinetRun(parent) || resolveCabinetType(module, parent) !== 'base') return null
+  const wallChild = wallChildOf(module, sceneApi.nodes())
+  return wallChild ? [wallChild.id as AnyNodeId, { width }] : null
+}
+
+function parentRunGeometryPreviewOverride(
+  node: CabinetEditableNode,
+  sceneApi: SceneApi,
+): readonly [AnyNodeId, Partial<AnyNode>] | null {
+  if (!isCabinetModule(node) || !node.parentId) return null
+  const parent = sceneApi.get(node.parentId as AnyNodeId)
+  if (isCabinetRun(parent)) return [parent.id as AnyNodeId, {}]
+  if (!isCabinetModule(parent) || wallChildOf(parent, sceneApi.nodes())?.id !== node.id) return null
+  const run = parent.parentId ? sceneApi.get(parent.parentId as AnyNodeId) : undefined
+  return isCabinetRun(run) ? [run.id as AnyNodeId, {}] : null
+}
+
+function sharedDepthBounds(
+  referenceDepth: number,
+  targets: readonly CabinetEditableNode[],
+  nodes: Readonly<Partial<Record<AnyNodeId, AnyNode>>>,
+): { min: number; max: number } {
+  const depthOwners = targets.flatMap((target) => {
+    if (!isCabinetRun(target)) return [target]
+    const modules = cabinetModulesForRun(target, nodes)
+    return modules.length > 0 ? [target, ...modules] : [target]
+  })
+  const minDelta = Math.max(...depthOwners.map((target) => MIN_CABINET_DEPTH - target.depth))
+  const maxDelta = Math.min(
+    ...depthOwners.map(
+      (target) => cabinetResizeUpperBound(target.depth, MAX_CABINET_DEPTH) - target.depth,
+    ),
+  )
+  return {
+    min: referenceDepth + minDelta,
+    max: referenceDepth + maxDelta,
+  }
+}
+
+function depthDeltaRunOverrides(
+  run: CabinetNodeType,
+  nodes: Readonly<Partial<Record<AnyNodeId, AnyNode>>>,
+  depthDelta: number,
+): ReadonlyArray<readonly [AnyNodeId, Partial<AnyNode>]> {
+  const overrides: Array<readonly [AnyNodeId, Partial<AnyNode>]> = []
+  for (const module of cabinetModulesForRun(run, nodes)) {
+    const depth = module.depth + depthDelta
+    const positionZ = backAnchoredModuleZ(module.position[2], module.depth, depth)
+    const parentShiftZ = positionZ - module.position[2]
+    overrides.push([
+      module.id as AnyNodeId,
+      {
+        depth,
+        position: [module.position[0], module.position[1], positionZ],
+      } as Partial<AnyNode>,
+    ])
+    for (const childId of module.children ?? []) {
+      const child = nodes[childId as AnyNodeId]
+      if (child?.type !== 'cabinet') continue
+      overrides.push([
+        child.id as AnyNodeId,
+        {
+          position: [child.position[0], child.position[1], child.position[2] - parentShiftZ],
+        } as Partial<AnyNode>,
+      ])
+    }
+    const wallChild = wallChildOf(module, nodes)
+    if (wallChild) {
+      overrides.push([
+        wallChild.id as AnyNodeId,
+        {
+          position: [
+            wallChild.position[0],
+            wallChild.position[1],
+            backAlignZ(depth, wallChild.depth),
+          ],
+        } as Partial<AnyNode>,
+      ])
+    }
+  }
+  return overrides
+}
+
+function commitRunResize(
+  run: CabinetNodeType,
+  patch: Partial<CabinetNodeType>,
+  sceneApi: SceneApi,
+  options: { cornerSync?: 'full' | 'width-only' } = {},
+) {
+  sceneApi.update(run.id as AnyNodeId, patch as Partial<AnyNode>)
+  const nextRun = { ...run, ...patch }
+  const syncDepth = typeof patch.depth === 'number'
+  const syncHeight = typeof patch.carcassHeight === 'number'
+  const syncPosition = patch.showPlinth !== undefined || typeof patch.plinthHeight === 'number'
+
+  if (syncDepth || syncHeight || syncPosition) {
+    const depthOverrides = new Map(
+      syncDepth ? backAlignedRunDepthOverrides(run, sceneApi.nodes(), nextRun.depth) : [],
+    )
+    for (const module of cabinetModulesForRun(run, sceneApi.nodes())) {
+      const modulePatch: Partial<CabinetModuleNodeType> = {}
+      if (syncDepth) {
+        Object.assign(modulePatch, depthOverrides.get(module.id as AnyNodeId))
+      }
+      if (syncHeight) {
+        modulePatch.carcassHeight = Math.max(
+          nextRun.carcassHeight,
+          minCabinetCarcassHeightForStack(module),
+        )
+      }
+      if (syncPosition) {
+        modulePatch.position = [
+          modulePatch.position?.[0] ?? module.position[0],
+          runModuleBaseY(nextRun),
+          modulePatch.position?.[2] ?? module.position[2],
+        ]
+      }
+      if (Object.keys(modulePatch).length > 0) {
+        sceneApi.update(module.id as AnyNodeId, modulePatch as Partial<AnyNode>)
+        const wallChild = wallChildOf(module, sceneApi.nodes())
+        if (wallChild && typeof modulePatch.depth === 'number') {
+          sceneApi.update(
+            wallChild.id as AnyNodeId,
+            {
+              position: [
+                wallChild.position[0],
+                wallChild.position[1],
+                backAlignZ(modulePatch.depth, wallChild.depth),
+              ],
+            } as Partial<AnyNode>,
+          )
+        }
+      }
+    }
+    if (syncDepth) {
+      for (const [id, depthPatch] of depthOverrides) {
+        if (sceneApi.get(id)?.type !== 'cabinet') continue
+        sceneApi.update(id, depthPatch as Partial<AnyNode>)
+      }
+    }
+  }
+
+  if (syncDepth || syncHeight || syncPosition) {
+    bumpCabinetRunLayoutRevision(sceneApi, nextRun)
+    syncCornerRunsFromRunSources({
+      baseLayout: options.cornerSync ?? 'full',
+      run: nextRun,
+      sceneApi,
+    })
+  }
+}
+
+function commitRunDepthDelta(
+  run: CabinetNodeType,
+  depth: number,
+  sceneApi: SceneApi,
+  options: { cornerSync?: 'full' | 'width-only' } = {},
+) {
+  const depthDelta = depth - run.depth
+  for (const [id, patch] of depthDeltaRunOverrides(run, sceneApi.nodes(), depthDelta)) {
+    sceneApi.update(id, patch)
+  }
+  sceneApi.update(run.id as AnyNodeId, { depth } as Partial<AnyNode>)
+  const nextRun = { ...run, depth }
+  bumpCabinetRunLayoutRevision(sceneApi, nextRun)
+  syncCornerRunsFromRunSources({
+    baseLayout: options.cornerSync ?? 'full',
+    run: nextRun,
+    sceneApi,
+  })
+}
+
+function commitModuleResize(
+  module: CabinetModuleNodeType,
+  patch: Partial<CabinetModuleNodeType>,
+  sceneApi: SceneApi,
+) {
+  const nodes = sceneApi.nodes()
+  const parent = module.parentId ? nodes[module.parentId as AnyNodeId] : undefined
+  const parentRun = isCabinetRun(parent) ? parent : undefined
+
+  if (!parentRun) {
+    sceneApi.update(module.id as AnyNodeId, patch as Partial<AnyNode>)
+    const parentModule = isCabinetModule(parent) ? parent : undefined
+    if (parentModule) sceneApi.markDirty(parentModule.id as AnyNodeId)
+    return
+  }
+
+  if (typeof patch.width === 'number') {
+    const previousModule = module
+    sceneApi.update(module.id as AnyNodeId, patch as Partial<AnyNode>)
+    if (resolveCabinetType(module, parentRun) === 'base') {
+      const wallChild = wallChildOf(module, sceneApi.nodes())
+      if (wallChild) {
+        sceneApi.update(wallChild.id as AnyNodeId, { width: patch.width } as Partial<AnyNode>)
+      }
+    }
+    bumpCabinetRunLayoutRevision(sceneApi, parentRun)
+    syncCornerRunsFromSourceModule({
+      module: sceneApi.get<CabinetModuleNodeType>(module.id as AnyNodeId) ?? module,
+      previousModule,
+      run: sceneApi.get<CabinetNodeType>(parentRun.id as AnyNodeId) ?? parentRun,
+      sceneApi,
+    })
+    return
+  }
+
+  const modulePatch: Partial<CabinetModuleNodeType> = { ...patch }
+  if (typeof patch.depth === 'number') {
+    modulePatch.position = [
+      patch.position?.[0] ?? module.position[0],
+      patch.position?.[1] ?? module.position[1],
+      backAnchoredModuleZ(module.position[2], module.depth, patch.depth),
+    ]
+  }
+
+  sceneApi.update(module.id as AnyNodeId, modulePatch as Partial<AnyNode>)
+
+  if (resolveCabinetType(module, parentRun) === 'base') {
+    const runPatch: Partial<CabinetNodeType> = {}
+    if (typeof patch.carcassHeight === 'number') {
+      runPatch.carcassHeight = patch.carcassHeight
+    }
+    if (Object.keys(runPatch).length > 0) {
+      commitRunResize(parentRun, runPatch, sceneApi)
+    } else {
+      bumpCabinetRunLayoutRevision(sceneApi, parentRun)
+    }
+  } else {
+    bumpCabinetRunLayoutRevision(sceneApi, parentRun)
+  }
+
+  syncCornerRunsFromSourceModule({
+    module: sceneApi.get<CabinetModuleNodeType>(module.id as AnyNodeId) ?? module,
+    previousModule: module,
+    run: sceneApi.get<CabinetNodeType>(parentRun.id as AnyNodeId) ?? parentRun,
+    sceneApi,
+  })
+
+  const wallChild = wallChildOf(module, sceneApi.nodes())
+  if (wallChild && typeof modulePatch.depth === 'number') {
+    sceneApi.update(
+      wallChild.id as AnyNodeId,
+      {
+        position: [
+          wallChild.position[0],
+          wallChild.position[1],
+          backAlignZ(modulePatch.depth, wallChild.depth),
+        ],
+      } as Partial<AnyNode>,
+    )
+  }
+}
+
+function commitCabinetResize(
+  node: CabinetEditableNode,
+  patch: Partial<CabinetEditableNode>,
+  sceneApi: SceneApi,
+) {
+  const liveNode = sceneApi.get(node.id as AnyNodeId) ?? node
+  if (isCabinetRun(liveNode)) {
+    commitRunResize(liveNode, patch as Partial<CabinetNodeType>, sceneApi)
+    return
+  }
+  if (isCabinetModule(liveNode)) {
+    commitModuleResize(liveNode, patch as Partial<CabinetModuleNodeType>, sceneApi)
+    return
+  }
+  sceneApi.update(node.id as AnyNodeId, patch as Partial<AnyNode>)
+}
+
+function cabinetManualWidthContext(
+  node: CabinetModuleNodeType,
+  sceneApi: SceneApi,
+): {
+  run: CabinetNodeType
+  selected: CabinetModuleNodeType
+  modules: CabinetModuleNodeType[]
+} | null {
+  const parent = node.parentId ? sceneApi.get(node.parentId as AnyNodeId) : undefined
+  if (isCabinetRun(parent)) {
+    return { run: parent, selected: node, modules: cabinetModulesForRun(parent, sceneApi.nodes()) }
+  }
+  if (!isCabinetModule(parent)) return null
+  const run = parent.parentId ? sceneApi.get(parent.parentId as AnyNodeId) : undefined
+  if (!isCabinetRun(run) || wallChildOf(parent, sceneApi.nodes())?.id !== node.id) return null
+  return { run, selected: parent, modules: cabinetModulesForRun(run, sceneApi.nodes()) }
+}
+
+function cabinetWidthIsNestedModule(node: CabinetModuleNodeType, sceneApi: SceneApi): boolean {
+  const context = cabinetManualWidthContext(node, sceneApi)
+  return context !== null && context.selected.id !== node.id
+}
+
+function snapCabinetWidth(
+  node: CabinetModuleNodeType,
+  width: number,
+  side: 'left' | 'right',
+  sceneApi: SceneApi,
+): number {
+  const context = cabinetManualWidthContext(node, sceneApi)
+  if (!context) return width
+
+  const sorted = sortRunModules(context.modules)
+  const selected = context.selected
+  const selectedIndex = sorted.findIndex((module) => module.id === selected.id)
+  const neighborHost = sorted[side === 'right' ? selectedIndex + 1 : selectedIndex - 1]
+  if (!neighborHost) return width
+
+  const nested = selected.id !== node.id
+  const snapTarget = nested ? wallChildOf(neighborHost, sceneApi.nodes()) : neighborHost
+  if (!snapTarget) return width
+
+  const selectedCenter = nested
+    ? cabinetModuleRunLocalCenterX(node, sceneApi)
+    : selected.position[0]
+  const targetCenter = nested
+    ? cabinetModuleRunLocalCenterX(snapTarget, sceneApi)
+    : snapTarget.position[0]
+  if (selectedCenter === null || targetCenter === null) return width
+
+  const selectedEdge = selectedCenter + (side === 'right' ? node.width / 2 : -node.width / 2)
+  const neighborEdge =
+    targetCenter + (side === 'right' ? -snapTarget.width / 2 : snapTarget.width / 2)
+  const gap = side === 'right' ? neighborEdge - selectedEdge : selectedEdge - neighborEdge
+  if (gap <= CABINET_ADJACENCY_EPSILON) return width
+
+  const targetWidth = node.width + gap - (nested ? 0 : cabinetWallWidthGap(node, side, sceneApi))
+  return targetWidth > node.width && Math.abs(width - targetWidth) <= CABINET_WIDTH_SNAP_THRESHOLD
+    ? targetWidth
+    : width
+}
+
+function cabinetIndependentWidthPatch(
+  node: CabinetModuleNodeType,
+  width: number,
+  side: 'left' | 'right',
+  sceneApi: SceneApi,
+): Partial<CabinetEditableNode> {
+  const sign = side === 'right' ? 1 : -1
+  const gap = cabinetWallWidthGap(node, side, sceneApi)
+  const effectiveWidth = width + gap
+  return {
+    width: effectiveWidth,
+    position: [
+      node.position[0] + (sign * (effectiveWidth - node.width)) / 2,
+      node.position[1],
+      node.position[2],
+    ],
+  }
+}
+
+function cabinetIndependentWidthPreviewOverrides(
+  node: CabinetModuleNodeType,
+  width: number,
+  side: 'left' | 'right',
+  sceneApi: SceneApi,
+): Array<readonly [AnyNodeId, Partial<AnyNode>]> {
+  const overrides: Array<readonly [AnyNodeId, Partial<AnyNode>]> = []
+  overrides.push([
+    node.id as AnyNodeId,
+    cabinetIndependentWidthPatch(node, width, side, sceneApi) as Partial<AnyNode>,
+  ])
+  const parentRunOverride = parentRunGeometryPreviewOverride(node, sceneApi)
+  if (parentRunOverride) overrides.push(parentRunOverride)
+
+  const gap = cabinetWallWidthGap(node, side, sceneApi)
+  const selectedWallOverride = wallCabinetWidthOverride(node, width + gap, sceneApi)
+  if (selectedWallOverride) overrides.push(selectedWallOverride)
+  return overrides
+}
+
+function previewCabinetCornerWidthOverrides(
+  node: CabinetModuleNodeType,
+  initialOverrides: ReadonlyArray<readonly [AnyNodeId, Partial<AnyNode>]>,
+  sceneApi: SceneApi,
+): ReadonlyArray<readonly [AnyNodeId, Partial<AnyNode>]> {
+  const parent = node.parentId
+    ? sceneApi.get<CabinetNodeType>(node.parentId as AnyNodeId)
+    : undefined
+  if (!parent || !isCabinetRun(parent)) return initialOverrides
+  return previewCornerRunsFromRunSources({
+    baseLayout: 'width-only',
+    initialOverrides,
+    previousModules: cabinetModulesForRun(parent, sceneApi.nodes()),
+    run: parent,
+    sceneApi,
+  })
+}
+
+function cabinetManualWidthReflow(
+  node: CabinetModuleNodeType,
+  width: number,
+  side: 'left' | 'right',
+  sceneApi: SceneApi,
+) {
+  const context = cabinetManualWidthContext(node, sceneApi)
+  if (!context) return null
+  const wallGap = cabinetWallWidthGap(node, side, sceneApi)
+  const selectedWidth = width + wallGap
+  const runConstraints = runWallConstraints(
+    context.run,
+    context.modules,
+    sceneApi.nodes() as Record<AnyNodeId, AnyNode>,
+    { widthGrowth: Math.max(0, selectedWidth - context.selected.width) },
+  )
+  const draggedEnd = side === 'right' ? runConstraints.right : runConstraints.left
+  const clampedSelectedWidth =
+    selectedWidth > context.selected.width && draggedEnd.constrained
+      ? Math.min(selectedWidth, context.selected.width + draggedEnd.slack)
+      : selectedWidth
+  const reflowed = reflowCabinetRunModules(
+    context.modules,
+    context.selected.id,
+    clampedSelectedWidth,
+    {
+      resizeSide: side,
+      consumeAdjacentGap: true,
+      eligibleDonorIds: new Set(),
+      maximumWidth: MAX_CABINET_WIDTH,
+    },
+  )
+  return reflowed.length > 0 ? { ...context, reflowed, wallGap } : null
+}
+
+function commitCabinetManualWidth(
+  node: CabinetModuleNodeType,
+  width: number,
+  side: 'left' | 'right',
+  sceneApi: SceneApi,
+) {
+  const reflow = cabinetManualWidthReflow(node, width, side, sceneApi)
+  if (!reflow) return
+  const reflowById = new Map(reflow.reflowed.map((entry) => [entry.id, entry]))
+  for (const module of reflow.modules) {
+    const next = reflowById.get(module.id)
+    if (!next) continue
+    const isSelected = module.id === reflow.selected.id
+    const modulePatch: Partial<CabinetModuleNodeType> = {
+      width: next.width,
+      position: next.position,
+    }
+    if (isSelected) {
+      modulePatch.metadata = metadataForSelectedWidth(module, next.width)
+    } else if (Math.abs(next.width - module.width) > 1e-4) {
+      modulePatch.metadata = metadataWithPresetWidthDebt(
+        module,
+        reflow.selected.id,
+        next.width - module.width,
+      )
+    }
+    const nestedCornerOverrides = nestedCornerRunPositionOverrides(
+      module,
+      next.position,
+      sceneApi.nodes(),
+    )
+    sceneApi.update(module.id as AnyNodeId, modulePatch as Partial<AnyNode>)
+    for (const [id, override] of nestedCornerOverrides) {
+      sceneApi.update(id, override)
+    }
+    const wallChild = wallChildOf(module, sceneApi.nodes())
+    if (wallChild) {
+      sceneApi.update(
+        wallChild.id as AnyNodeId,
+        {
+          width: next.width,
+          position: [0, wallChild.position[1], backAlignZ(module.depth, wallChild.depth)],
+        } as Partial<AnyNode>,
+      )
+    }
+  }
+  syncCornerRunsFromRunSources({
+    baseLayout: 'width-only',
+    previousModules: reflow.modules,
+    run: sceneApi.get<CabinetNodeType>(reflow.run.id as AnyNodeId) ?? reflow.run,
+    sceneApi,
+  })
+  bumpCabinetRunLayoutRevision(sceneApi, reflow.run)
+}
+
+function cabinetWidthHandle(side: 'left' | 'right'): HandleDescriptor<CabinetEditableNode> {
+  const sign = side === 'right' ? 1 : -1
+  return {
+    kind: 'linear-resize',
+    axis: 'x',
+    anchor: side === 'right' ? 'min' : 'max',
+    min: (node, sceneApi) => {
+      if (!isCabinetModule(node)) return MIN_CABINET_WIDTH
+      const gap = cabinetWidthIsNestedModule(node, sceneApi)
+        ? 0
+        : cabinetWallWidthGap(node, side, sceneApi)
+      return MIN_CABINET_WIDTH - gap
+    },
+    max: (node, sceneApi) => {
+      const ownMax = cabinetResizeUpperBound(node.width, MAX_CABINET_WIDTH)
+      if (!isCabinetModule(node)) return ownMax
+      const gap = cabinetWidthIsNestedModule(node, sceneApi)
+        ? 0
+        : cabinetWallWidthGap(node, side, sceneApi)
+      return ownMax - gap
+    },
+    magneticSnap: (node, width, sceneApi) =>
+      isCabinetModule(node) ? snapCabinetWidth(node, width, side, sceneApi) : width,
+    currentValue: (node) => node.width,
+    apply: (node, width, sceneApi, modifiers) => {
+      if (isCabinetModule(node) && modifiers?.altKey) {
+        return cabinetIndependentWidthPatch(node, width, side, sceneApi)
+      }
+      if (
+        isCabinetModule(node) &&
+        cabinetManualWidthContext(node, sceneApi) &&
+        !cabinetWidthIsNestedModule(node, sceneApi)
+      ) {
+        const reflow = cabinetManualWidthReflow(node, width, side, sceneApi)
+        if (reflow) {
+          const selected = reflow.reflowed.find((entry) => entry.id === reflow.selected.id)
+          if (selected) return { width: selected.width, position: selected.position }
+        }
+        return { width: node.width, position: node.position }
+      }
+      const gap =
+        isCabinetModule(node) && !cabinetWidthIsNestedModule(node, sceneApi)
+          ? cabinetWallWidthGap(node, side, sceneApi)
+          : 0
+      const effectiveWidth = width + gap
+      return {
+        width: effectiveWidth,
+        position: [
+          node.position[0] + (sign * (effectiveWidth - node.width)) / 2,
+          node.position[1],
+          node.position[2],
+        ],
+      }
+    },
+    previewOverrides: (node, width, sceneApi, modifiers) => {
+      if (!isCabinetModule(node)) return []
+      if (modifiers?.altKey) {
+        return previewCabinetCornerWidthOverrides(
+          node,
+          cabinetIndependentWidthPreviewOverrides(node, width, side, sceneApi),
+          sceneApi,
+        )
+      }
+      if (cabinetWidthIsNestedModule(node, sceneApi)) {
+        const parentRunOverride = parentRunGeometryPreviewOverride(node, sceneApi)
+        return parentRunOverride ? [parentRunOverride] : []
+      }
+      const reflow = cabinetManualWidthReflow(node, width, side, sceneApi)
+      if (reflow) {
+        const overrides: Array<readonly [AnyNodeId, Partial<AnyNode>]> = []
+        const parentRunOverride = parentRunGeometryPreviewOverride(node, sceneApi)
+        if (parentRunOverride) overrides.push(parentRunOverride)
+        for (const entry of reflow.reflowed) {
+          const module = reflow.modules.find((candidate) => candidate.id === entry.id)
+          if (!module) continue
+          overrides.push([
+            module.id as AnyNodeId,
+            { width: entry.width, position: entry.position } as Partial<AnyNode>,
+          ])
+          overrides.push(
+            ...nestedCornerRunPositionOverrides(module, entry.position, sceneApi.nodes()),
+          )
+          const wallChild = wallChildOf(module, sceneApi.nodes())
+          if (wallChild) {
+            overrides.push([
+              wallChild.id as AnyNodeId,
+              {
+                width: entry.width,
+                position: [0, wallChild.position[1], backAlignZ(module.depth, wallChild.depth)],
+              } as Partial<AnyNode>,
+            ])
+          }
+        }
+        return previewCabinetCornerWidthOverrides(node, overrides, sceneApi)
+      }
+      if (cabinetManualWidthContext(node, sceneApi)) {
+        const parentRunOverride = parentRunGeometryPreviewOverride(node, sceneApi)
+        return parentRunOverride ? [parentRunOverride] : []
+      }
+      const overrides: Array<readonly [AnyNodeId, Partial<AnyNode>]> = []
+      const parentRunOverride = parentRunGeometryPreviewOverride(node, sceneApi)
+      if (parentRunOverride) overrides.push(parentRunOverride)
+      const gap = cabinetWallWidthGap(node, side, sceneApi)
+      const effectiveWidth = width + gap
+      const selectedPosition: [number, number, number] = [
+        node.position[0] + (sign * (effectiveWidth - node.width)) / 2,
+        node.position[1],
+        node.position[2],
+      ]
+      overrides.push([
+        node.id as AnyNodeId,
+        {
+          width: effectiveWidth,
+          position: selectedPosition,
+        } as Partial<AnyNode>,
+      ])
+      overrides.push(...nestedCornerRunPositionOverrides(node, selectedPosition, sceneApi.nodes()))
+      const selectedWallOverride = wallCabinetWidthOverride(node, width + gap, sceneApi)
+      if (selectedWallOverride) overrides.push(selectedWallOverride)
+      const connectedResize = connectedCabinetWidthResize(node, side, width - node.width, sceneApi)
+      if (connectedResize) {
+        overrides.push([
+          connectedResize.module.id as AnyNodeId,
+          connectedResize.patch as Partial<AnyNode>,
+        ])
+        overrides.push(
+          ...nestedCornerRunPositionOverrides(
+            connectedResize.module,
+            connectedResize.patch.position,
+            sceneApi.nodes(),
+          ),
+        )
+        const connectedWallOverride = wallCabinetWidthOverride(
+          connectedResize.module,
+          connectedResize.patch.width,
+          sceneApi,
+        )
+        if (connectedWallOverride) overrides.push(connectedWallOverride)
+      }
+      return previewCabinetCornerWidthOverrides(node, overrides, sceneApi)
+    },
+    commit: (node, patch, sceneApi, modifiers) => {
+      if (isCabinetModule(node) && typeof patch.width === 'number' && modifiers?.altKey) {
+        commitCabinetResize(
+          node,
+          {
+            ...patch,
+            metadata: metadataForSelectedWidth(node, patch.width, patch.metadata),
+          },
+          sceneApi,
+        )
+        return
+      }
+      if (isCabinetModule(node) && typeof patch.width === 'number') {
+        if (cabinetWidthIsNestedModule(node, sceneApi)) {
+          commitCabinetResize(node, patch, sceneApi)
+          return
+        }
+        commitCabinetManualWidth(
+          node,
+          patch.width - cabinetWallWidthGap(node, side, sceneApi),
+          side,
+          sceneApi,
+        )
+        return
+      }
+      const connectedResize =
+        isCabinetModule(node) && typeof patch.width === 'number'
+          ? connectedCabinetWidthResize(
+              node,
+              side,
+              patch.width - node.width - cabinetWallWidthGap(node, side, sceneApi),
+              sceneApi,
+            )
+          : null
+      const selectedPatch =
+        isCabinetModule(node) && typeof patch.width === 'number'
+          ? {
+              ...patch,
+              metadata: metadataForSelectedWidth(node, patch.width, patch.metadata),
+            }
+          : patch
+      commitCabinetResize(node, selectedPatch, sceneApi)
+      if (connectedResize) {
+        const widthDelta = connectedResize.patch.width - connectedResize.module.width
+        commitCabinetResize(
+          connectedResize.module,
+          {
+            ...connectedResize.patch,
+            metadata: metadataWithPresetWidthDebt(
+              connectedResize.module,
+              node.id as CabinetModuleNodeType['id'],
+              widthDelta,
+            ),
+          },
+          sceneApi,
+        )
+      }
+    },
+    visible: (node, sceneApi) =>
+      !isCabinetModule(node) || cabinetModuleSideOpen(node, side, sceneApi),
+    placement: {
+      position: (node) => [
+        sign * (node.width / 2 + SIDE_HANDLE_OFFSET),
+        cabinetTotalHeight(node) / 2,
+        0,
+      ],
+      rotationY: () => (side === 'left' ? Math.PI : 0),
+    },
+  }
+}
+
+function cabinetDepthResizePatch<N extends CabinetEditableNode>(
+  node: N,
+  depth: number,
+): Partial<N> {
+  return {
+    depth,
+    position: [node.position[0], node.position[1], node.position[2] + (depth - node.depth) / 2],
+  } as Partial<N>
+}
+
+function snapCabinetDepth(
+  node: CabinetEditableNode,
+  requestedDepth: number,
+  sceneApi: SceneApi,
+): number {
+  if (!isCabinetModule(node)) return requestedDepth
+
+  let snappedDepth = requestedDepth
+  let closestDistance = Number.POSITIVE_INFINITY
+  for (const side of ['left', 'right'] as const) {
+    const connected = cabinetWidthConnectedNeighbor(node, side, sceneApi)
+    if (!connected || isCabinetWidthFiller(connected)) continue
+    const distance = Math.abs(requestedDepth - connected.depth)
+    if (distance <= CABINET_DEPTH_SNAP_THRESHOLD && distance < closestDistance) {
+      snappedDepth = connected.depth
+      closestDistance = distance
+    }
+  }
+  return snappedDepth
+}
+
+function cabinetDepthHandle(): LinearResizeHandle<CabinetEditableNode> {
+  return {
+    kind: 'linear-resize',
+    axis: 'z',
+    anchor: 'min',
+    min: MIN_CABINET_DEPTH,
+    max: (node) => cabinetResizeUpperBound(node.depth, MAX_CABINET_DEPTH),
+    currentValue: (node) => node.depth,
+    apply: cabinetDepthResizePatch,
+    magneticSnap: snapCabinetDepth,
+    previewOverrides: (node, _depth, sceneApi) => {
+      const parentRunOverride = parentRunGeometryPreviewOverride(node, sceneApi)
+      return parentRunOverride ? [parentRunOverride] : []
+    },
+    commit: commitCabinetResize,
+    placement: {
+      position: (node) => [0, cabinetTotalHeight(node) / 2, node.depth / 2 + SIDE_HANDLE_OFFSET],
+    },
+  }
+}
+
+function cornerBaseSourceRunId(node: CabinetNodeType): AnyNodeId | null {
+  const value = cabinetMetadataRecord(node.metadata).cabinetCornerDerivedRun
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null
+  const role = (value as { role?: unknown }).role
+  const sourceRunId = (value as { sourceRunId?: unknown }).sourceRunId
+  return role === 'base-leg' && typeof sourceRunId === 'string' ? (sourceRunId as AnyNodeId) : null
+}
+
+function connectedBaseRuns(node: CabinetNodeType, sceneApi: SceneApi): CabinetNodeType[] {
+  const runs = new Map<AnyNodeId, CabinetNodeType>()
+  for (const candidate of Object.values(sceneApi.nodes())) {
+    if (isCabinetRun(candidate) && candidate.runTier === 'base') {
+      runs.set(candidate.id as AnyNodeId, candidate)
+    }
+  }
+  runs.set(node.id as AnyNodeId, node)
+
+  const neighbors = new Map<AnyNodeId, Set<AnyNodeId>>()
+  const connect = (a: AnyNodeId, b: AnyNodeId) => {
+    const aNeighbors = neighbors.get(a) ?? new Set<AnyNodeId>()
+    const bNeighbors = neighbors.get(b) ?? new Set<AnyNodeId>()
+    aNeighbors.add(b)
+    bNeighbors.add(a)
+    neighbors.set(a, aNeighbors)
+    neighbors.set(b, bNeighbors)
+  }
+  for (const run of runs.values()) {
+    const sourceRunId = cornerBaseSourceRunId(run)
+    if (sourceRunId && runs.has(sourceRunId)) connect(sourceRunId, run.id as AnyNodeId)
+  }
+
+  const connected: CabinetNodeType[] = []
+  const pending: AnyNodeId[] = [node.id as AnyNodeId]
+  const visited = new Set<AnyNodeId>()
+  while (pending.length > 0) {
+    const id = pending.shift()!
+    if (visited.has(id)) continue
+    visited.add(id)
+    const run = runs.get(id)
+    if (run) connected.push(run)
+    for (const neighbor of neighbors.get(id) ?? []) pending.push(neighbor)
+  }
+  return connected
+}
+
+function cabinetRunFrontCenter(run: CabinetNodeType, sceneApi: SceneApi): [number, number, number] {
+  const modules = cabinetModulesForRun(run, sceneApi.nodes())
+  if (modules.length === 0) {
+    return [0, cabinetTotalHeight(run) / 2, run.depth / 2 + SIDE_HANDLE_OFFSET]
+  }
+  const minX = Math.min(...modules.map((module) => module.position[0] - module.width / 2))
+  const maxX = Math.max(...modules.map((module) => module.position[0] + module.width / 2))
+  const maxZ = Math.max(...modules.map((module) => module.position[2] + module.depth / 2))
+  return [(minX + maxX) / 2, cabinetTotalHeight(run) / 2, maxZ + SIDE_HANDLE_OFFSET]
+}
+
+function cabinetRunPointInSelectedFrame(
+  selected: CabinetEditableNode,
+  target: CabinetEditableNode,
+  point: readonly [number, number, number],
+  sceneApi: SceneApi,
+): [number, number, number] {
+  const nodes = sceneApi.nodes() as Readonly<Record<AnyNodeId, AnyNode>>
+  const selectedWorld = cabinetDuplicateWorldPose(selected, nodes)
+  const targetWorld = cabinetDuplicateWorldPose(target, nodes)
+  if (!selectedWorld || !targetWorld) return [point[0], point[1], point[2]]
+  const worldPoint = composeCabinetDuplicatePose(
+    targetWorld.position,
+    targetWorld.rotation,
+    point,
+    0,
+  ).position
+  const dx = worldPoint[0] - selectedWorld.position[0]
+  const dz = worldPoint[2] - selectedWorld.position[2]
+  const cos = Math.cos(selectedWorld.rotation)
+  const sin = Math.sin(selectedWorld.rotation)
+  return [cos * dx - sin * dz, worldPoint[1] - selectedWorld.position[1], sin * dx + cos * dz]
+}
+
+function cabinetRootRun(node: CabinetEditableNode, sceneApi: SceneApi): CabinetNodeType | null {
+  let current: CabinetEditableNode = node
+  let root: CabinetNodeType | null = isCabinetRun(current) ? current : null
+  const visited = new Set<AnyNodeId>()
+  while (current.parentId && !visited.has(current.parentId as AnyNodeId)) {
+    visited.add(current.parentId as AnyNodeId)
+    const parent = sceneApi.get(current.parentId as AnyNodeId)
+    if (!isCabinetRun(parent) && !isCabinetModule(parent)) break
+    current = parent
+    if (isCabinetRun(current)) root = current
+  }
+  return root
+}
+
+function cabinetWallTargets(node: CabinetEditableNode, sceneApi: SceneApi): CabinetEditableNode[] {
+  const root = cabinetRootRun(node, sceneApi)
+  if (!root) return []
+  const targets: CabinetEditableNode[] = []
+  const visited = new Set<AnyNodeId>()
+  const visit = (current: CabinetEditableNode) => {
+    if (visited.has(current.id as AnyNodeId)) return
+    visited.add(current.id as AnyNodeId)
+    if (isCabinetRun(current) && current.runTier === 'wall') {
+      targets.push(current)
+      return
+    }
+    const parent = current.parentId ? sceneApi.get(current.parentId as AnyNodeId) : undefined
+    if (isCabinetModule(current) && isCabinetModule(parent)) {
+      if (!isHoodOnlyCabinet(current)) targets.push(current)
+      return
+    }
+    for (const childId of current.children ?? []) {
+      const child = sceneApi.get(childId as AnyNodeId)
+      if (isCabinetRun(child) || isCabinetModule(child)) visit(child)
+    }
+  }
+  visit(root)
+  return targets
+}
+
+function cabinetWallDepthPreview(
+  targets: readonly CabinetEditableNode[],
+  depth: number,
+  sceneApi: SceneApi,
+  adjustCornerWidths: boolean,
+  widthMode: 'bridge' | 'corner-pair',
+  cornerIndex?: WallCornerDepthIndex,
+): ReadonlyArray<readonly [AnyNodeId, Partial<AnyNode>]> {
+  const overrides = new Map<AnyNodeId, Partial<AnyNode>>()
+  const liveTargets = targets.map(
+    (target) => sceneApi.get<CabinetEditableNode>(target.id as AnyNodeId) ?? target,
+  )
+  const depthDelta = depth - (liveTargets[0]?.depth ?? depth)
+  for (const live of liveTargets) {
+    const nextDepth = live.depth + depthDelta
+    if (isCabinetRun(live)) {
+      overrides.set(live.id as AnyNodeId, { depth: nextDepth } as Partial<AnyNode>)
+      for (const [id, patch] of depthDeltaRunOverrides(live, sceneApi.nodes(), depthDelta)) {
+        overrides.set(id, { ...(overrides.get(id) ?? {}), ...patch } as Partial<AnyNode>)
+      }
+      continue
+    }
+    overrides.set(
+      live.id as AnyNodeId,
+      cabinetDepthResizePatch(live, nextDepth) as Partial<AnyNode>,
+    )
+  }
+  if (adjustCornerWidths) {
+    for (const [id, patch] of wallCornerWidthOverridesForDepthTargets({
+      cornerIndex,
+      depth,
+      nodes: sceneApi.nodes(),
+      targets: liveTargets,
+      widthMode,
+    })) {
+      const existing = overrides.get(id) as Partial<CabinetEditableNode> | undefined
+      const cornerPatch = patch as Partial<CabinetEditableNode>
+      const merged = { ...(existing ?? {}), ...cornerPatch } as Partial<CabinetEditableNode>
+      if (existing?.position && cornerPatch.position) {
+        merged.position = [cornerPatch.position[0], cornerPatch.position[1], existing.position[2]]
+      }
+      overrides.set(id, merged as Partial<AnyNode>)
+    }
+  }
+  return [...overrides]
+}
+
+function commitCabinetWallDepth(
+  targets: readonly CabinetEditableNode[],
+  depth: number,
+  sceneApi: SceneApi,
+  adjustCornerWidths: boolean,
+  widthMode: 'bridge' | 'corner-pair',
+  cornerIndex: WallCornerDepthIndex,
+) {
+  const preview = cabinetWallDepthPreview(
+    targets,
+    depth,
+    sceneApi,
+    adjustCornerWidths,
+    widthMode,
+    cornerIndex,
+  )
+  for (const [id, patch] of preview) {
+    sceneApi.update(id, patch)
+  }
+  const bumpedRuns = new Set<AnyNodeId>()
+  for (const [id] of preview) {
+    const live = sceneApi.get(id)
+    if (isCabinetRun(live)) {
+      if (!bumpedRuns.has(live.id as AnyNodeId)) {
+        bumpedRuns.add(live.id as AnyNodeId)
+        bumpCabinetRunLayoutRevision(sceneApi, live)
+      }
+      continue
+    }
+    const parent = live?.parentId ? sceneApi.get(live.parentId as AnyNodeId) : undefined
+    if (isCabinetRun(parent) && !bumpedRuns.has(parent.id as AnyNodeId)) {
+      bumpedRuns.add(parent.id as AnyNodeId)
+      bumpCabinetRunLayoutRevision(sceneApi, parent)
+    } else if (isCabinetModule(parent)) {
+      sceneApi.markDirty(parent.id as AnyNodeId)
+    }
+  }
+}
+
+function cabinetWallDepthBounds(
+  targets: readonly CabinetEditableNode[],
+  sceneApi: SceneApi,
+  adjustCornerWidths: boolean,
+  widthMode: 'bridge' | 'corner-pair',
+  cornerIndex: WallCornerDepthIndex,
+): { min: number; max: number } {
+  const liveTargets = targets.map(
+    (target) => sceneApi.get<CabinetEditableNode>(target.id as AnyNodeId) ?? target,
+  )
+  const currentDepth = liveTargets[0]?.depth ?? MIN_CABINET_DEPTH
+  const sharedBounds = sharedDepthBounds(currentDepth, liveTargets, sceneApi.nodes())
+  let min = sharedBounds.min
+  let max = sharedBounds.max
+  if (!adjustCornerWidths) return { min, max }
+  const baselineAdjustments = new Map(
+    wallCornerWidthOverridesForDepthTargets({
+      clampWidths: false,
+      cornerIndex,
+      depth: currentDepth,
+      nodes: sceneApi.nodes(),
+      targets: liveTargets,
+      widthMode,
+    }),
+  )
+  const unitAdjustments = wallCornerWidthOverridesForDepthTargets({
+    clampWidths: false,
+    cornerIndex,
+    depth: currentDepth + 1,
+    nodes: sceneApi.nodes(),
+    targets: liveTargets,
+    widthMode,
+  })
+  for (const [id, patch] of unitAdjustments) {
+    const cabinetPatch = patch as Partial<CabinetModuleNodeType>
+    if (typeof cabinetPatch.width !== 'number') continue
+    const node = sceneApi.get<CabinetModuleNodeType>(id)
+    if (!isCabinetModule(node)) continue
+    const baselinePatch = baselineAdjustments.get(id) as Partial<CabinetModuleNodeType> | undefined
+    const baselineWidth =
+      typeof baselinePatch?.width === 'number' ? baselinePatch.width : node.width
+    const factor = cabinetPatch.width - baselineWidth
+    if (Math.abs(factor) <= CABINET_ADJACENCY_EPSILON) continue
+    const minWidth =
+      node.name === 'Wall Bridge Filler'
+        ? 0
+        : node.name?.includes('Filler')
+          ? 0.05
+          : MIN_CABINET_WIDTH
+    const maxWidth = cabinetResizeUpperBound(baselineWidth, MAX_CABINET_WIDTH)
+    const firstDepth = currentDepth + (minWidth - baselineWidth) / factor
+    const secondDepth = currentDepth + (maxWidth - baselineWidth) / factor
+    min = Math.max(min, Math.min(firstDepth, secondDepth))
+    max = Math.min(max, Math.max(firstDepth, secondDepth))
+  }
+  return {
+    min: Math.min(currentDepth, min),
+    max: Math.max(currentDepth, max),
+  }
+}
+
+function cabinetWallGroupDepthHandles(
+  selected: CabinetEditableNode,
+  sceneApi: SceneApi,
+): LinearResizeHandle<CabinetEditableNode>[] {
+  const targets = cabinetWallTargets(selected, sceneApi)
+  if (targets.length < 2) return []
+  const cornerIndex = buildWallCornerDepthIndex(sceneApi.nodes())
+
+  const groups: Array<{ rotation: number; targets: CabinetEditableNode[] }> = []
+  for (const target of targets) {
+    const rotation =
+      cabinetDuplicateWorldPose(target, sceneApi.nodes())?.rotation ?? target.rotation
+    const group = groups.find(
+      (candidate) =>
+        Math.abs(
+          Math.atan2(
+            Math.sin(rotation - candidate.rotation),
+            Math.cos(rotation - candidate.rotation),
+          ),
+        ) < 1e-3,
+    )
+    if (group) group.targets.push(target)
+    else groups.push({ rotation, targets: [target] })
+  }
+
+  const selectedRotation = cabinetDuplicateWorldPose(selected, sceneApi.nodes())?.rotation ?? 0
+  return groups.map((group) => {
+    const representative = group.targets[0]!
+    const relativeRotation = group.rotation - selectedRotation
+    const frontX = Math.sin(relativeRotation)
+    const frontZ = Math.cos(relativeRotation)
+    const axis = Math.abs(frontX) > Math.abs(frontZ) ? 'x' : 'z'
+    const positive = axis === 'x' ? frontX >= 0 : frontZ >= 0
+    const adjustCornerWidths = true
+    const widthMode = Math.abs(frontX) < 1e-3 && frontZ > 0 ? 'corner-pair' : 'bridge'
+    const depthBounds = () =>
+      cabinetWallDepthBounds(group.targets, sceneApi, adjustCornerWidths, widthMode, cornerIndex)
+    const clampedDepth = (requestedDepth: number, liveSceneApi: SceneApi) => {
+      const bounds = cabinetWallDepthBounds(
+        group.targets,
+        liveSceneApi,
+        adjustCornerWidths,
+        widthMode,
+        cornerIndex,
+      )
+      return Math.min(bounds.max, Math.max(bounds.min, requestedDepth))
+    }
+    return {
+      kind: 'linear-resize',
+      axis,
+      anchor: positive ? 'min' : 'max',
+      min: () => depthBounds().min,
+      max: () => depthBounds().max,
+      currentValue: () =>
+        sceneApi.get<CabinetEditableNode>(representative.id as AnyNodeId)?.depth ??
+        representative.depth,
+      overrideTarget: () => representative.id as AnyNodeId,
+      apply: (_node, depth) => ({ depth }),
+      previewOverrides: (_node, depth, liveSceneApi) =>
+        cabinetWallDepthPreview(
+          group.targets,
+          clampedDepth(depth, liveSceneApi),
+          liveSceneApi,
+          adjustCornerWidths,
+          widthMode,
+          cornerIndex,
+        ),
+      commit: (_node, patch, liveSceneApi) => {
+        if (typeof patch.depth === 'number') {
+          commitCabinetWallDepth(
+            group.targets,
+            clampedDepth(patch.depth, liveSceneApi),
+            liveSceneApi,
+            adjustCornerWidths,
+            widthMode,
+            cornerIndex,
+          )
+        }
+      },
+      placement: {
+        position: (node, liveSceneApi) => {
+          const points = group.targets.map((target) => {
+            const liveTarget =
+              liveSceneApi.get<CabinetEditableNode>(target.id as AnyNodeId) ?? target
+            const point = isCabinetRun(liveTarget)
+              ? cabinetRunFrontCenter(liveTarget, liveSceneApi)
+              : ([
+                  0,
+                  cabinetTotalHeight(liveTarget) / 2,
+                  liveTarget.depth / 2 + SIDE_HANDLE_OFFSET,
+                ] as const)
+            return cabinetRunPointInSelectedFrame(node, liveTarget, point, liveSceneApi)
+          })
+          return [
+            points.reduce((sum, point) => sum + point[0], 0) / points.length,
+            points.reduce((sum, point) => sum + point[1], 0) / points.length,
+            points.reduce((sum, point) => sum + point[2], 0) / points.length,
+          ]
+        },
+        rotationY: () => (axis === 'x' ? relativeRotation - Math.PI / 2 : relativeRotation),
+      },
+    }
+  })
+}
+
+function cabinetConnectedRunDepthHandle(
+  selected: CabinetNodeType,
+  target: CabinetNodeType,
+  sceneApi: SceneApi,
+): LinearResizeHandle<CabinetNodeType> {
+  const nodes = sceneApi.nodes() as Readonly<Record<AnyNodeId, AnyNode>>
+  const selectedWorld = cabinetDuplicateWorldPose(selected, nodes)
+  const targetWorld = cabinetDuplicateWorldPose(target, nodes)
+  const relativeRotation = (targetWorld?.rotation ?? 0) - (selectedWorld?.rotation ?? 0)
+  const frontX = Math.sin(relativeRotation)
+  const frontZ = Math.cos(relativeRotation)
+  const axis = Math.abs(frontX) > Math.abs(frontZ) ? 'x' : 'z'
+  const positive = axis === 'x' ? frontX >= 0 : frontZ >= 0
+  const targetDepthBounds = (liveSceneApi: SceneApi) => {
+    const liveTarget = liveSceneApi.get<CabinetNodeType>(target.id as AnyNodeId) ?? target
+    const compensatedWidths: number[] = []
+    const derived = cabinetMetadataRecord(liveTarget.metadata).cabinetCornerDerivedRun
+    if (derived && typeof derived === 'object' && !Array.isArray(derived)) {
+      const role = (derived as { role?: unknown }).role
+      const side = (derived as { side?: unknown }).side
+      const turnSide = (derived as { turnSide?: unknown }).turnSide
+      const sourceModuleId = (derived as { sourceModuleId?: unknown }).sourceModuleId
+      const sourceModule =
+        role === 'base-leg' &&
+        (turnSide === side || (turnSide !== 'left' && turnSide !== 'right')) &&
+        typeof sourceModuleId === 'string'
+          ? liveSceneApi.get<CabinetModuleNodeType>(sourceModuleId as AnyNodeId)
+          : undefined
+      if (sourceModule?.type === 'cabinet-module') {
+        compensatedWidths.push(sourceModule.width)
+      }
+    }
+    for (const childId of liveTarget.children ?? []) {
+      const child = liveSceneApi.get<CabinetNodeType>(childId as AnyNodeId)
+      if (child?.type !== 'cabinet') continue
+      const childDerived = cabinetMetadataRecord(child.metadata).cabinetCornerDerivedRun
+      if (!childDerived || typeof childDerived !== 'object' || Array.isArray(childDerived)) continue
+      if (
+        (childDerived as { role?: unknown }).role !== 'base-leg' ||
+        (childDerived as { sourceRunId?: unknown }).sourceRunId !== target.id
+      ) {
+        continue
+      }
+      const connectedModule = cabinetModulesForRun(child, liveSceneApi.nodes()).find(
+        (module) => module.name === 'Base Cabinet',
+      )
+      if (connectedModule) compensatedWidths.push(connectedModule.width)
+    }
+    const connectedBounds = cabinetConnectedDepthBounds(liveTarget.depth, compensatedWidths)
+    const deltaBounds = sharedDepthBounds(liveTarget.depth, [liveTarget], liveSceneApi.nodes())
+    return {
+      min: Math.max(connectedBounds.min, deltaBounds.min),
+      max: Math.min(connectedBounds.max, deltaBounds.max),
+    }
+  }
+  const clampedDepth = (depth: number, liveSceneApi: SceneApi) => {
+    const bounds = targetDepthBounds(liveSceneApi)
+    return Math.min(bounds.max, Math.max(bounds.min, depth))
+  }
+  return {
+    kind: 'linear-resize',
+    axis,
+    anchor: positive ? 'min' : 'max',
+    min: (_node, liveSceneApi) => targetDepthBounds(liveSceneApi).min,
+    max: (_node, liveSceneApi) => targetDepthBounds(liveSceneApi).max,
+    currentValue: (node) =>
+      node.id === target.id
+        ? node.depth
+        : (sceneApi.get<CabinetNodeType>(target.id as AnyNodeId)?.depth ?? target.depth),
+    overrideTarget: () => target.id as AnyNodeId,
+    apply: (_node, depth) => ({ depth }),
+    previewOverrides: (_node, depth, liveSceneApi) => {
+      const liveTarget = liveSceneApi.get<CabinetNodeType>(target.id as AnyNodeId) ?? target
+      const nextDepth = clampedDepth(depth, liveSceneApi)
+      const moduleOverrides = depthDeltaRunOverrides(
+        liveTarget,
+        liveSceneApi.nodes(),
+        nextDepth - liveTarget.depth,
+      )
+      const sourceOverrides = cornerSourceWidthOverridesForDerivedDepth(
+        liveTarget,
+        liveSceneApi.nodes(),
+        nextDepth,
+      )
+      return previewCornerRunsFromRunSources({
+        baseLayout: 'width-only',
+        initialOverrides: [...moduleOverrides, ...sourceOverrides],
+        run: { ...liveTarget, depth: nextDepth },
+        sceneApi: liveSceneApi,
+      })
+    },
+    commit: (_node, patch, liveSceneApi) => {
+      if (typeof patch.depth !== 'number') return
+      const liveTarget = liveSceneApi.get<CabinetNodeType>(target.id as AnyNodeId) ?? target
+      const nextDepth = clampedDepth(patch.depth, liveSceneApi)
+      for (const [id, sourcePatch] of cornerSourceWidthOverridesForDerivedDepth(
+        liveTarget,
+        liveSceneApi.nodes(),
+        nextDepth,
+      )) {
+        liveSceneApi.update(id, sourcePatch)
+      }
+      commitRunDepthDelta(liveTarget, nextDepth, liveSceneApi, {
+        cornerSync: 'width-only',
+      })
+    },
+    placement: {
+      position: (node, liveSceneApi) => {
+        const liveTarget = liveSceneApi.get<CabinetNodeType>(target.id as AnyNodeId) ?? target
+        return cabinetRunPointInSelectedFrame(
+          node,
+          liveTarget,
+          cabinetRunFrontCenter(liveTarget, liveSceneApi),
+          liveSceneApi,
+        )
+      },
+      rotationY: () => (axis === 'x' ? relativeRotation - Math.PI / 2 : relativeRotation),
+    },
+  }
+}
+
+function cabinetHeightHandle(): HandleDescriptor<CabinetEditableNode> {
+  return {
+    kind: 'linear-resize',
+    axis: 'y',
+    anchor: 'min',
+    min: MIN_CABINET_CARCASS_HEIGHT,
+    currentValue: (node) => node.carcassHeight,
+    apply: (_node, carcassHeight) => ({ carcassHeight }),
+    commit: commitCabinetResize,
+    placement: {
+      position: (node, sceneApi) => [
+        0,
+        cabinetLocalBounds(node, sceneApi.nodes()).maxY + HEIGHT_HANDLE_OFFSET,
+        0,
+      ],
+    },
+  }
+}
+
+function cabinetRotateHandle(): HandleDescriptor<CabinetEditableNode> {
+  return {
+    kind: 'arc-resize',
+    axis: 'angular',
+    shape: 'rotate',
+    apply: (initial, delta, sceneApi) => {
+      const rotation = (initial.rotation ?? 0) - delta
+      const bounds = cabinetLocalBounds(initial, sceneApi.nodes())
+      const [centerX, , centerZ] = bounds.center
+      const previousRotation = initial.rotation ?? 0
+      const previousCos = Math.cos(previousRotation)
+      const previousSin = Math.sin(previousRotation)
+      const nextCos = Math.cos(rotation)
+      const nextSin = Math.sin(rotation)
+      const pivotWorldX = initial.position[0] + centerX * previousCos + centerZ * previousSin
+      const pivotWorldZ = initial.position[2] - centerX * previousSin + centerZ * previousCos
+      return {
+        rotation,
+        position: [
+          pivotWorldX - centerX * nextCos - centerZ * nextSin,
+          initial.position[1],
+          pivotWorldZ + centerX * nextSin - centerZ * nextCos,
+        ],
+      }
+    },
+    placement: {
+      position: (node, sceneApi) => {
+        const bounds = cabinetLocalBounds(node, sceneApi.nodes())
+        return [bounds.maxX, bounds.center[1], bounds.maxZ + ROTATE_CORNER_OFFSET]
+      },
+      rotationY: () => -Math.PI / 4,
+    },
+    rotationCenter: (node, sceneApi) => cabinetLocalBounds(node, sceneApi.nodes()).center,
+    decoration: {
+      kind: 'ring',
+      radius: (node, sceneApi) => {
+        const bounds = cabinetLocalBounds(node, sceneApi.nodes())
+        return Math.hypot(bounds.size[0] / 2, bounds.size[2] / 2) + ROTATE_RING_OFFSET
+      },
+      y: (node) => cabinetTotalHeight(node) / 2,
+      center: (node, sceneApi) => cabinetLocalBounds(node, sceneApi.nodes()).center,
+    },
+  }
+}
+
+function cabinetHandles(
+  node: CabinetNodeType,
+  sceneApi?: SceneApi,
+): HandleDescriptor<CabinetNodeType>[] {
+  const structuralChildren = (node.children ?? []).filter(
+    (id) => id.startsWith('cabinet_') || id.startsWith('cabinet-module_'),
+  )
+  if (structuralChildren.length > 0) {
+    const connectedRuns =
+      sceneApi && node.runTier === 'base' ? connectedBaseRuns(node, sceneApi) : []
+    const depthHandles = sceneApi
+      ? connectedRuns.map((run) => cabinetConnectedRunDepthHandle(node, run, sceneApi))
+      : []
+    const wallDepthHandles = sceneApi ? cabinetWallGroupDepthHandles(node, sceneApi) : []
+    return [
+      ...depthHandles,
+      ...wallDepthHandles,
+      cabinetRotateHandle(),
+    ] as HandleDescriptor<CabinetNodeType>[]
+  }
+  const handles: HandleDescriptor<CabinetEditableNode>[] = [
+    cabinetDepthHandle(),
+    cabinetHeightHandle(),
+    cabinetRotateHandle(),
+  ]
+  if (structuralChildren.length === 0) {
+    handles.unshift(cabinetWidthHandle('left'), cabinetWidthHandle('right'))
+  }
+  return handles as HandleDescriptor<CabinetNodeType>[]
+}
+
+function isHoodOnlyCabinet(node: CabinetEditableNode): boolean {
+  const stack = stackForCabinet(node)
+  return stack.length > 0 && stack.every((compartment) => isHoodCompartmentType(compartment.type))
+}
+
+function cabinetModuleHeightHandleVisible(
+  node: CabinetModuleNodeType,
+  sceneApi: SceneApi,
+): boolean {
+  const parent = node.parentId ? sceneApi.get(node.parentId as AnyNodeId) : undefined
+  if (isCabinetRun(parent)) {
+    return parent.runTier === 'wall' || resolveCabinetType(node, parent) === 'tall'
+  }
+  return isCabinetModule(parent) && wallChildOf(parent, sceneApi.nodes())?.id === node.id
+}
+
+function cabinetModuleHandles(): HandleDescriptor<CabinetModuleNodeType>[] {
+  return [
+    {
+      ...cabinetWidthHandle('left'),
+      visible: (node, sceneApi) =>
+        !isCabinetWidthFiller(node) &&
+        !cabinetModuleUsesFixedApplianceWidth(node) &&
+        !cabinetModuleSideHasCornerFiller(node, 'left', sceneApi),
+    } as HandleDescriptor<CabinetModuleNodeType>,
+    {
+      ...cabinetWidthHandle('right'),
+      visible: (node, sceneApi) =>
+        !isCabinetWidthFiller(node) &&
+        !cabinetModuleUsesFixedApplianceWidth(node) &&
+        !cabinetModuleSideHasCornerFiller(node, 'right', sceneApi),
+    } as HandleDescriptor<CabinetModuleNodeType>,
+    {
+      ...cabinetDepthHandle(),
+      visible: (node) => !isCabinetWidthFiller(node),
+    } as HandleDescriptor<CabinetModuleNodeType>,
+    {
+      ...cabinetHeightHandle(),
+      visible: cabinetModuleHeightHandleVisible,
+    } as HandleDescriptor<CabinetModuleNodeType>,
+  ]
+}
+
+export const cabinetEditContribution: NodeEditContribution<typeof CabinetNode> = {
+  snapProfile: 'item',
+  facingIndicator: true,
+  capabilities: {
+    paint: cabinetPaint,
+  },
+  parametrics: cabinetParametrics,
+  handles: (node, sceneApi) => cabinetHandles(node, sceneApi).map(withCabinetHostedChildren),
+  placementNotice: cabinetPlacementNotice,
+  floorplan: buildCabinetFloorplan,
+  floorplanSiblingOverrides: cabinetFloorplanSiblingOverrides,
+  floorplanAffectedIds: cabinetFloorplanAffectedIds,
+  quickActionNodeScope: 'level',
+  quickActions: cabinetQuickActions,
+  // E operates the run: every child module's doors/drawers swing together.
+  keyboardActions: {
+    e: {
+      appliesTo: (node: AnyNode) => node.type === 'cabinet',
+      run: (node: AnyNode) => toggleCabinetOperationState(node.id as AnyNodeId),
+    },
+  },
+  tool: () => import('./tool'),
+  toolHints: [
+    { key: 'Click', label: 'Place cabinet' },
+    {
+      key: 'I',
+      label: 'Placement type',
+      chip: {
+        subscribe: (onChange) => useCabinetPlacementType.subscribe(onChange),
+        value: () => useCabinetPlacementType.getState().type,
+        cycle: () => void useCabinetPlacementType.getState().cycleType(),
+        labels: { cabinet: 'Type: Cabinet', island: 'Type: Island' },
+        icons: { cabinet: 'lucide:rectangle-horizontal', island: 'lucide:table-2' },
+        tooltip: 'Placement type — click or press I to toggle',
+      },
+    },
+    { key: 'Alt', label: 'Force place' },
+    { key: 'R / T', label: 'Rotate' },
+    { key: 'Esc', label: 'Cancel run / exit' },
+  ],
+}
+
+export const cabinetModuleEditContribution: NodeEditContribution<typeof CabinetModuleNode> = {
+  snapProfile: 'item',
+  facingIndicator: true,
+  capabilities: {
+    paint: cabinetPaint,
+  },
+  parametrics: cabinetModuleParametrics,
+  handles: () => cabinetModuleHandles().map(withCabinetHostedChildren),
+  placementNotice: cabinetPlacementNotice,
+  floorplan: buildCabinetModuleFloorplan,
+  floorplanSiblingOverrides: cabinetFloorplanSiblingOverrides,
+  floorplanAffectedIds: cabinetFloorplanAffectedIds,
+  // 2D ↔ 3D parity: module position is run-local, so the generic overlay's
+  // plan-space translate would corrupt it on any rotated / offset run.
+  floorplanMoveTarget: cabinetModuleFloorplanMoveTarget,
+  quickActionNodeScope: 'level',
+  quickActions: cabinetQuickActions,
+  // E animates this module's doors/drawers open ↔ closed (hood-only
+  // modules have nothing to operate).
+  keyboardActions: {
+    e: {
+      appliesTo: (node: AnyNode) =>
+        node.type === 'cabinet-module' && !isHoodOnlyCabinet(node as CabinetModuleNodeType),
+      run: (node: AnyNode) => toggleCabinetOperationState(node.id as AnyNodeId),
+    },
+  },
+}
