@@ -1076,6 +1076,17 @@ describe('a close-up of a roof', () => {
     expect(r(sceneViewBounds(nodes, 'building_main').max[1])).toBe(ridge)
   })
 
+  test("a roof's planes of a kind this runtime has not registered frame up to its level's top", () => {
+    // Without their plugin, core cannot read the planes: they frame as planes on the level did.
+    const nodes = hipHouse()
+    const plane = roofPlane('roofplane_south', [-0.5, -0.5, 10.5, 4], 0, { parentId: 'roof_main' })
+    const roof = nodes.roof_main as RoofNode
+    nodes.roof_main = { ...roof, children: [...roof.children, plane.id] }
+    nodes[plane.id] = plane
+    nodes.level_roof = { ...nodes.level_roof!, height: 3 } as AnyNode
+    expect(r(sceneViewBounds(nodes, 'building_main').max[1])).toBe(r(2.45 + 3))
+  })
+
   test('the picture is taken from outside the roof, centred on it', () => {
     const { pose } = sceneViewPlan(hipHouse(), {
       target: 'roof_main',

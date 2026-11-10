@@ -262,7 +262,7 @@ export function storeyOf(nodes: Nodes, levelId: string): string {
  */
 function roofStandingHeight(nodes: Nodes, roof: RoofNode): number {
   const eaves = roofFaceShapes(roof, nodes).map((face) => face.low)
-  const holdsSegment = roof.children.some((id) => nodes[id]?.type === 'roof-segment')
+  const holdsSegment = (roof.children ?? []).some((id) => nodes[id]?.type === 'roof-segment')
   return Math.min(...(holdsSegment || !eaves.length ? [roof.position[1]] : []), ...eaves)
 }
 

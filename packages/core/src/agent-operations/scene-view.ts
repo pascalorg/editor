@@ -10,7 +10,7 @@ import { levelGradeStanding } from '../lib/grade-standing'
 import { buildingGroundBox, levelGroundBox, terrainBetweenEyeAndBox } from '../lib/ground-window'
 import { distanceToSegment } from '../lib/room-topology-index'
 import { buildingStreet } from '../lib/site-placement'
-import { roofFaceShapes } from '../registry/roofs'
+import { roofFaceOf, roofFaceShapes } from '../registry/roofs'
 import type {
   AnyNode,
   AnyNodeId,
@@ -683,10 +683,20 @@ export function sceneViewBounds(
   const outlines: { points: Pt[]; levelId: string }[] = []
   // With no walls yet, what the level holds frames it: furniture placed from a plan before the
   // walls are built, a site with its paving and fences. The roofs frame with the walls, and so does
-  // a plugin's node (a roof plane), whose shape core cannot read: up to its storey's top.
+  // a plugin's node (a roof plane), whose shape core cannot read: up to its storey's top. A roof's
+  // faces are read through their kind (`capabilities.roofs`); a plugin's this runtime has not
+  // registered frames as one on the level would.
   const held: SceneViewBox[] = []
   const roofs: SceneViewBox[] = []
   let pluginTop = Number.NEGATIVE_INFINITY
+  const upToStoreyTop = (levelId: string, at: { y: number }) => {
+    const storey = elevations.get(levelId)
+    if (storey) pluginTop = Math.max(pluginTop, baseOf(levelId) + storey.height + at.y)
+  }
+  const unreadFace = (id: string) => {
+    const child = nodes[id]
+    return !!child?.type.includes(':') && !roofFaceOf(child)
+  }
   // biome-ignore lint/plugin: a view frames whatever the level holds
   for (const node of Object.values(nodes)) {
     const level = levelOf(node)
@@ -710,12 +720,12 @@ export function sceneViewBounds(
       })
     else if (node.type === 'item')
       (isRoofGeometry(node) ? roofs : held).push(placedBox(itemBox(node, baseOf(level.id)), at))
-    else if (node.type.includes(':')) {
-      const storey = elevations.get(level.id)
-      if (storey) pluginTop = Math.max(pluginTop, baseOf(level.id) + storey.height + at.y)
-    } else {
+    else if (node.type.includes(':')) upToStoreyTop(level.id, at)
+    else {
       const box = levelChildBox(nodes, node, baseOf(level.id))
       if (box) (node.type === 'roof' ? roofs : held).push(placedBox(box, at))
+      if (node.type === 'roof' && ((node as RoofNode).children ?? []).some(unreadFace))
+        upToStoreyTop(level.id, at)
     }
   }
   const upTo = (box: SceneViewBox): SceneViewBox =>
