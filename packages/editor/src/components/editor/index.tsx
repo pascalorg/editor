@@ -4,6 +4,7 @@ import { Icon } from '@iconify/react'
 import {
   acquireSceneReadOnlyLease,
   createI18n,
+  emitter,
   getCatalogMaterialById,
   getLibraryMaterialIdFromRef,
   getMaterialSwatch,
@@ -43,6 +44,7 @@ import {
 } from 'react'
 import { ViewerOverlay } from '../../components/viewer-overlay'
 import { ViewerZoneSystem } from '../../components/viewer-zone-system'
+import { useAutoFrame } from '../../hooks/use-auto-frame'
 import { type SaveStatus, useAutoSave } from '../../hooks/use-auto-save'
 import { useKeyboard } from '../../hooks/use-keyboard'
 import { useIsMobile } from '../../hooks/use-mobile'
@@ -67,6 +69,7 @@ import {
   type SceneGraph,
   writePersistedSelection,
 } from '../../lib/scene'
+import { computeSceneBoundsXZ } from '../../lib/scene-bounds'
 import { disposeSFXBus, initSFXBus } from '../../lib/sfx-bus'
 import { useUnitFocusRules } from '../../lib/units'
 import { cn } from '../../lib/utils'
@@ -1570,6 +1573,8 @@ function EditorContent({
   useKeyboard({ isVersionPreviewMode, disabled: isFirstPersonMode || isStudioMode })
   useGestureLifecycleOwner()
 
+  useAutoFrame()
+
   const { beginSceneLoad, completeSceneLoad, saveNow } = useAutoSave({
     guardAgainstSceneWipe,
     onSave,
@@ -1740,6 +1745,21 @@ function EditorContent({
 
     return () => window.clearTimeout(timer)
   }, [hasLoadedInitialScene, isLoading, isSceneLoading, isViewerSceneReady, sceneReadyKey])
+
+  // The useAutoFrame emit can be clobbered by the level-follow effect's
+  // first-run pivot rest on fast (client-side navigation) loads. Re-emitting
+  // here is the last word after every load-driven camera effect has run.
+  // Once per load: a remounted viewer reports ready again, but only a new
+  // load reframes; remounted controls rest their own pivot on the level.
+  const framedSceneReadyKeyRef = useRef<number | null>(null)
+  useEffect(() => {
+    if (!isViewerSceneReady || framedSceneReadyKeyRef.current === sceneReadyKey) return
+    framedSceneReadyKeyRef.current = sceneReadyKey
+    const nodes = useScene.getState().nodes
+    if (Object.keys(nodes).length === 0) return
+    const bounds = computeSceneBoundsXZ(nodes)
+    emitter.emit('camera-controls:fit-scene', bounds ? { bounds } : {})
+  }, [isViewerSceneReady, sceneReadyKey])
 
   const isSceneDataLoading = isLoading || isSceneLoading || !hasLoadedInitialScene
   const showLoader = isSceneDataLoading || !isViewerSceneReady
