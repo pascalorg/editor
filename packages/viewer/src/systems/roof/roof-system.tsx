@@ -191,9 +191,15 @@ const MAX_SEGMENTS_PER_FRAME = 3
 /** What each roof's shell was last merged from: its node and its segments, as the store held them. */
 const mergedFrom = new Map<AnyNodeId, Map<string, AnyNode>>()
 
+/** A roof's shell is merged from the roof and its segments; its faces of other kinds draw apart. */
+const shellInputIds = (roof: RoofNode, nodes: Record<string, AnyNode>): string[] => [
+  roof.id,
+  ...(roof.children ?? []).filter((id) => nodes[id]?.type === 'roof-segment'),
+]
+
 function rememberMergedInputs(roof: RoofNode, nodes: Record<string, AnyNode>) {
   const inputs = new Map<string, AnyNode>()
-  for (const id of [roof.id, ...(roof.children ?? [])]) {
+  for (const id of shellInputIds(roof, nodes)) {
     const node = nodes[id]
     if (node) inputs.set(id, node)
   }
@@ -205,7 +211,7 @@ function mergedFromStillHolds(roofId: AnyNodeId, nodes: Record<string, AnyNode>)
   const inputs = mergedFrom.get(roofId)
   const roof = nodes[roofId]
   if (!inputs || roof?.type !== 'roof') return false
-  const ids = [roofId, ...(roof.children ?? [])]
+  const ids = shellInputIds(roof, nodes)
   return ids.length === inputs.size && ids.every((id) => inputs.get(id) === nodes[id])
 }
 
