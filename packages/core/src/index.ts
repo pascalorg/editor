@@ -168,6 +168,7 @@ export {
   groundPitFloorY,
   terrainOverFloors,
 } from './lib/below-grade-footprints'
+export * from './lib/build-mode'
 export {
   CEILING_BUILD_UP_PRESETS,
   type CeilingBuildUpPreset,

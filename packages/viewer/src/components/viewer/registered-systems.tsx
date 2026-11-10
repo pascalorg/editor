@@ -3,6 +3,7 @@
 import {
   type AnyNodeDefinition,
   createSceneApi,
+  isDevelopmentBuild,
   isNodeKindEnabled,
   nodeRegistry,
   useRegistryVersion,
@@ -40,7 +41,7 @@ class SystemErrorBoundary extends Component<
   }
 
   componentDidCatch(error: Error) {
-    if (typeof process === 'undefined' || process.env.NODE_ENV !== 'production') {
+    if (isDevelopmentBuild()) {
       console.error(`[viewer] Disabled system ${this.props.systemId}`, error)
     }
   }

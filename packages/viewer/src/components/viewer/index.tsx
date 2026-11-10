@@ -2,6 +2,7 @@
 
 import {
   type AnyNodeId,
+  isDevelopmentBuild,
   nodeRegistry,
   RoofElevationSystem,
   type SitePresentation,
@@ -103,10 +104,7 @@ const DIRTY_BUILD_KINDS = new Set([
   'window',
 ])
 
-const warnedEmptyDraw =
-  typeof process !== 'undefined' && process.env.NODE_ENV === 'production'
-    ? null
-    : new WeakSet<object>()
+const warnedEmptyDraw = isDevelopmentBuild() ? new WeakSet<object>() : null
 
 /**
  * Renderer-level safety net against the empty-vertex-buffer crash.

@@ -1,4 +1,5 @@
 import clipping from 'polygon-clipping'
+import { isDevelopmentBuild } from './build-mode'
 
 export type Ring = [number, number][]
 export type Polygon = { outer: Ring; holes: Ring[] }
@@ -114,7 +115,7 @@ function clip(
     return normalise(run(inputs.map(quantised)))
   } catch (error) {
     if (throwOnError) throw error
-    if (typeof process === 'undefined' || process.env.NODE_ENV !== 'production') {
+    if (isDevelopmentBuild()) {
       const caller = new Error('Polygon clipping caller').stack
         ?.split('\n')
         .slice(1)

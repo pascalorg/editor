@@ -1,3 +1,4 @@
+import { isDevelopmentOutsideTests } from '../lib/build-mode'
 import {
   floorPlateAtGroundContact,
   floorPlateHoldsUnderside,
@@ -472,11 +473,7 @@ export function convertDerivedPlateHoleWrites<T extends MutableDerivedChanges>(
 const warnedFields = new Set<string>()
 
 function warnFilteredFields(nodeId: string, fields: string[]) {
-  if (
-    typeof process !== 'undefined' &&
-    (process.env.NODE_ENV === 'production' || process.env.NODE_ENV === 'test')
-  )
-    return
+  if (!isDevelopmentOutsideTests()) return
   const fresh = fields.filter((field) => !warnedFields.has(`${nodeId}:${field}`))
   if (!fresh.length) return
   for (const field of fresh) warnedFields.add(`${nodeId}:${field}`)

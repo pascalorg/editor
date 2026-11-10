@@ -25,6 +25,9 @@ async function run(command: string[], cwd: string) {
   return result.stdout.toString()
 }
 
+// Built from the escape character so the regex literal holds no control character.
+const ANSI_ESCAPES = new RegExp(`${String.fromCharCode(27)}\\[[0-9;]*m`, 'g')
+
 async function withServer(command: string[], cwd: string, check: (url: string) => Promise<void>) {
   // CI forces colour, and Vite then splits the printed URL with escape codes.
   const server = spawn(command[0]!, command.slice(1), {
@@ -49,7 +52,7 @@ async function withServer(command: string[], cwd: string, check: (url: string) =
       reject(new Error(output))
     }, 30_000)
     const poll = setInterval(() => {
-      const match = output.replace(/\x1b\[[0-9;]*m/g, '').match(/http:\/\/127\.0\.0\.1:\d+/)
+      const match = output.replace(ANSI_ESCAPES, '').match(/http:\/\/127\.0\.0\.1:\d+/)
       if (match || exitCode !== null) {
         clearTimeout(deadline)
         clearInterval(poll)
