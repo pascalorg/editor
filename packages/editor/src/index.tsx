@@ -207,6 +207,7 @@ export {
   resolveLevelConstructionPlane,
 } from './components/tools/shared/horizontal-construction-plane'
 export { PlacementBox } from './components/tools/shared/placement-box'
+export { PlacementCoordinateInput } from './components/tools/shared/placement-coordinate-input'
 export { PlacementDimensionGuides } from './components/tools/shared/placement-dimension-guides'
 // Pointer-decided support surface (deck top vs floor underneath) — the
 // draw tools (wall / fence) ride their grid plane and commit cap on it.
@@ -273,6 +274,11 @@ export {
   type WallPullSnapRadii,
   type WallPullSnapResult,
 } from './components/tools/wall/wall-pull-snap'
+export {
+  formatWallDraftHeading,
+  resolveTypedWallEnd,
+  wallDraftHeadingDegrees,
+} from './components/tools/wall/wall-typed-entry'
 // `ToolbarLeft` / `ToolbarRight` alias `ViewerToolbarLeft` / `ViewerToolbarRight`
 // (same components) under the names headless hosts compose their toolbars with.
 export {
@@ -1182,6 +1188,22 @@ export {
   default as usePlacementPreview,
   type PlacementPreviewDimension,
 } from './store/use-placement-preview'
+export {
+  isPlacementTypingKey,
+  isPlacementTypingStartKey,
+  PLACEMENT_TYPING_DISTANCE_OFFSET,
+  PLACEMENT_TYPING_LENGTH_ANGLE,
+  type PlacementTypingField,
+  type PlacementTypingKeyOptions,
+  type PlacementTypingKeyOutcome,
+  type PlacementTypingProjection,
+  type PlacementTypingSession,
+  type PlacementTypingState,
+  type PlacementTypingValues,
+  placementTypingLengthOptions,
+  routePlacementTypingKey,
+  usePlacementTyping,
+} from './store/use-placement-typing'
 export { usePointAsk } from './store/use-point-ask'
 export {
   activateQuickMeasurementHudSource,

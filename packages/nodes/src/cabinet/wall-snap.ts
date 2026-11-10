@@ -171,6 +171,7 @@ function closestStraightWallPoint(
 export function findClosestCabinetWallInPlan({
   excludeIds,
   fallbackToAnyYaw = false,
+  maxDistance = WALL_SNAP_DISTANCE_M,
   nodes,
   parentLevelId,
   planPoint,
@@ -178,6 +179,10 @@ export function findClosestCabinetWallInPlan({
 }: {
   excludeIds: readonly AnyNodeId[]
   fallbackToAnyYaw?: boolean
+  /** Override the snap-distance cap — pass `Infinity` when the wall is
+   *  already known and only the projection onto it is needed (e.g. typed
+   *  entry re-entering a session at a large perpendicular offset). */
+  maxDistance?: number
   nodes: Record<AnyNodeId, AnyNode>
   parentLevelId: AnyNodeId
   planPoint: readonly [number, number]
@@ -204,7 +209,7 @@ export function findClosestCabinetWallInPlan({
     const closest = isCurvedWall(wall)
       ? closestCurvedWallPoint(wall, planPoint)
       : closestStraightWallPoint(wall, planPoint)
-    if (!closest || closest.distance > WALL_SNAP_DISTANCE_M) continue
+    if (!closest || closest.distance > maxDistance) continue
     const side = closest.perpDistance >= 0 ? 'front' : 'back'
     const candidate: { distance: number; hit: WallHit } = {
       distance: closest.distance,
