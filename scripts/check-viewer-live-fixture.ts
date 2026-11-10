@@ -34,7 +34,17 @@ async function withServer(command: string[], cwd: string, check: (url: string) =
     cwd,
     stdio: ['ignore', 'pipe', 'pipe'],
     env: { ...process.env, NO_COLOR: '1', FORCE_COLOR: '0' },
+    // Its own process group, so stopping it also stops the Vite and esbuild children
+    // `npm run` starts; on Linux they otherwise outlive npm and keep this script alive.
+    detached: true,
   })
+  const stop = () => {
+    try {
+      process.kill(-server.pid!, 'SIGTERM')
+    } catch {
+      // Already gone.
+    }
+  }
   let output = ''
   let exitCode: number | null = null
   server.stdout.on('data', (chunk) => {
@@ -61,13 +71,13 @@ async function withServer(command: string[], cwd: string, check: (url: string) =
       }
     }, 50)
   }).catch((error) => {
-    server.kill()
+    stop()
     throw error
   })
   try {
     await check(origin)
   } finally {
-    server.kill('SIGTERM')
+    stop()
     await new Promise<void>((accept) => {
       if (server.exitCode !== null || server.signalCode !== null) accept()
       else server.once('exit', () => accept())
@@ -204,3 +214,5 @@ try {
   if (process.env.KEEP_VIEWER_LIVE_FIXTURE) console.log(`Kept ${temp}`)
   else await rm(temp, { recursive: true, force: true })
 }
+// Nothing this script started may keep CI waiting once the verdict is printed.
+process.exit(0)
