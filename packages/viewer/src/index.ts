@@ -95,7 +95,7 @@ export { useAssetUrl } from './hooks/use-asset-url'
 export { useGLTFKTX2 } from './hooks/use-gltf-ktx2'
 export { useLibraryMaterialsVersion } from './hooks/use-library-materials-version'
 export { useNodeEvents } from './hooks/use-node-events'
-export { ASSETS_CDN_URL, resolveAssetUrl, resolveCdnUrl } from './lib/asset-url'
+export { resolveAssetUrl, resolveCdnUrl } from './lib/asset-url'
 export { backdropColors, backdropGradient, deepSkyColor, horizonHazeColor } from './lib/backdrop'
 export { applyWorldScaleBoxUVs } from './lib/box-uv'
 // CSG primitives — used by chimney's roof-trim and other kinds whose
@@ -343,6 +343,12 @@ export {
   UNDERGROUND_RIM,
   undergroundAmbianceNode,
 } from './lib/underground-ambiance'
+export {
+  ASSETS_CDN_URL,
+  configureViewer,
+  getViewerConfig,
+  type ViewerConfig,
+} from './lib/viewer-config'
 export { createZoneShape, createZoneWallGeometry } from './lib/zone-geometry'
 export type { LightSource } from './store/use-item-light-pool'
 export { catalogLightSource, useItemLightPool } from './store/use-item-light-pool'

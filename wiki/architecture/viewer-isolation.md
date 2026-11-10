@@ -4,7 +4,7 @@
 
 Applies to: `packages/viewer/**`.
 
-`@pascal-app/viewer` is a standalone 3D canvas library. It must never know about editor-specific features, UI state, or tools. This keeps it usable in the read-only `/viewer/[id]` route and in any future embedding context.
+`@pascal-app/viewer` is a standalone 3D canvas library. It must never know about editor-specific features, UI state, or tools. This keeps it usable in the read-only `/viewer/[id]` route and in external React applications.
 
 ## The Rule
 
@@ -26,28 +26,54 @@ if (isEditorMode) { … }
 The editor mounts the viewer and passes what it needs:
 
 ```tsx
-// apps/editor/components/editor-canvas.tsx  ✅
 import { Viewer } from '@pascal-app/viewer'
 import { ToolManager } from '../tools/tool-manager'
-import { useEditor } from '../../store/use-editor'
 
 export function EditorCanvas() {
-  const { selection } = useViewer()
-
   return (
-    <Viewer
-      theme="light"
-      onSelect={(id) => useViewer.getState().setSelection(id)}
-      onExport={handleExport}
-    >
-      {/* Editor injects tools as children — viewer renders them inside the canvas */}
+    <Viewer selectionManager="custom">
       <ToolManager />
     </Viewer>
   )
 }
 ```
 
-The viewer accepts `children` and renders them inside the R3F canvas. This is the extension point for tools, overlays, and editor-specific systems.
+The viewer accepts `children` inside its R3F canvas. This is the extension point for controls,
+tools, overlays and host-specific systems. Live scene rendering is available through
+`@pascal-app/nodes/render`; it does not depend on the full editing plugin, Next.js or Tailwind.
+The render-bundle gate inspects all static and lazy chunks for editor/Next dependencies, and the
+isolated Vite fixture verifies packed packages in dev and production.
+
+## Live graph bootstrap and ownership
+
+```tsx
+import { acquireSceneReadOnlyLease, loadPlugin, useScene } from '@pascal-app/core'
+import { renderPlugin } from '@pascal-app/nodes/render'
+import { configureViewer, Viewer } from '@pascal-app/viewer'
+import { OrbitControls } from '@react-three/drei'
+
+configureViewer({ assetsBaseUrl, storageUrl, decoders: { dracoPath, basisPath } })
+await loadPlugin(renderPlugin)
+const releaseReadOnly = acquireSceneReadOnlyLease()
+useScene.getState().setScene(nodes, rootNodeIds, { materials, collections, installedPlugins })
+
+// Mount into a container with an explicit width and height:
+<Viewer><OrbitControls makeDefault /></Viewer>
+// After unmounting, releaseReadOnly().
+```
+
+Load exactly one built-in plugin per runtime: the render entry for read-only hosts, the full
+`builtinPlugin` for editors. The read-only lease keeps document writers from modifying the hydrated
+graph while geometry systems build it. Asset/storage configuration is resolved at call time; hosts
+should configure before the first asset load. Next hosts pass their public environments explicitly.
+Decoders have pinned defaults and can be self-hosted; initialized workers/models remain cached.
+
+**One active scene per page/package instance.** The scene and viewer stores, node registry,
+`sceneRegistry`, loader caches and viewer systems are singletons. Two canvases cannot own independent
+graphs. On project switch, unmount the previous viewer, release its read-only lease and host
+subscriptions, then hydrate the new graph, reset host selection/project presentation and remount.
+Use separate pages/iframes for independent graphs. This limit applies to the live graph path;
+baked-asset rendering remains a separate host composition.
 
 ## Viewer's Own State (`useViewer`)
 

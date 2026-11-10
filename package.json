@@ -30,7 +30,8 @@
     "release:beta": "gh workflow run release.yml -f bump=beta",
     "release:minor": "gh workflow run release.yml -f bump=minor",
     "release:major": "gh workflow run release.yml -f bump=major",
-    "check:render-bundle": "bun scripts/check-render-bundle.ts"
+    "check:render-bundle": "bun scripts/check-render-bundle.ts",
+    "check:viewer-live": "bun scripts/check-viewer-live-fixture.ts"
   },
   "devDependencies": {
     "@ai-sdk/anthropic": "^4.0.97",

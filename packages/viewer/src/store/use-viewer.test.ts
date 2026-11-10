@@ -336,3 +336,40 @@ describe('render quality', () => {
     expect(useViewer.getState().renderQuality).toBe('medium')
   })
 })
+
+test('denied preference storage does not block hydration or presentation changes', async () => {
+  const savedWindow = Object.getOwnPropertyDescriptor(globalThis, 'window')
+  try {
+    for (const storage of [
+      {
+        get localStorage(): Storage {
+          throw new DOMException('Denied', 'SecurityError')
+        },
+      },
+      {
+        localStorage: {
+          getItem() {
+            throw new DOMException('Denied', 'SecurityError')
+          },
+          setItem() {
+            throw new DOMException('Full', 'QuotaExceededError')
+          },
+          removeItem() {
+            throw new DOMException('Denied', 'SecurityError')
+          },
+        },
+      },
+    ]) {
+      Object.defineProperty(globalThis, 'window', { configurable: true, value: storage })
+      await useViewer.persist.rehydrate()
+      useViewer.getState().setShowMeasurements(false)
+      expect(useViewer.getState().showMeasurements).toBe(false)
+      useViewer.getState().setShowMeasurements(true)
+      expect(useViewer.getState().showMeasurements).toBe(true)
+      expect(() => useViewer.persist.clearStorage()).not.toThrow()
+    }
+  } finally {
+    if (savedWindow) Object.defineProperty(globalThis, 'window', savedWindow)
+    else Reflect.deleteProperty(globalThis, 'window')
+  }
+})
