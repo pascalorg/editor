@@ -24,7 +24,7 @@ import type {
   WallNode,
 } from '../schema'
 import { getActiveRoofHeight } from '../schema'
-import { isCeilingGeometry, isRoofGeometry } from '../services/roof-level'
+import { coveredStoreyId, isCeilingGeometry, isRoofGeometry } from '../services/roof-level'
 import { EXPLODED_GAP, getLevelElevations } from '../services/storey'
 import { stairFootprintAABB } from '../systems/stair/stair-footprint'
 import { resolveWallExteriorSide } from '../systems/wall/wall-assembly'
@@ -674,11 +674,21 @@ export function sceneViewBounds(
     const pose = itemLevelPose(nodes, target, (id) => elevations.get(id)?.height ?? 2.5)
     if (pose) return placed(hostedItemBox(target, pose, baseOf(pose.levelId)), pose.levelId)
   }
+  const unreadFace = (id: string) => {
+    const child = nodes[id]
+    return !!child?.type.includes(':') && !roofFaceOf(child)
+  }
+  // A roof holding faces this runtime cannot read (their plugin not registered here) frames the
+  // storey it covers as well, up to its own level's top.
+  const coveredByTarget =
+    target?.type === 'roof' && ((target as RoofNode).children ?? []).some(unreadFace)
+      ? coveredStoreyId(nodes, target as RoofNode)
+      : null
   const site =
     target && nodes[target.parentId ?? '']?.type === 'level'
       ? levelChildBox(nodes, target, baseOf(target.parentId))
       : null
-  if (site) return placed(site, target!.parentId)
+  if (site && !coveredByTarget) return placed(site, target!.parentId)
   const levelOf = (node: AnyNode) => (node.parentId ? nodes[node.parentId] : undefined)
   const outlines: { points: Pt[]; levelId: string }[] = []
   // With no walls yet, what the level holds frames it: furniture placed from a plan before the
@@ -693,10 +703,6 @@ export function sceneViewBounds(
     const storey = elevations.get(levelId)
     if (storey) pluginTop = Math.max(pluginTop, baseOf(levelId) + storey.height + at.y)
   }
-  const unreadFace = (id: string) => {
-    const child = nodes[id]
-    return !!child?.type.includes(':') && !roofFaceOf(child)
-  }
   // biome-ignore lint/plugin: a view frames whatever the level holds
   for (const node of Object.values(nodes)) {
     const level = levelOf(node)
@@ -705,6 +711,7 @@ export function sceneViewBounds(
       !target ||
       target.id === node.id ||
       target.id === level.id ||
+      level.id === coveredByTarget ||
       (target.type === 'building' && level.parentId === target.id)
     if (!inTarget) continue
     const at = standingOf(nodes, level.id)
