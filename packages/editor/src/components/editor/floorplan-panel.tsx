@@ -12146,7 +12146,6 @@ export function FloorplanPanel({
                 emitFloorplanGridEvent('click', pt, new MouseEvent('click') as any)
                 handleWallPlacementPoint(pt)
               } else if (isFenceBuildActive) {
-                emitFloorplanGridEvent('click', pt, new MouseEvent('click') as any)
                 handleBackgroundPlacementClick(pt, new MouseEvent('click') as any)
               } else if (isPolygonDraftBuildActive) {
                 emitFloorplanGridEvent('click', pt, new MouseEvent('click') as any)

@@ -263,12 +263,14 @@ function OpeningGuide({
   const [isEditing, setIsEditing] = useState(false)
   const [inputValue, setInputValue] = useState('')
   const inputRef = useRef<HTMLInputElement>(null)
+  const isCancelledRef = useRef(false)
 
   const isInteractive = Boolean(guide.kind === 'dimension' && guide.targetNodeId && guide.wallId && guide.role)
 
   const handleStartEdit = (e: React.MouseEvent) => {
     e.stopPropagation()
     if (!isInteractive || guide.kind !== 'dimension') return
+    isCancelledRef.current = false
     setIsEditing(true)
     setInputValue(formatMeasurement(guide.value, unit, metricNotation))
   }
@@ -281,6 +283,8 @@ function OpeningGuide({
   }, [isEditing])
 
   const handleCommit = () => {
+    if (isCancelledRef.current) return
+    isCancelledRef.current = true
     setIsEditing(false)
     if (guide.kind !== 'dimension' || !guide.targetNodeId || !guide.role) return
     const parsed = parseDimensionInput(inputValue, unit)
@@ -337,12 +341,14 @@ function OpeningGuide({
   }
 
   const handleCancel = () => {
+    isCancelledRef.current = true
     setIsEditing(false)
   }
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     e.stopPropagation()
     if (e.key === 'Enter') {
+      isCancelledRef.current = false
       handleCommit()
     } else if (e.key === 'Escape') {
       handleCancel()
