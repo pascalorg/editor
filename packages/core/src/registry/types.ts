@@ -1663,7 +1663,8 @@ export type RendererSource<N> =
  * `resolve` looks up any node of the scene graph the artifact was baked from.
  * The baked viewer never loads that graph into `useScene`, so a renderer that
  * builds from other nodes (its parent site, its siblings) reads them here.
- * Hosts without the graph omit it.
+ * `GlbScene` builds it from its `sceneNodes` prop and leaves it undefined when
+ * the host omits `sceneNodes`.
  */
 export type BakeReplaceRenderer<N> = {
   module: () => Promise<{
