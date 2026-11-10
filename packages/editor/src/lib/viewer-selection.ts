@@ -11,6 +11,7 @@ import {
   type LevelNode,
   type NodeEvent,
   resolveSelectionProxyId,
+  roomFloorElevation,
   sceneRegistry,
   type UnitNode,
   type ZoneNode,
@@ -29,7 +30,6 @@ import {
 } from 'three'
 import { useBelowGrade } from './below-grade'
 import { nodeDisplayLabel } from './node-display-label'
-import { roomFloorElevation } from './room-handle-drag'
 import { type DescriptorTranslator, displayRoomName } from './room-name-messages'
 import { RoomSelectionIndex, type RoomSelectionRecord, resolveRoomHit } from './room-selection'
 import type { SelectionModifierKeys } from './selection-routing'

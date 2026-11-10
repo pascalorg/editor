@@ -19,6 +19,8 @@ import {
   emitter,
   type FenceNode,
   type FloorplanGeometry,
+  formatAngleRadians,
+  formatLinearMeasurement,
   formatNumber as formatLocalizedNumber,
   type GeometryContext,
   type GuideNode,
@@ -29,6 +31,7 @@ import {
   type ItemNode,
   isCurvedWall,
   type LevelNode,
+  linearUnitToMeters,
   loadAssetUrl,
   newZone,
   nodeRegistry,
@@ -124,7 +127,6 @@ import {
   syncKeyboardPanMotion,
 } from '../../lib/keyboard-pan'
 import { measurementHint, parseMeasurement } from '../../lib/measurement-parser'
-import { formatLinearMeasurement, linearUnitToMeters } from '../../lib/measurements'
 import {
   createGuideScaleReference,
   formatReferenceScaleLabel,
@@ -255,7 +257,6 @@ import {
 } from '../tools/select/screen-rectangle-selection'
 import { collectSelectableCandidateIds } from '../tools/select/select-candidates'
 import {
-  formatAngleRadians,
   getAngleArcToSegmentReference,
   getAngleToSegmentReference,
   getSegmentAngleReferenceAtPoint,
@@ -10417,6 +10418,7 @@ export function FloorplanPanel({
       unit,
       emitFloorplanGridEvent,
       setCursorPoint,
+      locale,
     ],
   )
   const handleSvgClick = useCallback(

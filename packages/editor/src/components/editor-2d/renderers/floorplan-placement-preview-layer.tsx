@@ -4,13 +4,13 @@ import {
   type AnyNode,
   type AnyNodeId,
   type FloorplanGeometry,
+  formatLinearMeasurement,
   type GeometryContext,
   nodeRegistry,
   useScene,
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { memo, useMemo } from 'react'
-import { formatLinearMeasurement } from '../../../lib/measurements'
 import usePlacementPreview from '../../../store/use-placement-preview'
 import { usePlacementTyping } from '../../../store/use-placement-typing'
 import { useFloorplanRender, useFloorplanSceneRotation } from '../floorplan-render-context'

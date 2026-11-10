@@ -3,6 +3,7 @@ import {
   type AnyNodeId,
   type FloorplanGeometry,
   type FloorplanPoint,
+  formatLinearMeasurement,
   type GeometryContext,
   getBlockFaceFrame,
   getEffectiveNode,
@@ -16,11 +17,7 @@ import {
   scriptImages,
   useLiveTransforms,
 } from '@pascal-app/core'
-import {
-  formatLinearMeasurement,
-  readFloorplanContext,
-  readFloorplanMetricNotationOverride,
-} from '@pascal-app/editor'
+import { readFloorplanContext, readFloorplanMetricNotationOverride } from '@pascal-app/editor'
 import { restingNodePlanFrame } from '../shared/resting-surface-plan'
 import { buildPlanItemSymbol, classifyPlanItem, PLAN_SYMBOL_METADATA_KEY } from './plan-symbols'
 

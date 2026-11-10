@@ -1,10 +1,10 @@
+import type { AnyNodeId } from '../schema/types'
 import {
-  type AnyNodeId,
   type InteractiveState,
   useInteractive,
-  useScene,
   type WindowInteractiveState,
-} from '@pascal-app/core'
+} from '../store/use-interactive'
+import useScene from '../store/use-scene'
 
 export const WINDOW_TOGGLE_ANIMATION_MS = 520
 

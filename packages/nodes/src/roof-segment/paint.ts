@@ -155,5 +155,3 @@ export const roofSegmentPaint: PaintCapability = {
     return { material: spec.material, materialPreset: spec.materialPreset }
   },
 }
-
-export { roofSegmentSlots } from '@pascal-app/core'

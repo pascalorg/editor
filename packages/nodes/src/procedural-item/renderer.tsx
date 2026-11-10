@@ -17,7 +17,6 @@ import {
   ProceduralMotionController,
   proceduralLocalPose,
 } from '@pascal-app/core/procedural-items'
-import { usePlacementPreview } from '@pascal-app/editor'
 import {
   cloneWithProceduralEmission,
   createSurfaceRoleMaterial,
@@ -143,22 +142,8 @@ export default function ProceduralRenderer({ node }: { node: ProceduralItemNode 
         useScene.getState().markDirty(id as AnyNodeId)
     }
     recut()
-    // A move preview of this design re-cuts its ceiling, and the ceiling it previews on, on
-    // every step.
-    const unsubscribe = usePlacementPreview.subscribe((state, previous) => {
-      if (state.node?.id !== node.id && previous.node?.id !== node.id) return
-      recut()
-      for (const id of new Set([state.node?.parentId, previous.node?.parentId]))
-        if (id !== parentId && useScene.getState().nodes[id as AnyNodeId]?.type === 'ceiling')
-          recut(id)
-    })
-    return () => {
-      unsubscribe()
-      recut()
-      const preview = usePlacementPreview.getState().node
-      if (preview?.id === node.id && preview.parentId !== parentId) recut(preview.parentId)
-    }
-  }, [cutKey, node.parentId, node.id])
+    return () => recut()
+  }, [cutKey, node.parentId])
   useLayoutEffect(() => {
     // Continuous joints start running, as in the baked viewer; flat spins keep #930's default.
     const running = new Set(
@@ -193,7 +178,7 @@ export default function ProceduralRenderer({ node }: { node: ProceduralItemNode 
       awake.current = true
       invalidate()
     }
-  }, [built, node.id, invalidate])
+  }, [built, node.id, invalidate, node.recipe.joints])
   useEffect(
     () =>
       useInteractive.subscribe((state, previous) => {
@@ -283,7 +268,7 @@ export default function ProceduralRenderer({ node }: { node: ProceduralItemNode 
     return () => {
       for (const key of keys) useItemLightPool.getState().unregister(key)
     }
-  }, [built, node.id, effective.visible, effective.metadata?.isNew])
+  }, [built, node.id, effective.visible, effective.metadata?.isNew, effective.metadata])
   const materialKey = JSON.stringify([effective.recipe.slots, effective.slots, libraryVersion])
   const materials = useMemo(() => {
     const [slots, overrides] = JSON.parse(materialKey) as [

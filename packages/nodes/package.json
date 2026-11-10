@@ -25,6 +25,11 @@
       "types": "./dist/agent-operations/index.d.ts",
       "import": "./dist/agent-operations/index.js",
       "default": "./dist/agent-operations/index.js"
+    },
+    "./render": {
+      "types": "./dist/render.d.ts",
+      "import": "./dist/render.js",
+      "default": "./dist/render.js"
     }
   },
   "files": [
@@ -79,5 +84,10 @@
   },
   "license": "MIT",
   "homepage": "https://github.com/pascalorg/editor/tree/main/packages/nodes#readme",
-  "bugs": "https://github.com/pascalorg/editor/issues"
+  "bugs": "https://github.com/pascalorg/editor/issues",
+  "peerDependenciesMeta": {
+    "@pascal-app/editor": {
+      "optional": true
+    }
+  }
 }

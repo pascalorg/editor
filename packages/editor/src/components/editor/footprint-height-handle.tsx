@@ -2,6 +2,7 @@
 
 import {
   type AnyNodeId,
+  formatLinearMeasurement,
   getStoredLevelHeight,
   type Point,
   type SlabNode,
@@ -20,7 +21,6 @@ import {
   THICK_FLOOR_HINT,
   thickFloorAdvice,
 } from '../../lib/floor-footprints'
-import { formatLinearMeasurement } from '../../lib/measurements'
 import { runRoomHandleDrag } from '../../lib/room-handle-drag'
 import useEditor, { isGridSnapActive } from '../../store/use-editor'
 import useInteractionScope from '../../store/use-interaction-scope'

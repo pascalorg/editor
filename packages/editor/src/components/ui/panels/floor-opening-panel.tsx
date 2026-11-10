@@ -14,7 +14,7 @@ import {
   finishFloorOpening,
   openingRoom,
 } from '../../../lib/floor-edit-session'
-import { formatAreaLabel } from '../../../lib/measurements'
+import { formatAreaLabel } from '@pascal-app/core'
 import { Button } from '../primitives/button'
 import { Switch } from '../primitives/switch'
 import { PanelWrapper } from './panel-wrapper'

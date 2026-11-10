@@ -1,11 +1,13 @@
 import { afterEach, expect, test } from 'bun:test'
-import { useInteractive, useScene, WindowNode } from '@pascal-app/core'
 import {
   getDisplayedWindowShutterValue,
   getDisplayedWindowValue,
   openWindowOpenState,
   setWindowShuttersOpenState,
-} from '../index'
+  useInteractive,
+  useScene,
+  WindowNode,
+} from '@pascal-app/core'
 
 const originalScene = useScene.getState()
 const originalInteractive = useInteractive.getState()

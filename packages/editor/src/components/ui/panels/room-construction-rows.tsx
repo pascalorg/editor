@@ -34,7 +34,7 @@ import {
   roomFloorOwner,
   roomFootprint,
 } from '../../../lib/floor-footprints'
-import { formatLinearMeasurement } from '../../../lib/measurements'
+import { formatLinearMeasurement } from '@pascal-app/core'
 import { startMezzanineDraft } from '../../../lib/mezzanine-draft'
 import { resolveRoomAssemblyHeights } from '../../../lib/room-assembly-overlay'
 import { type FloorChoice, roomBuiltOn, separateFloorSummary } from '../../../lib/room-built-on'

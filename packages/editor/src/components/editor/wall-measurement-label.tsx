@@ -4,6 +4,7 @@ import {
   type AnyNode,
   type AnyNodeId,
   calculateLevelMiters,
+  formatLinearMeasurement,
   getWallCurveLength,
   getWallEffectiveHeightForNodes,
   getWallMiterBoundaryPoints,
@@ -23,7 +24,6 @@ import { getSceneTheme, useViewer } from '@pascal-app/viewer'
 import { createPortal, useFrame } from '@react-three/fiber'
 import { useMemo, useState } from 'react'
 import * as THREE from 'three'
-import { formatLinearMeasurement } from '../../lib/measurements'
 import { Html } from './localized-html'
 
 const GUIDE_Y_OFFSET = 0.08

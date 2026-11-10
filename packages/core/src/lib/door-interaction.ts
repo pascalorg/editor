@@ -1,10 +1,7 @@
-import {
-  type AnyNodeId,
-  type DoorInteractiveState,
-  isOperationDoorType,
-  useInteractive,
-  useScene,
-} from '@pascal-app/core'
+import type { AnyNodeId } from '../schema/types'
+import { type DoorInteractiveState, useInteractive } from '../store/use-interactive'
+import useScene from '../store/use-scene'
+import { isOperationDoorType } from './door-operation'
 
 export const DOOR_SWING_OPEN_ANGLE = Math.PI / 2
 export const DOOR_TOGGLE_ANIMATION_MS = 520

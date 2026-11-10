@@ -4,6 +4,7 @@ import {
   type AnyNode,
   buildUnitReport,
   polygonInteriorPoint,
+  roomFloorElevation,
   sceneRegistry,
   useLocale,
   usePascalI18n,
@@ -15,7 +16,6 @@ import { useCallback, useEffect, useMemo } from 'react'
 import { Vector3 } from 'three'
 import { useShallow } from 'zustand/react/shallow'
 import { resolveRoomAssemblyHeights } from '../../lib/room-assembly-overlay'
-import { roomFloorElevation } from '../../lib/room-handle-drag'
 import { describeZoneOutline, type RoomSelectionRecord } from '../../lib/room-selection'
 import {
   selectViewerRoom,

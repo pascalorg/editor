@@ -1,6 +1,6 @@
+import { formatAngleRadians } from '@pascal-app/core'
 import { type ParseMeasurementOptions, parseMeasurement } from '../../../lib/measurement-parser'
 import type { PlacementTypingValues } from '../../../store/use-placement-typing'
-import { formatAngleRadians } from '../shared/segment-angle'
 import type { WallPlanPoint } from './wall-drafting'
 
 /**

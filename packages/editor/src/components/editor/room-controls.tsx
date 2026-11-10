@@ -6,7 +6,9 @@ import {
   DEFAULT_LEVEL_HEIGHT,
   deleteZone,
   emitter,
+  formatLinearMeasurement,
   type Point,
+  roomFloorElevation,
   type StructureNodes,
   sceneRegistry,
   useScene,
@@ -35,7 +37,6 @@ import { getRoomSelectionIndex } from '../../hooks/use-selected-room'
 import { EDITOR_LAYER } from '../../lib/constants'
 import { getFloatingMenuScale } from '../../lib/floating-menu-scale'
 import { clientToPlan } from '../../lib/floorplan/plan-coords'
-import { formatLinearMeasurement } from '../../lib/measurements'
 import { addMezzanineStairs } from '../../lib/mezzanine-stairs'
 import {
   cancelRoomDivide,
@@ -46,7 +47,7 @@ import {
   roomDivideContains,
   startRoomDivide,
 } from '../../lib/room-divide-session'
-import { roomFloorElevation, useRoomHandleDrag } from '../../lib/room-handle-drag'
+import { useRoomHandleDrag } from '../../lib/room-handle-drag'
 import type { RoomSelectionRecord } from '../../lib/room-selection'
 import { requestRoomDeletion } from '../../lib/room-structure-commands'
 import {

@@ -1,5 +1,4 @@
 import { describe, expect, test } from 'bun:test'
-import { measurementHint, parseMeasurement } from '../index'
 import {
   buildMeasurementAngleArcPoints,
   cubicMetersToVolumeUnit,
@@ -11,16 +10,18 @@ import {
   getVolumeUnitLabel,
   linearControlValueToMeters,
   linearUnitToMeters,
-  MEASUREMENT_ACTIVE_COLOR,
-  MEASUREMENT_DANGLING_COLOR,
-  MEASUREMENT_FLOORPLAN_COLOR,
-  MEASUREMENT_PERSISTENT_COLOR,
-  measurementFloorplanPresentationColor,
-  measurementPresentationColor,
   metersToLinearUnit,
   parseLinearMeasurementInput,
   squareMetersToAreaUnit,
-} from './measurements'
+} from '@pascal-app/core'
+import {
+  MEASUREMENT_ACTIVE_COLOR,
+  MEASUREMENT_DANGLING_COLOR,
+  MEASUREMENT_PERSISTENT_COLOR,
+  measurementPresentationColor,
+} from '@pascal-app/viewer'
+import { measurementHint, parseMeasurement } from '../index'
+import { MEASUREMENT_FLOORPLAN_COLOR, measurementFloorplanPresentationColor } from './measurements'
 
 describe('measurement presentation', () => {
   test('uses black at rest, indigo while active, and red for dangling references', () => {

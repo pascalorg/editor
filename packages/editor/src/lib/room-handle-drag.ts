@@ -16,12 +16,15 @@ import {
   type Point,
   planWallDivision,
   resolveMovedWallSupportSlabPatch,
+  roomFloorElevation,
+  roomOwnPlate,
   runAsSingleSceneHistoryStep,
   SEPARATOR_JOIN_REACH,
   type SeparatorNode,
   type SeparatorSpan,
   type StructureNodes,
   type StructurePlan,
+  separatorFloorElevation,
   setRoomFloorConstruction,
   setWallGeometry,
   setZoneEdges,
@@ -46,7 +49,6 @@ import { clientToPlan } from './floorplan/plan-coords'
 import { beginGesture } from './gesture-lifecycle'
 import { isHistoryShortcut } from './history'
 import { MEZZANINE_FAILED_MESSAGE, mezzanineConflictMessage } from './mezzanine-messages'
-import { roomOwnPlate } from './room-built-on'
 import {
   mezzanineEdgeDimensions,
   type RoomDimension,
@@ -145,19 +147,6 @@ export type RoomHandleDrag =
 export const useRoomHandleDrag = create<{ drag: RoomHandleDrag | null }>(() => ({ drag: null }))
 
 type Nodes = Record<string, AnyNode>
-
-/** The walking surface of a room: its own elevation, else its plate's. */
-export function roomFloorElevation(nodes: Nodes, zoneId: string): number {
-  const zone = nodes[zoneId]
-  if (zone?.type !== 'zone') return 0
-  const own = roomOwnPlate(nodes, zoneId)
-  if (own) return own.elevation
-  if (typeof zone.floor?.elevation === 'number') return zone.floor.elevation
-  const plate = Object.values(nodes).find(
-    (node) => node.type === 'slab' && node.zoneIds?.includes(zoneId),
-  )
-  return plate?.type === 'slab' ? (plate.elevation ?? 0.05) : 0.05
-}
 
 /**
  * The stretch of a wall a push moves: `[0, 1]` is the whole wall (its
@@ -394,14 +383,6 @@ export function separatorPushHandles(separator: SeparatorNode, floor = 0): WallP
     const outward: Point = [(-dz / length) * sign, (dx / length) * sign]
     return separatorPushHandle(edge, outward, floor, `${separator.id}:${side}`)
   })
-}
-
-/** The floor an invisible wall lies on: the walking surface of a room it closes, else 0. */
-export function separatorFloorElevation(nodes: Nodes, separatorId: string): number {
-  const zone = Object.values(nodes).find(
-    (node) => node.type === 'zone' && node.boundarySeparatorIds.includes(separatorId),
-  )
-  return zone ? roomFloorElevation(nodes, zone.id) : 0
 }
 
 /**

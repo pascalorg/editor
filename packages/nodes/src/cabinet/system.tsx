@@ -11,7 +11,7 @@ import {
   type CabinetRunFootprint,
   cabinetRunFootprint,
   cabinetRunNeighborSignature,
-} from './definition'
+} from './definition.render'
 import { collectCabinetFlameObjects } from './flame-index'
 
 function materialWithOpacity(material: Material | Material[] | undefined): Material | null {

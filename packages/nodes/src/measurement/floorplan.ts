@@ -1,7 +1,12 @@
 import {
+  buildMeasurementAngleArcPoints,
   type FloorplanGeometry,
   type FloorplanPoint,
   type FloorplanStyle,
+  formatAngleRadians,
+  formatAreaLabel,
+  formatLinearMeasurement,
+  formatVolumeLabel,
   type GeometryContext,
   type MeasurementNode,
   type MeasurementPoint,
@@ -12,16 +17,11 @@ import {
   measurementPrismVolume,
 } from '@pascal-app/core'
 import {
-  buildMeasurementAngleArcPoints,
-  formatAngleRadians,
-  formatAreaLabel,
-  formatLinearMeasurement,
-  formatVolumeLabel,
   measurementFloorplanPresentationColor,
-  measurementPolygonLabelAnchor,
   readFloorplanContext,
   withFloorplanGeometryMetadata,
 } from '@pascal-app/editor'
+import { measurementPolygonLabelAnchor } from '@pascal-app/viewer'
 import { measurementResolvedEditPoints } from './edit'
 import { resolveMeasurementNode } from './resolve'
 

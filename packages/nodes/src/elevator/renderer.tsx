@@ -891,6 +891,7 @@ function ElevatorMeshButton({
   disabled = false,
   elevatorId,
   faceSign = -1,
+  interactionEnabled = true,
   glyph,
   label,
   levelId,
@@ -904,6 +905,7 @@ function ElevatorMeshButton({
   disabled?: boolean
   elevatorId: AnyNodeId
   faceSign?: -1 | 1
+  interactionEnabled?: boolean
   glyph?: 'door-open'
   label?: string
   levelId?: AnyNodeId
@@ -942,13 +944,14 @@ function ElevatorMeshButton({
     () => ({
       elevatorButton: {
         action,
-        disabled,
+        // Gate input without changing the physical button state or its appearance.
+        disabled: disabled || !interactionEnabled,
         elevatorId,
         kind: buttonKind,
         levelId,
       },
     }),
-    [action, buttonKind, disabled, elevatorId, levelId],
+    [action, buttonKind, disabled, elevatorId, interactionEnabled, levelId],
   )
 
   return (
@@ -1347,7 +1350,13 @@ function LandingDoor({
   )
 }
 
-export const ElevatorRenderer = ({ node }: { node: ElevatorNode }) => {
+export const ElevatorRenderer = ({
+  node,
+  interactionEnabled = true,
+}: {
+  node: ElevatorNode
+  interactionEnabled?: boolean
+}) => {
   const cutaway = useElevatorInspection((state) => state.nodeId === node.id && state.cutaway)
   const ref = useRef<Group>(null!)
   const cabRef = useRef<Group>(null)
@@ -1701,6 +1710,7 @@ export const ElevatorRenderer = ({ node }: { node: ElevatorNode }) => {
 
                 return (
                   <ElevatorMeshButton
+                    interactionEnabled={interactionEnabled}
                     active={!isDisabledLevel && activeLevelId === entry.id}
                     buttonKind="cab"
                     disabled={isDisabledLevel}
@@ -1716,6 +1726,7 @@ export const ElevatorRenderer = ({ node }: { node: ElevatorNode }) => {
                 )
               })}
               <ElevatorMeshButton
+                interactionEnabled={interactionEnabled}
                 action="open-door"
                 active={doorOpenButtonActive}
                 buttonKind="cab"
@@ -1779,6 +1790,7 @@ export const ElevatorRenderer = ({ node }: { node: ElevatorNode }) => {
                     scale={[landingPanelWidth, 0.42, 0.04]}
                   />
                   <ElevatorMeshButton
+                    interactionEnabled={interactionEnabled}
                     active={
                       !isDisabledLevel && !isServiceOnlyLevel && isCurrentLevel && doorOpen > 0.5
                     }

@@ -23,11 +23,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '../../../../../components/ui/primitives/dialog'
-import {
-  getAreaUnitLabel,
-  type LinearUnit,
-  squareMetersToAreaUnit,
-} from '../../../../../lib/measurements'
+import { getAreaUnitLabel, type LinearUnit, squareMetersToAreaUnit } from '@pascal-app/core'
 
 export type PendingImport = {
   fileName: string

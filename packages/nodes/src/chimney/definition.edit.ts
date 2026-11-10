@@ -1,0 +1,243 @@
+import {
+  type AnyNodeId,
+  type ChimneyNode as ChimneyNodeType,
+  getActiveRoofHeight,
+  type HandleDescriptor,
+  type RoofSegmentNode as RoofSegmentNodeType,
+  type SceneApi,
+} from '@pascal-app/core'
+import type { NodeEditContribution } from '../definition-contributions'
+import { buildChimneyFloorplan } from './floorplan'
+import { chimneyPaint } from './paint'
+import { chimneyParametrics } from './parametrics'
+import type { ChimneyNode } from './schema'
+
+// Side handle offsets in metres. Match the roof-segment values so a
+// segment + chimney selected back-to-back use the same visual rhythm.
+const SIDE_HANDLE_OFFSET = 0.25
+
+const ROTATE_CORNER_OFFSET = 0.35
+
+const MIN_BODY_DIM = 0.3
+
+const MIN_HEIGHT_ABOVE_RIDGE = 0.05
+
+// Fallback Y when the host segment can't be resolved (shouldn't happen
+// for a placed chimney, but `placement.position` runs synchronously and
+// must always return a vector).
+const FALLBACK_BODY_MID_Y = 1.5
+
+// Resolve the segment that hosts this chimney. Returns undefined if the
+// chimney is unparented or the parent isn't in the scene yet.
+function resolveHostSegment(
+  node: ChimneyNodeType,
+  sceneApi: SceneApi,
+): RoofSegmentNodeType | undefined {
+  if (!node.roofSegmentId) return undefined
+  return sceneApi.get<RoofSegmentNodeType>(node.roofSegmentId as AnyNodeId)
+}
+
+// Mid-Y of the visible chimney body in the host segment's local frame.
+// Matches the geometry builder: body runs from `baseY = max(0, wallHeight
+// - 0.2)` up to `peakY + heightAboveRidge`. The handle Y picks the
+// midpoint of the *visible* portion (deck plane → top) so chevrons sit
+// next to the body, not buried inside the roof deck or floating over
+// the eave.
+function getBodyMidY(node: ChimneyNodeType, segment: RoofSegmentNodeType): number {
+  const peakY = segment.wallHeight + getActiveRoofHeight(segment)
+  const topY = peakY + node.heightAboveRidge
+  return (segment.wallHeight + topY) / 2
+}
+
+// Top of the chimney body (where the cap reveal gap begins). Tracker
+// handle and cap-thickness handle both reference this Y.
+function getBodyTopY(node: ChimneyNodeType, segment: RoofSegmentNodeType): number {
+  return segment.wallHeight + getActiveRoofHeight(segment) + node.heightAboveRidge
+}
+
+// Width arrow on the +X (right) or -X (left) side. Asymmetric resize:
+// dragging one arrow grows the chimney outward from its own edge while
+// the opposite edge stays world-fixed. Handles live in the chimney's
+// registered ref frame (the nested inner group in the renderer that
+// applies `node.position` / `node.rotation`), so placements are in
+// chimney-local coordinates — no per-arrow rotation/translation
+// compensation. `apply` keeps the world-fixed edge anchored even when
+// the chimney is rotated by recentering `position` along the chimney's
+// own +X arm in segment frame.
+function chimneyWidthHandle(side: 'left' | 'right'): HandleDescriptor<ChimneyNodeType> {
+  const sign = side === 'right' ? 1 : -1
+  return {
+    kind: 'linear-resize',
+    axis: 'x',
+    anchor: side === 'right' ? 'min' : 'max',
+    // Portal into the roof (grandparent), not the segment (parent). Unpainted
+    // roof segments live inside a `visible={false}` wrapper, which would
+    // hide the handles. The roof itself is always visible. Skylight does
+    // the same.
+    portal: 'grandparent',
+    min: MIN_BODY_DIM,
+    currentValue: (n) => n.width,
+    apply: (initial, newWidth) => {
+      const rotY = initial.rotation ?? 0
+      const armX = Math.cos(rotY)
+      const armZ = -Math.sin(rotY)
+      const anchorX = initial.position[0] - sign * (initial.width / 2) * armX
+      const anchorZ = initial.position[2] - sign * (initial.width / 2) * armZ
+      const newCenterX = anchorX + sign * (newWidth / 2) * armX
+      const newCenterZ = anchorZ + sign * (newWidth / 2) * armZ
+      return {
+        width: newWidth,
+        position: [newCenterX, initial.position[1], newCenterZ],
+      }
+    },
+    placement: {
+      position: (n, sceneApi) => {
+        const segment = resolveHostSegment(n, sceneApi)
+        const y = segment ? getBodyMidY(n, segment) : FALLBACK_BODY_MID_Y
+        return [sign * (n.width / 2 + SIDE_HANDLE_OFFSET), y, 0]
+      },
+      // Chevron faces along the chimney's own ±X; the left arrow flips
+      // 180°. No node.rotation here — the registered inner group is
+      // already rotated by `node.rotation`, so chimney-local +X is the
+      // chevron's natural direction.
+      rotationY: () => (side === 'right' ? 0 : Math.PI),
+    },
+  }
+}
+
+// Depth arrow — symmetric on the +Z side. Only meaningful for square
+// bodies; round chimneys are circular (depth field is ignored by the
+// geometry builder, so a depth handle would just resize an invisible
+// field). The chimneys factory below omits this descriptor for round
+// bodies.
+function chimneyDepthHandle(): HandleDescriptor<ChimneyNodeType> {
+  return {
+    kind: 'linear-resize',
+    axis: 'z',
+    anchor: 'center',
+    min: MIN_BODY_DIM,
+    currentValue: (n) => n.depth,
+    apply: (_n, newValue) => ({ depth: newValue }),
+    placement: {
+      position: (n, sceneApi) => {
+        const segment = resolveHostSegment(n, sceneApi)
+        const y = segment ? getBodyMidY(n, segment) : FALLBACK_BODY_MID_Y
+        return [0, y, n.depth / 2 + SIDE_HANDLE_OFFSET]
+      },
+    },
+  }
+}
+
+// Height-above-ridge tracker. Dashed leader spans the chimney body's
+// visible extent — from the roof deck plane up to the body top — and
+// terminates in a draggable cube at the body top. Cap, flues, cricket
+// and bands sit ABOVE the body and are explicitly excluded from the
+// leader so the height affordance reads as "this is the body height",
+// not "this is the whole stack height". Dragging the cube vertically
+// adjusts `heightAboveRidge` 1:1.
+function chimneyHeightAboveRidgeHandle(): HandleDescriptor<ChimneyNodeType> {
+  return {
+    kind: 'linear-resize',
+    axis: 'y',
+    anchor: 'min',
+    shape: 'tracker',
+    min: MIN_HEIGHT_ABOVE_RIDGE,
+    currentValue: (n) => n.heightAboveRidge,
+    apply: (initial, newValue) => ({
+      heightAboveRidge: Math.max(MIN_HEIGHT_ABOVE_RIDGE, newValue),
+    }),
+    placement: {
+      // Cube sits AT the body top (no offset) so the leader terminates
+      // exactly at the body's top edge — visually the "ceiling" of the
+      // body, before the cap reveal gap.
+      position: (n, sceneApi) => {
+        const segment = resolveHostSegment(n, sceneApi)
+        const y = segment ? getBodyTopY(n, segment) : FALLBACK_BODY_MID_Y
+        return [0, y, 0]
+      },
+    },
+    // Leader bottom = deck plane (segment.wallHeight). The chimney body
+    // geometry actually extends a touch below the deck so the bottom
+    // doesn't show above the eave on low-slope roofs (`baseY = max(0,
+    // wallHeight - 0.2)`), but the visible portion starts at the deck —
+    // and starting the leader there is what reads as "body height" to
+    // the user.
+    trackerBaseY: (n, sceneApi) => {
+      const segment = resolveHostSegment(n, sceneApi)
+      return segment?.wallHeight ?? 0
+    },
+  }
+}
+
+// Whole-chimney rotation gizmo at the +X/+Z corner of the body
+// footprint. The registered inner group already centers on the chimney
+// and applies its yaw, so the default rotation pivot (rideObject origin)
+// is correct — no `rotationCenter` override needed.
+function chimneyRotateHandle(): HandleDescriptor<ChimneyNodeType> {
+  return {
+    kind: 'arc-resize',
+    axis: 'angular',
+    shape: 'rotate',
+    apply: (initial, delta) => ({ rotation: (initial.rotation ?? 0) - delta }),
+    placement: {
+      position: (n, sceneApi) => {
+        const segment = resolveHostSegment(n, sceneApi)
+        const y = segment ? getBodyMidY(n, segment) : FALLBACK_BODY_MID_Y
+        const isRound = n.bodyShape === 'round'
+        const halfX = n.width / 2 + ROTATE_CORNER_OFFSET
+        const halfZ = (isRound ? n.width : n.depth) / 2 + ROTATE_CORNER_OFFSET
+        return [halfX, y, halfZ]
+      },
+      // The two-headed icon's natural bias points along +X; aim it
+      // toward the corner (45° outward from the chimney's local frame).
+      rotationY: () => -Math.PI / 4,
+    },
+  }
+}
+
+const chimneyHandles = (node: ChimneyNodeType): HandleDescriptor<ChimneyNodeType>[] => {
+  const descriptors: HandleDescriptor<ChimneyNodeType>[] = [
+    chimneyWidthHandle('right'),
+    chimneyWidthHandle('left'),
+  ]
+  if (node.bodyShape !== 'round') descriptors.push(chimneyDepthHandle())
+  descriptors.push(chimneyHeightAboveRidgeHandle(), chimneyRotateHandle())
+  // Conditional flue/cap handles are temporarily disabled — they fired
+  // a "Color target has no corresponding fragment stage output" WebGPU
+  // validation error that the original four handles don't trigger. The
+  // descriptor shapes (linear-resize y / radial-resize x) match other
+  // working handles in the codebase, so the cause is likely a TSL/MRT
+  // pipeline interaction we haven't pinned down. Re-enable one at a
+  // time after isolating the trigger; the factory + helpers are kept so
+  // we can flip them back on without re-deriving the placement math.
+  // if (node.cap && node.capShape !== 'none') {
+  //   descriptors.push(chimneyCapThicknessHandle(), chimneyCapOverhangHandle())
+  // }
+  // if (node.flueCount > 0) descriptors.push(chimneyFlueHeightHandle())
+  return descriptors
+}
+
+export const chimneyEditContribution: NodeEditContribution<typeof ChimneyNode> = {
+  snapProfile: 'item',
+  capabilities: {
+    // Paint dispatch for the body / top surface split. The editor's
+    // selection-manager routes paint hover / click / preview through
+    // this entry rather than carrying a kind-name arm.
+    paint: chimneyPaint,
+  },
+  affordanceTools: {
+    // Drag-to-place tool for duplicate + move. Reuses the placement
+    // ghost preview but seeds it from the moving (cloned) node so the
+    // duplicate keeps the source's body shape, materials, panels, etc.
+    move: () => import('./move-tool'),
+  },
+  parametrics: chimneyParametrics,
+  handles: chimneyHandles,
+  floorplan: buildChimneyFloorplan,
+  preview: () => import('./preview'),
+  tool: () => import('./tool'),
+  toolHints: [
+    { key: 'Left click', label: 'Place chimney on roof' },
+    { key: 'Esc', label: 'Cancel' },
+  ],
+}

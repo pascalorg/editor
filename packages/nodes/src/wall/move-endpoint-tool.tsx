@@ -5,6 +5,7 @@ import {
   acquireSceneHistoryPause,
   collectAlignmentAnchors,
   emitter,
+  formatAngleRadians,
   type GridEvent,
   getWallBaseElevationForNodes,
   getWallCurveLength,
@@ -18,7 +19,6 @@ import {
 } from '@pascal-app/core'
 import {
   CursorSphere,
-  formatAngleRadians,
   getAngleToSegmentReference,
   getSegmentAngleReferenceAtPoint,
   isAlignmentGuideActive,

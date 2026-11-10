@@ -1,7 +1,7 @@
+import { formatAngleRadians } from '@pascal-app/core'
 import {
   DraftMeasurementLabel,
   EDITOR_LAYER,
-  formatAngleRadians,
   getAngleArcToSegmentReference,
   getAngleToSegmentReference,
   type SegmentAngleReference,

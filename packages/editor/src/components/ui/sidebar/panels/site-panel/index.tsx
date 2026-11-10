@@ -60,14 +60,7 @@ import {
 import { addStoreyOnTop } from './../../../../../lib/add-storey'
 import { offerExteriorWallCopy } from './../../../../../components/ui/level-wall-copy-prompt'
 import { deleteLevelWithFallbackSelection } from './../../../../../lib/level-selection'
-import {
-  formatAreaLabel,
-  getAreaUnitLabel,
-  getLinearUnitLabel,
-  linearUnitToMeters,
-  metersToLinearUnit,
-  squareMetersToAreaUnit,
-} from './../../../../../lib/measurements'
+import { formatAreaLabel, getAreaUnitLabel, getLinearUnitLabel, linearUnitToMeters, metersToLinearUnit, squareMetersToAreaUnit } from '@pascal-app/core'
 import { createLocalGuideImage, createLocalScan } from './../../../../../lib/local-guide-image'
 import { editorHostTreeChildrenRegistry } from './../../../../../lib/host-tree-children'
 import { requestRoomDeletion } from './../../../../../lib/room-structure-commands'

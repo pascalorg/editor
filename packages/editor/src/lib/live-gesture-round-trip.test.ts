@@ -6,6 +6,7 @@ import {
   createZoneDivisionContext,
   generateId,
   nodeRegistry,
+  roomFloorElevation,
   type SlabNode,
   useLiveNodeOverrides,
   useScene,
@@ -29,7 +30,6 @@ import { roomRelativeFloorHeight, stepRoomFloorElevation } from './room-construc
 import {
   commitRoomElevation,
   mezzanineEdgeHandles,
-  roomFloorElevation,
   roomPushHandles,
   runFloorplanMezzanineEdge,
   runFloorplanRoomPush,

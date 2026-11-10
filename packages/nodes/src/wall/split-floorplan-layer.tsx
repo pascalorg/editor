@@ -1,6 +1,7 @@
 'use client'
 
 import {
+  formatLinearMeasurement,
   getWallCurveFrameAt,
   getWallCurveLength,
   getWallFaceOffsets,
@@ -11,7 +12,6 @@ import {
   clientToPlan,
   FloorplanDraftMeasurement,
   type FloorplanToolContext,
-  formatLinearMeasurement,
   useFloorplanRender,
 } from '@pascal-app/editor'
 import { getSceneTheme, useViewer } from '@pascal-app/viewer'
