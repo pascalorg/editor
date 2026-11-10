@@ -141,9 +141,15 @@ export function ownFloorIntentChanges(
   for (const old of Object.values(nodes)) {
     const current = next[old.id]
     if (old.type !== 'wall' || current?.type !== 'wall' || !old.parentId) continue
-    const oldTop = getWallTop(old, old.parentId, nodes, wallSupportForNodes(old, nodes).elevation)
+    const oldTop = getWallTop(
+      old,
+      old.parentId,
+      nodes,
+      wallSupportForNodes(old, nodes).elevation,
+      0,
+    )
     const support = wallSupportForNodes(current, next).elevation
-    const newTop = getWallTop(current, current.parentId!, next, support)
+    const newTop = getWallTop(current, current.parentId!, next, support, 0)
     if (Math.abs(oldTop - newTop) <= 1e-6) continue
     if (oldTop - support < MIN_WALL_HEIGHT)
       return refuse(

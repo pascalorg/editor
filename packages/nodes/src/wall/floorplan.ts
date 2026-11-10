@@ -371,7 +371,7 @@ export function buildWallFloorplan(node: WallNode, ctx: GeometryContext): Floorp
     children.push(
       ...buildCurtainWallFloorplan(
         node,
-        getWallEffectiveHeightForNodes(node, ctx.sceneNodes ?? {}),
+        getWallEffectiveHeightForNodes(node, ctx.sceneNodes ?? {}, 0),
         stroke,
         ctx.children,
       ),

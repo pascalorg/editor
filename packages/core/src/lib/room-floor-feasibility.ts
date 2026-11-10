@@ -248,7 +248,10 @@ function computeRoomFloor(
     )
     const support =
       hasOpenings || wall.height !== undefined ? wallSupportForNodes(wall, candidate) : undefined
-    const top = getWallTop(wall, level.id, nodes, support?.elevation ?? 0)
+    const top = Math.min(
+      getWallTop(wall, level.id, nodes, support?.elevation ?? 0, 0),
+      getWallTop(wall, level.id, nodes, support?.elevation ?? 0, 1),
+    )
     const openingSpans =
       hasOpenings && linked
         ? (roomFace(nodes, zone, floorRoomFaces(boundaries(nodes, zone.parentId!)))?.spans ?? [])

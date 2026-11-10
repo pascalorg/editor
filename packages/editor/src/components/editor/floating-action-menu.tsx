@@ -284,7 +284,7 @@ function getHeightPillDimensions(node: WallNode | FenceNode): {
 } {
   if (node.type === 'wall') {
     return {
-      height: getWallEffectiveHeightForNodes(node, useScene.getState().nodes),
+      height: getWallEffectiveHeightForNodes(node, useScene.getState().nodes, 0),
       length: getWallCurveLength(node),
       thickness: getWallThickness(node),
     }
@@ -423,7 +423,7 @@ export function FloatingActionMenu() {
         | undefined
       const fallbackHeight =
         node.type === 'wall'
-          ? getWallEffectiveHeightForNodes(node, useScene.getState().nodes)
+          ? getWallEffectiveHeightForNodes(node, useScene.getState().nodes, 0)
           : FENCE_DEFAULT_HEIGHT
       const liveHeight = override?.height ?? node.height ?? fallbackHeight
       pillHeightRef.current.textContent = `H ${formatMeasurement(liveHeight, unit, metricNotation)}`

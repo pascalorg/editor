@@ -21,7 +21,7 @@ import { openingPropertyPreviewHost } from '../shared/opening-property-preview-h
 import { readRoofFaceHeightMax, readRoofFaceWidthMax } from '../shared/roof-opening-host'
 import { buildRoofWallOpeningCut } from '../shared/roof-wall-opening-cut'
 import { scriptedOpeningHandles } from '../shared/scripted-opening-handles'
-import { readHostWallCeiling } from '../shared/wall-opening-ceiling'
+import { readHostWallCeiling, readHostWallCeilingMaxWidth } from '../shared/wall-opening-ceiling'
 import { openingSeenFromOutside } from '../wall/exterior'
 import { wallFloorplanSiblingOverrides } from '../wall/floorplan-overrides'
 import { buildDoorContextualDimensions } from './contextual-dimensions'
@@ -44,9 +44,10 @@ const MIN_DOOR_WIDTH = 0.3
 const MOVE_HANDLE_LIFT = 0.12
 
 function readWallLength(door: DoorNodeType, scene: { get: (id: AnyNodeId) => unknown }): number {
-  if (!door.wallId) return Number.POSITIVE_INFINITY
-  const wall = scene.get(door.wallId as AnyNodeId) as WallNode | undefined
-  if (!wall) return Number.POSITIVE_INFINITY
+  const hostId = door.wallId || door.parentId
+  if (!hostId) return Number.POSITIVE_INFINITY
+  const wall = scene.get(hostId as AnyNodeId) as WallNode | undefined
+  if (wall?.type !== 'wall' || !wall.start || !wall.end) return Number.POSITIVE_INFINITY
   return Math.hypot(wall.end[0] - wall.start[0], wall.end[1] - wall.start[1])
 }
 
@@ -63,13 +64,27 @@ function doorWidthHandle(side: 'left' | 'right'): HandleDescriptor<DoorNodeType>
     anchor: side === 'right' ? 'min' : 'max',
     min: MIN_DOOR_WIDTH,
     max: (n, scene) => {
-      // Roof-hosted doors clamp against the face profile (the wall-based
-      // limits read Infinity when wallId is unset).
+      // Roof-hosted doors clamp against the face profile.
       const roofMax = readRoofFaceWidthMax(n, scene, sign)
       if (roofMax !== null) return Math.max(MIN_DOOR_WIDTH, roofMax)
-      return (
-        curtainOpeningResizeMax(n, scene.nodes(), 'x', sign) ??
-        readWallLength(n, scene) - (getDoorOpeningSize(n).width - n.width)
+      const curtainMax = curtainOpeningResizeMax(n, scene.nodes(), 'x', sign)
+      if (curtainMax !== undefined) return curtainMax
+      const lengthMax = readWallLength(n, scene) - (getDoorOpeningSize(n).width - n.width)
+      // rotation[1] = π flips the door, so its visual right edge moves toward lower wall-local S.
+      const growSign = sign * Math.cos(n.rotation[1]) > 0 ? 1 : -1
+      const fixedEdgeS = n.position[0] - (growSign * n.width) / 2
+      const topY = n.position[1] - n.height / 2 + getDoorOpeningSize(n).height
+      return Math.max(
+        MIN_DOOR_WIDTH,
+        readHostWallCeilingMaxWidth(
+          n.wallId || n.parentId,
+          scene,
+          fixedEdgeS,
+          growSign,
+          topY,
+          lengthMax,
+          n,
+        ),
       )
     },
     currentValue: (n) => n.width,
@@ -122,13 +137,13 @@ function doorHeightHandle(): HandleDescriptor<DoorNodeType> {
       const bottom = n.position[1] - n.height / 2
       return Math.max(
         MIN_DOOR_HEIGHT,
-        readHostWallCeiling(n.wallId, scene, n) -
+        readHostWallCeiling(n.wallId || n.parentId, scene, n) -
           bottom -
           (getDoorOpeningSize(n).height - n.height),
       )
     },
     currentValue: (n) => n.height,
-    onDrag: (node) => publishOpeningResizeGuides(node, false),
+    onDrag: (node) => publishOpeningResizeGuides(node, true),
     apply: (initial, newHeight) => {
       const bottom = initial.position[1] - initial.height / 2
       // Scale the handle so it tracks the door instead of staying glued to a

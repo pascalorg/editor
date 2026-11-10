@@ -181,7 +181,7 @@ describe('scene vertical model migration', () => {
         return (
           elevations.get(wallNode.parentId!)!.baseY +
           getWallBaseElevationForNodes(wallNode, nodes) +
-          getWallEffectiveHeightForNodes(wallNode, nodes)
+          getWallEffectiveHeightForNodes(wallNode, nodes, 0)
         )
       }
       const roofSeat =

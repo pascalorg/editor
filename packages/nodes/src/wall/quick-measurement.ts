@@ -10,7 +10,7 @@ import { resolveWallOpeningCeiling } from '../shared/wall-opening-ceiling'
 
 export function wallQuickMeasurement(node: WallNode): QuickMeasurementReport {
   const length = getWallCurveLength(node)
-  const height = resolveWallOpeningCeiling(node, useScene.getState().nodes)
+  const height = resolveWallOpeningCeiling(node, useScene.getState().nodes, 0.5)
   const frame = getWallCurveFrameAt(node, 0.5)
 
   return {

@@ -230,6 +230,49 @@ describe('wall treatment miters', () => {
     expect(xs.every((x) => x <= 1 + 1e-6 || x >= 2 - 1e-6)).toBe(true)
     geometry.dispose()
   })
+  test('does not cut sloped crown molding when opening is below crown at its own X', () => {
+    const node = {
+      ...wall('A', [0, 0], [10, 0]),
+      endHeightOffset: 1.0,
+    }
+    const geometry = buildTrimGeometry(
+      node,
+      'a',
+      trim,
+      'crown',
+      [{ type: 'window', width: 1, height: 1, position: [8, 1.5, 0] }],
+      treatmentLevelData([node]),
+    )
+    expect(geometry).not.toBeNull()
+    if (!geometry) throw new Error('expected trim geometry')
+
+    const xs = allPositions(geometry).map((point) => point.x)
+    expect(xs.some((x) => Math.abs(x - 7.5) < 0.01 || Math.abs(x - 8.5) < 0.01)).toBe(false)
+    expect(Math.max(...xs)).toBeCloseTo(10, 5)
+    expect(Math.min(...xs)).toBeCloseTo(0, 5)
+    geometry.dispose()
+  })
+
+  test('cuts sloped crown molding only where opening penetrates crown at its own X', () => {
+    const node = {
+      ...wall('A', [0, 0], [10, 0]),
+      endHeightOffset: 1.0,
+    }
+    const geometry = buildTrimGeometry(
+      node,
+      'a',
+      trim,
+      'crown',
+      [{ type: 'door', width: 1, height: 2.48, position: [0.5, 1.24, 0] }],
+      treatmentLevelData([node]),
+    )
+    expect(geometry).not.toBeNull()
+    if (!geometry) throw new Error('expected trim geometry')
+
+    const xs = allPositions(geometry).map((point) => point.x)
+    expect(xs.every((x) => x <= 0.01 || x >= 0.79)).toBe(true)
+    geometry.dispose()
+  })
 
   // A door 1 m wide at 1.5 m, cased 0.1 m wide on face a only: its legs run from 0.9 to 1 and
   // from 2 to 2.1 on that face.

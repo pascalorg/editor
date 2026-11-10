@@ -31,7 +31,11 @@ export function resolveRoofWallTopElevation(
   const sourceLevelY = elevations.get(sourceLevelId)?.baseY ?? 0
   const targetLevelY = elevations.get(targetLevelId)?.baseY ?? 0
   const support = wallSupportForNodes(wall, nodes)
-  return sourceLevelY + getWallTop(wall, sourceLevelId, nodes, support.elevation) - targetLevelY
+  const top = Math.max(
+    getWallTop(wall, sourceLevelId, nodes, support.elevation, 0),
+    getWallTop(wall, sourceLevelId, nodes, support.elevation, 1),
+  )
+  return sourceLevelY + top - targetLevelY
 }
 
 /**

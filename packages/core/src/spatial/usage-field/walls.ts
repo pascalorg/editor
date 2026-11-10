@@ -53,6 +53,27 @@ function pushPieces(
 }
 
 /**
+ * A wall's highest top, and the shape of a prism standing to it: a sloped top is drawn at its
+ * taller end over the whole length, so the prism claims space above the low end and is approximate.
+ */
+function wallTopReach(
+  wall: WallNode,
+  levelId: string,
+  nodes: Nodes,
+  base: number,
+): { top: number; sloped: Pick<Prism, 'shape' | 'why'> } {
+  const start = getWallTop(wall, levelId, nodes as never, base, 0)
+  const end = getWallTop(wall, levelId, nodes as never, base, 1)
+  return {
+    top: Math.max(start, end),
+    sloped:
+      Math.abs(end - start) > MIN_PIECE_M
+        ? { shape: 'approx', why: 'a sloped wall top: drawn at its taller end' }
+        : { shape: 'exact' },
+  }
+}
+
+/**
  * The wall bodies of one level: each wall's mitred footprint over its height, less the bands its
  * doors and windows cut, with the pieces left below a sill and above a head. Heights are level-local:
  * from the wall's elected base (`wallSupportForNodes`) to its top (`getWallTop`), the same two
@@ -70,7 +91,7 @@ export function wallBodies(
     if (footprint.length < 3) continue
     const support = wallSupportForNodes(wall, nodes)
     const base = support.elevation
-    const top = getWallTop(wall, levelId, nodes as never, base)
+    const { top, sloped } = wallTopReach(wall, levelId, nodes, base)
     if (!(top - base > MIN_PIECE_M)) continue
     const cuts = (wall.children ?? [])
       .map((id) => nodes[id])
@@ -78,7 +99,7 @@ export function wallBodies(
       .map((opening) => ({ opening, cut: getOpeningWallCut(wall, opening, nodes, support) }))
       .filter(({ cut }) => cut.band.length >= 3)
     const bands = cuts.length ? union(cuts.map(({ cut }) => cut.band)) : []
-    const common = { nodeId: wall.id, kind: 'wall' as const, shape: 'exact' as const }
+    const common = { nodeId: wall.id, kind: 'wall' as const, ...sloped }
     pushPieces(out, difference(footprint, bands), {
       ...common,
       id: `${wall.id}#body`,
@@ -144,7 +165,7 @@ export function wallTrims(
       continue
     }
     const support = wallSupportForNodes(wall, nodes)
-    const top = getWallTop(wall, levelId, nodes as never, support.elevation)
+    const { top, sloped } = wallTopReach(wall, levelId, nodes, support.elevation)
     const openings = (wall.children ?? [])
       .map((id) => nodes[id])
       .filter(isOpening)
@@ -189,7 +210,7 @@ export function wallTrims(
           kind: 'wall-trim',
           z0,
           z1,
-          shape: 'exact',
+          ...(kind === 'crown' ? sloped : { shape: 'exact' as const }),
           host: { wallId: wall.id, face },
         })
       }

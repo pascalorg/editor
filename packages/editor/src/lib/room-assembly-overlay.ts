@@ -77,7 +77,7 @@ export function resolveRoomAssemblyHeights(
     const wall = nodes[id]
     if (wall?.type !== 'wall') continue
     const base = getWallBaseElevationForNodes(wall, sceneNodes)
-    wallTops.set(id, getWallTop(wall, levelId, sceneNodes, base))
+    wallTops.set(id, getWallTop(wall, levelId, sceneNodes, base, 0.5))
   }
   const ceilingNode = room.ceilingId ? nodes[room.ceilingId] : undefined
   const ceiling =

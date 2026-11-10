@@ -463,6 +463,7 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
       )
       const { clampedY } = slid
       let clampedX = slid.clampedX
+      let fits = slid.fits
       // The corner zone: the edge snaps to the corner, unless a curtain wall's margin keeps it off.
       // Alt, or snapping off, places the window where it is dropped.
       const found =
@@ -490,18 +491,23 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
         if (Math.abs(settled.clampedX - snap.centreX) > 1e-6) {
           block = { reason: 'curtain', end: snap.end }
           snap = null
-        } else clampedX = snap.centreX
+        } else {
+          clampedX = snap.centreX
+          fits = settled.fits
+        }
       }
 
-      const valid = !hasWallChildOverlap(
-        event.node.id,
-        nodes,
-        clampedX,
-        clampedY,
-        movingWindowNode.width,
-        movingWindowNode.height,
-        movingWindowNode.id,
-      )
+      const valid =
+        fits &&
+        !hasWallChildOverlap(
+          event.node.id,
+          nodes,
+          clampedX,
+          clampedY,
+          movingWindowNode.width,
+          movingWindowNode.height,
+          movingWindowNode.id,
+        )
 
       return {
         wallNode: event.node,

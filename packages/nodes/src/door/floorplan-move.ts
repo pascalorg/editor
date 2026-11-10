@@ -106,6 +106,7 @@ export const doorFloorplanMoveTarget: FloorplanMoveTarget<DoorNode> = ({ node })
   // the cursor as a ghost (like the 3D move) and is NOT committable — a door
   // needs a wall. Starts true so a click before any move keeps the door put.
   let onWall = true
+  let lastFits = true
   // Alt force-place (last apply's modifier) — lets `canCommit` allow an
   // overlapping placement, matching the 3D move. Read in `canCommit` so an Alt-
   // held commit over a collision lands instead of reverting.
@@ -232,7 +233,7 @@ export const doorFloorplanMoveTarget: FloorplanMoveTarget<DoorNode> = ({ node })
           : neighborX +
             getDoorOpeningSize(node).leafOffsetX *
               openingHostFacing({ rotation: [0, hit.itemRotation + (flipped ? Math.PI : 0), 0] })
-      const { clampedX, clampedY, transomHeight } = clampToWall(
+      const { clampedX, clampedY, fits, transomHeight } = clampToWall(
         hit.wall,
         snappedLocalX,
         node.width,
@@ -243,6 +244,7 @@ export const doorFloorplanMoveTarget: FloorplanMoveTarget<DoorNode> = ({ node })
         },
         nodes,
       )
+      lastFits = fits
 
       // One click per real position step, keyed on the SNAPPED along-wall value
       // so it ticks only when the door actually moves to a new cell.
@@ -294,21 +296,23 @@ export const doorFloorplanMoveTarget: FloorplanMoveTarget<DoorNode> = ({ node })
       if (!onWall || !lastValid) return false
       const live = useScene.getState().nodes[nodeId] as DoorNode | undefined
       if (live?.type !== 'door') return false
-      // Block commit if the door overlaps another wall child — UNLESS Alt
-      // force-places (same `placeable` rule as the 3D move + the shared
-      // `resolveOpeningPlacement`).
-      const collides = hasWallChildOverlap(
-        lastValid.parentId,
-        useScene.getState().nodes,
-        lastValid.position[0] -
-          getDoorOpeningSize({ ...live, ...lastValid }).leafOffsetX *
-            openingHostFacing({ rotation: lastValid.rotation }),
-        lastValid.position[1] +
-          (getDoorOpeningSize({ ...live, ...lastValid }).height - live.height) / 2,
-        getDoorOpeningSize({ ...live, ...lastValid }).width,
-        getDoorOpeningSize({ ...live, ...lastValid }).height,
-        live.id,
-      )
+      // Block commit if the door does not fit under the wall's top or overlaps
+      // another wall child — UNLESS Alt force-places (same `placeable` rule as
+      // the 3D move + the shared `resolveOpeningPlacement`).
+      const collides =
+        !lastFits ||
+        hasWallChildOverlap(
+          lastValid.parentId,
+          useScene.getState().nodes,
+          lastValid.position[0] -
+            getDoorOpeningSize({ ...live, ...lastValid }).leafOffsetX *
+              openingHostFacing({ rotation: lastValid.rotation }),
+          lastValid.position[1] +
+            (getDoorOpeningSize({ ...live, ...lastValid }).height - live.height) / 2,
+          getDoorOpeningSize({ ...live, ...lastValid }).width,
+          getDoorOpeningSize({ ...live, ...lastValid }).height,
+          live.id,
+        )
       return resolveOpeningPlacement({ collides, forcePlace }).placeable
     },
     commit() {
