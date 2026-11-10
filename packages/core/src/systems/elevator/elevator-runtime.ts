@@ -145,10 +145,19 @@ export function stepElevatorRuntimeState({
     !state.requestedStops.length &&
     !state.targetLevelId &&
     state.doorOpen === 0 &&
-    stationaryEntry?.baseY === state.carY
+    stationaryEntry?.baseY === state.carY &&
+    !elevator.disabledLevelIds.includes(stationaryEntry.id)
   )
     return state
   const available = entries.filter((entry) => !elevator.disabledLevelIds.includes(entry.id))
+  const nearestAvailable = () =>
+    available.reduce<ElevatorLevelEntry | null>(
+      (nearest, entry) =>
+        !nearest || Math.abs(entry.baseY - state.carY) < Math.abs(nearest.baseY - state.carY)
+          ? entry
+          : nearest,
+      null,
+    )
   const fallback =
     available.find((entry) => entry.id === defaultEntry.id) ?? available[0] ?? defaultEntry
   const currentEntry = entries.find((entry) => entry.id === state.currentLevelId)
@@ -165,16 +174,7 @@ export function stepElevatorRuntimeState({
     state = { ...state, queue, requestedStops }
   }
   if (state.targetLevelId && !canServe(state.targetLevelId)) {
-    const destination =
-      state.phase === 'moving'
-        ? available.reduce<ElevatorLevelEntry | null>(
-            (nearest, entry) =>
-              !nearest || Math.abs(entry.baseY - state.carY) < Math.abs(nearest.baseY - state.carY)
-                ? entry
-                : nearest,
-            null,
-          )
-        : null
+    const destination = state.phase === 'moving' ? nearestAvailable() : null
     state = {
       ...state,
       targetLevelId: (destination?.id as AnyNodeId) ?? null,
@@ -202,6 +202,15 @@ export function stepElevatorRuntimeState({
     (state.phase === 'open' || state.phase === 'opening')
   ) {
     state = { ...state, phase: 'closing', phaseStartedAt: now }
+  }
+  if (
+    elevator.disabledLevelIds.includes(currentEntry.id) &&
+    state.phase !== 'moving' &&
+    !state.targetLevelId &&
+    !state.queue.length
+  ) {
+    const destination = nearestAvailable()
+    if (destination) state = { ...state, queue: [destination.id as AnyNodeId] }
   }
 
   const targetEntry = state.targetLevelId

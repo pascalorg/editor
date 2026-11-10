@@ -172,3 +172,20 @@ test('requests reject disabled and unserved stops but permit service-only cab st
     useInteractive.setState({ elevators: interactiveBefore })
   }
 })
+
+test('an idle cab on a landing that becomes disabled leaves for the nearest available landing', () => {
+  const disabledUpper = { ...elevator, disabledLevelIds: [upperLevelId] }
+  let state = createElevatorInteractiveState(upperLevelId, 2.5)
+  for (let tick = 0; tick < 10 && state.currentLevelId !== groundLevelId; tick++) {
+    state = stepElevatorRuntimeState({
+      defaultEntry: entries[0]!,
+      entries,
+      elevator: disabledUpper,
+      now: tick,
+      delta: 0.1,
+      state,
+    })
+  }
+  expect(state.currentLevelId).toBe(groundLevelId)
+  expect(state.carY).toBe(0)
+})
