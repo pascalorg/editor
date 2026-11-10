@@ -30,6 +30,18 @@
       "dependsOn": ["^build"],
       "outputs": []
     },
+    "@pascal-app/core#test": {
+      "dependsOn": ["build"],
+      "outputs": []
+    },
+    "@pascal-app/viewer#test": {
+      "dependsOn": ["build"],
+      "outputs": []
+    },
+    "@pascal-app/mcp#test": {
+      "dependsOn": ["build"],
+      "outputs": []
+    },
     "@pascal-app/nodes#test": {
       "dependsOn": ["build"],
       "outputs": []
