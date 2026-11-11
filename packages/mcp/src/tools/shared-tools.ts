@@ -666,11 +666,18 @@ function writesScene(changes: SceneChanges | undefined): boolean {
   )
 }
 
-type FoundAsset = { id: string; name: string; dimensions: unknown; attachTo: string | null }
+type FoundAsset = {
+  id: string
+  name: string
+  dimensions: unknown
+  attachTo: string | null
+  params?: unknown[]
+}
 
 /**
- * search_assets as the model reads it: each item's id, name and placement facts; the category
- * and the floor's null attachTo stay in the structured result.
+ * search_assets as the model reads it: each item's id, name and placement facts, and the params
+ * of one built from a script (add_object changes them once placed); the category and the floor's
+ * null attachTo stay in the structured result.
  */
 function searchAssetsModelResult(output: Record<string, unknown>) {
   const groups = output.groups as { results: FoundAsset[] }[]
@@ -678,11 +685,12 @@ function searchAssetsModelResult(output: Record<string, unknown>) {
     ...output,
     groups: groups.map((group) => ({
       ...group,
-      results: group.results.map(({ id, name, dimensions, attachTo }) => ({
+      results: group.results.map(({ id, name, dimensions, attachTo, params }) => ({
         id,
         name,
         dimensions,
         ...(attachTo && { attachTo }),
+        ...(params && { params }),
       })),
     })),
   }

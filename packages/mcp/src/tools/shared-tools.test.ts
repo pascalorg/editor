@@ -1,13 +1,20 @@
 import { beforeEach, describe, expect, test } from 'bun:test'
 import { Client } from '@modelcontextprotocol/client'
 import { InMemoryTransport, McpServer } from '@modelcontextprotocol/server'
+import { scriptSource } from '@pascal-app/core'
 import {
   type AgentOperations,
   type AssetCatalogSource,
   assetCatalogSource,
 } from '@pascal-app/core/agent-operations'
 import { type PluginAgentTools, refuse } from '@pascal-app/core/agent-tools'
-import { type AnyNodeId, BuildingNode, type Collection, LevelNode } from '@pascal-app/core/schema'
+import {
+  type AnyNodeId,
+  BuildingNode,
+  type Collection,
+  GeometryArtifactManifest,
+  LevelNode,
+} from '@pascal-app/core/schema'
 import { createPascalMcpServer } from '@pascal-app/mcp/server'
 import { z } from 'zod'
 import {
@@ -207,6 +214,33 @@ describe("search_assets over MCP reads the host's catalog", () => {
     expect(text.hint).toContain('"lamp" matches 30 items')
     expect(structured.groups[0].results).toHaveLength(24)
     expect(structured.groups[0].results[1]).toMatchObject({ category: 'lighting', attachTo: null })
+  })
+
+  test('the model reads the params of an item built from a script', async () => {
+    const sofa = {
+      id: 'scripted-sofa',
+      category: 'sofa',
+      name: 'Scripted sofa',
+      thumbnail: '',
+      src: `artifact://${'a'.repeat(64)}`,
+      dimensions: [2.2, 0.8, 0.9] as [number, number, number],
+      script: scriptSource({
+        sha256: 'a'.repeat(64),
+        script: 'b'.repeat(64),
+        language: 'three',
+        mount: 'floor',
+        params: { width: 2.2 },
+        manifest: GeometryArtifactManifest.parse({
+          bounds: { min: [-1.1, 0, -0.45], max: [1.1, 0.8, 0.45] },
+          triangles: 12,
+          params: [{ id: 'width', kind: 'number', default: 2, min: 1.6, max: 3, unit: 'm' }],
+        }),
+      }),
+    }
+    const text = JSON.parse((await call('sofa', [sofa])).content[0]!.text)
+    expect(text.groups[0].results[0].params).toEqual([
+      { id: 'width', kind: 'number', default: 2, min: 1.6, max: 3, unit: 'm', value: 2.2 },
+    ])
   })
 
   test('a standalone server searches its built-in list', async () => {
