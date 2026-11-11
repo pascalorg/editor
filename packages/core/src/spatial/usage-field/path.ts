@@ -1,9 +1,10 @@
 import { type BucketIndex, cellOf, cellX, cellZ, type Grid } from './field'
 
-/** A binary min-heap on a numeric key. */
+/** A binary min-heap on a numeric key. `pop` returns the value and leaves its key in `key`. */
 class Heap {
   private keys: number[] = []
   private values: number[] = []
+  key = 0
 
   get size() {
     return this.keys.length
@@ -17,34 +18,43 @@ class Heap {
     values.push(value)
     while (i > 0) {
       const parent = (i - 1) >> 1
-      if (keys[i]! >= keys[parent]!) break
-      ;[keys[i], keys[parent]] = [keys[parent]!, keys[i]!]
-      ;[values[i], values[parent]] = [values[parent]!, values[i]!]
+      const above = keys[parent]!
+      if (key >= above) break
+      keys[i] = above
+      values[i] = values[parent]!
       i = parent
     }
+    keys[i] = key
+    values[i] = value
   }
 
-  pop(): [number, number] {
+  pop(): number {
     const keys = this.keys
     const values = this.values
-    const top: [number, number] = [keys[0]!, values[0]!]
-    const lastKey = keys.pop()!
-    const lastValue = values.pop()!
-    if (keys.length) {
-      keys[0] = lastKey
-      values[0] = lastValue
+    this.key = keys[0]!
+    const top = values[0]!
+    const key = keys.pop()!
+    const value = values.pop()!
+    const size = keys.length
+    if (size) {
       let i = 0
       for (;;) {
         const l = 2 * i + 1
         const r = l + 1
         let m = i
-        if (l < keys.length && keys[l]! < keys[m]!) m = l
-        if (r < keys.length && keys[r]! < keys[m]!) m = r
+        let least = key
+        if (l < size && keys[l]! < least) {
+          m = l
+          least = keys[l]!
+        }
+        if (r < size && keys[r]! < least) m = r
         if (m === i) break
-        ;[keys[i], keys[m]] = [keys[m]!, keys[i]!]
-        ;[values[i], values[m]] = [values[m]!, values[i]!]
+        keys[i] = keys[m]!
+        values[i] = values[m]!
         i = m
       }
+      keys[i] = key
+      values[i] = value
     }
     return top
   }
@@ -79,10 +89,10 @@ export function widestPath(
       heap.push(-F[s]!, s)
     }
   while (heap.size) {
-    const [negative, c] = heap.pop()
+    const c = heap.pop()
     if (done[c]) continue
     done[c] = 1
-    const b = -negative
+    const b = -heap.key
     const i = c % g.W
     const j = (c / g.W) | 0
     for (const [di, dj] of FOUR) {
@@ -154,7 +164,8 @@ export function travel(g: Grid, pass: Uint8Array, sources: Iterable<number>): Fl
       heap.push(0, s)
     }
   while (heap.size) {
-    const [d, c] = heap.pop()
+    const c = heap.pop()
+    const d = heap.key
     if (d > D[c]!) continue
     const i = c % g.W
     const j = (c / g.W) | 0
@@ -370,7 +381,7 @@ export function shortestRoute(
   cost[from] = 0
   heap.push(heuristic(from), from)
   while (heap.size) {
-    const [, c] = heap.pop()
+    const c = heap.pop()
     if (c === to) break
     const i = c % g.W
     const j = (c / g.W) | 0
