@@ -1647,7 +1647,7 @@ function EditorContent({
     void useSidebarStore.persist.rehydrate()
   }, [])
 
-  // A project opens on the column's tab (the chat) as it starts loading: after the saved layout
+  // A project opens on the column's tab (the chat) as it starts loading: once the saved layout
   // is restored (the effect above), once per project, and not again when preview hands the
   // layout back.
   const openedOnColumnRef = useRef<string | null>(null)
@@ -1655,8 +1655,13 @@ function EditorContent({
     if (layoutVersion !== 'v2' || !columnTabId || isMobile) return
     const project = projectId ?? ''
     if (openedOnColumnRef.current === project) return
-    openedOnColumnRef.current = project
-    useEditor.getState().setActiveSidebarPanel(columnTabId)
+    const open = () => {
+      openedOnColumnRef.current = project
+      useEditor.getState().setActiveSidebarPanel(columnTabId)
+    }
+    // The restore may still be running; switching before it ends would be overwritten by it.
+    if (useEditor.persist.hasHydrated()) open()
+    else return useEditor.persist.onFinishHydration(open)
   }, [projectId, layoutVersion, columnTabId, isMobile])
 
   useEffect(() => {
