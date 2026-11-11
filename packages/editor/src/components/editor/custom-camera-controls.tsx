@@ -789,9 +789,10 @@ export const CustomCameraControls = ({
       const control = controls.current
       if (openingFrame.current !== 'framing' || !control) return false
       const nodes = Object.values(useScene.getState().nodes)
-      const saved = nodes.find(
-        (node) => (node.type === 'site' || node.type === 'building') && savedView(node),
-      )
+      // The project's (site) view first, then a building's.
+      const saved =
+        nodes.find((node) => node.type === 'site' && savedView(node)) ??
+        nodes.find((node) => node.type === 'building' && savedView(node))
       const view = saved ? savedView(saved) : null
       if (view) {
         // The saved view is the opening: the follow leaves it, and a load fit puts it back.

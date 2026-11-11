@@ -562,7 +562,12 @@ export function EditorLayoutV2({
           />
         )}
         {showSideColumns && columnTab && (
-          <ChatColumn hidden={tool !== undefined} overlay={sidebarOverlay} tabId={columnTab.id}>
+          // The overlay shows in whichever column is on screen, never in both.
+          <ChatColumn
+            hidden={tool !== undefined}
+            overlay={tool === undefined ? sidebarOverlay : undefined}
+            tabId={columnTab.id}
+          >
             {renderTabContent(columnTab.id)}
           </ChatColumn>
         )}
