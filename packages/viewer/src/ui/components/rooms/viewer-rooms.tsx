@@ -11,21 +11,21 @@ import {
   useScene,
   type ZoneNode,
 } from '@pascal-app/core'
-import { SelectionCallout, useViewer } from '@pascal-app/viewer'
+import { useCallback, useEffect, useMemo } from 'react'
+import { Vector3 } from 'three'
+import { useShallow } from 'zustand/react/shallow'
+import { SelectionCallout } from '../../../components/viewer/selection-callout'
+import useViewer from '../../../store/use-viewer'
+import { formatRoomArea } from '../../lib/room-area'
+import { resolveRoomAssemblyHeights } from '../../lib/room-assembly-overlay'
+import { describeZoneOutline, type RoomSelectionRecord } from '../../lib/room-selection'
 import {
-  describeZoneOutline,
-  formatRoomArea,
-  type RoomSelectionRecord,
   selectViewerRoom,
   type ViewerSource,
   viewerRooms,
   zoneLabel,
-} from '@pascal-app/viewer/ui'
-import { useCallback, useEffect, useMemo } from 'react'
-import { Vector3 } from 'three'
-import { useShallow } from 'zustand/react/shallow'
-import { resolveRoomAssemblyHeights } from '../../lib/room-assembly-overlay'
-import { RoomAssemblyMesh } from '../editor/room-highlight'
+} from '../../lib/viewer-selection'
+import { RoomAssemblyMesh } from './room-highlight'
 import {
   RoomLabelAnchor3D,
   type RoomLabelEntry,
@@ -35,14 +35,14 @@ import {
   roomLabelEntries,
   roomLabelsVisible,
   useFadePresence,
-} from '../editor/room-labels'
+} from './room-labels'
 
 /**
- * Rooms on every viewer surface, as the editor shows them: the editor's pills
- * on the current floor while nothing but the floor is selected, and the
- * editor's room highlight on the selected or hovered room (or a focused
- * unit's rooms). Zones draw no tinted volume here, and their meshes are not
- * mounted at all, so they never catch a click.
+ * Rooms on every viewer surface, as the editor shows them: the room pills on
+ * the current floor while nothing but the floor is selected, the room
+ * highlight on the selected or hovered room (or a focused unit's rooms), and
+ * the selected room's callout. Zones draw no tinted volume here, and their
+ * meshes are not mounted at all, so they never catch a click.
  */
 export function ViewerRooms({ source }: { source: ViewerSource }) {
   const i18n = usePascalI18n()
@@ -67,18 +67,12 @@ export function ViewerRooms({ source }: { source: ViewerSource }) {
     !!levelId &&
     !walkthrough &&
     roomLabelsVisible({
-      phase: 'building',
-      mode: 'select',
-      scopeIdle: true,
-      room: null,
       zoneId,
       focusedUnitId,
-      isCaptureMode: false,
-      isThumbnailCapture: false,
       selectedTypes: selectedIds.map((id) => nodes[id]?.type),
     })
 
-  // The layer stays mounted through its fade-out, like the editor's.
+  // The layer stays mounted through its fade-out.
   const pillsPresent = useFadePresence(pillsShown)
 
   const rooms = useMemo(() => (levelId ? viewerRooms(levelId, nodes) : []), [levelId, nodes])

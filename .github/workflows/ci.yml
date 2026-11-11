@@ -263,5 +263,6 @@ jobs:
           node-version: '22.23.4'
       - uses: rharkor/caching-for-turbo@2238fae6eb9a9936f92356f54cb3660200d105e7
       - run: bun install --frozen-lockfile
-      - run: bunx playwright-core install --with-deps chromium
+      # The check drives the runner's Google Chrome; install one only where the image lacks it.
+      - run: command -v google-chrome || bunx playwright-core install --with-deps chromium
       - run: bun run check:viewer-live

@@ -12,7 +12,6 @@ import {
   WallNode,
 } from '@pascal-app/core'
 import { migrateCeilingRoomLinks, migrateRoomZones } from '@pascal-app/core/scene-migrations'
-import { RoomSelectionIndex, type RoomSelectionRecord } from '@pascal-app/viewer/ui'
 import { BoxGeometry, Mesh, MeshBasicMaterial } from 'three'
 import {
   buildRoomAssembly,
@@ -21,6 +20,7 @@ import {
   resolveRoomAssemblyHeights,
   roomWallFaces,
 } from './room-assembly-overlay'
+import { RoomSelectionIndex, type RoomSelectionRecord } from './room-selection'
 
 const levelId = 'level_room_assembly'
 const buildingId = 'building_room_assembly'
@@ -267,7 +267,7 @@ describe('room assembly geometry', () => {
       expect(mesh.userData).toEqual(userData)
       expect(mesh.visible).toBe(visible)
     }
-    for (const file of ['./room-assembly-overlay.ts', '../components/editor/room-highlight.tsx']) {
+    for (const file of ['./room-assembly-overlay.ts', '../components/rooms/room-highlight.tsx']) {
       const source = readFileSync(new URL(file, import.meta.url), 'utf8')
       expect(source).not.toMatch(/\.material\s*=[^=]|userData|sceneRegistry\.nodes\.set/)
     }

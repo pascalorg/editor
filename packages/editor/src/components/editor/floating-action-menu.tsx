@@ -30,6 +30,7 @@ import {
   type WallNode,
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
+import { LocalizedHtml as Html } from '@pascal-app/viewer/ui'
 import { useFrame } from '@react-three/fiber'
 import { useCallback, useMemo, useRef } from 'react'
 import * as THREE from 'three'
@@ -54,7 +55,6 @@ import useInteractionScope, {
 } from '../../store/use-interaction-scope'
 import { IconRefGlyph } from '../ui/icon-ref'
 import { duplicateNodeAndPickUp } from './duplicate-node'
-import { Html } from './localized-html'
 import { formatMeasurement, MeasurementPill } from './measurement-pill'
 import { NodeActionMenu } from './node-action-menu'
 import { startZoneRoomTransform } from './room-controls'

@@ -124,8 +124,10 @@ export {
   framedLookAt,
   frameViewerCamera,
   frameViewerNode,
+  LocalizedHtml,
   localizedLevelName,
   openSkyPanel,
+  ParametricViewerRooms,
   QualityMenu,
   SceneLoader,
   SkyControl,
@@ -143,6 +145,7 @@ export {
   type ViewerControlsBarProps,
   ViewerHoverLabel,
   type ViewerPick,
+  ViewerRooms,
   ViewerSceneHeader,
   type ViewerSceneHeaderProps,
   ViewerSelectionManager,
@@ -186,7 +189,6 @@ export { FloatingActionMenu as FloatingMenu } from './components/editor/floating
 // flags. Tools place onto `useViewer.selection.levelId`, so the host must set a
 // building + level selection first.
 export { EDITOR_GRID_INPUT_NAME, Grid } from './components/editor/grid'
-export { Html as LocalizedHtml } from './components/editor/localized-html'
 export {
   DimensionPill,
   type DimensionPillPart,
@@ -462,7 +464,6 @@ export {
   type FloorplanPreviewProps,
   type FloorplanPreviewScene,
 } from './components/viewer/floorplan-preview'
-export { ParametricViewerRooms, ViewerRooms } from './components/viewer/viewer-rooms'
 export { ViewerStage, type ViewerStageProps } from './components/viewer/viewer-stage'
 export {
   normalizeViewerStageModes,

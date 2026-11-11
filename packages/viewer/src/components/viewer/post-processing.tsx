@@ -2,6 +2,7 @@ import { useFrame, useThree } from '@react-three/fiber'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   ACESFilmicToneMapping,
+  type Camera,
   Color,
   Layers,
   Matrix4,
@@ -953,7 +954,7 @@ const PostProcessingPasses = ({
         }
         const submittedAt = PERF_OVERLAY_ENABLED ? performance.now() : 0
         timeSpan('render-encode', () => {
-          renderWithSceneMatrices(scene, () => (renderer as any).render(scene, camera))
+          renderWithSceneMatrices(scene, () => renderDirect(renderer, scene, camera))
         })
         if (PERF_OVERLAY_ENABLED) recordFrameGpuTiming(renderer, submittedAt)
       } catch (fallbackError) {
@@ -1007,3 +1008,24 @@ const PostProcessingPasses = ({
 }
 
 export default PostProcessingPasses
+
+/**
+ * Without the pipeline there is no overlay composite: the scene draws without the overlay layer,
+ * then overlays (selection highlights, room assemblies) draw over it with no scene-depth test,
+ * like the composite, whether or not the camera already enables that layer.
+ */
+function renderDirect(renderer: any, scene: Scene, camera: Camera) {
+  const mask = camera.layers.mask
+  const autoClear = renderer.autoClear
+  try {
+    camera.layers.disable(OVERLAY_LAYER)
+    renderer.render(scene, camera)
+    camera.layers.set(OVERLAY_LAYER)
+    renderer.autoClear = false
+    renderer.clearDepth()
+    renderer.render(scene, camera)
+  } finally {
+    camera.layers.mask = mask
+    renderer.autoClear = autoClear
+  }
+}

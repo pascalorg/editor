@@ -13,7 +13,6 @@
     "./distribution": "./src/components/tools/distribution/distribution-public.ts"
   },
   "scripts": {
-    "bench:room-labels": "bun run src/components/editor/__bench__/room-label-placement.bench.ts",
     "check-types": "tsgo --noEmit",
     "test": "bun test src"
   },

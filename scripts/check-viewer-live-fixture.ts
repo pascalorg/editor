@@ -211,9 +211,31 @@ try {
               throw new Error(
                 `Viewer UI icons did not load from iconsBaseUrl: ${iconRequests.join(', ')}`,
               )
+            // The packed rooms layer: the level's pill, then the room it selects, highlighted
+            // on the overlay layer with its callout. The fixture is unstyled, so the pill
+            // inherits its wrapper's `pointer-events: none`; click it directly.
+            await page.evaluate(() => (window as any).showFixtureRooms())
+            const pill = '[data-room-label="zone_fixture"]'
+            await page.waitForSelector(pill, { state: 'attached', timeout: 10_000 })
+            // Measurements and guides share the overlay layer: the highlight adds to them.
+            const overlayBefore: number = await page.evaluate(
+              () => (window as any).viewerFixture.overlay,
+            )
+            await page.evaluate((selector) => {
+              document.querySelector<HTMLButtonElement>(selector)!.click()
+            }, pill)
+            await page.waitForFunction(
+              (before) =>
+                (window as any).viewerFixture?.overlay > before &&
+                document.querySelector('.pascal-callout strong')?.textContent === 'Live room',
+              overlayBefore,
+              { timeout: 10_000 },
+            )
+            if (errors.length) throw new Error(errors.join('\n'))
             console.log(
               `${mode}, storage ${deniedStorage ? 'denied' : 'available'}: scene ready, ` +
-                `non-empty node geometry, ${probe.drawCalls} draw calls, no errors (${elapsed()})`,
+                `non-empty node geometry, ${probe.drawCalls} draw calls, room pill, highlight ` +
+                `and callout, no errors (${elapsed()})`,
             )
           } catch (error) {
             console.error(

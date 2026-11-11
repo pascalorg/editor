@@ -235,9 +235,10 @@ const consumerSource = `
   const sound: SoundName = 'menuClick';
   export const play = () => playSound(sound);
   export { initInteractionSounds, useAudioSettings };
-  import { SceneLoader, ViewerControlsBar, ViewerSceneHeader, WalkthroughHud, type ViewerLinkProps } from '@pascal-app/viewer/ui';
+  import { ParametricViewerRooms, RoomPillsLayer2D, RoomPillsLayer3D, SceneLoader, ViewerControlsBar, ViewerRooms, ViewerSceneHeader, WalkthroughHud, type ViewerLinkProps } from '@pascal-app/viewer/ui';
   const link = (props: ViewerLinkProps) => props.href;
   export const ui = { SceneLoader, ViewerControlsBar, ViewerSceneHeader, WalkthroughHud, link };
+  export const rooms = { ParametricViewerRooms, RoomPillsLayer2D, RoomPillsLayer3D, ViewerRooms };
   const plugin: Plugin = renderPlugin;
   export const version: 1 = plugin.apiVersion;
 `
