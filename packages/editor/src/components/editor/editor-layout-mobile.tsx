@@ -75,6 +75,10 @@ export function EditorLayoutMobile({
   const [committedSheetH, setCommittedSheetH] = useState(0)
 
   const currentTab = sidebarTabs.find((t) => t.id === activePanel)
+  // Entries another one stands for (each plugin, under Plugins) stay out of the tab bar; their
+  // panels still open, from that entry's panel, and keep it lit.
+  const barTabs = sidebarTabs.filter((t) => !t.menuParent)
+  const barActiveTab = currentTab?.menuParent ?? activePanel
 
   // Sync the editor mode with the active tab:
   // - Entering Chat always drops to Select (chat is a composing context).
@@ -274,7 +278,7 @@ export function EditorLayoutMobile({
       </div>
 
       {!isCaptureMode && sidebarTabs.length > 0 && (
-        <MobileTabBar activeTab={activePanel} onTabPress={handleTabPress} tabs={sidebarTabs} />
+        <MobileTabBar activeTab={barActiveTab} onTabPress={handleTabPress} tabs={barTabs} />
       )}
     </div>
   )

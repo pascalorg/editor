@@ -32,9 +32,9 @@ export type SidebarTab = {
   /** Heading the v2 side menu groups this entry under, e.g. "Tools". */
   section?: string
   /**
-   * The v2 side menu entry that stands for this one, e.g. Plugins for each
-   * plugin: this entry is left out of the menu, and that one is lit while its
-   * panel is open.
+   * The v2 entry that stands for this one, e.g. Plugins for each plugin: this
+   * entry is left out of the side menu and the phone's tab bar, and that one is
+   * lit while its panel is open.
    */
   menuParent?: string
 }
