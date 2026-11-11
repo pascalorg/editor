@@ -5,7 +5,7 @@ import type { SceneMaterialId } from '../schema/scene-material'
 import { applySceneChanges, mergeSceneChanges } from './apply-changes'
 import { requireFurnishing } from './design-brief'
 import { referencedSceneMaterialIds } from './scene-materials'
-import type { AgentOperation, SceneChanges } from './types'
+import type { AgentOperation, AgentOperationOutcome, SceneChanges } from './types'
 
 type BatchInput = {
   calls: { tool: string; input?: Record<string, unknown> }[]
@@ -41,17 +41,24 @@ function prepareCall(
   return { operation, input: parsed.data }
 }
 
+/** A batch one call at a time: each resume runs the next call, and the last returns the outcome. */
+export type BatchSteps = (
+  ...args: Parameters<AgentOperation<BatchInput>>
+) => Generator<void, AgentOperationOutcome, void>
+
 /**
  * `run_batch`: shared tools in order, each on the scene the calls before it left, their changes
  * merged into one set — one undo step, one write on either surface. The user: the model spent a
  * round trip per step on what could be serialised (deleting balcony walls one by one, the same
  * build on every floor). Pre-check and operation refusals follow the same per-call policy.
+ * It stops after each call, so a host that can let other work run between a batch's calls does
+ * (`createBatchOperation` runs it through in one go).
  */
-export function createBatchOperation(
+export function createBatchSteps(
   operations: Readonly<Record<string, AgentOperation<never>>>,
   contracts: readonly Contract[],
-): AgentOperation<BatchInput> {
-  return (nodes, { calls, onRefusal = 'stop' }, context) => {
+): BatchSteps {
+  return function* (nodes, { calls, onRefusal = 'stop' }, context) {
     let working = nodes
     let workingContext = context
     let kept: RefusalKeep['readings'] | undefined
@@ -109,6 +116,7 @@ export function createBatchOperation(
           error: error.message,
         })
       }
+      yield
     }
     const applied = reports.filter((report) => report.status === 'ok').length
     const merged = mergeSceneChanges(sets)
@@ -132,6 +140,21 @@ export function createBatchOperation(
       result: { status: 'applied', applied, refused: reports.length - applied, calls: reports },
       ...(changed ? { changes: merged } : {}),
       ...(kept ? { keep: { readings: kept } } : {}),
+    }
+  }
+}
+
+/** `run_batch` as one synchronous operation: every call, back to back. */
+export function createBatchOperation(
+  operations: Readonly<Record<string, AgentOperation<never>>>,
+  contracts: readonly Contract[],
+): AgentOperation<BatchInput> {
+  const steps = createBatchSteps(operations, contracts)
+  return (nodes, input, context) => {
+    const batch = steps(nodes, input, context)
+    for (;;) {
+      const step = batch.next()
+      if (step.done) return step.value
     }
   }
 }
