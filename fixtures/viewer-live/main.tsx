@@ -1,6 +1,13 @@
-import { acquireSceneReadOnlyLease, loadPlugin, sceneRegistry, useScene } from '@pascal-app/core'
+import {
+  acquireSceneReadOnlyLease,
+  emitter,
+  loadPlugin,
+  sceneRegistry,
+  useScene,
+} from '@pascal-app/core'
 import { renderPlugin } from '@pascal-app/nodes/render'
 import { configureViewer, pendingSceneBuildCount, useViewer, Viewer } from '@pascal-app/viewer'
+import { initInteractionSounds } from '@pascal-app/viewer/sfx'
 import { OrbitControls } from '@react-three/drei'
 import { useFrame, useThree } from '@react-three/fiber'
 import { useState } from 'react'
@@ -16,7 +23,10 @@ const scene = sceneJson as unknown as {
   rootNodeIds: SceneInput[1]
 } & NonNullable<SceneInput[2]>
 
-configureViewer({ assetsBaseUrl: window.location.origin })
+configureViewer({ assetsBaseUrl: window.location.origin, sfxBaseUrl: '/fixture-sfx' })
+// The packed sfx entry loads its files from the configured base; the check intercepts them.
+initInteractionSounds()
+Object.assign(window, { playFixtureSound: () => emitter.emit('interaction:sound', 'door-open') })
 await loadPlugin(renderPlugin)
 const releaseReadOnly = acquireSceneReadOnlyLease()
 useScene.getState().setScene(scene.nodes, scene.rootNodeIds, {

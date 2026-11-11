@@ -152,6 +152,11 @@ try {
                 },
               })
             })
+          const soundRequests: string[] = []
+          await page.route('**/fixture-sfx/*.mp3', (route) => {
+            soundRequests.push(new URL(route.request().url()).pathname)
+            return route.fulfill({ status: 200, contentType: 'audio/mpeg', body: Buffer.alloc(0) })
+          })
           try {
             await page.goto(url)
             await page.waitForFunction(
@@ -186,6 +191,13 @@ try {
             if (errors.length) throw new Error(errors.join('\n'))
             if ((await page.evaluate(() => typeof (globalThis as any).process)) !== 'undefined')
               throw new Error('Fixture must run without a process polyfill')
+            await page.evaluate(() => (window as any).playFixtureSound())
+            for (let i = 0; i < 50 && !soundRequests.includes('/fixture-sfx/door_open.mp3'); i++)
+              await page.waitForTimeout(100)
+            if (!soundRequests.includes('/fixture-sfx/door_open.mp3'))
+              throw new Error(
+                `Sound files did not load from sfxBaseUrl: ${soundRequests.join(', ')}`,
+              )
             console.log(
               `${mode}, storage ${deniedStorage ? 'denied' : 'available'}: scene ready, ` +
                 `non-empty node geometry, ${probe.drawCalls} draw calls, no errors (${elapsed()})`,

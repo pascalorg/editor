@@ -20,6 +20,11 @@
       "types": "./dist/capture/preview.d.ts",
       "import": "./dist/capture/preview.js",
       "default": "./dist/capture/preview.js"
+    },
+    "./sfx": {
+      "types": "./dist/sfx/index.d.ts",
+      "import": "./dist/sfx/index.js",
+      "default": "./dist/sfx/index.js"
     }
   },
   "files": [
@@ -41,6 +46,7 @@
     "three": "^0.187"
   },
   "dependencies": {
+    "howler": "^2.2.4",
     "three-bvh-csg": "^0.0.18",
     "three-mesh-bvh": "~0.9.18",
     "zustand": "^5"
@@ -49,6 +55,7 @@
     "@pascal-app/core": "^1.1.0",
     "@pascal/typescript-config": "*",
     "@react-three/test-renderer": "^9.1.1",
+    "@types/howler": "^2.2.13",
     "@types/node": "^26",
     "@types/react": "19.3.0",
     "@types/react-dom": "19.3.0",

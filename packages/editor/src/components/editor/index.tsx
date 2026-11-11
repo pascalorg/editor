@@ -29,6 +29,7 @@ import {
   type ViewerImmersiveSession,
   ViewerPresentations,
 } from '@pascal-app/viewer'
+import { useViewerUiSounds } from '@pascal-app/viewer/sfx'
 import {
   type CSSProperties,
   memo,
@@ -107,7 +108,6 @@ import { SitePanel, type SitePanelProps } from '../ui/sidebar/panels/site-panel'
 import type { SidebarTab } from '../ui/sidebar/tab-bar'
 import { useHostPanels } from '../ui/sidebar/use-plugin-panels'
 import { SKY_DOCK_HEIGHT, SkyControl } from '../viewer/sky-control'
-import { useViewerUiSounds } from '../viewer/use-viewer-ui-sounds'
 import { ViewerHoverLabel } from '../viewer/viewer-hover-label'
 import { ParametricViewerRooms } from '../viewer/viewer-rooms'
 import { ViewerSelectionManager } from '../viewer/viewer-selection-manager'

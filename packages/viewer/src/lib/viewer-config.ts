@@ -1,6 +1,8 @@
 export type ViewerConfig = {
   assetsBaseUrl?: string
   storageUrl?: string
+  /** Base URL for interaction and UI sound files, resolved when played or preloaded. */
+  sfxBaseUrl?: string
   decoders?: {
     dracoPath?: string
     basisPath?: string
@@ -26,6 +28,7 @@ export function getViewerConfig() {
     storageUrl:
       config.storageUrl ??
       (typeof process !== 'undefined' ? process.env.NEXT_PUBLIC_SUPABASE_URL : undefined),
+    sfxBaseUrl: config.sfxBaseUrl ?? `${ASSETS_CDN_URL}/audios/sfx`,
     decoders: {
       dracoPath:
         config.decoders?.dracoPath ?? 'https://www.gstatic.com/draco/versioned/decoders/1.5.5/',

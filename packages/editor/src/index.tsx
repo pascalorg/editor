@@ -99,6 +99,7 @@ export {
   triangulateMeasurementPolygon,
   useViewer,
 } from '@pascal-app/viewer'
+export { useAudioSettings as useAudio, useViewerUiSounds } from '@pascal-app/viewer/sfx'
 export type { EditorProps } from './components/editor'
 export { default as Editor } from './components/editor'
 export { ActionMenuButton } from './components/editor/action-menu-button'
@@ -436,7 +437,6 @@ export {
 } from './components/viewer/render-settings-menu'
 export { openSkyPanel, SkyControl, useSkyPanel } from './components/viewer/sky-control'
 export { useViewerCameraNavigationSync } from './components/viewer/use-viewer-camera-navigation-sync'
-export { useViewerUiSounds } from './components/viewer/use-viewer-ui-sounds'
 export {
   ViewerControlsBar,
   type ViewerControlsBarProps,
@@ -1064,7 +1064,6 @@ export {
   type DraftGuides,
   default as useAlignmentGuides,
 } from './store/use-alignment-guides'
-export { default as useAudio } from './store/use-audio'
 export { type CameraHintAction, useCameraHintFocus } from './store/use-camera-hint-focus'
 export { type CommandAction, useCommandRegistry } from './store/use-command-registry'
 export {

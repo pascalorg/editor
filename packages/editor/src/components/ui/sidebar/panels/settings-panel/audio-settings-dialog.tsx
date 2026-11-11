@@ -9,7 +9,7 @@ import {
   DialogTrigger,
 } from '../../../../../components/ui/primitives/dialog'
 import { Slider } from '../../../../../components/ui/slider'
-import useAudio from '../../../../../store/use-audio'
+import { useAudioSettings as useAudio } from '@pascal-app/viewer/sfx'
 
 export function AudioSettingsDialog() {
   const {

@@ -1,5 +1,9 @@
 import { afterAll, beforeEach, describe, expect, test } from 'bun:test'
-import useAudio, { AUDIO_MUTED_STORAGE_KEY, AUDIO_SETTINGS_STORAGE_KEY } from './use-audio'
+import {
+  AUDIO_MUTED_STORAGE_KEY,
+  AUDIO_SETTINGS_STORAGE_KEY,
+  useAudioSettings as useAudio,
+} from '@pascal-app/viewer/sfx'
 
 function memoryStorage() {
   const items = new Map<string, string>()
@@ -143,4 +147,26 @@ describe('muting a tab', () => {
 
     expect((await loadIn(memoryStorage())).muted).toBe(false)
   })
+})
+
+test('denied browser storage keeps settings and mute usable in memory', async () => {
+  try {
+    for (const name of ['localStorage', 'sessionStorage']) {
+      Object.defineProperty(globalThis, name, {
+        configurable: true,
+        get() {
+          throw new DOMException('denied', 'SecurityError')
+        },
+      })
+    }
+    await useAudio.persist.rehydrate()
+    expect(() => {
+      useAudio.getState().setMasterVolume(42)
+      useAudio.getState().setMuted(true)
+    }).not.toThrow()
+    expect(useAudio.getState()).toMatchObject({ masterVolume: 42, muted: true })
+  } finally {
+    use('localStorage', browser)
+    use('sessionStorage', memoryStorage())
+  }
 })
