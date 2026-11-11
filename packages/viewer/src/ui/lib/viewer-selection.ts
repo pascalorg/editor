@@ -16,7 +16,6 @@ import {
   type UnitNode,
   type ZoneNode,
 } from '@pascal-app/core'
-import { useViewer } from '@pascal-app/viewer'
 import type { CameraControlsImpl } from '@react-three/drei'
 import { useEffect } from 'react'
 import {
@@ -28,11 +27,12 @@ import {
   Sphere,
   Vector3,
 } from 'three'
+import useViewer from '../../store/use-viewer'
 import { useBelowGrade } from './below-grade'
 import { nodeDisplayLabel } from './node-display-label'
 import { type DescriptorTranslator, displayRoomName } from './room-name-messages'
 import { RoomSelectionIndex, type RoomSelectionRecord, resolveRoomHit } from './room-selection'
-import type { SelectionModifierKeys } from './selection-routing'
+import type { SelectionModifierKeys } from './selection-modifiers'
 
 // One selection model for every viewer surface: the published viewer (baked
 // GLB or parametric), its embed and the editor's Preview. Each renderer only

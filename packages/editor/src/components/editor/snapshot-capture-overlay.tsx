@@ -2,6 +2,7 @@
 
 import { emitter, type SnapshotSavedEvent } from '@pascal-app/core'
 import { SNAPSHOT_MAX_EDGE } from '@pascal-app/viewer'
+import { useFirstPersonHud, useIsMobile, WalkthroughCrosshair } from '@pascal-app/viewer/ui'
 import {
   Check,
   Crop,
@@ -16,7 +17,6 @@ import {
 } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { flushSync } from 'react-dom'
-import { useIsMobile } from '../../hooks/use-mobile'
 import { triggerSFX } from '../../lib/sfx-bus'
 import { isTypingTarget } from '../../lib/typing-target'
 import { requestWalkthroughPointerLock } from '../../lib/walkthrough-pointer-lock'
@@ -27,9 +27,7 @@ import useEditor, {
   type SnapshotCropMode,
   type SnapshotStandardAspect,
 } from '../../store/use-editor'
-import { useFirstPersonHud } from '../../store/use-first-person-hud'
 import { Slider } from '../ui/slider'
-import { WalkthroughCrosshair } from '../walkthrough-hud'
 import { CaptureLevelPicker } from './capture-level-picker'
 import { isOverlaySnapshotSave } from './snapshot-capture'
 

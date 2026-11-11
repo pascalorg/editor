@@ -8,7 +8,7 @@ import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
-} from './../../../../../components/ui/primitives/tooltip'
+} from '@pascal-app/viewer/ui'
 import { focusTreeNode, TreeNode, TreeNodeWrapper } from './tree-node'
 import { TreeNodeActions } from './tree-node-actions'
 

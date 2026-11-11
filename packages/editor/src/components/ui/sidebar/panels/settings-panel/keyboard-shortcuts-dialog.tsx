@@ -1,6 +1,6 @@
 import { type MessageDescriptor, usePascalI18n } from '@pascal-app/core'
 import { Keyboard } from 'lucide-react'
-import { Button } from './../../../../../components/ui/primitives/button'
+import { Button } from '@pascal-app/viewer/ui'
 import {
   Dialog,
   DialogContent,

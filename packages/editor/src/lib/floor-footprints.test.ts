@@ -19,6 +19,7 @@ import {
   useScene,
   ZoneNode,
 } from '@pascal-app/core'
+import type { RoomSelectionRecord } from '@pascal-app/viewer/ui'
 import { moveTogetherLabel } from '../components/ui/panels/floor-foundation-panel'
 import {
   applyFloorFoundation,
@@ -43,7 +44,6 @@ import {
   roomRelativeFloorHeight,
   setRoomRelativeFloorHeight,
 } from './room-construction-commands'
-import type { RoomSelectionRecord } from './room-selection'
 import { applyRoomPlan } from './room-structure-commands'
 
 const LEVEL = 'level_footprints'

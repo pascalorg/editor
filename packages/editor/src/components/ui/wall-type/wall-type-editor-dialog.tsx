@@ -36,7 +36,7 @@ import {
   type WallTypePlacement,
   type WallTypeSaveResult,
 } from '../../../lib/wall-type'
-import { Button } from '../primitives/button'
+import { Button } from '@pascal-app/viewer/ui'
 import {
   Dialog,
   DialogContent,

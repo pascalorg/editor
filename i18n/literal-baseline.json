@@ -471,11 +471,6 @@
       "Toggle Sidebar",
       "Toggle Sidebar"
     ],
-    "packages/editor/src/components/ui/scene-loader.tsx": [
-      "Nothing was changed. Check your connection and try again.",
-      "This project couldn't be loaded",
-      "Try again"
-    ],
     "packages/editor/src/components/ui/sidebar/panels/settings-panel/animation-speed-setting.tsx": [
       "Animation speed",
       "Animation speed",
@@ -628,14 +623,6 @@
     "packages/editor/src/components/ui/slider-demo.tsx": [
       "Temperature",
       "Temperature"
-    ],
-    "packages/editor/src/components/walkthrough-hud.tsx": [
-      "Click",
-      "free cursor",
-      "or",
-      "or click to",
-      "to exit",
-      "to resume"
     ],
     "packages/editor/src/lib/floor-region-session.ts": [
       "Pick a material first",
@@ -798,6 +785,19 @@
     "packages/viewer/src/components/viewer/unsupported-gpu-fallback.tsx": [
       "3D viewer unavailable",
       "This browser or environment could not initialize WebGPU or WebGL, so Pascal cannot render the 3D scene here. Try opening the editor in a browser with hardware acceleration enabled."
+    ],
+    "packages/viewer/src/ui/components/scene-loader.tsx": [
+      "Nothing was changed. Check your connection and try again.",
+      "This project couldn't be loaded",
+      "Try again"
+    ],
+    "packages/viewer/src/ui/components/walkthrough-hud.tsx": [
+      "Click",
+      "free cursor",
+      "or",
+      "or click to",
+      "to exit",
+      "to resume"
     ]
   }
 }

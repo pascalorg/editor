@@ -27,7 +27,7 @@ type FollowPascalState = {
 }
 
 /** Follow Pascal's switch, its pause and whether a build is being followed. */
-const useFollowPascal = create<FollowPascalState>()(
+export const useFollowPascal = create<FollowPascalState>()(
   persist(
     (set, get) => ({
       on: true,
@@ -48,6 +48,3 @@ const useFollowPascal = create<FollowPascalState>()(
     },
   ),
 )
-
-export default useFollowPascal
-export { useFollowPascal }

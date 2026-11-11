@@ -4,7 +4,7 @@ import type { ReactNode } from 'react'
 import { editorHostPanelRegistry } from '../../../lib/plugin-panels'
 import { triggerSFX } from './../../../lib/sfx-bus'
 import { cn } from './../../../lib/utils'
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../primitives/tooltip'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@pascal-app/viewer/ui'
 
 export type SidebarTab = {
   id: string

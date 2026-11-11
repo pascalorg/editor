@@ -271,6 +271,58 @@ function SoundControls() {
 existing Pascal storage keys. Denied storage falls back to memory. Existing radio preferences
 remain in the same settings record so editor consumers continue to share one store.
 
+## Viewer UI (`@pascal-app/viewer/ui`)
+
+Pascal's read-only viewer chrome as React components: the controls bar (levels, walls, display,
+daylight, sky, walkthrough), the scene header (project card, breadcrumb, floor list), the hover
+label, the walkthrough and drone HUDs, the loader, the selection model behind them
+(`applyViewerClick`, `ViewerSelectionManager`) and the primitives they are built from (`Button`,
+`DropdownMenu*`, `Popover*`, `Tooltip*`, `Switch`). The entry never imports the editor or Next.
+
+The components are styled with Tailwind v4 classes. Point Tailwind at the built entry and import
+the theme (tokens, `shadow-elevation-*`, `corner-smooth`, the loader animations):
+
+```css
+@import "tailwindcss";
+@import "@pascal-app/viewer/ui/theme.css";
+@source "../node_modules/@pascal-app/viewer/dist/ui";
+```
+
+Override any token after the import (`:root { --radius: 0.5rem }`). The docks and menus scope
+themselves with a `dark` class. Control icons load from `configureViewer({ iconsBaseUrl })` (default
+`https://editor.pascal.app/icons`); button sounds play through `@pascal-app/viewer/sfx`.
+
+```tsx
+import { useViewer, Viewer } from '@pascal-app/viewer'
+import {
+  SceneLoader,
+  ViewerControlsBar,
+  ViewerSceneHeader,
+  ViewerSelectionManager,
+  WalkthroughHud,
+} from '@pascal-app/viewer/ui'
+
+function ProjectViewer({ ready, name }: { ready: boolean; name: string }) {
+  const walking = useViewer((s) => s.walkthroughMode)
+  const toggleWalk = () => useViewer.getState().setWalkthroughMode(!walking)
+  return (
+    <div className="relative h-full w-full">
+      <Viewer selectionManager="custom">
+        <ViewerSelectionManager />
+      </Viewer>
+      <ViewerSceneHeader backHref={null} linkComponent={MyLink} projectName={name} />
+      <ViewerControlsBar onWalkthroughToggle={toggleWalk} walkthroughActive={walking} />
+      {walking && <WalkthroughHud onExit={toggleWalk} />}
+      {!ready && <SceneLoader />}
+    </div>
+  )
+}
+```
+
+`linkComponent` renders the header's links (a plain `<a>` by default); pass your router's link,
+e.g. Next's `Link`. The walkthrough toggle only flips `walkthroughMode`; mount your own
+first-person controls inside `<Viewer>` to move the camera.
+
 ## Asset CDN Helpers
 
 ```typescript

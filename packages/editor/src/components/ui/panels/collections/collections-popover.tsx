@@ -21,12 +21,12 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-} from '../../../../components/ui/primitives/dropdown-menu'
+} from '@pascal-app/viewer/ui'
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
-} from '../../../../components/ui/primitives/popover'
+} from '@pascal-app/viewer/ui'
 import { cn } from '../../../../lib/utils'
 
 interface CollectionsPopoverProps {

@@ -8,6 +8,7 @@ import {
 import { renderPlugin } from '@pascal-app/nodes/render'
 import { configureViewer, pendingSceneBuildCount, useViewer, Viewer } from '@pascal-app/viewer'
 import { initInteractionSounds } from '@pascal-app/viewer/sfx'
+import { SceneLoader, ViewerControlsBar } from '@pascal-app/viewer/ui'
 import { OrbitControls } from '@react-three/drei'
 import { useFrame, useThree } from '@react-three/fiber'
 import { useState } from 'react'
@@ -23,7 +24,11 @@ const scene = sceneJson as unknown as {
   rootNodeIds: SceneInput[1]
 } & NonNullable<SceneInput[2]>
 
-configureViewer({ assetsBaseUrl: window.location.origin, sfxBaseUrl: '/fixture-sfx' })
+configureViewer({
+  assetsBaseUrl: window.location.origin,
+  sfxBaseUrl: '/fixture-sfx',
+  iconsBaseUrl: '/icons',
+})
 // The packed sfx entry loads its files from the configured base; the check intercepts them.
 initInteractionSounds()
 Object.assign(window, { playFixtureSound: () => emitter.emit('interaction:sound', 'door-open') })
@@ -82,6 +87,9 @@ function App() {
         <OrbitControls makeDefault target={[0, 1, 0]} />
         <GeometryProbe />
       </Viewer>
+      {/* The packed UI entry mounts without the editor; its icons load from iconsBaseUrl. */}
+      <ViewerControlsBar onWalkthroughToggle={() => {}} />
+      {!ready && <SceneLoader />}
       <output data-scene-ready={ready}>{ready ? 'Scene ready' : 'Building scene…'}</output>
     </>
   )

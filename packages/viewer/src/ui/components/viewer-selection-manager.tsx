@@ -1,15 +1,15 @@
 'use client'
 
 import { type AnyNodeId, emitter, type NodeEvent, sceneRegistry, useScene } from '@pascal-app/core'
-import { useViewer } from '@pascal-app/viewer'
 import { useThree } from '@react-three/fiber'
 import { useEffect } from 'react'
-import { selectionModifiersFromEvent } from '../../lib/selection-routing'
+import useViewer from '../../store/use-viewer'
+import { selectionModifiersFromEvent } from '../lib/selection-modifiers'
 import {
   applyViewerClick,
   applyViewerHover,
   viewerPickFromNodeEvent,
-} from '../../lib/viewer-selection'
+} from '../lib/viewer-selection'
 
 /**
  * Selection for a parametric viewer surface (the published viewer's fallback,

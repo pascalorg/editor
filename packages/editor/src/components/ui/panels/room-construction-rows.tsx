@@ -58,7 +58,7 @@ import {
   unlockRoomOutsideFaces,
 } from '../../../lib/room-construction-commands'
 import { ownFloorElevationBounds } from '../../../lib/room-handle-drag'
-import type { RoomSelectionRecord } from '../../../lib/room-selection'
+import type { RoomSelectionRecord } from '@pascal-app/viewer/ui'
 import { cn } from '../../../lib/utils'
 import { roomPorchFramingCounts } from '../../../lib/room-construction'
 import { applyRoomPlan } from '../../../lib/room-structure-commands'
@@ -70,16 +70,16 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from '../primitives/dropdown-menu'
-import { Switch } from '../primitives/switch'
-import { Tooltip, TooltipContent, TooltipTrigger } from '../primitives/tooltip'
+} from '@pascal-app/viewer/ui'
+import { Switch } from '@pascal-app/viewer/ui'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@pascal-app/viewer/ui'
 import { localizedFloorFootprintName } from '../../../i18n/floor-footprint-name'
 import { messageWithSlot } from '../../../i18n/message-slot'
 import { nodeLabel } from '../../../i18n/node-messages'
 import { DeckBoardsFields } from './deck-boards-fields'
 import { RoomOpeningsField } from './room-openings-field'
 import { ShapeChoice } from './shape-choice'
-import { displayRoomName } from '../../../lib/room-name-messages'
+import { displayRoomName } from '@pascal-app/viewer/ui'
 
 /** The buttons a row offers — derived together with its presence. */
 export function constructionActions(state: RoomConstructionState, part: RoomConstructionPart) {

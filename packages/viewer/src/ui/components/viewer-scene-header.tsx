@@ -8,12 +8,13 @@ import {
   usePascalI18n,
   useScene,
 } from '@pascal-app/core'
-import { markPerfAction, useViewer } from '@pascal-app/viewer'
 import { ArrowLeft, ChevronRight, Layers } from 'lucide-react'
-import Link from 'next/link'
-import { type ReactNode, useMemo } from 'react'
-import { localizedLevelName } from '../../i18n/level-name'
-import { cn } from '../../lib/utils'
+import { type ComponentType, type ReactNode, useMemo } from 'react'
+import { markPerfAction } from '../../lib/perf-actions'
+import useViewer from '../../store/use-viewer'
+import { cn } from '../lib/cn'
+import { localizedLevelName } from '../lib/level-name'
+import { formatRoomArea } from '../lib/room-area'
 import {
   applyViewerClick,
   frameViewerNode,
@@ -27,8 +28,19 @@ import {
   type ViewerSource,
   viewerBreadcrumb,
   viewerSidebarSections,
-} from '../../lib/viewer-selection'
-import { formatRoomArea } from '../editor/room-labels'
+} from '../lib/viewer-selection'
+
+/** What a header link receives; a host passes its router's link component (e.g. Next's `Link`). */
+export type ViewerLinkProps = {
+  href: string
+  className?: string
+  'aria-label'?: string
+  children: ReactNode
+}
+
+function PlainLink(props: ViewerLinkProps) {
+  return <a {...props} />
+}
 
 export type ViewerSceneHeaderProps = {
   projectName?: string | null
@@ -42,6 +54,8 @@ export type ViewerSceneHeaderProps = {
   stats?: ReactNode
   /** The scene the header navigates; the parametric scene store by default. */
   source?: ViewerSource
+  /** Renders the back and owner links; a plain `<a>` by default. */
+  linkComponent?: ComponentType<ViewerLinkProps>
 }
 
 function sectionTitle(kind: ViewerSidebarSection['kind'], i18n: PascalI18n): string {
@@ -56,7 +70,7 @@ const parametricObject = (id: string) => sceneRegistry.nodes.get(id)
  * The navigation of every viewer surface: the project card, the bar (building
  * › floor › room › element) and the floor list with, under the current floor,
  * its units, rooms and zones. A row or a crumb selects and frames; the canvas
- * selects in place (`lib/viewer-selection.ts`).
+ * selects in place (`ui/lib/viewer-selection.ts`).
  */
 export const ViewerSceneHeader = ({
   projectName,
@@ -65,6 +79,7 @@ export const ViewerSceneHeader = ({
   backHref = '/',
   stats,
   source: sourceProp,
+  linkComponent: Link = PlainLink,
 }: ViewerSceneHeaderProps) => {
   const i18n = usePascalI18n()
   const catalogVersion = i18n.getVersion()
@@ -136,7 +151,6 @@ export const ViewerSceneHeader = ({
               aria-label={i18n._({ id: 'viewer.header.back', message: 'Back' })}
               className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md transition-colors hover:bg-white/10"
               href={backHref}
-              prefetch={false}
             >
               <ArrowLeft className="h-4 w-4 text-muted-foreground" />
             </Link>

@@ -35,6 +35,11 @@ import {
   tintEmissive,
   useViewer,
 } from '@pascal-app/viewer'
+import {
+  type SelectionModifierKeys,
+  sameRoom,
+  selectionModifiersFromEvent,
+} from '@pascal-app/viewer/ui'
 import { useThree } from '@react-three/fiber'
 import { useCallback, useEffect, useRef } from 'react'
 import { type BufferGeometry, Color, type Material, type Mesh, type Object3D, Vector3 } from 'three'
@@ -105,7 +110,6 @@ import {
   usePaintOutline,
 } from '../../lib/plate-paint-affected'
 import { getHoveredRoofSegmentOutlineProxy } from '../../lib/roof-hover-outline-proxy'
-import { sameRoom } from '../../lib/room-selection'
 import { selectRoom, shouldInterceptRoom } from '../../lib/room-selection-commands'
 import { roomKeyForZone } from '../../lib/room-zone-routing'
 import {
@@ -114,8 +118,6 @@ import {
   resolveCanvasBuildingId,
   resolveCanvasSelectionNode,
   resolveSelectedIdsForNodeClick,
-  type SelectionModifierKeys,
-  selectionModifiersFromEvent,
   shouldPreserveSelectedRoofHostTarget,
 } from '../../lib/selection-routing'
 import { emitDeleteSFX, sfxEmitter } from '../../lib/sfx-bus'

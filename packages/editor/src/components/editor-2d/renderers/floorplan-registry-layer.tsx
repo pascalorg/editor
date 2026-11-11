@@ -37,6 +37,7 @@ import {
   useRevealWaiting,
   useViewer,
 } from '@pascal-app/viewer'
+import { selectionModifiersFromEvent } from '@pascal-app/viewer/ui'
 import {
   type ComponentProps,
   memo,
@@ -55,7 +56,6 @@ import {
   hoverRoomFromHit,
   resolvePlanRoomHit,
   roomPickingEnabled,
-  selectionModifiersFromEvent,
   useRoomRecords,
 } from '../../../hooks/use-selected-room'
 import { useCeilingEditSession } from '../../../lib/ceiling-edit-session'

@@ -11,7 +11,7 @@ import {
 import { useViewer } from '@pascal-app/viewer'
 import { useEffect, useMemo, useState, useSyncExternalStore } from 'react'
 import { useShallow } from 'zustand/react/shallow'
-import { useIsMobile } from '../../../hooks/use-mobile'
+import { useIsMobile } from '@pascal-app/viewer/ui'
 import {
   AXIS_MOVE_DRAG_LABEL,
   type ContextualShortcutHint,

@@ -1,6 +1,6 @@
 import { afterEach, expect, test } from 'bun:test'
 import { createI18n, setLocale, translate } from '@pascal-app/core'
-import { authoredLevelName, localizedLevelName } from './level-name'
+import { authoredLevelName, localizedLevelName } from '@pascal-app/viewer/ui'
 import { registerBundledLocales } from './locales'
 
 afterEach(() => setLocale('en'))

@@ -1,6 +1,7 @@
 'use client'
 
 import { useScene } from '@pascal-app/core'
+import { Button } from '@pascal-app/viewer/ui'
 import {
   Check,
   ChevronRight,
@@ -31,7 +32,6 @@ import { cn } from '../../../lib/utils'
 import useEditor from '../../../store/use-editor'
 import { IconRefGlyph } from '../../ui/icon-ref'
 import { Badge } from '../../ui/primitives/badge'
-import { Button } from '../../ui/primitives/button'
 import { PLUGINS_VIEW_ID } from './use-editor-views'
 
 const PLUGIN_AUTHORING_URL = 'https://editor.pascal.app/docs/developers/plugins'

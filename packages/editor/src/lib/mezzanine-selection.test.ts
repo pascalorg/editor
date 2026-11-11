@@ -15,6 +15,7 @@ import {
   type ZoneNode,
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
+import { RoomSelectionIndex, resolveRoomHit } from '@pascal-app/viewer/ui'
 import { deleteConfirmationContent } from '../components/editor/delete-confirmation-dialog'
 import { resolveFloorRegionRoom } from '../components/editor/floor-region-controls'
 import { MEZZANINE_GESTURE_HINTS, mezzanineGesture } from '../components/ui/helpers/helper-manager'
@@ -23,7 +24,6 @@ import {
   mezzanineElevationBounds,
   ROOM_ELEVATION_DRAG_LABEL,
 } from './room-handle-drag'
-import { RoomSelectionIndex, resolveRoomHit } from './room-selection'
 import { applyRoomPlan } from './room-structure-commands'
 import { ROOM_MOVE_DRAG_LABEL } from './room-transform-session'
 import { zoneAtLevelPoint } from './units'

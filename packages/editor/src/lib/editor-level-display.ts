@@ -1,7 +1,7 @@
 import { useViewer } from '@pascal-app/viewer'
+import { useBelowGrade, useGroundWindowBox } from '@pascal-app/viewer/ui'
 import { useEffect } from 'react'
 import useEditor, { type CaptureMode } from '../store/use-editor'
-import { useBelowGrade, useGroundWindowBox } from './below-grade'
 
 /**
  * Whether the editor shows every level. Preview and the walkthrough show the

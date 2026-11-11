@@ -136,6 +136,7 @@ const result = await build({
   entryPoints: {
     render: '@pascal-app/nodes/render',
     sfx: '@pascal-app/viewer/sfx',
+    ui: '@pascal-app/viewer/ui',
     consumer: 'render-consumer',
   },
   bundle: true,
@@ -168,6 +169,8 @@ const result = await build({
 const inputs = Object.keys(result.metafile.inputs)
 if (!inputs.some((path) => path.endsWith('packages/viewer/dist/sfx/index.js')))
   throw new Error('SFX entry must resolve through the built package export to dist/sfx/index.js')
+if (!inputs.some((path) => path.endsWith('packages/viewer/dist/ui/index.js')))
+  throw new Error('UI entry must resolve through the built package export to dist/ui/index.js')
 if (!inputs.some((path) => path.endsWith('packages/nodes/dist/render.js')))
   throw new Error('Render entry must resolve through the built package export to dist/render.js')
 let scannedPascalModules = 0
@@ -190,6 +193,8 @@ const files = result.outputFiles
 const entry = files.find((file) => file.path.endsWith('/render.js'))
 const sfxEntry = files.find((file) => file.path.endsWith('/sfx.js'))
 if (!sfxEntry) throw new Error('Missing SFX entry output')
+const uiEntry = files.find((file) => file.path.endsWith('/ui.js'))
+if (!uiEntry) throw new Error('Missing UI entry output')
 const consumerEntry = files.find((file) => file.path.endsWith('/consumer.js'))
 if (!entry || !consumerEntry) throw new Error('Missing render or consumer entry output')
 const bytes = files.reduce((sum, file) => sum + file.contents.byteLength, 0)
@@ -215,6 +220,9 @@ console.log(
   `Render graph including shared/lazy chunks: ${renderBytes} bytes across ${reachable.size} chunks`,
 )
 console.log(`Viewer SFX entry: ${sfxEntry.contents.byteLength} bytes`)
+console.log(
+  `Viewer UI entry: ${uiEntry.contents.byteLength} bytes (shared chunks emitted separately)`,
+)
 console.log(`Viewer/hydration consumer entry: ${consumerEntry.contents.byteLength} bytes`)
 console.log(`Render bundle including all lazy chunks: ${bytes} bytes across ${files.length} chunks`)
 
@@ -227,6 +235,9 @@ const consumerSource = `
   const sound: SoundName = 'menuClick';
   export const play = () => playSound(sound);
   export { initInteractionSounds, useAudioSettings };
+  import { SceneLoader, ViewerControlsBar, ViewerSceneHeader, WalkthroughHud, type ViewerLinkProps } from '@pascal-app/viewer/ui';
+  const link = (props: ViewerLinkProps) => props.href;
+  export const ui = { SceneLoader, ViewerControlsBar, ViewerSceneHeader, WalkthroughHud, link };
   const plugin: Plugin = renderPlugin;
   export const version: 1 = plugin.apiVersion;
 `
@@ -269,4 +280,6 @@ if (!program.getSourceFiles().some((file) => file.fileName.endsWith('/nodes/dist
   throw new Error('Declaration consumer must resolve the built render export')
 if (!program.getSourceFiles().some((file) => file.fileName.endsWith('/viewer/dist/sfx/index.d.ts')))
   throw new Error('Declaration consumer must resolve the built SFX export')
-console.log('Render and SFX declaration consumer: passed with editor/Next resolution forbidden')
+if (!program.getSourceFiles().some((file) => file.fileName.endsWith('/viewer/dist/ui/index.d.ts')))
+  throw new Error('Declaration consumer must resolve the built UI export')
+console.log('Render, SFX and UI declaration consumer: passed with editor/Next resolution forbidden')
