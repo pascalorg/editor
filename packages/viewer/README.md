@@ -132,7 +132,7 @@ values explicitly. Door and drawer cues emit core `interaction:sound`; opt into 
 `initInteractionSounds` from `viewer/sfx`. Movement and interaction do not persist document edits.
 
 Optional `LiveWalkthroughControllerProps` let a host own framing: `paused` freezes movement/look,
-`externalFov` leaves FOV application/restoration to the host, `pointerInteraction={false}` reserves
+`externalFov` (a function, read when walkthrough starts and ends) leaves FOV application/restoration to the host while it returns true, `pointerInteraction={false}` reserves
 locked-pointer clicks for the host, and `suspendOnUnlock` keeps walkthrough active when pointer lock
 is lost (Escape with a free cursor exits). `onExit` runs after the controller clears
 `walkthroughMode`. Props remain current during a session without releasing pointer lock.

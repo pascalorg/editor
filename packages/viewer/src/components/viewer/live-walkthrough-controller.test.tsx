@@ -128,7 +128,7 @@ test('Escape while locked exits once even when unlock is delivered immediately',
 test('host FOV ownership and suspended unlock preserve framing until Escape exits', async () => {
   const exits: boolean[] = []
   const camera = await mount({
-    externalFov: true,
+    externalFov: () => true,
     suspendOnUnlock: true,
     onExit: () => exits.push(useViewer.getState().walkthroughMode),
   })
@@ -155,4 +155,18 @@ test('main and UI exports share one HUD store and suppress equivalent updates', 
   expect(useFirstPersonHud.getState()).toBe(previous)
   uiHud.getState().reset()
   expect(useFirstPersonHud.getState().interact).toBeNull()
+})
+
+test('the orbit FOV returns when the host gave FOV back before walkthrough ends', async () => {
+  let hostOwnsFov = false
+  const camera = await mount({ externalFov: () => hostOwnsFov })
+  await enterDrone()
+  expect(camera.fov).not.toBe(47)
+  hostOwnsFov = true
+  camera.fov = 32
+  hostOwnsFov = false
+  lock()
+  await act(async () => key('Escape'))
+  expect(useViewer.getState().walkthroughMode).toBe(false)
+  expect(camera.fov).toBe(47)
 })

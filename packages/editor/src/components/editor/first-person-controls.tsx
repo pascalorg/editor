@@ -9,6 +9,8 @@ import useEditor from '../../store/use-editor'
 export function FirstPersonControls() {
   const capture = useEditor((state) => state.isCaptureMode)
   const paused = useEditor((state) => state.captureShutterHold)
+  // Read at walkthrough start and end, as the capture rig may own the FOV by then.
+  const captureOwnsFov = useCallback(() => useEditor.getState().isCaptureMode, [])
   const onExit = useCallback(() => {
     const editor = useEditor.getState()
     if (editor.isCaptureMode) editor.setCaptureMode(false)
@@ -17,7 +19,7 @@ export function FirstPersonControls() {
 
   return (
     <LiveWalkthroughController
-      externalFov={capture}
+      externalFov={captureOwnsFov}
       onExit={onExit}
       paused={paused}
       pointerInteraction={!capture}

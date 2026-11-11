@@ -751,8 +751,11 @@ const resolvePlacedSpawnNode = (nodes: ReturnType<typeof useScene.getState>['nod
 export type LiveWalkthroughControllerProps = {
   /** Freeze movement and look while a host renders a still. */
   paused?: boolean
-  /** The host owns camera FOV, including restoration when this controller unmounts. */
-  externalFov?: boolean
+  /**
+   * Whether the host owns camera FOV right now (e.g. a capture rig). Read when walkthrough
+   * starts and when it ends, so the answer at teardown decides whether the orbit FOV returns.
+   */
+  externalFov?: () => boolean
   /** Allow locked-pointer clicks to operate the targeted object (E/R still work). */
   pointerInteraction?: boolean
   /** Keep walkthrough active when pointer lock is lost; Escape with a free cursor exits. */
@@ -762,6 +765,8 @@ export type LiveWalkthroughControllerProps = {
 }
 
 /** Live scene walking, collision and interaction. Mount inside Viewer; useViewer owns activation. */
+const noExternalFov = () => false
+
 export function LiveWalkthroughController(props: LiveWalkthroughControllerProps) {
   const active = useViewer((state) => state.walkthroughMode)
   return active ? <LiveWalkthroughSession {...props} /> : null
@@ -769,7 +774,7 @@ export function LiveWalkthroughController(props: LiveWalkthroughControllerProps)
 
 function LiveWalkthroughSession({
   paused = false,
-  externalFov = false,
+  externalFov = noExternalFov,
   pointerInteraction = true,
   suspendOnUnlock = false,
   onExit,
@@ -836,12 +841,12 @@ function LiveWalkthroughSession({
   useEffect(() => {
     const perspectiveCamera = camera as PerspectiveCamera
     if (!perspectiveCamera.isPerspectiveCamera) return
-    if (hostRef.current.externalFov) return
+    if (hostRef.current.externalFov()) return
     const previousFov = perspectiveCamera.fov
     perspectiveCamera.fov = WALKTHROUGH_FOV
     perspectiveCamera.updateProjectionMatrix()
     return () => {
-      if (hostRef.current.externalFov) return
+      if (hostRef.current.externalFov()) return
       perspectiveCamera.fov = previousFov
       perspectiveCamera.updateProjectionMatrix()
     }
