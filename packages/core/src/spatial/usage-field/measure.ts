@@ -6,6 +6,7 @@ import { floorsOf } from '../../agent-operations/circulation-spaces'
 import { isFloorUnderlay } from '../../agent-operations/furniture-kind'
 import { area, difference, union } from '../../lib/polygon-boolean'
 import { polygonInteriorPoint } from '../../lib/polygon-label'
+import { inOneGo, type Steps } from '../../lib/steps'
 import type { AnyNode, DoorNode, ItemNode, WallNode } from '../../schema'
 import { resolveStairWalkingSurfaces } from '../../systems/stair/stair-clearance'
 import { cellX, cellZ, type Grid } from './field'
@@ -344,13 +345,13 @@ export function prepareGroup(
  * shapes `usageShapes` read. The floor is a cell grid of the clearance to the nearest obstacle in a
  * band a body stands in; a passage is the widest path from the entrance to the room, its pinch
  * re-solved on a finer grid to the millimetre; a pocket is floor where a 0.60 m unit fits but
- * cannot get out.
+ * cannot get out. One floor a step: a building of many floors takes seconds.
  */
-export function measureUsage(
+export function* measureUsageSteps(
   nodes: Nodes,
   shapes: UsageShapes,
   options: MeasureOptions = {},
-): UsageMeasure {
+): Steps<UsageMeasure> {
   const cell = options.cell ?? 0.02
   const floors = floorsOf(nodes).floors
   const exterior = exteriorDoors(nodes)
@@ -571,6 +572,15 @@ export function measureUsage(
       }
     })
     groups.push({ levelId: group.levelId, y: group.y, source, rooms })
+    yield
   }
   return { groups, entranceDoorId: entrance }
+}
+
+export function measureUsage(
+  nodes: Nodes,
+  shapes: UsageShapes,
+  options: MeasureOptions = {},
+): UsageMeasure {
+  return inOneGo(measureUsageSteps(nodes, shapes, options))
 }

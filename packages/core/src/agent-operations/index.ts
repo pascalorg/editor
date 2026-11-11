@@ -1,11 +1,12 @@
 import { AGENT_TOOL_CONTRACTS, BATCHABLE_TOOLS } from '../agent-tools'
+import { inOneGo } from '../lib/steps'
 import { addColumn } from './add-column'
 import { addFence } from './add-fence'
 import { addLevel } from './add-level'
 import { addObjectInBatch } from './add-object'
 import { addWall } from './add-wall'
 import { viewAssets } from './asset-views'
-import { createBatchOperation, createBatchSteps } from './batch'
+import { createBatchSteps } from './batch'
 import { addCornerWindow } from './corner-window'
 import { createRoof } from './create-roof'
 import { createRoom } from './create-room'
@@ -33,14 +34,15 @@ import { setCheckpoint } from './set-checkpoint'
 import { setGroundLevel } from './set-ground-level'
 import { getSite, placeBuilding } from './site'
 import { fitStair, measureStairOperation } from './stairs'
-import type { AgentOperation, AgentOperations } from './types'
+import type { AgentOperation, AgentOperationSteps, AgentOperations } from './types'
 import { createUnit, listUnits, setUnitMembers } from './units'
-import { verifyScene } from './verify-scene'
+import { verifyScene, verifySceneSteps } from './verify-scene'
 import { setWallType } from './wall-type'
 import './room-checks'
 import './unreachable-rooms-check'
 import './usage-checks'
 
+export { inOneGo, type Steps } from '../lib/steps'
 export * from './achieved'
 export * from './add-column'
 export * from './add-fence'
@@ -164,14 +166,24 @@ const BATCHED_OPERATIONS = Object.fromEntries(
   BATCHABLE_TOOLS.map((name) => [name, BATCH_OPERATIONS[name]]),
 ) as Record<(typeof BATCHABLE_TOOLS)[number], AgentOperation<never>>
 
+const STEPPED_OPERATIONS = { verify_scene: verifySceneSteps }
+const batchSteps = createBatchSteps(BATCHED_OPERATIONS, AGENT_TOOL_CONTRACTS, STEPPED_OPERATIONS)
+
 /** Each shared agent tool's operation, by tool name: what every surface executes. */
 export const AGENT_OPERATIONS = {
   ...SINGLE_OPERATIONS,
-  run_batch: createBatchOperation(BATCHED_OPERATIONS, AGENT_TOOL_CONTRACTS),
+  run_batch: (nodes, input, context) => inOneGo(batchSteps(nodes, input, context)),
 } as const satisfies AgentOperations
 
-/** `run_batch` one call at a time, for a host that lets other work run between a batch's calls. */
-export const RUN_BATCH_STEPS = createBatchSteps(BATCHED_OPERATIONS, AGENT_TOOL_CONTRACTS)
+/**
+ * The operations that take seconds on a large building, in steps, by tool name: a batch after each
+ * of its calls, verify_scene after each of its checks. For a host that lets other work run between
+ * the steps; each answers what its operation in `AGENT_OPERATIONS` answers.
+ */
+export const AGENT_OPERATION_STEPS: Readonly<Record<string, AgentOperationSteps<never>>> = {
+  ...STEPPED_OPERATIONS,
+  run_batch: batchSteps,
+}
 
 export {
   type AssetViewFacts,

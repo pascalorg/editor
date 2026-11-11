@@ -7,6 +7,7 @@ import { HIDDEN_SITE_NOTE } from '../lib/node-visibility'
 import { wallSupportForNodes } from '../lib/opening-floor-datum'
 import { detectOpenWallEnds, type OpenWallEnd } from '../lib/room-graph'
 import { siteBrief } from '../lib/site-placement'
+import { inOneGo, type Steps } from '../lib/steps'
 import { nodeRegistry } from '../registry'
 import {
   type AnyNode,
@@ -57,7 +58,7 @@ import {
   queryNodes,
 } from './scene-queries'
 import { reviewSince } from './scene-review'
-import type { AgentContext, AgentOperation, SceneNodes } from './types'
+import type { AgentContext, AgentOperation, AgentOperationSteps, SceneNodes } from './types'
 import type { RoomUnreachableIssue } from './unreachable-rooms-check'
 import {
   type WallEndShortIssue,
@@ -120,12 +121,17 @@ export type VerifySceneInput = Readonly<Record<string, unknown>>
 /**
  * A check verify_scene runs beyond its own, registered by the module that knows it (the facade
  * checks, the photo's), so verify_scene imports none of them. Checks before CHECKPOINT_ORDER run
- * ahead of the checkpoint's comparison, the rest after it.
+ * ahead of the checkpoint's comparison, the rest after it. A check that takes seconds on a large
+ * building answers in steps, and verify_scene stops where it does.
  */
 export type SceneCheck = {
   name: string
   order: number
-  run: (nodes: SceneNodes, input: VerifySceneInput, context: AgentContext) => SceneIssue[]
+  run: (
+    nodes: SceneNodes,
+    input: VerifySceneInput,
+    context: AgentContext,
+  ) => SceneIssue[] | Steps<SceneIssue[]>
 }
 
 export const CHECKPOINT_ORDER = 100
@@ -336,11 +342,15 @@ function checkSchemas(scene: SceneNodes, hostSchema: AgentContext['nodeSchema'])
 /** A flight of this many risers or fewer is a step up to a door, not a staircase: no going or comfort target applies. */
 const SHORT_FLIGHT_STEPS = 3
 
-export const verifyScene: AgentOperation<VerifySceneInput | undefined> = (
+export const verifyScene: AgentOperation<VerifySceneInput | undefined> = (scene, input, context) =>
+  inOneGo(verifySceneSteps(scene, input, context))
+
+/** `verify_scene`, a step for each registered check and for each step of one that has them. */
+export const verifySceneSteps: AgentOperationSteps<VerifySceneInput | undefined> = function* (
   scene,
   input,
   context,
-) => {
+) {
   const { errors, unknownKinds, unread, measured: nodes } = checkSchemas(scene, context.nodeSchema)
   const onLevel = (levelId: string) => nodesOnLevel(nodes, levelId)
   const ofType = <T extends AnyNode['type']>(content: readonly AnyNode[], type: T) =>
@@ -798,8 +808,15 @@ export const verifyScene: AgentOperation<VerifySceneInput | undefined> = (
   issues.push(...layoutIssuesFromScene(Object.values(settled)))
   issues.push(...ceilingObjectObservations(settled))
   issues.push(...wallObjectObservations(settled))
-  for (const check of checks)
-    if (check.order < CHECKPOINT_ORDER) issues.push(...check.run(settled, input ?? {}, context))
+  const registered = function* (beforeCheckpoint: boolean): Steps<void> {
+    for (const check of checks) {
+      if (check.order < CHECKPOINT_ORDER !== beforeCheckpoint) continue
+      const found = check.run(settled, input ?? {}, context)
+      issues.push(...(Array.isArray(found) ? found : yield* found))
+      yield
+    }
+  }
+  yield* registered(true)
   // What the edits since the host's checkpoint lost, by place.
   const hosted = context.checkpoint
     ? changesSince(context.checkpoint as SceneCheckpoint, scene)
@@ -810,8 +827,7 @@ export const verifyScene: AgentOperation<VerifySceneInput | undefined> = (
   const session = context.session ?? EMPTY_SESSION
   const since = typeof input?.since === 'string' ? reviewSince(session, input.since, scene) : null
   if (since?.places) issues.push(...since.places.issues)
-  for (const check of checks)
-    if (check.order >= CHECKPOINT_ORDER) issues.push(...check.run(settled, input ?? {}, context))
+  yield* registered(false)
 
   const occupiedStoryCount = levels.filter((level) => level.isOccupiedStory).length
   issues.splice(0, issues.length, ...withoutDuplicatePockets(issues))

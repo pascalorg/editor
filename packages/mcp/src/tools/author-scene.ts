@@ -6,9 +6,10 @@ import {
   type AuthorScenePending,
   achievedChanges,
   authorSceneChecks,
+  inOneGo,
   type ProjectFileReader,
   type SceneNodes,
-  verifyScene,
+  verifySceneSteps,
 } from '@pascal-app/core/agent-operations'
 import {
   type AuthorScenePayload,
@@ -26,7 +27,7 @@ import { compileAndStore, type GeometryScriptHost, type ObjectMakerHost } from '
 import { DESTRUCTIVE_TOOL_ANNOTATIONS } from './annotations'
 import { refusalResult, toolError } from './errors'
 import { persistencePayload, publishLiveSceneSnapshot } from './live-sync'
-import { toPatches } from './shared-tools'
+import { pausedBetweenSteps, toPatches } from './shared-tools'
 
 type Edit = { in: 'module' | 'adapter'; find: string; replace: string }
 type Input = {
@@ -63,7 +64,8 @@ const CODE_KEYS = new Set(['code', 'floorCode', 'wallCode'])
  * stored module and adapter, changed by edits, when left out), or the stored conversion again;
  * items naming a piece written with its module, those still being made left for the host to write
  * when they land; every module compiled and stored through the host, the operation applied,
- * Pascal's checks run, and the gate report answered.
+ * Pascal's checks run, and the gate report answered. The checks take seconds on a large building:
+ * a host that gives `betweenSteps` is awaited between them, as in verify_scene.
  */
 export function registerAuthorScene(
   server: McpServer,
@@ -71,6 +73,7 @@ export function registerAuthorScene(
   host: GeometryScriptHost | undefined,
   makers?: ObjectMakerHost,
   readFile?: ProjectFileReader,
+  betweenSteps?: () => Promise<void>,
 ): void {
   server.registerTool(
     authorSceneTool.name,
@@ -227,9 +230,12 @@ export function registerAuthorScene(
         ) as unknown as typeof outcome.changes,
       )
       if (patches.length) bridge.applyPatch(patches)
-      const verified = verifyScene(bridge.getNodes() as SceneNodes, undefined, {
+      const checking = verifySceneSteps(bridge.getNodes() as SceneNodes, undefined, {
         activeLevelId: null,
-      }).result as {
+      })
+      const verified = (
+        betweenSteps ? await pausedBetweenSteps(checking, betweenSteps) : inOneGo(checking)
+      ).result as {
         valid: boolean
         issues: { type?: string; message?: string; severity?: string }[]
       }

@@ -59,18 +59,18 @@ export function registerTools(
     readFile,
     sceneViews,
     assetViews,
-    betweenBatchCalls,
+    betweenSteps,
   }: ToolHosts = {},
 ): void {
   registerGetScene(server, operations)
   registerSharedTools(server, operations, catalog, {
     assetViews,
-    betweenBatchCalls,
+    betweenSteps,
     buildObject: (input) => compileObjectOnHost(geometryScripts, operations, input),
   })
   registerAddColumn(server, operations, geometryScripts)
   registerAddObject(server, operations, geometryScripts, objectMakers)
-  registerAuthorScene(server, operations, geometryScripts, objectMakers, readFile)
+  registerAuthorScene(server, operations, geometryScripts, objectMakers, readFile, betweenSteps)
   registerGetSource(server, operations, geometryScripts)
   registerMeasure(server, operations)
   registerViewScene(server, operations, sceneViews)

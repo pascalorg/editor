@@ -3,6 +3,7 @@ import {
   type ThresholdSource,
   USAGE_INDICATORS,
 } from '../../building/code-profile'
+import { inOneGo, type Steps } from '../../lib/steps'
 import type { AnyNode, DoorNode, ItemNode } from '../../schema'
 import { bedIssues } from './beds'
 import { blockedOpeningIssues } from './blocked'
@@ -13,7 +14,7 @@ import { fixtureClearanceIssues } from './fixtures'
 import { m, nameOf, quote, unique } from './labels'
 import {
   type MeasureOptions,
-  measureUsage,
+  measureUsageSteps,
   type ObstacleRef,
   type Passage,
   type RoomMeasure,
@@ -298,12 +299,12 @@ function pocketIssue(nodes: Nodes, room: RoomMeasure, from: string): UsageIssue 
 }
 
 /** The passages, turning circles and pockets of every group of rooms, measured on one clearance field. */
-function circulationIssues(
+function* circulationIssues(
   nodes: Nodes,
   shapes: UsageShapes,
   options: MeasureOptions,
-): UsageIssue[] {
-  const measure = measureUsage(nodes, shapes, options)
+): Steps<UsageIssue[]> {
+  const measure = yield* measureUsageSteps(nodes, shapes, options)
   const issues: UsageIssue[] = []
   for (const group of measure.groups) {
     const from = group.source.kind === 'door' ? 'the entrance' : 'the stair arrival'
@@ -346,11 +347,16 @@ function circulationIssues(
 /**
  * Each measurement with the finding types it gives, in the order their findings are listed. On a
  * building of a few hundred rooms the circulation measurement takes seconds and the others a
- * fraction of one, so a question about some types takes the measurements that give them alone.
+ * fraction of one, so a question about some types takes the measurements that give them alone,
+ * and the circulation measurement is taken in steps.
  */
 const MEASUREMENTS: {
   types: readonly UsageIssue['type'][]
-  run: (nodes: Nodes, shapes: UsageShapes, options: MeasureOptions) => UsageIssue[]
+  run: (
+    nodes: Nodes,
+    shapes: UsageShapes,
+    options: MeasureOptions,
+  ) => UsageIssue[] | Steps<UsageIssue[]>
 }[] = [
   {
     types: ['usage_pocket', 'usage_passage_narrow', 'usage_turning_narrow'],
@@ -386,11 +392,22 @@ export type UsageOptions = MeasureOptions & {
  * not a compliance check.
  */
 export function usageIssues(nodes: Nodes, options: UsageOptions = {}): UsageIssue[] {
+  return inOneGo(usageIssueSteps(nodes, options))
+}
+
+/** `usageIssues`, a step for each measurement and for each floor of the circulation one. */
+export function* usageIssueSteps(nodes: Nodes, options: UsageOptions = {}): Steps<UsageIssue[]> {
   const { types, ...measure } = options
   const asked = types
     ? MEASUREMENTS.filter((measurement) => measurement.types.some((type) => types.has(type)))
     : MEASUREMENTS
   if (asked.length === 0) return []
   const shapes = usageShapes(nodes)
-  return asked.flatMap((measurement) => measurement.run(nodes, shapes, measure))
+  const issues: UsageIssue[] = []
+  for (const measurement of asked) {
+    const found = measurement.run(nodes, shapes, measure)
+    issues.push(...(Array.isArray(found) ? found : yield* found))
+    yield
+  }
+  return issues
 }

@@ -26,10 +26,10 @@ async function served(pause?: (bridge: SceneBridge) => Promise<void>) {
   bridge.setScene({ [building.id]: building, [level.id]: level }, [building.id] as never)
   const server = createPascalMcpServer({
     bridge,
-    ...(pause && { betweenBatchCalls: () => pause(bridge) }),
+    ...(pause && { betweenSteps: () => pause(bridge) }),
   })
   const [serverTransport, clientTransport] = InMemoryTransport.createLinkedPair()
-  const client = new Client({ name: 'run-batch-pause-test', version: '0.0.0' })
+  const client = new Client({ name: 'paused-steps-test', version: '0.0.0' })
   await Promise.all([server.connect(serverTransport), client.connect(clientTransport)])
   const walls = () => Object.values(bridge.getNodes()).filter((node) => node.type === 'wall').length
   const batch = async (calls: unknown[], onRefusal?: 'stop' | 'skip') =>
@@ -37,7 +37,13 @@ async function served(pause?: (bridge: SceneBridge) => Promise<void>) {
       name: 'run_batch',
       arguments: { calls, ...(onRefusal && { onRefusal }) },
     })) as Result
-  return { batch, bridge, walls }
+  const verify = async () =>
+    (
+      (await client.callTool({ name: 'verify_scene', arguments: {} })) as {
+        structuredContent: unknown
+      }
+    ).structuredContent
+  return { batch, bridge, verify, walls }
 }
 
 /** A result without the ids its calls minted. */
@@ -54,7 +60,7 @@ const shape = (result: Result) => ({
   })),
 })
 
-describe("run_batch on a host that pauses between a batch's calls", () => {
+describe('on a host that pauses between the steps of a long call', () => {
   test('pauses after each call, with the scene as the batch found it, then applies the batch whole', async () => {
     const seen: number[] = []
     const host = await served(async () => {
@@ -70,7 +76,26 @@ describe("run_batch on a host that pauses between a batch's calls", () => {
     expect(result.structuredContent).toMatchObject({ status: 'applied', applied: 4, refused: 0 })
   })
 
-  test('answers as a batch run in one go does: in order, stopped by a refusal, or past it', async () => {
+  test('verify_scene pauses between its checks, alone and as a call of a batch, with the same answer', async () => {
+    let pauses = 0
+    const paused = await served(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0))
+      pauses++
+    })
+    const direct = await served()
+    expect(await paused.verify()).toEqual(await direct.verify())
+    const checks = pauses
+    expect(checks).toBeGreaterThan(1)
+
+    pauses = 0
+    const calls = [wall(0), { tool: 'verify_scene' }]
+    const [a, b] = [await paused.batch(calls), await direct.batch(calls)]
+    // The batch's own two pauses, and the check's inside its call.
+    expect(pauses).toBe(checks + calls.length)
+    expect(shape(a)).toEqual(shape(b))
+  })
+
+  test('a batch answers as one run in one go does: in order, stopped by a refusal, or past it', async () => {
     const batches: [unknown[], ('stop' | 'skip')?][] = [
       [[wall(0), { tool: 'get_walls' }, wall(2)]],
       [[wall(0), missing, wall(2)]],
