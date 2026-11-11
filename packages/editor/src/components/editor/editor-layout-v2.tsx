@@ -57,58 +57,10 @@ function MenuColumn({
   /** The column's own tab (the chat): lit whenever no tool panel takes its place. */
   columnTabId?: string
 }) {
-  const isCollapsed = useSidebarStore((s) => s.isCollapsed)
   const setIsCollapsed = useSidebarStore((s) => s.setIsCollapsed)
   const activePanel = useShownSidebarPanel(tabs)
   const setActivePanel = useEditor((s) => s.setActiveSidebarPanel)
   const setIsMenuHidden = useSidebarStore((s) => s.setIsMenuHidden)
-
-  // Publish the menu's tabs so keyboard shortcuts (B, P) can open a panel.
-  useEffect(() => {
-    setSidebarTabIds(tabs.map((tab) => tab.id))
-    return () => setSidebarTabIds([])
-  }, [tabs])
-
-  // A stage entry whose surface has left the stage (its view closed from the
-  // view bar) hands the menu back to the panel that was open before it.
-  const lastPanelTab = useRef<string | null>(null)
-  const activeTab = tabs.find((t) => t.id === activePanel)
-  if (activeTab && !activeTab.noPanel) lastPanelTab.current = activeTab.id
-  useEffect(() => {
-    if (activeTab?.stageActive !== false) return
-    const fallback = tabs.find((t) => t.id === lastPanelTab.current) ?? tabs.find((t) => !t.noPanel)
-    if (fallback) setActivePanel(fallback.id)
-  }, [activeTab, tabs, setActivePanel])
-
-  // Leaving the items tab with the item tool in hand drops back to select mode
-  useEffect(() => {
-    if (activePanel === 'items') return
-    const { mode, tool, setMode } = useEditor.getState()
-    if (mode === 'build' && tool === 'item') {
-      setMode('select')
-    }
-  }, [activePanel])
-
-  // Paint mode entered without the panel (command palette, a material's "paint
-  // with") brings the host's Paint panel along, so the menu reflects the mode.
-  useEffect(
-    () =>
-      useEditor.subscribe((state, prev) => {
-        if (state.mode !== prev.mode && state.mode === 'material-paint') {
-          openSidebarPanel(['paint'])
-        }
-      }),
-    [],
-  )
-
-  // Closing the tool panel disarms any build tool back to select
-  useEffect(() => {
-    if (!isCollapsed) return
-    const { mode, setMode } = useEditor.getState()
-    if (mode === 'build') {
-      setMode('select')
-    }
-  }, [isCollapsed])
 
   // Menu click: open a closed panel (at a usable width), close it when
   // re-clicking the open entry, otherwise switch panels.
@@ -140,6 +92,7 @@ function MenuColumn({
     [tabs, toolClosed, activePanel, columnTabId, setIsCollapsed, setActivePanel],
   )
 
+  const activeTab = tabs.find((t) => t.id === activePanel)
   const columnShown = toolClosed && columnTabId !== undefined && activeTab?.noPanel !== true
   return (
     <SideMenu
@@ -151,6 +104,75 @@ function MenuColumn({
       tabs={tabs}
     />
   )
+}
+
+// ── Menu behavior: runs while the menu is hidden too ─────────────────────────
+
+/**
+ * What the side menu's tabs do beyond its buttons, kept mounted while the menu
+ * is hidden: shortcuts that open a panel, the Paint panel following paint
+ * mode, a stage entry handing back to the last panel, and a build tool put
+ * down once no tool panel is open (closed, or the chat back in its place).
+ */
+function useSideMenuBehavior({
+  tabs,
+  enabled,
+  toolOpen,
+}: {
+  tabs: SidebarTab[]
+  enabled: boolean
+  toolOpen: boolean
+}) {
+  const activePanel = useShownSidebarPanel(tabs)
+  const setActivePanel = useEditor((s) => s.setActiveSidebarPanel)
+
+  // Publish the menu's tabs so keyboard shortcuts (B, P) can open a panel.
+  useEffect(() => {
+    if (!enabled) return
+    setSidebarTabIds(tabs.map((tab) => tab.id))
+    return () => setSidebarTabIds([])
+  }, [enabled, tabs])
+
+  // A stage entry whose surface has left the stage (its view closed from the
+  // view bar) hands the menu back to the panel that was open before it.
+  const lastPanelTab = useRef<string | null>(null)
+  const activeTab = tabs.find((t) => t.id === activePanel)
+  if (activeTab && !activeTab.noPanel) lastPanelTab.current = activeTab.id
+  useEffect(() => {
+    if (!enabled || activeTab?.stageActive !== false) return
+    const fallback = tabs.find((t) => t.id === lastPanelTab.current) ?? tabs.find((t) => !t.noPanel)
+    if (fallback) setActivePanel(fallback.id)
+  }, [enabled, activeTab, tabs, setActivePanel])
+
+  // Leaving the items tab with the item tool in hand drops back to select mode
+  useEffect(() => {
+    if (!enabled || activePanel === 'items') return
+    const { mode, tool, setMode } = useEditor.getState()
+    if (mode === 'build' && tool === 'item') {
+      setMode('select')
+    }
+  }, [enabled, activePanel])
+
+  // Paint mode entered without the panel (command palette, a material's "paint
+  // with") brings the host's Paint panel along, so the menu reflects the mode.
+  useEffect(() => {
+    if (!enabled) return
+    return useEditor.subscribe((state, prev) => {
+      if (state.mode !== prev.mode && state.mode === 'material-paint') {
+        openSidebarPanel(['paint'])
+      }
+    })
+  }, [enabled])
+
+  // No tool panel open any more puts a build tool down, so a click on the 3D
+  // view selects instead of drawing.
+  useEffect(() => {
+    if (!enabled || toolOpen) return
+    const { mode, setMode } = useEditor.getState()
+    if (mode === 'build') {
+      setMode('select')
+    }
+  }, [enabled, toolOpen])
 }
 
 // ── Chat column: the host's column tab, beside the menu while no tool is open ─
@@ -504,6 +526,11 @@ export function EditorLayoutV2({
   )
   const toolClosed = isCollapsed || (!isMobile && columnPicked)
   const openTool = useOpenTool(sidebarTabs, toolClosed, isMobile ? undefined : columnTab?.id)
+  useSideMenuBehavior({
+    tabs: sidebarTabs,
+    enabled: showSideColumns,
+    toolOpen: openTool !== undefined,
+  })
 
   if (isMobile) {
     return (

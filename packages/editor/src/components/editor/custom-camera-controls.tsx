@@ -764,6 +764,11 @@ export const CustomCameraControls = ({
   // unless the camera already has somewhere to be: a view saved on the site or a building, a pose
   // applied to it, or the person moving it. Scans and models finish streaming in after the scene
   // reports ready, so the frame follows them for a few seconds while nothing else has moved it.
+  // These controls outlive a project: each one that loads gets its own opening frame.
+  useEffect(() => {
+    if (!sceneReady) openingFrame.current = 'waiting'
+  }, [sceneReady])
+
   useEffect(() => {
     if (!sceneReady || isPreviewMode || isFirstPersonMode) return
     if (openingFrame.current !== 'waiting') return
@@ -793,9 +798,19 @@ export const CustomCameraControls = ({
     }
     frame()
     const timers = OPENING_FRAME_FOLLOW_MS.map((ms) => window.setTimeout(frame, ms))
+    // The follow window over, the opening is settled: later runs (preview, first person) leave it.
+    timers.push(
+      window.setTimeout(
+        () => {
+          if (openingFrame.current === 'framing') openingFrame.current = 'done'
+        },
+        Math.max(...OPENING_FRAME_FOLLOW_MS) + 1,
+      ),
+    )
     return () => {
       for (const timer of timers) window.clearTimeout(timer)
-      if (openingFrame.current === 'framing') openingFrame.current = 'done'
+      // Interrupted before anything else moved the camera (a remount, preview): frame on the next run.
+      if (openingFrame.current === 'framing') openingFrame.current = 'waiting'
     }
   }, [sceneReady, isPreviewMode, isFirstPersonMode])
 
