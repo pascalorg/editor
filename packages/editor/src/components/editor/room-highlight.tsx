@@ -2,6 +2,7 @@
 
 import { type AnyNodeId, sceneRegistry, useScene } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
+import { describeZoneOutline, type RoomSelectionRecord } from '@pascal-app/viewer/ui'
 import { useFrame } from '@react-three/fiber'
 import { useEffect, useMemo, useRef } from 'react'
 import {
@@ -21,7 +22,6 @@ import {
   type RoomAssemblyHeights,
   resolveRoomAssemblyHeights,
 } from '../../lib/room-assembly-overlay'
-import { describeZoneOutline, type RoomSelectionRecord } from '../../lib/room-selection'
 import useEditor from '../../store/use-editor'
 import useInteractionScope from '../../store/use-interaction-scope'
 import { RoomControls2D, RoomControls3D } from './room-controls'

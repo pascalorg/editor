@@ -1,8 +1,9 @@
 import { describe, expect, test } from 'bun:test'
 import { type AnyNode, type MessageDescriptor, ZoneNode } from '@pascal-app/core'
+import { displayRoomName, editedRoomName } from '@pascal-app/viewer/ui'
 import { roomNameOptions } from '../components/ui/panels/room-name-options'
 import { roomNameSections } from './room-name-catalog'
-import { displayRoomName, editedRoomName, localizedRoomNameSections } from './room-name-messages'
+import { localizedRoomNameSections } from './room-name-messages'
 
 const FRENCH: Record<string, string> = {
   'editor.roomName.bedroom': 'Chambre',

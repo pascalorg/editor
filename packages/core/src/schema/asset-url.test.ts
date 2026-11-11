@@ -28,6 +28,8 @@ describe('AssetUrl', () => {
       ['http://127.0.0.1:8080/texture.png', 'http 127.0.0.1 loopback'],
       ['/public/a.glb', 'app-relative path'],
       ['/material/wood1/albedoMap_basecolor.jpg', 'relative path deep'],
+      ['/assets/x.png', 'single-slash path'],
+      ['/assets//x.png', 'path with a doubled slash after the first segment'],
       ['data:image/png;base64,AAA', 'inline PNG data URL'],
       ['data:image/jpeg;base64,/9j/', 'inline JPEG data URL'],
       ['data:image/webp;base64,UklGR', 'inline WebP data URL'],
@@ -58,6 +60,15 @@ describe('AssetUrl', () => {
       ['', 'empty string'],
       ['not a url at all', 'non-url string'],
       ['://missing-scheme', 'malformed'],
+      ['//evil.example/x.png', 'scheme-relative URL'],
+      ['/\\evil.example/x.png', 'slash-backslash scheme-relative URL'],
+      ['\\\\evil.example/x.png', 'backslash scheme-relative URL'],
+      ['\\/evil.example/x.png', 'backslash-slash scheme-relative URL'],
+      ['//169.254.169.254/x', 'scheme-relative link-local (cloud metadata)'],
+      [' //evil.example/x.png', 'scheme-relative URL after a space'],
+      ['\u0000\u001f//evil.example/x.png', 'scheme-relative URL after control characters'],
+      ['/\t/evil.example/x.png', 'scheme-relative URL split by a tab'],
+      ['/\n\\evil.example/x.png', 'scheme-relative URL split by a newline'],
     ]
     for (const [url, label] of cases) {
       test(`rejects ${label}: ${url}`, () => {
@@ -127,6 +138,14 @@ describe('AssetUrl', () => {
       expect(isValid('data:image/png;base64,AAA')).toBe(true)
       expect(isValid('/public/a.glb')).toBe(true)
       expect(isValid('http://localhost:3000/x')).toBe(true)
+    })
+
+    test('allowlist cannot be bypassed with a scheme-relative URL', () => {
+      if (!g.process?.env) return
+      g.process.env[ALLOWED_ORIGINS_ENV] = 'https://cdn.pascal.app'
+      expect(isValid('//evil.example/x.png')).toBe(false)
+      expect(isValid('/\\evil.example/x.png')).toBe(false)
+      expect(isValid('/assets/x.png')).toBe(true)
     })
 
     test('allowlist rejects subdomain spoofing', () => {

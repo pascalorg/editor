@@ -1863,10 +1863,11 @@ export const RoofEditSystem = () => {
         const wasReveal = prevRevealRoofIds.current.has(roofId)
         if (isActive !== wasActive || isMoving !== wasMoving) {
           // Entering or exiting edit and move modes rebuilds the merged shell
-          // from the current segment values.
+          // from the current segment values (its faces of other kinds are no part of it).
           const { markDirty } = useScene.getState()
           for (const childId of roofNode.children) {
-            markDirty(childId as AnyNodeId)
+            if (nodes[childId as AnyNodeId]?.type === 'roof-segment')
+              markDirty(childId as AnyNodeId)
           }
         }
         // Entering reveal mode (and NOT also full-edit, which already

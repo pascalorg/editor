@@ -14,7 +14,7 @@ import {
   XCircle,
 } from 'lucide-react'
 import { useState } from 'react'
-import { Button } from '../../../../../components/ui/primitives/button'
+import { Button } from '@pascal-app/viewer/ui'
 import {
   Dialog,
   DialogContent,

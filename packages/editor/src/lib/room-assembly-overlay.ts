@@ -11,8 +11,8 @@ import {
   roomDrawnFloor,
   type WallNode,
 } from '@pascal-app/core'
+import type { RoomSelectionGeometry, RoomSelectionRecord } from '@pascal-app/viewer/ui'
 import { ShapeUtils, Vector2 } from 'three'
-import type { RoomSelectionGeometry, RoomSelectionRecord } from './room-selection'
 
 type Point = readonly [number, number]
 type Ring = readonly Point[]

@@ -6,7 +6,7 @@ import { PanelLeftIcon } from 'lucide-react'
 import * as React from 'react'
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
-import { Button } from './../../../components/ui/primitives/button'
+import { Button } from '@pascal-app/viewer/ui'
 import { Input } from './../../../components/ui/primitives/input'
 import { Separator } from './../../../components/ui/primitives/separator'
 import {
@@ -22,8 +22,8 @@ import {
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
-} from './../../../components/ui/primitives/tooltip'
-import { useIsMobile } from './../../../hooks/use-mobile'
+} from '@pascal-app/viewer/ui'
+import { useIsMobile } from '@pascal-app/viewer/ui'
 import { hydrationGatedStorage } from './../../../lib/hydration-gated-storage'
 import { cn } from './../../../lib/utils'
 

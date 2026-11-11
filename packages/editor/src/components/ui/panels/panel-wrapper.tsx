@@ -19,7 +19,7 @@ import {
   useRef,
   useState,
 } from 'react'
-import { useIsMobile } from '../../../hooks/use-mobile'
+import { useIsMobile } from '@pascal-app/viewer/ui'
 import { NodeIconImage } from '../node-icon-image'
 import { resolveActiveExtension, toggleCard } from '../../../lib/inspector-card-mode'
 import { cn } from '../../../lib/utils'

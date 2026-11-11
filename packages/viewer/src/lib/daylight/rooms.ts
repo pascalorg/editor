@@ -41,14 +41,14 @@ import {
   vec3,
   vec4,
 } from 'three/tsl'
-import { CELL, type MapLevel, RoomMap, TILE, type TileCells } from './room-map'
+import { CELL, type MapLevel, type MapWalls, RoomMap, TILE, type TileCells } from './room-map'
 
 /**
  * "Room-aware" interior light, the game-engine way (ported from the enhanced viewer):
  *
  * - Zone polygons are rasterized per level into a top-down room-id map (10 cm cells). A fragment
- *   finds its room by looking up `p + n·0.18` — a wall face looks *into* the room it faces, so
- *   light never leaks through walls and there are no shadow maps to pay for.
+ *   finds its room a step off itself along its normal — a wall face looks *into* the room it
+ *   faces, so light never leaks through walls and there are no shadow maps to pay for.
  * - Each room owns its lamps and window "portals": glass rectangles that emit sky (+ ground
  *   bounce) radiance inwards with an analytic rectangle form factor, plus the internally
  *   reflected component (split-flux) and the sky patch on the floor. Enclosed rooms see only
@@ -111,8 +111,11 @@ export type RoomSceneInput = {
   zones: RoomZone[]
   /** Ceilings, roofs and slabs (enclosure rays) with their kind. */
   covers: { object: Object3D; kind: 'ceiling' | 'roof' | 'slab' }[]
-  /** Wall meshes only (openings and their parts excluded), for walkable-opening rays. */
-  walls: Object3D[]
+  /**
+   * Wall meshes only (openings and their parts excluded), each with its level: walkable-opening
+   * rays test them, and their footprints keep rooms from reaching past a wall's far face.
+   */
+  walls: { object: Object3D; levelIndex: number }[]
   openings: RoomOpeningRoot[]
   lamps: RoomLamp[]
   /** Whether rooms without lamps of their own get their virtual ceiling lamp lit. */
@@ -307,6 +310,7 @@ export class RoomLighting {
         holes: room.zone.holes,
       })),
       openings.walk,
+      wallFootprints(input.walls),
     )
     this.openings = openings.finish()
 
@@ -854,13 +858,15 @@ export class RoomLighting {
       .map((o) => ({ id: o.id, box: new Box3().setFromObject(o.object) }))
     const doorHoles = doors.map((door) => door.box.clone().expandByScalar(0.05))
     ray.far = 0.9
-    const wallGrid = new MeshGrid(input.walls)
+    const wallGrid = new MeshGrid(input.walls.map((wall) => wall.object))
     const samples = new Map<string, OpeningSamples>()
     const v = new Vector3()
     const dirV = new Vector3()
 
     const walk = (tile: TileCells) => {
       const { cells, stride, i0, j0, x0, z0, ci0, cj0, level: l } = tile
+      // The tile lies in its building's turned frame: points and directions go back to the world.
+      const [cos, sin] = tile.turn
       const floorY = this.levels[l]?.y ?? 0
       const visit = (i: number, j: number, axis: 'x' | 'z') => {
         const di = axis === 'x' ? 1 : 0
@@ -874,9 +880,11 @@ export class RoomLighting {
         // Outside openings only from enclosed rooms.
         if (a < 0 && !this.rooms[b]!.enclosed) return
         if (b < 0 && !this.rooms[a]!.enclosed) return
-        const x = x0 + (i + 0.5 + di * 0.5) * CELL
-        const z = z0 + (j + 0.5 + dj * 0.5) * CELL
-        dirV.set(di, 0, dj)
+        const mx = x0 + (i + 0.5 + di * 0.5) * CELL
+        const mz = z0 + (j + 0.5 + dj * 0.5) * CELL
+        const x = mx * cos - mz * sin
+        const z = mx * sin + mz * cos
+        dirV.set(di * cos - dj * sin, 0, di * sin + dj * cos)
         for (const h of [0.35, 1.6]) {
           v.set(x, floorY + h, z).addScaledVector(dirV, -0.45)
           ray.set(v, dirV)
@@ -903,7 +911,7 @@ export class RoomLighting {
           samples.set(key, s)
         }
         s.pts.push(new Vector3(x, floorY, z))
-        s.facing.push(new Vector3(di * dir, 0, dj * dir))
+        s.facing.push(dirV.clone().multiplyScalar(dir))
       }
       // Each edge belongs to the tile of the cell before it. A uniform tile has none inside: only
       // its borders with the next tiles can hold one.
@@ -1021,11 +1029,14 @@ export class RoomLighting {
   roomAtNode = Fn(([p]: [N]) => this.map.roomAtNode(p))
 
   /**
-   * The room a surface faces (probed 18 cm off it along its normal). One node per material: its
-   * lighting and its exterior mask share the lookup.
+   * The room a surface faces, probed off it along its normal: 30 cm sideways, 18 cm up or down.
+   * Sideways it must clear a wall from inside it: a shutter, a door leaf or a pane set half-way
+   * into a 30 cm wall looks out past the wall's face, not into the cells along it, where a wall
+   * off the grid axes reads as room and outside in turn. One node per material: its lighting and
+   * its exterior mask share the lookup.
    */
   probeRoomNode(): N {
-    return this.roomAtNode(positionWorld.add(normalWorld.mul(0.18)))
+    return this.roomAtNode(positionWorld.add(normalWorld.mul(vec3(0.3, 0.18, 0.3))))
   }
 
   /** E' = Emax·(1 − e^(−E/Emax)), on luminance, hue kept — near-field hot spots compress, never blow out. */
@@ -1323,6 +1334,42 @@ export class RoomLighting {
 }
 
 // ---- helpers -------------------------------------------------------------------------------
+
+/**
+ * The walls' footprints per level: every triangle that has an area seen from above (tops,
+ * bottoms, lintels, sills), in world XZ. Read from the vertices as they are now, like `MeshGrid`.
+ */
+function wallFootprints(walls: RoomSceneInput['walls']): MapWalls[] {
+  const byLevel = new Map<number, number[]>()
+  const a = new Vector3()
+  const b = new Vector3()
+  const c = new Vector3()
+  for (const { object, levelIndex } of walls) {
+    const mesh = object as Mesh
+    const position = mesh.isMesh ? mesh.geometry?.getAttribute('position') : undefined
+    if (!position || position.count === 0) continue
+    let triangles = byLevel.get(levelIndex)
+    if (!triangles) {
+      triangles = []
+      byLevel.set(levelIndex, triangles)
+    }
+    const index = mesh.geometry.getIndex()
+    const count = index ? index.count : position.count
+    for (let k = 0; k + 2 < count; k += 3) {
+      a.fromBufferAttribute(position, index ? index.getX(k) : k).applyMatrix4(mesh.matrixWorld)
+      b.fromBufferAttribute(position, index ? index.getX(k + 1) : k + 1).applyMatrix4(
+        mesh.matrixWorld,
+      )
+      c.fromBufferAttribute(position, index ? index.getX(k + 2) : k + 2).applyMatrix4(
+        mesh.matrixWorld,
+      )
+      // Faces seen edge-on from above (the wall's sides) add nothing to its footprint.
+      if (Math.abs((b.x - a.x) * (c.z - a.z) - (c.x - a.x) * (b.z - a.z)) < 1e-6) continue
+      triangles.push(a.x, a.z, b.x, b.z, c.x, c.z)
+    }
+  }
+  return [...byLevel].map(([level, triangles]) => ({ level, triangles }))
+}
 
 /**
  * Ray hits against the meshes' geometry itself, nearest first. Picking overrides (walls hidden

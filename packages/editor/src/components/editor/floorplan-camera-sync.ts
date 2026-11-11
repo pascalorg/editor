@@ -1,8 +1,8 @@
 'use client'
 
 import { type CameraPose, emitter } from '@pascal-app/core'
+import { subscribeCameraPose } from '@pascal-app/viewer/ui'
 import { useEffect, useRef } from 'react'
-import { subscribeCameraPose } from '../../store/camera-pose-store'
 import { subscribeNavigationSyncPose } from '../../store/navigation-sync-pose-store'
 import type { NavigationSyncPose, NavigationSyncPoseInput } from '../../store/use-editor'
 

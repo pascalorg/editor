@@ -242,6 +242,87 @@ function ViewerControls() {
 }
 ```
 
+## Sound effects (`@pascal-app/viewer/sfx`)
+
+Opt in to building interactions and selection/hover cues from any viewer or custom UI.
+The default files come from `https://editor.pascal.app/audios/sfx`; hosts serving the files
+locally should configure their own base URL before preloading. Importing the entry creates no
+Howl instances or interaction subscriptions. Playback starts after the browser allows audio;
+selection/hover cues stay silent until user activation and during walkthrough.
+
+```tsx
+import { useEffect } from 'react'
+import { configureViewer } from '@pascal-app/viewer'
+import { initInteractionSounds, playSound, useAudioSettings, useViewerUiSounds } from '@pascal-app/viewer/sfx'
+configureViewer({ sfxBaseUrl: '/audios/sfx' })
+function SoundControls() {
+  useEffect(() => initInteractionSounds(), [])
+  useViewerUiSounds()
+  const toggleMute = useAudioSettings(s => s.toggleMute)
+  return <button onPointerEnter={() => playSound('menuHover')} onClick={() => { playSound('menuClick'); toggleMute() }}>Toggle sound</button>
+}
+```
+
+`SOUNDS` lists the built-in cue definitions. `playSound(name, options?)` supports gain
+(`volumeMultiplier`) and stereo positioning. `preloadSounds()` warms files without playing;
+`disposeSounds()` releases the shared cache when the host runtime shuts down. Host cues can use
+`SoundDefinition` objects with the same player, including `startSoundLoop` / `stopSoundLoop`.
+`useAudioSettings` shares master/effects volumes across tabs and keeps mute per tab, preserving
+existing Pascal storage keys. Denied storage falls back to memory. Existing radio preferences
+remain in the same settings record so editor consumers continue to share one store.
+
+## Viewer UI (`@pascal-app/viewer/ui`)
+
+Pascal's read-only viewer chrome as React components: the controls bar (levels, walls, display,
+daylight, sky, walkthrough), the scene header (project card, breadcrumb, floor list), the hover
+label, the walkthrough and drone HUDs, the loader, the selection model behind them
+(`applyViewerClick`, `ViewerSelectionManager`) and the primitives they are built from (`Button`,
+`DropdownMenu*`, `Popover*`, `Tooltip*`, `Switch`). The entry never imports the editor or Next.
+
+The components are styled with Tailwind v4 classes. Point Tailwind at the built entry and import
+the theme (tokens, `shadow-elevation-*`, `corner-smooth`, the loader animations):
+
+```css
+@import "tailwindcss";
+@import "@pascal-app/viewer/ui/theme.css";
+@source "../node_modules/@pascal-app/viewer/dist/ui";
+```
+
+Override any token after the import (`:root { --radius: 0.5rem }`). The docks and menus scope
+themselves with a `dark` class. Control icons load from `configureViewer({ iconsBaseUrl })` (default
+`https://editor.pascal.app/icons`); button sounds play through `@pascal-app/viewer/sfx`.
+
+```tsx
+import { useViewer, Viewer } from '@pascal-app/viewer'
+import {
+  SceneLoader,
+  ViewerControlsBar,
+  ViewerSceneHeader,
+  ViewerSelectionManager,
+  WalkthroughHud,
+} from '@pascal-app/viewer/ui'
+
+function ProjectViewer({ ready, name }: { ready: boolean; name: string }) {
+  const walking = useViewer((s) => s.walkthroughMode)
+  const toggleWalk = () => useViewer.getState().setWalkthroughMode(!walking)
+  return (
+    <div className="relative h-full w-full">
+      <Viewer selectionManager="custom">
+        <ViewerSelectionManager />
+      </Viewer>
+      <ViewerSceneHeader backHref={null} linkComponent={MyLink} projectName={name} />
+      <ViewerControlsBar onWalkthroughToggle={toggleWalk} walkthroughActive={walking} />
+      {walking && <WalkthroughHud onExit={toggleWalk} />}
+      {!ready && <SceneLoader />}
+    </div>
+  )
+}
+```
+
+`linkComponent` renders the header's links (a plain `<a>` by default); pass your router's link,
+e.g. Next's `Link`. The walkthrough toggle only flips `walkthroughMode`; mount your own
+first-person controls inside `<Viewer>` to move the camera.
+
 ## Asset CDN Helpers
 
 ```typescript

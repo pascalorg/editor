@@ -2059,28 +2059,28 @@ msgstr "墙体：{label}"
 # Source-Hash: 8caa959c0ae800c3
 # Review: human
 # English: "Basement"
-#: packages/editor/src/i18n/level-name.ts
+#: packages/viewer/src/ui/lib/level-name.ts
 msgid "core.level.basement"
 msgstr "地下层"
 
 # Source-Hash: 14927085ee91ba05
 # Review: human
 # English: "Basement {number}"
-#: packages/editor/src/i18n/level-name.ts
+#: packages/viewer/src/ui/lib/level-name.ts
 msgid "core.level.basementNumber"
 msgstr "地下 {number} 层"
 
 # Source-Hash: e59074a7b9b3f56e
 # Review: human
 # English: "Floor {number}"
-#: packages/editor/src/i18n/level-name.ts
+#: packages/viewer/src/ui/lib/level-name.ts
 msgid "core.level.floorNumber"
 msgstr "{number} 层"
 
 # Source-Hash: cde3efc9b7ddfa41
 # Review: human
 # English: "Ground floor"
-#: packages/editor/src/i18n/level-name.ts
+#: packages/viewer/src/ui/lib/level-name.ts
 msgid "core.level.groundFloor"
 msgstr "首层"
 
@@ -2149,7 +2149,7 @@ msgstr "恢复跟随"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Follow Pascal: Off"
-#: packages/editor/src/components/ui/action-menu/follow-pascal-toggle.tsx
+#: packages/viewer/src/ui/components/follow-pascal-toggle.tsx
 #, fuzzy
 msgid "editor.actionMenu.followPascalToggle.off"
 msgstr "跟随 Pascal：关"
@@ -2159,7 +2159,7 @@ msgstr "跟随 Pascal：关"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Follow Pascal: On"
-#: packages/editor/src/components/ui/action-menu/follow-pascal-toggle.tsx
+#: packages/viewer/src/ui/components/follow-pascal-toggle.tsx
 #, fuzzy
 msgid "editor.actionMenu.followPascalToggle.on"
 msgstr "跟随 Pascal：开"
@@ -13959,7 +13959,7 @@ msgstr "输入尺寸以移动墙体"
 # AI-Model: claude-opus-5-5
 # English: "Room"
 #: packages/editor/src/components/editor/room-labels.tsx
-#: packages/editor/src/lib/viewer-selection.ts
+#: packages/viewer/src/ui/lib/viewer-selection.ts
 #, fuzzy
 msgid "editor.roomLabel.room"
 msgstr "房间"
@@ -13970,7 +13970,7 @@ msgstr "房间"
 # AI-Model: claude-opus-5-5
 # English: "Zone"
 #: packages/editor/src/components/editor/room-labels.tsx
-#: packages/editor/src/lib/viewer-selection.ts
+#: packages/viewer/src/ui/lib/viewer-selection.ts
 #, fuzzy
 msgid "editor.roomLabel.zone"
 msgstr "区域"
@@ -13980,7 +13980,7 @@ msgstr "区域"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Attic"
-#: packages/editor/src/lib/room-name-messages.ts
+#: packages/viewer/src/ui/lib/room-name-messages.ts
 #, fuzzy
 msgid "editor.roomName.attic"
 msgstr "阁楼"
@@ -13990,7 +13990,7 @@ msgstr "阁楼"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Balcony"
-#: packages/editor/src/lib/room-name-messages.ts
+#: packages/viewer/src/ui/lib/room-name-messages.ts
 #, fuzzy
 msgid "editor.roomName.balcony"
 msgstr "阳台"
@@ -14000,7 +14000,7 @@ msgstr "阳台"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Basement"
-#: packages/editor/src/lib/room-name-messages.ts
+#: packages/viewer/src/ui/lib/room-name-messages.ts
 #, fuzzy
 msgid "editor.roomName.basement"
 msgstr "地下层"
@@ -14010,7 +14010,7 @@ msgstr "地下层"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Bathroom"
-#: packages/editor/src/lib/room-name-messages.ts
+#: packages/viewer/src/ui/lib/room-name-messages.ts
 #, fuzzy
 msgid "editor.roomName.bathroom"
 msgstr "浴室"
@@ -14020,7 +14020,7 @@ msgstr "浴室"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Bedroom"
-#: packages/editor/src/lib/room-name-messages.ts
+#: packages/viewer/src/ui/lib/room-name-messages.ts
 #, fuzzy
 msgid "editor.roomName.bedroom"
 msgstr "卧室"
@@ -14030,7 +14030,7 @@ msgstr "卧室"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Boiler room"
-#: packages/editor/src/lib/room-name-messages.ts
+#: packages/viewer/src/ui/lib/room-name-messages.ts
 #, fuzzy
 msgid "editor.roomName.boilerRoom"
 msgstr "锅炉房"
@@ -14040,7 +14040,7 @@ msgstr "锅炉房"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Carport"
-#: packages/editor/src/lib/room-name-messages.ts
+#: packages/viewer/src/ui/lib/room-name-messages.ts
 #, fuzzy
 msgid "editor.roomName.carport"
 msgstr "车棚"
@@ -14050,7 +14050,7 @@ msgstr "车棚"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Cellar"
-#: packages/editor/src/lib/room-name-messages.ts
+#: packages/viewer/src/ui/lib/room-name-messages.ts
 #, fuzzy
 msgid "editor.roomName.cellar"
 msgstr "地窖"
@@ -14060,7 +14060,7 @@ msgstr "地窖"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Closet"
-#: packages/editor/src/lib/room-name-messages.ts
+#: packages/viewer/src/ui/lib/room-name-messages.ts
 #, fuzzy
 msgid "editor.roomName.closet"
 msgstr "壁橱"
@@ -14070,7 +14070,7 @@ msgstr "壁橱"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Corridor"
-#: packages/editor/src/lib/room-name-messages.ts
+#: packages/viewer/src/ui/lib/room-name-messages.ts
 #, fuzzy
 msgid "editor.roomName.corridor"
 msgstr "走廊"
@@ -14080,7 +14080,7 @@ msgstr "走廊"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Courtyard"
-#: packages/editor/src/lib/room-name-messages.ts
+#: packages/viewer/src/ui/lib/room-name-messages.ts
 #, fuzzy
 msgid "editor.roomName.courtyard"
 msgstr "庭院"
@@ -14090,7 +14090,7 @@ msgstr "庭院"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Deck"
-#: packages/editor/src/lib/room-name-messages.ts
+#: packages/viewer/src/ui/lib/room-name-messages.ts
 #, fuzzy
 msgid "editor.roomName.deck"
 msgstr "平台"
@@ -14100,7 +14100,7 @@ msgstr "平台"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Den"
-#: packages/editor/src/lib/room-name-messages.ts
+#: packages/viewer/src/ui/lib/room-name-messages.ts
 #, fuzzy
 msgid "editor.roomName.den"
 msgstr "书房"
@@ -14110,7 +14110,7 @@ msgstr "书房"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Dining room"
-#: packages/editor/src/lib/room-name-messages.ts
+#: packages/viewer/src/ui/lib/room-name-messages.ts
 #, fuzzy
 msgid "editor.roomName.diningRoom"
 msgstr "餐厅"
@@ -14120,7 +14120,7 @@ msgstr "餐厅"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Dressing room"
-#: packages/editor/src/lib/room-name-messages.ts
+#: packages/viewer/src/ui/lib/room-name-messages.ts
 #, fuzzy
 msgid "editor.roomName.dressingRoom"
 msgstr "更衣室"
@@ -14130,7 +14130,7 @@ msgstr "更衣室"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "En-suite"
-#: packages/editor/src/lib/room-name-messages.ts
+#: packages/viewer/src/ui/lib/room-name-messages.ts
 #, fuzzy
 msgid "editor.roomName.enSuite"
 msgstr "套内卫生间"
@@ -14140,7 +14140,7 @@ msgstr "套内卫生间"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Entrance"
-#: packages/editor/src/lib/room-name-messages.ts
+#: packages/viewer/src/ui/lib/room-name-messages.ts
 #, fuzzy
 msgid "editor.roomName.entrance"
 msgstr "入口"
@@ -14150,7 +14150,7 @@ msgstr "入口"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Family room"
-#: packages/editor/src/lib/room-name-messages.ts
+#: packages/viewer/src/ui/lib/room-name-messages.ts
 #, fuzzy
 msgid "editor.roomName.familyRoom"
 msgstr "家庭活动室"
@@ -14160,7 +14160,7 @@ msgstr "家庭活动室"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Gallery"
-#: packages/editor/src/lib/room-name-messages.ts
+#: packages/viewer/src/ui/lib/room-name-messages.ts
 #, fuzzy
 msgid "editor.roomName.gallery"
 msgstr "回廊"
@@ -14170,7 +14170,7 @@ msgstr "回廊"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Games room"
-#: packages/editor/src/lib/room-name-messages.ts
+#: packages/viewer/src/ui/lib/room-name-messages.ts
 #, fuzzy
 msgid "editor.roomName.gamesRoom"
 msgstr "游戏室"
@@ -14180,7 +14180,7 @@ msgstr "游戏室"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Garage"
-#: packages/editor/src/lib/room-name-messages.ts
+#: packages/viewer/src/ui/lib/room-name-messages.ts
 #, fuzzy
 msgid "editor.roomName.garage"
 msgstr "车库"
@@ -14190,7 +14190,7 @@ msgstr "车库"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Garden"
-#: packages/editor/src/lib/room-name-messages.ts
+#: packages/viewer/src/ui/lib/room-name-messages.ts
 #, fuzzy
 msgid "editor.roomName.garden"
 msgstr "花园"
@@ -14200,7 +14200,7 @@ msgstr "花园"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Garden shed"
-#: packages/editor/src/lib/room-name-messages.ts
+#: packages/viewer/src/ui/lib/room-name-messages.ts
 #, fuzzy
 msgid "editor.roomName.gardenShed"
 msgstr "园艺棚"
@@ -14210,7 +14210,7 @@ msgstr "园艺棚"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Guest room"
-#: packages/editor/src/lib/room-name-messages.ts
+#: packages/viewer/src/ui/lib/room-name-messages.ts
 #, fuzzy
 msgid "editor.roomName.guestRoom"
 msgstr "客房"
@@ -14220,7 +14220,7 @@ msgstr "客房"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Gym"
-#: packages/editor/src/lib/room-name-messages.ts
+#: packages/viewer/src/ui/lib/room-name-messages.ts
 #, fuzzy
 msgid "editor.roomName.gym"
 msgstr "健身房"
@@ -14230,7 +14230,7 @@ msgstr "健身房"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Hallway"
-#: packages/editor/src/lib/room-name-messages.ts
+#: packages/viewer/src/ui/lib/room-name-messages.ts
 #, fuzzy
 msgid "editor.roomName.hallway"
 msgstr "门厅"
@@ -14240,7 +14240,7 @@ msgstr "门厅"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Home cinema"
-#: packages/editor/src/lib/room-name-messages.ts
+#: packages/viewer/src/ui/lib/room-name-messages.ts
 #, fuzzy
 msgid "editor.roomName.homeCinema"
 msgstr "家庭影院"
@@ -14250,7 +14250,7 @@ msgstr "家庭影院"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Kids' room"
-#: packages/editor/src/lib/room-name-messages.ts
+#: packages/viewer/src/ui/lib/room-name-messages.ts
 #, fuzzy
 msgid "editor.roomName.kidsRoom"
 msgstr "儿童房"
@@ -14260,7 +14260,7 @@ msgstr "儿童房"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Kitchen"
-#: packages/editor/src/lib/room-name-messages.ts
+#: packages/viewer/src/ui/lib/room-name-messages.ts
 #, fuzzy
 msgid "editor.roomName.kitchen"
 msgstr "厨房"
@@ -14270,7 +14270,7 @@ msgstr "厨房"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Kitchenette"
-#: packages/editor/src/lib/room-name-messages.ts
+#: packages/viewer/src/ui/lib/room-name-messages.ts
 #, fuzzy
 msgid "editor.roomName.kitchenette"
 msgstr "小厨房"
@@ -14280,7 +14280,7 @@ msgstr "小厨房"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Landing"
-#: packages/editor/src/lib/room-name-messages.ts
+#: packages/viewer/src/ui/lib/room-name-messages.ts
 #, fuzzy
 msgid "editor.roomName.landing"
 msgstr "平台"
@@ -14290,7 +14290,7 @@ msgstr "平台"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Laundry"
-#: packages/editor/src/lib/room-name-messages.ts
+#: packages/viewer/src/ui/lib/room-name-messages.ts
 #, fuzzy
 msgid "editor.roomName.laundry"
 msgstr "洗衣房"
@@ -14300,7 +14300,7 @@ msgstr "洗衣房"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Library"
-#: packages/editor/src/lib/room-name-messages.ts
+#: packages/viewer/src/ui/lib/room-name-messages.ts
 #, fuzzy
 msgid "editor.roomName.library"
 msgstr "素材库"
@@ -14310,7 +14310,7 @@ msgstr "素材库"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Living room"
-#: packages/editor/src/lib/room-name-messages.ts
+#: packages/viewer/src/ui/lib/room-name-messages.ts
 #, fuzzy
 msgid "editor.roomName.livingRoom"
 msgstr "客厅"
@@ -14320,7 +14320,7 @@ msgstr "客厅"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Loft"
-#: packages/editor/src/lib/room-name-messages.ts
+#: packages/viewer/src/ui/lib/room-name-messages.ts
 #, fuzzy
 msgid "editor.roomName.loft"
 msgstr "阁楼"
@@ -14330,7 +14330,7 @@ msgstr "阁楼"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Lounge"
-#: packages/editor/src/lib/room-name-messages.ts
+#: packages/viewer/src/ui/lib/room-name-messages.ts
 #, fuzzy
 msgid "editor.roomName.lounge"
 msgstr "休息室"
@@ -14340,7 +14340,7 @@ msgstr "休息室"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Mezzanine"
-#: packages/editor/src/lib/room-name-messages.ts
+#: packages/viewer/src/ui/lib/room-name-messages.ts
 #, fuzzy
 msgid "editor.roomName.mezzanine"
 msgstr "夹层"
@@ -14350,7 +14350,7 @@ msgstr "夹层"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Mudroom"
-#: packages/editor/src/lib/room-name-messages.ts
+#: packages/viewer/src/ui/lib/room-name-messages.ts
 #, fuzzy
 msgid "editor.roomName.mudroom"
 msgstr "玄关储物间"
@@ -14360,7 +14360,7 @@ msgstr "玄关储物间"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Nursery"
-#: packages/editor/src/lib/room-name-messages.ts
+#: packages/viewer/src/ui/lib/room-name-messages.ts
 #, fuzzy
 msgid "editor.roomName.nursery"
 msgstr "婴儿房"
@@ -14370,7 +14370,7 @@ msgstr "婴儿房"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Office"
-#: packages/editor/src/lib/room-name-messages.ts
+#: packages/viewer/src/ui/lib/room-name-messages.ts
 #, fuzzy
 msgid "editor.roomName.office"
 msgstr "办公室"
@@ -14380,7 +14380,7 @@ msgstr "办公室"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Pantry"
-#: packages/editor/src/lib/room-name-messages.ts
+#: packages/viewer/src/ui/lib/room-name-messages.ts
 #, fuzzy
 msgid "editor.roomName.pantry"
 msgstr "食品储藏室"
@@ -14390,7 +14390,7 @@ msgstr "食品储藏室"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Patio"
-#: packages/editor/src/lib/room-name-messages.ts
+#: packages/viewer/src/ui/lib/room-name-messages.ts
 #, fuzzy
 msgid "editor.roomName.patio"
 msgstr "露台"
@@ -14400,7 +14400,7 @@ msgstr "露台"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Playroom"
-#: packages/editor/src/lib/room-name-messages.ts
+#: packages/viewer/src/ui/lib/room-name-messages.ts
 #, fuzzy
 msgid "editor.roomName.playroom"
 msgstr "游戏室"
@@ -14410,7 +14410,7 @@ msgstr "游戏室"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Pool area"
-#: packages/editor/src/lib/room-name-messages.ts
+#: packages/viewer/src/ui/lib/room-name-messages.ts
 #, fuzzy
 msgid "editor.roomName.poolArea"
 msgstr "泳池区"
@@ -14420,7 +14420,7 @@ msgstr "泳池区"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Porch"
-#: packages/editor/src/lib/room-name-messages.ts
+#: packages/viewer/src/ui/lib/room-name-messages.ts
 #, fuzzy
 msgid "editor.roomName.porch"
 msgstr "门廊"
@@ -14430,7 +14430,7 @@ msgstr "门廊"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Powder room"
-#: packages/editor/src/lib/room-name-messages.ts
+#: packages/viewer/src/ui/lib/room-name-messages.ts
 #, fuzzy
 msgid "editor.roomName.powderRoom"
 msgstr "客用卫生间"
@@ -14440,7 +14440,7 @@ msgstr "客用卫生间"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Primary bedroom"
-#: packages/editor/src/lib/room-name-messages.ts
+#: packages/viewer/src/ui/lib/room-name-messages.ts
 #, fuzzy
 msgid "editor.roomName.primaryBedroom"
 msgstr "主卧"
@@ -14450,7 +14450,7 @@ msgstr "主卧"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Reading nook"
-#: packages/editor/src/lib/room-name-messages.ts
+#: packages/viewer/src/ui/lib/room-name-messages.ts
 #, fuzzy
 msgid "editor.roomName.readingNook"
 msgstr "阅读角"
@@ -14540,7 +14540,7 @@ msgstr "工作与爱好"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Shower room"
-#: packages/editor/src/lib/room-name-messages.ts
+#: packages/viewer/src/ui/lib/room-name-messages.ts
 #, fuzzy
 msgid "editor.roomName.showerRoom"
 msgstr "淋浴间"
@@ -14550,7 +14550,7 @@ msgstr "淋浴间"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Stairwell"
-#: packages/editor/src/lib/room-name-messages.ts
+#: packages/viewer/src/ui/lib/room-name-messages.ts
 #, fuzzy
 msgid "editor.roomName.stairwell"
 msgstr "楼梯间"
@@ -14560,7 +14560,7 @@ msgstr "楼梯间"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Storage"
-#: packages/editor/src/lib/room-name-messages.ts
+#: packages/viewer/src/ui/lib/room-name-messages.ts
 #, fuzzy
 msgid "editor.roomName.storage"
 msgstr "储藏"
@@ -14570,7 +14570,7 @@ msgstr "储藏"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Studio"
-#: packages/editor/src/lib/room-name-messages.ts
+#: packages/viewer/src/ui/lib/room-name-messages.ts
 #, fuzzy
 msgid "editor.roomName.studio"
 msgstr "影棚"
@@ -14580,7 +14580,7 @@ msgstr "影棚"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Study"
-#: packages/editor/src/lib/room-name-messages.ts
+#: packages/viewer/src/ui/lib/room-name-messages.ts
 #, fuzzy
 msgid "editor.roomName.study"
 msgstr "书房"
@@ -14590,7 +14590,7 @@ msgstr "书房"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Sunroom"
-#: packages/editor/src/lib/room-name-messages.ts
+#: packages/viewer/src/ui/lib/room-name-messages.ts
 #, fuzzy
 msgid "editor.roomName.sunroom"
 msgstr "阳光房"
@@ -14600,7 +14600,7 @@ msgstr "阳光房"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Terrace"
-#: packages/editor/src/lib/room-name-messages.ts
+#: packages/viewer/src/ui/lib/room-name-messages.ts
 #, fuzzy
 msgid "editor.roomName.terrace"
 msgstr "露台"
@@ -14610,7 +14610,7 @@ msgstr "露台"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Toilet"
-#: packages/editor/src/lib/room-name-messages.ts
+#: packages/viewer/src/ui/lib/room-name-messages.ts
 #, fuzzy
 msgid "editor.roomName.toilet"
 msgstr "卫生间"
@@ -14620,7 +14620,7 @@ msgstr "卫生间"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Utility room"
-#: packages/editor/src/lib/room-name-messages.ts
+#: packages/viewer/src/ui/lib/room-name-messages.ts
 #, fuzzy
 msgid "editor.roomName.utilityRoom"
 msgstr "杂物间"
@@ -14630,7 +14630,7 @@ msgstr "杂物间"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Veranda"
-#: packages/editor/src/lib/room-name-messages.ts
+#: packages/viewer/src/ui/lib/room-name-messages.ts
 #, fuzzy
 msgid "editor.roomName.veranda"
 msgstr "游廊"
@@ -14640,7 +14640,7 @@ msgstr "游廊"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Walk-in closet"
-#: packages/editor/src/lib/room-name-messages.ts
+#: packages/viewer/src/ui/lib/room-name-messages.ts
 #, fuzzy
 msgid "editor.roomName.walkInCloset"
 msgstr "步入式衣帽间"
@@ -14650,7 +14650,7 @@ msgstr "步入式衣帽间"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Workshop"
-#: packages/editor/src/lib/room-name-messages.ts
+#: packages/viewer/src/ui/lib/room-name-messages.ts
 #, fuzzy
 msgid "editor.roomName.workshop"
 msgstr "工作间"
@@ -17880,7 +17880,7 @@ msgstr "视图"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "boost"
-#: packages/editor/src/components/walkthrough-hud.tsx
+#: packages/viewer/src/ui/components/walkthrough-hud.tsx
 #, fuzzy
 msgid "editor.walkthroughHud.drone.boost"
 msgstr "加速"
@@ -17890,7 +17890,7 @@ msgstr "加速"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "down"
-#: packages/editor/src/components/walkthrough-hud.tsx
+#: packages/viewer/src/ui/components/walkthrough-hud.tsx
 #, fuzzy
 msgid "editor.walkthroughHud.drone.down"
 msgstr "下降"
@@ -17900,7 +17900,7 @@ msgstr "下降"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "move"
-#: packages/editor/src/components/walkthrough-hud.tsx
+#: packages/viewer/src/ui/components/walkthrough-hud.tsx
 #, fuzzy
 msgid "editor.walkthroughHud.drone.move"
 msgstr "移动"
@@ -17910,7 +17910,7 @@ msgstr "移动"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "slow"
-#: packages/editor/src/components/walkthrough-hud.tsx
+#: packages/viewer/src/ui/components/walkthrough-hud.tsx
 #, fuzzy
 msgid "editor.walkthroughHud.drone.slow"
 msgstr "减速"
@@ -17920,7 +17920,7 @@ msgstr "减速"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "up"
-#: packages/editor/src/components/walkthrough-hud.tsx
+#: packages/viewer/src/ui/components/walkthrough-hud.tsx
 #, fuzzy
 msgid "editor.walkthroughHud.drone.up"
 msgstr "上升"
@@ -38574,37 +38574,37 @@ msgstr "内开内倒窗"
 # Source-Hash: 8bf25afa3cb8baea
 # Review: human
 # English: "Orbit left"
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
+#: packages/viewer/src/ui/components/viewer-controls-bar.tsx
 msgid "viewer.camera.orbitLeft"
 msgstr "向左旋转"
 
 # Source-Hash: b9cc64c1d1bb0d46
 # Review: human
 # English: "Orbit right"
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
+#: packages/viewer/src/ui/components/viewer-controls-bar.tsx
 msgid "viewer.camera.orbitRight"
 msgstr "向右旋转"
 
 # Source-Hash: 1ab1eb3a14f4b0e0
 # Review: human
 # English: "Top view"
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
+#: packages/viewer/src/ui/components/viewer-controls-bar.tsx
 msgid "viewer.camera.topView"
 msgstr "俯视图"
 
 # Source-Hash: 50accd740fa2e736
 # Review: human
 # English: "Off"
-#: packages/editor/src/components/viewer/render-settings-menu.tsx
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
+#: packages/viewer/src/ui/components/render-settings-menu.tsx
+#: packages/viewer/src/ui/components/viewer-controls-bar.tsx
 msgid "viewer.common.off"
 msgstr "关闭"
 
 # Source-Hash: 9cc01faad79c28da
 # Review: human
 # English: "On"
-#: packages/editor/src/components/viewer/render-settings-menu.tsx
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
+#: packages/viewer/src/ui/components/render-settings-menu.tsx
+#: packages/viewer/src/ui/components/viewer-controls-bar.tsx
 msgid "viewer.common.on"
 msgstr "开启"
 
@@ -38613,7 +38613,7 @@ msgstr "开启"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Sun position is approximate"
-#: packages/editor/src/components/viewer/render-settings-menu.tsx
+#: packages/viewer/src/ui/components/render-settings-menu.tsx
 #, fuzzy
 msgid "viewer.daylight.location.approximate"
 msgstr "太阳位置为近似值"
@@ -38623,7 +38623,7 @@ msgstr "太阳位置为近似值"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Sun follows your location"
-#: packages/editor/src/components/viewer/render-settings-menu.tsx
+#: packages/viewer/src/ui/components/render-settings-menu.tsx
 #, fuzzy
 msgid "viewer.daylight.location.device"
 msgstr "太阳位置跟随您的位置"
@@ -38633,8 +38633,8 @@ msgstr "太阳位置跟随您的位置"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Use my location"
-#: packages/editor/src/components/viewer/render-settings-menu.tsx
-#: packages/editor/src/components/viewer/sky-control.tsx
+#: packages/viewer/src/ui/components/render-settings-menu.tsx
+#: packages/viewer/src/ui/components/sky-control.tsx
 #, fuzzy
 msgid "viewer.daylight.location.use"
 msgstr "使用我的位置"
@@ -38644,7 +38644,7 @@ msgstr "使用我的位置"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Afternoon"
-#: packages/editor/src/components/viewer/sky-control.tsx
+#: packages/viewer/src/ui/components/sky-control.tsx
 #, fuzzy
 msgid "viewer.daylight.phase.afternoon"
 msgstr "下午"
@@ -38654,7 +38654,7 @@ msgstr "下午"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Morning"
-#: packages/editor/src/components/viewer/sky-control.tsx
+#: packages/viewer/src/ui/components/sky-control.tsx
 #, fuzzy
 msgid "viewer.daylight.phase.morning"
 msgstr "上午"
@@ -38664,7 +38664,7 @@ msgstr "上午"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Auto"
-#: packages/editor/src/components/viewer/render-settings-menu.tsx
+#: packages/viewer/src/ui/components/render-settings-menu.tsx
 #, fuzzy
 msgid "viewer.daylight.quality.auto"
 msgstr "自动"
@@ -38674,7 +38674,7 @@ msgstr "自动"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Picked for this device: {tier}"
-#: packages/editor/src/components/viewer/render-settings-menu.tsx
+#: packages/viewer/src/ui/components/render-settings-menu.tsx
 #, fuzzy
 msgid "viewer.daylight.quality.autoDetail"
 msgstr "为此设备选择：{tier}"
@@ -38684,7 +38684,7 @@ msgstr "为此设备选择：{tier}"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "High"
-#: packages/editor/src/components/viewer/render-settings-menu.tsx
+#: packages/viewer/src/ui/components/render-settings-menu.tsx
 #, fuzzy
 msgid "viewer.daylight.quality.high"
 msgstr "高"
@@ -38694,7 +38694,7 @@ msgstr "高"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Lighting-aware ambient occlusion and bloom"
-#: packages/editor/src/components/viewer/render-settings-menu.tsx
+#: packages/viewer/src/ui/components/render-settings-menu.tsx
 #, fuzzy
 msgid "viewer.daylight.quality.highDetail"
 msgstr "光照感知的环境光遮蔽与泛光"
@@ -38704,7 +38704,7 @@ msgstr "光照感知的环境光遮蔽与泛光"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Low"
-#: packages/editor/src/components/viewer/render-settings-menu.tsx
+#: packages/viewer/src/ui/components/render-settings-menu.tsx
 #, fuzzy
 msgid "viewer.daylight.quality.low"
 msgstr "低"
@@ -38714,7 +38714,7 @@ msgstr "低"
 # Source-Hash: 8b94a0f7e27f671d
 # Review: required
 # English: "Fastest — no ambient occlusion or bloom"
-#: packages/editor/src/components/viewer/render-settings-menu.tsx
+#: packages/viewer/src/ui/components/render-settings-menu.tsx
 #, fuzzy
 msgid "viewer.daylight.quality.lowDetail"
 msgstr "最快 — 无环境光遮蔽和泛光"
@@ -38724,7 +38724,7 @@ msgstr "最快 — 无环境光遮蔽和泛光"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Medium"
-#: packages/editor/src/components/viewer/render-settings-menu.tsx
+#: packages/viewer/src/ui/components/render-settings-menu.tsx
 #, fuzzy
 msgid "viewer.daylight.quality.medium"
 msgstr "中"
@@ -38734,7 +38734,7 @@ msgstr "中"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Half-resolution ambient occlusion"
-#: packages/editor/src/components/viewer/render-settings-menu.tsx
+#: packages/viewer/src/ui/components/render-settings-menu.tsx
 #, fuzzy
 msgid "viewer.daylight.quality.mediumDetail"
 msgstr "半分辨率环境光遮蔽"
@@ -38744,7 +38744,7 @@ msgstr "半分辨率环境光遮蔽"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Quality"
-#: packages/editor/src/components/viewer/render-settings-menu.tsx
+#: packages/viewer/src/ui/components/render-settings-menu.tsx
 #, fuzzy
 msgid "viewer.daylight.quality.title"
 msgstr "质量"
@@ -38754,7 +38754,7 @@ msgstr "质量"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Drag the sun to set the time"
-#: packages/editor/src/components/viewer/sky-control.tsx
+#: packages/viewer/src/ui/components/sky-control.tsx
 #, fuzzy
 msgid "viewer.daylight.sky.arc"
 msgstr "拖动太阳设置时间"
@@ -38764,7 +38764,7 @@ msgstr "拖动太阳设置时间"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Close"
-#: packages/editor/src/components/viewer/sky-control.tsx
+#: packages/viewer/src/ui/components/sky-control.tsx
 #, fuzzy
 msgid "viewer.daylight.sky.close"
 msgstr "关闭"
@@ -38774,7 +38774,7 @@ msgstr "关闭"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Cloud cover"
-#: packages/editor/src/components/viewer/sky-control.tsx
+#: packages/viewer/src/ui/components/sky-control.tsx
 #, fuzzy
 msgid "viewer.daylight.sky.cloudCover"
 msgstr "云量"
@@ -38784,7 +38784,7 @@ msgstr "云量"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Cloud cover: {current}. Change to {next}"
-#: packages/editor/src/components/viewer/sky-control.tsx
+#: packages/viewer/src/ui/components/sky-control.tsx
 #, fuzzy
 msgid "viewer.daylight.sky.cycleWeather"
 msgstr "云量：{current}。切换为{next}"
@@ -38794,7 +38794,7 @@ msgstr "云量：{current}。切换为{next}"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Cycle cloud cover"
-#: packages/editor/src/components/viewer/sky-control.tsx
+#: packages/viewer/src/ui/components/sky-control.tsx
 #, fuzzy
 msgid "viewer.daylight.sky.cycleWeatherTip"
 msgstr "切换云量"
@@ -38804,7 +38804,7 @@ msgstr "切换云量"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Follow the clock"
-#: packages/editor/src/components/viewer/sky-control.tsx
+#: packages/viewer/src/ui/components/sky-control.tsx
 #, fuzzy
 msgid "viewer.daylight.sky.followClock"
 msgstr "跟随时钟"
@@ -38814,7 +38814,7 @@ msgstr "跟随时钟"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "The sun moves with your local clock."
-#: packages/editor/src/components/viewer/sky-control.tsx
+#: packages/viewer/src/ui/components/sky-control.tsx
 #, fuzzy
 msgid "viewer.daylight.sky.followClockDetail"
 msgstr "太阳随您的本地时钟移动。"
@@ -38824,7 +38824,7 @@ msgstr "太阳随您的本地时钟移动。"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "In viewport"
-#: packages/editor/src/components/viewer/render-settings-menu.tsx
+#: packages/viewer/src/ui/components/render-settings-menu.tsx
 #, fuzzy
 msgid "viewer.daylight.sky.inViewport"
 msgstr "在视口中"
@@ -38834,7 +38834,7 @@ msgstr "在视口中"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Follows your local clock. Sun position is approximate."
-#: packages/editor/src/components/viewer/sky-control.tsx
+#: packages/viewer/src/ui/components/sky-control.tsx
 #, fuzzy
 msgid "viewer.daylight.sky.liveDetail"
 msgstr "跟随您的本地时钟。太阳位置为近似值。"
@@ -38844,7 +38844,7 @@ msgstr "跟随您的本地时钟。太阳位置为近似值。"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Time & weather"
-#: packages/editor/src/components/viewer/render-settings-menu.tsx
+#: packages/viewer/src/ui/components/render-settings-menu.tsx
 #, fuzzy
 msgid "viewer.daylight.sky.menuItem"
 msgstr "时间与天气"
@@ -38854,7 +38854,7 @@ msgstr "时间与天气"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Time and weather"
-#: packages/editor/src/components/viewer/sky-control.tsx
+#: packages/viewer/src/ui/components/sky-control.tsx
 #, fuzzy
 msgid "viewer.daylight.sky.open"
 msgstr "时间与天气"
@@ -38864,7 +38864,7 @@ msgstr "时间与天气"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Reset"
-#: packages/editor/src/components/viewer/sky-control.tsx
+#: packages/viewer/src/ui/components/sky-control.tsx
 #, fuzzy
 msgid "viewer.daylight.sky.reset"
 msgstr "重置"
@@ -38874,7 +38874,7 @@ msgstr "重置"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Light and weather for this view"
-#: packages/editor/src/components/viewer/sky-control.tsx
+#: packages/viewer/src/ui/components/sky-control.tsx
 #, fuzzy
 msgid "viewer.daylight.sky.subtitle"
 msgstr "此视图的光线与天气"
@@ -38884,7 +38884,7 @@ msgstr "此视图的光线与天气"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Sunrise"
-#: packages/editor/src/components/viewer/sky-control.tsx
+#: packages/viewer/src/ui/components/sky-control.tsx
 #, fuzzy
 msgid "viewer.daylight.sky.sunrise"
 msgstr "日出"
@@ -38894,7 +38894,7 @@ msgstr "日出"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Sunset"
-#: packages/editor/src/components/viewer/sky-control.tsx
+#: packages/viewer/src/ui/components/sky-control.tsx
 #, fuzzy
 msgid "viewer.daylight.sky.sunset"
 msgstr "日落"
@@ -38904,7 +38904,7 @@ msgstr "日落"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Sky"
-#: packages/editor/src/components/viewer/sky-control.tsx
+#: packages/viewer/src/ui/components/sky-control.tsx
 #, fuzzy
 msgid "viewer.daylight.sky.title"
 msgstr "天空"
@@ -38914,8 +38914,8 @@ msgstr "天空"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Blue hour"
-#: packages/editor/src/components/viewer/render-settings-menu.tsx
-#: packages/editor/src/components/viewer/sky-control.tsx
+#: packages/viewer/src/ui/components/render-settings-menu.tsx
+#: packages/viewer/src/ui/components/sky-control.tsx
 #, fuzzy
 msgid "viewer.daylight.time.blue"
 msgstr "蓝调时刻"
@@ -38925,8 +38925,8 @@ msgstr "蓝调时刻"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Golden hour"
-#: packages/editor/src/components/viewer/render-settings-menu.tsx
-#: packages/editor/src/components/viewer/sky-control.tsx
+#: packages/viewer/src/ui/components/render-settings-menu.tsx
+#: packages/viewer/src/ui/components/sky-control.tsx
 #, fuzzy
 msgid "viewer.daylight.time.golden"
 msgstr "黄金时刻"
@@ -38936,8 +38936,8 @@ msgstr "黄金时刻"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Midday"
-#: packages/editor/src/components/viewer/render-settings-menu.tsx
-#: packages/editor/src/components/viewer/sky-control.tsx
+#: packages/viewer/src/ui/components/render-settings-menu.tsx
+#: packages/viewer/src/ui/components/sky-control.tsx
 #, fuzzy
 msgid "viewer.daylight.time.midday"
 msgstr "正午"
@@ -38947,8 +38947,8 @@ msgstr "正午"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Night"
-#: packages/editor/src/components/viewer/render-settings-menu.tsx
-#: packages/editor/src/components/viewer/sky-control.tsx
+#: packages/viewer/src/ui/components/render-settings-menu.tsx
+#: packages/viewer/src/ui/components/sky-control.tsx
 #, fuzzy
 msgid "viewer.daylight.time.night"
 msgstr "夜晚"
@@ -38958,8 +38958,8 @@ msgstr "夜晚"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Time of day"
-#: packages/editor/src/components/viewer/render-settings-menu.tsx
-#: packages/editor/src/components/viewer/sky-control.tsx
+#: packages/viewer/src/ui/components/render-settings-menu.tsx
+#: packages/viewer/src/ui/components/sky-control.tsx
 #, fuzzy
 msgid "viewer.daylight.time.title"
 msgstr "时段"
@@ -38969,8 +38969,8 @@ msgstr "时段"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Clear"
-#: packages/editor/src/components/viewer/render-settings-menu.tsx
-#: packages/editor/src/components/viewer/sky-control.tsx
+#: packages/viewer/src/ui/components/render-settings-menu.tsx
+#: packages/viewer/src/ui/components/sky-control.tsx
 #, fuzzy
 msgid "viewer.daylight.weather.clear"
 msgstr "晴朗"
@@ -38980,8 +38980,8 @@ msgstr "晴朗"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Cloudy"
-#: packages/editor/src/components/viewer/render-settings-menu.tsx
-#: packages/editor/src/components/viewer/sky-control.tsx
+#: packages/viewer/src/ui/components/render-settings-menu.tsx
+#: packages/viewer/src/ui/components/sky-control.tsx
 #, fuzzy
 msgid "viewer.daylight.weather.cloudy"
 msgstr "多云"
@@ -38991,8 +38991,8 @@ msgstr "多云"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Fair"
-#: packages/editor/src/components/viewer/render-settings-menu.tsx
-#: packages/editor/src/components/viewer/sky-control.tsx
+#: packages/viewer/src/ui/components/render-settings-menu.tsx
+#: packages/viewer/src/ui/components/sky-control.tsx
 #, fuzzy
 msgid "viewer.daylight.weather.fair"
 msgstr "少云"
@@ -39002,8 +39002,8 @@ msgstr "少云"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Overcast"
-#: packages/editor/src/components/viewer/render-settings-menu.tsx
-#: packages/editor/src/components/viewer/sky-control.tsx
+#: packages/viewer/src/ui/components/render-settings-menu.tsx
+#: packages/viewer/src/ui/components/sky-control.tsx
 #, fuzzy
 msgid "viewer.daylight.weather.overcast"
 msgstr "阴天"
@@ -39013,7 +39013,7 @@ msgstr "阴天"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Weather"
-#: packages/editor/src/components/viewer/render-settings-menu.tsx
+#: packages/viewer/src/ui/components/render-settings-menu.tsx
 #, fuzzy
 msgid "viewer.daylight.weather.title"
 msgstr "天气"
@@ -39021,63 +39021,63 @@ msgstr "天气"
 # Source-Hash: 14622745dbf93f4c
 # Review: human
 # English: "Camera"
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
+#: packages/viewer/src/ui/components/viewer-controls-bar.tsx
 msgid "viewer.display.camera"
 msgstr "相机"
 
 # Source-Hash: d3d478fa6c6d7ddc
 # Review: human
 # English: "Colored"
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
+#: packages/viewer/src/ui/components/viewer-controls-bar.tsx
 msgid "viewer.display.colored"
 msgstr "彩色"
 
 # Source-Hash: 82b74c4f5ef43336
 # Review: human
 # English: "Colors"
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
+#: packages/viewer/src/ui/components/viewer-controls-bar.tsx
 msgid "viewer.display.colors"
 msgstr "颜色"
 
 # Source-Hash: 027bbc8b7287c06a
 # Review: human
 # English: "Edges"
-#: packages/editor/src/components/viewer/render-settings-menu.tsx
+#: packages/viewer/src/ui/components/render-settings-menu.tsx
 msgid "viewer.display.edges.title"
 msgstr "边线"
 
 # Source-Hash: ecde2f7c26914be3
 # Review: human
 # English: "Monochrome"
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
+#: packages/viewer/src/ui/components/viewer-controls-bar.tsx
 msgid "viewer.display.monochrome"
 msgstr "单色"
 
 # Source-Hash: ed59dd8ce7797a66
 # Review: human
 # English: "Orthographic"
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
+#: packages/viewer/src/ui/components/viewer-controls-bar.tsx
 msgid "viewer.display.orthographic"
 msgstr "正交"
 
 # Source-Hash: 316e25993ff72b88
 # Review: human
 # English: "Perspective"
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
+#: packages/viewer/src/ui/components/viewer-controls-bar.tsx
 msgid "viewer.display.perspective"
 msgstr "透视"
 
 # Source-Hash: 4c6bcb30b40047fc
 # Review: human
 # English: "Shadows"
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
+#: packages/viewer/src/ui/components/viewer-controls-bar.tsx
 msgid "viewer.display.shadows"
 msgstr "阴影"
 
 # Source-Hash: d0db46f206a88e2e
 # Review: human
 # English: "Display settings"
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
+#: packages/viewer/src/ui/components/viewer-controls-bar.tsx
 msgid "viewer.display.title"
 msgstr "显示设置"
 
@@ -39086,7 +39086,7 @@ msgstr "显示设置"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Drone: {state}"
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
+#: packages/viewer/src/ui/components/viewer-controls-bar.tsx
 #, fuzzy
 msgid "viewer.drone.label"
 msgstr "无人机：{state}"
@@ -39094,7 +39094,7 @@ msgstr "无人机：{state}"
 # Source-Hash: 2bdf83801d4a40af
 # Review: human
 # English: "Align view to north"
-#: packages/editor/src/components/viewer/floorplan-compass-button.tsx
+#: packages/viewer/src/ui/components/floorplan-compass-button.tsx
 msgid "viewer.floorplan.alignNorth"
 msgstr "视图对齐北向"
 
@@ -39150,84 +39150,84 @@ msgstr "缩小"
 # Source-Hash: 7ceade8f25b58fe9
 # Review: human
 # English: "Back"
-#: packages/editor/src/components/viewer/viewer-scene-header.tsx
+#: packages/viewer/src/ui/components/viewer-scene-header.tsx
 msgid "viewer.header.back"
 msgstr "返回"
 
 # Source-Hash: cc3d601d59e2e26c
 # Review: human
 # English: "Levels"
-#: packages/editor/src/components/viewer/viewer-scene-header.tsx
+#: packages/viewer/src/ui/components/viewer-scene-header.tsx
 msgid "viewer.header.levels"
 msgstr "楼层"
 
 # Source-Hash: 3e7408ed44676176
 # Review: human
 # English: "Rooms"
-#: packages/editor/src/components/viewer/viewer-scene-header.tsx
+#: packages/viewer/src/ui/components/viewer-scene-header.tsx
 msgid "viewer.header.rooms"
 msgstr "房间"
 
 # Source-Hash: 170b2049ef0f9131
 # Review: human
 # English: "Selection"
-#: packages/editor/src/components/viewer/viewer-scene-header.tsx
+#: packages/viewer/src/ui/components/viewer-scene-header.tsx
 msgid "viewer.header.selection"
 msgstr "当前选择"
 
 # Source-Hash: b404dded35241274
 # Review: human
 # English: "Units"
-#: packages/editor/src/components/viewer/viewer-scene-header.tsx
+#: packages/viewer/src/ui/components/viewer-scene-header.tsx
 msgid "viewer.header.units"
 msgstr "单元"
 
 # Source-Hash: 6547a4c0c368042a
 # Review: human
 # English: "Untitled"
-#: packages/editor/src/components/viewer/viewer-scene-header.tsx
+#: packages/viewer/src/ui/components/viewer-scene-header.tsx
 msgid "viewer.header.untitled"
 msgstr "未命名"
 
 # Source-Hash: 665db49a26f81425
 # Review: human
 # English: "Zones"
-#: packages/editor/src/components/viewer/viewer-scene-header.tsx
+#: packages/viewer/src/ui/components/viewer-scene-header.tsx
 msgid "viewer.header.zones"
 msgstr "分区"
 
 # Source-Hash: be12f8788f1f0a05
 # Review: human
 # English: "Exploded"
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
+#: packages/viewer/src/ui/components/viewer-controls-bar.tsx
 msgid "viewer.levels.exploded"
 msgstr "分解"
 
 # Source-Hash: 4bf4a6861d7d633e
 # Review: human
 # English: "Levels: {mode}"
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
+#: packages/viewer/src/ui/components/viewer-controls-bar.tsx
 msgid "viewer.levels.label"
 msgstr "楼层：{mode}"
 
 # Source-Hash: 387082cd5f118bed
 # Review: human
 # English: "Manual"
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
+#: packages/viewer/src/ui/components/viewer-controls-bar.tsx
 msgid "viewer.levels.manual"
 msgstr "手动"
 
 # Source-Hash: e9f59b513f2f45ac
 # Review: human
 # English: "Solo"
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
+#: packages/viewer/src/ui/components/viewer-controls-bar.tsx
 msgid "viewer.levels.solo"
 msgstr "单层"
 
 # Source-Hash: c203c84eee18c0f6
 # Review: human
 # English: "Stacked"
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
+#: packages/viewer/src/ui/components/viewer-controls-bar.tsx
 msgid "viewer.levels.stacked"
 msgstr "叠层"
 
@@ -39248,98 +39248,98 @@ msgstr "分屏"
 # Source-Hash: f14b89d713d2528a
 # Review: human
 # English: "Blueprint"
-#: packages/editor/src/i18n/scene-theme-name.ts
+#: packages/viewer/src/ui/lib/scene-theme-name.ts
 msgid "viewer.theme.blueprint"
 msgstr "蓝图"
 
 # Source-Hash: 142bcb2841f423c5
 # Review: human
 # English: "Mediterranean"
-#: packages/editor/src/i18n/scene-theme-name.ts
+#: packages/viewer/src/ui/lib/scene-theme-name.ts
 msgid "viewer.theme.mediterranean"
 msgstr "地中海"
 
 # Source-Hash: b399942ec5d7e1ba
 # Review: human
 # English: "Night"
-#: packages/editor/src/i18n/scene-theme-name.ts
+#: packages/viewer/src/ui/lib/scene-theme-name.ts
 msgid "viewer.theme.night"
 msgstr "夜景"
 
 # Source-Hash: f512d1b947b8ae5a
 # Review: human
 # English: "Overcast"
-#: packages/editor/src/i18n/scene-theme-name.ts
+#: packages/viewer/src/ui/lib/scene-theme-name.ts
 msgid "viewer.theme.overcast"
 msgstr "阴天"
 
 # Source-Hash: 583542b3bc837192
 # Review: human
 # English: "Paper"
-#: packages/editor/src/i18n/scene-theme-name.ts
+#: packages/viewer/src/ui/lib/scene-theme-name.ts
 msgid "viewer.theme.paper"
 msgstr "纸面"
 
 # Source-Hash: 7abc2dc6e39b1747
 # Review: human
 # English: "Studio"
-#: packages/editor/src/i18n/scene-theme-name.ts
+#: packages/viewer/src/ui/lib/scene-theme-name.ts
 msgid "viewer.theme.studio"
 msgstr "影棚"
 
 # Source-Hash: efe94d3ec8d8c44e
 # Review: human
 # English: "Sunset"
-#: packages/editor/src/i18n/scene-theme-name.ts
+#: packages/viewer/src/ui/lib/scene-theme-name.ts
 msgid "viewer.theme.sunset"
 msgstr "日落"
 
 # Source-Hash: 82720864e5034398
 # Review: human
 # English: "Scene theme"
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
+#: packages/viewer/src/ui/components/viewer-controls-bar.tsx
 msgid "viewer.theme.title"
 msgstr "场景主题"
 
 # Source-Hash: 4c10ea0aa0e2ea41
 # Review: human
 # English: "Twilight"
-#: packages/editor/src/i18n/scene-theme-name.ts
+#: packages/viewer/src/ui/lib/scene-theme-name.ts
 msgid "viewer.theme.twilight"
 msgstr "暮色"
 
 # Source-Hash: f9592fb0672740c0
 # Review: human
 # English: "Verdant"
-#: packages/editor/src/i18n/scene-theme-name.ts
+#: packages/viewer/src/ui/lib/scene-theme-name.ts
 msgid "viewer.theme.verdant"
 msgstr "绿意"
 
 # Source-Hash: 892d5dd34372028b
 # Review: human
 # English: "Guides"
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
+#: packages/viewer/src/ui/components/viewer-controls-bar.tsx
 msgid "viewer.visibility.guides"
 msgstr "参考图"
 
 # Source-Hash: 3260bfa69cca50e5
 # Review: human
 # English: "Scans"
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
+#: packages/viewer/src/ui/components/viewer-controls-bar.tsx
 msgid "viewer.visibility.scans"
 msgstr "扫描模型"
 
 # Source-Hash: 2cefbb554eadbb6e
 # Review: human
 # English: "Visibility"
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
+#: packages/viewer/src/ui/components/viewer-controls-bar.tsx
 msgid "viewer.visibility.title"
 msgstr "可见性"
 
 # Source-Hash: 31afd9dee47ba943
 # Review: human
 # English: "Walkthrough: {state}"
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
+#: packages/viewer/src/ui/components/viewer-controls-bar.tsx
 msgid "viewer.walkthrough.label"
 msgstr "漫游：{state}"
 
@@ -39355,27 +39355,27 @@ msgstr "护窗板"
 # Source-Hash: 4da8b3678ed77b45
 # Review: human
 # English: "Cutaway"
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
+#: packages/viewer/src/ui/components/viewer-controls-bar.tsx
 msgid "viewer.walls.cutaway"
 msgstr "剖切墙"
 
 # Source-Hash: 131bac2467f4fdf6
 # Review: human
 # English: "Full height"
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
+#: packages/viewer/src/ui/components/viewer-controls-bar.tsx
 msgid "viewer.walls.fullHeight"
 msgstr "全高墙"
 
 # Source-Hash: 32f3d058cf2526d2
 # Review: human
 # English: "Walls: {mode}"
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
+#: packages/viewer/src/ui/components/viewer-controls-bar.tsx
 msgid "viewer.walls.label"
 msgstr "墙体：{mode}"
 
 # Source-Hash: 803532407fb5962b
 # Review: human
 # English: "Low"
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
+#: packages/viewer/src/ui/components/viewer-controls-bar.tsx
 msgid "viewer.walls.low"
 msgstr "矮墙"

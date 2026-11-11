@@ -2,9 +2,9 @@
 
 import { usePascalI18n } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
+import { useIsMobile } from '@pascal-app/viewer/ui'
 import { PanelLeftOpen, X } from 'lucide-react'
 import { type ReactNode, useCallback, useEffect, useRef } from 'react'
-import { useIsMobile } from '../../hooks/use-mobile'
 import {
   openSidebarPanel,
   SIDEBAR_MIN_WIDTH,

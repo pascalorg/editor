@@ -21,6 +21,7 @@ import {
   type WallSurfaceSide,
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
+import { cameraPoseStore, type RoomKey, sameRoom } from '@pascal-app/viewer/ui'
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import {
@@ -56,7 +57,6 @@ import {
   type PaintHoverInfo,
   type PaintScope,
 } from '../lib/paint-scope'
-import { type RoomKey, sameRoom } from '../lib/room-selection'
 import {
   cycleSnappingModeIn,
   defaultSnappingModeFor,
@@ -66,7 +66,6 @@ import {
   snapContextOf,
   snappingModesFor,
 } from '../lib/snapping-mode'
-import { cameraPoseStore } from './camera-pose-store'
 import { publishNavigationSyncPoseToStore } from './navigation-sync-pose-store'
 import useInteractionScope from './use-interaction-scope'
 import {

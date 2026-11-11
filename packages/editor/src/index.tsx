@@ -99,6 +99,58 @@ export {
   triangulateMeasurementPolygon,
   useViewer,
 } from '@pascal-app/viewer'
+export { useAudioSettings as useAudio, useViewerUiSounds } from '@pascal-app/viewer/sfx'
+export type { ActionMenuPlacement, RoomKey, RoomSelectionRecord } from '@pascal-app/viewer/ui'
+export {
+  applyViewerClick,
+  applyViewerHover,
+  DaylightMenu,
+  DroneHud,
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
+  DropdownMenuTrigger,
+  displayRoomName,
+  EdgesToggleItem,
+  type FirstPersonHudState,
+  FloorplanCompassButton,
+  type FloorplanCompassButtonProps,
+  framedLookAt,
+  frameViewerCamera,
+  frameViewerNode,
+  localizedLevelName,
+  openSkyPanel,
+  QualityMenu,
+  SceneLoader,
+  SkyControl,
+  sceneThemeName,
+  subscribeCameraPose,
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+  useFirstPersonHud,
+  useFollowPascal,
+  useSkyPanel,
+  useViewerCameraNavigationSync,
+  useViewerFloorDisplay,
+  ViewerControlsBar,
+  type ViewerControlsBarProps,
+  ViewerHoverLabel,
+  type ViewerPick,
+  ViewerSceneHeader,
+  type ViewerSceneHeaderProps,
+  ViewerSelectionManager,
+  type ViewerSource,
+  WalkthroughHud,
+  type WalkthroughHudProps,
+  type WalkthroughInteract,
+} from '@pascal-app/viewer/ui'
 export type { EditorProps } from './components/editor'
 export { default as Editor } from './components/editor'
 export { ActionMenuButton } from './components/editor/action-menu-button'
@@ -315,7 +367,6 @@ export {
   CameraActions as ViewerToolbarRight,
 } from './components/ui/action-menu/camera-actions'
 export { furnishTools } from './components/ui/action-menu/furnish-tools'
-export type { ActionMenuPlacement } from './components/ui/action-menu/placement'
 export {
   ViewToggles as ToolbarLeft,
   ViewToggles as ViewerToolbarLeft,
@@ -379,25 +430,11 @@ export { ShapeChoice } from './components/ui/panels/shape-choice'
 export { WallPaintRegionList } from './components/ui/panels/wall-region-list'
 export { PALETTE_COLORS } from './components/ui/primitives/color-dot'
 export {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuGroup,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuSub,
-  DropdownMenuSubContent,
-  DropdownMenuSubTrigger,
-  DropdownMenuTrigger,
-} from './components/ui/primitives/dropdown-menu'
-export {
   ShortcutToken,
   shortcutDisplayValue,
 } from './components/ui/primitives/shortcut-token'
 export { useSidebarStore } from './components/ui/primitives/sidebar'
 export { Slider } from './components/ui/primitives/slider'
-export { Tooltip, TooltipContent, TooltipTrigger } from './components/ui/primitives/tooltip'
-export { SceneLoader } from './components/ui/scene-loader'
 export type { ExtraPanel } from './components/ui/sidebar/icon-rail'
 export { ItemsPanel } from './components/ui/sidebar/panels/items-panel'
 export type { FunctionTreeNode } from './components/ui/sidebar/panels/items-panel/function-tree-panel'
@@ -421,33 +458,11 @@ export {
 // A wall's project wall types: new, edit, duplicate (the wall panel's Assembly).
 export { WallTypeMenu } from './components/ui/wall-type/wall-type-menu'
 export {
-  FloorplanCompassButton,
-  type FloorplanCompassButtonProps,
-} from './components/viewer/floorplan-compass-button'
-export {
   FloorplanPreview,
   type FloorplanPreviewProps,
   type FloorplanPreviewScene,
 } from './components/viewer/floorplan-preview'
-export {
-  DaylightMenu,
-  EdgesToggleItem,
-  QualityMenu,
-} from './components/viewer/render-settings-menu'
-export { openSkyPanel, SkyControl, useSkyPanel } from './components/viewer/sky-control'
-export { useViewerCameraNavigationSync } from './components/viewer/use-viewer-camera-navigation-sync'
-export { useViewerUiSounds } from './components/viewer/use-viewer-ui-sounds'
-export {
-  ViewerControlsBar,
-  type ViewerControlsBarProps,
-} from './components/viewer/viewer-controls-bar'
-export { ViewerHoverLabel } from './components/viewer/viewer-hover-label'
 export { ParametricViewerRooms, ViewerRooms } from './components/viewer/viewer-rooms'
-export {
-  ViewerSceneHeader,
-  type ViewerSceneHeaderProps,
-} from './components/viewer/viewer-scene-header'
-export { ViewerSelectionManager } from './components/viewer/viewer-selection-manager'
 export { ViewerStage, type ViewerStageProps } from './components/viewer/viewer-stage'
 export {
   normalizeViewerStageModes,
@@ -461,12 +476,6 @@ export {
   ViewerStageSwitcher,
   type ViewerStageSwitcherProps,
 } from './components/viewer/viewer-stage-switcher'
-export {
-  DroneHud,
-  WalkthroughHud,
-  type WalkthroughHudProps,
-  type WalkthroughInteract,
-} from './components/walkthrough-hud'
 export type { SaveStatus } from './hooks/use-auto-save'
 // useDragAction is the React-side glue for the registry's DragAction
 // primitive. Public so registry-driven kinds (Phase 5+ Stage D ports)
@@ -478,7 +487,6 @@ export { usePlacementNotice } from './hooks/use-placement-notice'
 export { useReducedMotion } from './hooks/use-reduced-motion'
 export { useSelectedRoom } from './hooks/use-selected-room'
 export { type Selection, useSelection } from './hooks/use-selection'
-export { localizedLevelName } from './i18n/level-name'
 export {
   messageSlug,
   nodeDescriptionDescriptor,
@@ -489,7 +497,6 @@ export {
   toolHintKey,
   toolHintLabel,
 } from './i18n/node-messages'
-export { sceneThemeName } from './i18n/scene-theme-name'
 export {
   clearPlacementSurface,
   getPlacementSurface,
@@ -889,8 +896,6 @@ export {
   WALL_PUSH_AFFORDANCE,
   type WallPushArrowPayload,
 } from './lib/room-handle-drag'
-export { displayRoomName } from './lib/room-name-messages'
-export type { RoomKey, RoomSelectionRecord } from './lib/room-selection'
 export { popRoomSelection, selectRoom } from './lib/room-selection-commands'
 export {
   captureElementActionOrigin,
@@ -979,16 +984,6 @@ export { useLinearDisplay } from './lib/use-linear-display'
 // dependency.
 export { cn } from './lib/utils'
 export {
-  applyViewerClick,
-  applyViewerHover,
-  framedLookAt,
-  frameViewerCamera,
-  frameViewerNode,
-  useViewerFloorDisplay,
-  type ViewerPick,
-  type ViewerSource,
-} from './lib/viewer-selection'
-export {
   getWallDrawVariant,
   getWallLineKind,
   INVISIBLE_WALL_DRAFT_THICKNESS,
@@ -1058,13 +1053,11 @@ export {
   snapBuildingLocalToWorldGrid,
   snapWorldXZForActiveBuilding,
 } from './lib/world-grid-snap'
-export { subscribeCameraPose } from './store/camera-pose-store'
 export {
   type DraftGuideLine,
   type DraftGuides,
   default as useAlignmentGuides,
 } from './store/use-alignment-guides'
-export { default as useAudio } from './store/use-audio'
 export { type CameraHintAction, useCameraHintFocus } from './store/use-camera-hint-focus'
 export { type CommandAction, useCommandRegistry } from './store/use-command-registry'
 export {
@@ -1119,11 +1112,9 @@ export {
 } from './store/use-editor'
 export { default as useFacingPose, type FacingPose } from './store/use-facing-pose'
 export { default as useFenceCurveDraft } from './store/use-fence-curve-draft'
-export { type FirstPersonHudState, useFirstPersonHud } from './store/use-first-person-hud'
 export { default as useFloorplanAnnotationVisibility } from './store/use-floorplan-annotation-visibility'
 export { useFloorplanDraftPreview } from './store/use-floorplan-draft-preview'
 export { default as useFloorplanMode } from './store/use-floorplan-mode'
-export { default as useFollowPascal } from './store/use-follow-pascal'
 export {
   default as useInteractionScope,
   getEditingHole,

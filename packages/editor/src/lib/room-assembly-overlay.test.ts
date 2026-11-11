@@ -12,6 +12,7 @@ import {
   WallNode,
 } from '@pascal-app/core'
 import { migrateCeilingRoomLinks, migrateRoomZones } from '@pascal-app/core/scene-migrations'
+import { RoomSelectionIndex, type RoomSelectionRecord } from '@pascal-app/viewer/ui'
 import { BoxGeometry, Mesh, MeshBasicMaterial } from 'three'
 import {
   buildRoomAssembly,
@@ -20,7 +21,6 @@ import {
   resolveRoomAssemblyHeights,
   roomWallFaces,
 } from './room-assembly-overlay'
-import { RoomSelectionIndex, type RoomSelectionRecord } from './room-selection'
 
 const levelId = 'level_room_assembly'
 const buildingId = 'building_room_assembly'

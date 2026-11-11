@@ -12,20 +12,21 @@ import {
   type ZoneNode,
 } from '@pascal-app/core'
 import { SelectionCallout, useViewer } from '@pascal-app/viewer'
-import { useCallback, useEffect, useMemo } from 'react'
-import { Vector3 } from 'three'
-import { useShallow } from 'zustand/react/shallow'
-import { resolveRoomAssemblyHeights } from '../../lib/room-assembly-overlay'
-import { describeZoneOutline, type RoomSelectionRecord } from '../../lib/room-selection'
 import {
+  describeZoneOutline,
+  formatRoomArea,
+  type RoomSelectionRecord,
   selectViewerRoom,
   type ViewerSource,
   viewerRooms,
   zoneLabel,
-} from '../../lib/viewer-selection'
+} from '@pascal-app/viewer/ui'
+import { useCallback, useEffect, useMemo } from 'react'
+import { Vector3 } from 'three'
+import { useShallow } from 'zustand/react/shallow'
+import { resolveRoomAssemblyHeights } from '../../lib/room-assembly-overlay'
 import { RoomAssemblyMesh } from '../editor/room-highlight'
 import {
-  formatRoomArea,
   RoomLabelAnchor3D,
   type RoomLabelEntry,
   RoomPillChip,

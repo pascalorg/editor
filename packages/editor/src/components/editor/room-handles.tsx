@@ -12,6 +12,7 @@ import {
   useScene,
 } from '@pascal-app/core'
 import { MEASUREMENT_ACTIVE_COLOR, useViewer } from '@pascal-app/viewer'
+import type { RoomSelectionRecord } from '@pascal-app/viewer/ui'
 import { type ThreeEvent, useFrame, useThree } from '@react-three/fiber'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
@@ -51,7 +52,6 @@ import {
   useRoomHandleDrag,
 } from '../../lib/room-handle-drag'
 import type { RoomDimension } from '../../lib/room-push-dimensions'
-import type { RoomSelectionRecord } from '../../lib/room-selection'
 import useEditor, { isGridSnapActive, isMagneticSnapActive } from '../../store/use-editor'
 import {
   commitDimensionValue,

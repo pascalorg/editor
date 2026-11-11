@@ -1,9 +1,9 @@
 import { type AnyNodeId, type BuildingNode, type LevelNode, useScene } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
+import type { SelectionModifierKeys } from '@pascal-app/viewer/ui'
+import { type RoomKey, shouldSelectRoom } from '@pascal-app/viewer/ui'
 import useEditor from '../store/use-editor'
 import useSessionGroups from '../store/use-session-groups'
-import { type RoomKey, shouldSelectRoom } from './room-selection'
-import type { SelectionModifierKeys } from './selection-routing'
 
 export function selectRoom(room: RoomKey) {
   const level = useScene.getState().nodes[room.levelId as AnyNodeId]

@@ -14,6 +14,7 @@ import {
 } from '@pascal-app/core'
 import { AnyNode as AnyNodeSchema } from '@pascal-app/core/schema'
 import { useViewer } from '@pascal-app/viewer'
+import { FloorplanCompassButton, localizedLevelName } from '@pascal-app/viewer/ui'
 import { Maximize2, Minus, Plus } from 'lucide-react'
 import {
   type KeyboardEvent as ReactKeyboardEvent,
@@ -28,7 +29,6 @@ import {
   useState,
 } from 'react'
 import { createPortal } from 'react-dom'
-import { localizedLevelName } from '../../i18n/level-name'
 import {
   FLOORPLAN_VIEW_ROTATION_DEG,
   floorplanLocalToWorldPoint,
@@ -47,7 +47,6 @@ import {
   setFloorplanCompassRotation,
 } from '../editor/floorplan-navigation-presentation'
 import { FloorplanGeometryRenderer } from '../editor-2d/renderers/floorplan-geometry-renderer'
-import { FloorplanCompassButton } from './floorplan-compass-button'
 import {
   type FloorplanBounds,
   type FloorplanViewBox,

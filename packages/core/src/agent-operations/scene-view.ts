@@ -10,6 +10,7 @@ import { levelGradeStanding } from '../lib/grade-standing'
 import { buildingGroundBox, levelGroundBox, terrainBetweenEyeAndBox } from '../lib/ground-window'
 import { distanceToSegment } from '../lib/room-topology-index'
 import { buildingStreet } from '../lib/site-placement'
+import { roofFaceOf, roofFaceShapes } from '../registry/roofs'
 import type {
   AnyNode,
   AnyNodeId,
@@ -23,7 +24,7 @@ import type {
   WallNode,
 } from '../schema'
 import { getActiveRoofHeight } from '../schema'
-import { isCeilingGeometry, isRoofGeometry } from '../services/roof-level'
+import { coveredStoreyId, isCeilingGeometry, isRoofGeometry } from '../services/roof-level'
 import { EXPLODED_GAP, getLevelElevations } from '../services/storey'
 import { stairFootprintAABB } from '../systems/stair/stair-footprint'
 import { resolveWallExteriorSide } from '../systems/wall/wall-assembly'
@@ -477,8 +478,9 @@ function siteBox(node: AnyNode, baseY: number): SceneViewBox | null {
 }
 
 /**
- * A roof's box: its segments' footprints in the plan, from the roof's seat to the highest peak. A
- * roof holds no wall, so a roof, or the roof level it stands on, framed nothing.
+ * A roof's box: its segments' footprints and its faces' outlines (`capabilities.roofs`) in the
+ * plan, from the roof's seat (its faces' lowest eave, theirs being their own heights) to the
+ * highest peak. A roof holds no wall, so a roof, or the roof level it stands on, framed nothing.
  */
 function roofBox(
   nodes: Readonly<Record<string, AnyNode>>,
@@ -491,10 +493,17 @@ function roofBox(
     x * Math.sin(angle) + z * Math.cos(angle),
   ]
   const points: Pt[] = []
-  let peak = seat
+  let floor = Number.POSITIVE_INFINITY
+  let peak = Number.NEGATIVE_INFINITY
+  for (const face of roofFaceShapes(roof, nodes)) {
+    points.push(...face.outline)
+    floor = Math.min(floor, baseY + face.low)
+    peak = Math.max(peak, baseY + face.high)
+  }
   for (const id of roof.children ?? []) {
     const segment = nodes[id]
     if (segment?.type !== 'roof-segment') continue
+    floor = Math.min(floor, seat)
     for (const [sx, sz] of [
       [-1, -1],
       [1, -1],
@@ -509,13 +518,14 @@ function roofBox(
     }
     peak = Math.max(
       peak,
+      seat,
       seat + segment.position[1] + segment.wallHeight + getActiveRoofHeight(segment),
     )
   }
   if (!points.length) return null
   return tall(
     {
-      min: [Math.min(...points.map((p) => p[0])), seat, Math.min(...points.map((p) => p[1]))],
+      min: [Math.min(...points.map((p) => p[0])), floor, Math.min(...points.map((p) => p[1]))],
       max: [Math.max(...points.map((p) => p[0])), peak, Math.max(...points.map((p) => p[1]))],
     },
     0.3,
@@ -664,19 +674,35 @@ export function sceneViewBounds(
     const pose = itemLevelPose(nodes, target, (id) => elevations.get(id)?.height ?? 2.5)
     if (pose) return placed(hostedItemBox(target, pose, baseOf(pose.levelId)), pose.levelId)
   }
+  const unreadFace = (id: string) => {
+    const child = nodes[id]
+    return !!child?.type.includes(':') && !roofFaceOf(child)
+  }
+  // A roof holding faces this runtime cannot read (their plugin not registered here) frames the
+  // storey it covers as well, up to its own level's top.
+  const coveredByTarget =
+    target?.type === 'roof' && ((target as RoofNode).children ?? []).some(unreadFace)
+      ? coveredStoreyId(nodes, target as RoofNode)
+      : null
   const site =
     target && nodes[target.parentId ?? '']?.type === 'level'
       ? levelChildBox(nodes, target, baseOf(target.parentId))
       : null
-  if (site) return placed(site, target!.parentId)
+  if (site && !coveredByTarget) return placed(site, target!.parentId)
   const levelOf = (node: AnyNode) => (node.parentId ? nodes[node.parentId] : undefined)
   const outlines: { points: Pt[]; levelId: string }[] = []
   // With no walls yet, what the level holds frames it: furniture placed from a plan before the
   // walls are built, a site with its paving and fences. The roofs frame with the walls, and so does
-  // a plugin's node (a roof plane), whose shape core cannot read: up to its storey's top.
+  // a plugin's node (a roof plane), whose shape core cannot read: up to its storey's top. A roof's
+  // faces are read through their kind (`capabilities.roofs`); a plugin's this runtime has not
+  // registered frames as one on the level would.
   const held: SceneViewBox[] = []
   const roofs: SceneViewBox[] = []
   let pluginTop = Number.NEGATIVE_INFINITY
+  const upToStoreyTop = (levelId: string, at: { y: number }) => {
+    const storey = elevations.get(levelId)
+    if (storey) pluginTop = Math.max(pluginTop, baseOf(levelId) + storey.height + at.y)
+  }
   // biome-ignore lint/plugin: a view frames whatever the level holds
   for (const node of Object.values(nodes)) {
     const level = levelOf(node)
@@ -685,6 +711,7 @@ export function sceneViewBounds(
       !target ||
       target.id === node.id ||
       target.id === level.id ||
+      level.id === coveredByTarget ||
       (target.type === 'building' && level.parentId === target.id)
     if (!inTarget) continue
     const at = standingOf(nodes, level.id)
@@ -700,12 +727,12 @@ export function sceneViewBounds(
       })
     else if (node.type === 'item')
       (isRoofGeometry(node) ? roofs : held).push(placedBox(itemBox(node, baseOf(level.id)), at))
-    else if (node.type.includes(':')) {
-      const storey = elevations.get(level.id)
-      if (storey) pluginTop = Math.max(pluginTop, baseOf(level.id) + storey.height + at.y)
-    } else {
+    else if (node.type.includes(':')) upToStoreyTop(level.id, at)
+    else {
       const box = levelChildBox(nodes, node, baseOf(level.id))
       if (box) (node.type === 'roof' ? roofs : held).push(placedBox(box, at))
+      if (node.type === 'roof' && ((node as RoofNode).children ?? []).some(unreadFace))
+        upToStoreyTop(level.id, at)
     }
   }
   const upTo = (box: SceneViewBox): SceneViewBox =>

@@ -1816,6 +1816,15 @@ export type Capabilities = {
   ) => { size: [number, number, number]; center?: [number, number, number]; centerY?: number }
   roofAccessory?: RoofAccessoryConfig
   /**
+   * The kind roofs: a node of it is one face of the roof that holds it (a plugin's solved roof
+   * plane), as a segment is one of the roof's masses. A roof lists it in `children` beside its
+   * segments and renders it through the kind's own renderer under the roof's transform, so hiding,
+   * selecting or deleting the roof takes its faces with it; the readers of a roof's extent and
+   * heights (the storey it covers, the walls it stands on, a view's frame) count it through
+   * `outline` and `heightAt`. See `RoofsCapability`.
+   */
+  roofs?: RoofsCapability
+  /**
    * Kind cuts a hole in the ceiling surface it is attached to (e.g. recessed
    * downlights). The viewer's `CeilingSystem` calls this for each child of a
    * ceiling to collect extra holes before triangulating. See `CeilingCutCapability`.
@@ -2233,6 +2242,22 @@ export type RoofAccessoryConfig = {
    * yet, per-frame rebuild budget exhausted).
    */
   dirtyHandledByOwnSystem?: boolean
+}
+
+/**
+ * One face of the roof holding the node, in that roof's frame: metres, `[x, z]` in its plan and
+ * heights up from its origin. A roof standing unturned at its level's origin holds its faces in
+ * the level's frame.
+ */
+export type RoofsCapability = {
+  /** The face's outline in its roof's plan, corners in order. */
+  outline: (node: AnyNode) => readonly (readonly [x: number, z: number])[]
+  /**
+   * The height of the face's top surface over its roof's origin at a point of its outline. Readers
+   * take a face's lowest and highest points at the outline's corners, so a curved face gives an
+   * outline dense enough to hold them.
+   */
+  heightAt: (node: AnyNode, x: number, z: number) => number
 }
 
 /**

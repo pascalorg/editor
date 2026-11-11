@@ -2,14 +2,6 @@
 
 import { type MessageDescriptor, type PascalI18n, usePascalI18n } from '@pascal-app/core'
 import { type GroundMode, useViewer } from '@pascal-app/viewer'
-import { ArrowLeftRight, Check, Columns2, MoreHorizontal, Pin, PinOff, X } from 'lucide-react'
-import { type ReactNode, useEffect, useRef } from 'react'
-import { useIsMobile } from '../../../hooks/use-mobile'
-import { type EditorViewDescriptor, isSceneView, isViewPinned } from '../../../lib/editor-views'
-import { cn } from '../../../lib/utils'
-import useEditor from '../../../store/use-editor'
-import { VIEW_2D, VIEW_3D, type ViewPaneIndex } from '../../../store/view-layout'
-import { IconRefGlyph } from '../../ui/icon-ref'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -17,7 +9,15 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from '../../ui/primitives/dropdown-menu'
+  useIsMobile,
+} from '@pascal-app/viewer/ui'
+import { ArrowLeftRight, Check, Columns2, MoreHorizontal, Pin, PinOff, X } from 'lucide-react'
+import { type ReactNode, useEffect, useRef } from 'react'
+import { type EditorViewDescriptor, isSceneView, isViewPinned } from '../../../lib/editor-views'
+import { cn } from '../../../lib/utils'
+import useEditor from '../../../store/use-editor'
+import { VIEW_2D, VIEW_3D, type ViewPaneIndex } from '../../../store/view-layout'
+import { IconRefGlyph } from '../../ui/icon-ref'
 import { PLUGINS_VIEW_ID, useActiveViewLayout, useEditorViews } from './use-editor-views'
 
 const GROUP = cn(

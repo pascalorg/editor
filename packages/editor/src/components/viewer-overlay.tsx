@@ -1,10 +1,9 @@
 'use client'
 
+import { ViewerControlsBar, ViewerSceneHeader } from '@pascal-app/viewer/ui'
 import { flushSync } from 'react-dom'
 import { requestWalkthroughPointerLock } from '../lib/walkthrough-pointer-lock'
 import useEditor from '../store/use-editor'
-import { ViewerControlsBar } from './viewer/viewer-controls-bar'
-import { ViewerSceneHeader } from './viewer/viewer-scene-header'
 
 type ProjectOwner = {
   id: string

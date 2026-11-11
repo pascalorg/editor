@@ -14,6 +14,7 @@ import {
   useScene,
 } from '@pascal-app/core'
 import { getSceneTheme, setSurfaceRaycastLayers, useViewer } from '@pascal-app/viewer'
+import type { RoomSelectionRecord } from '@pascal-app/viewer/ui'
 import { useFrame, useThree } from '@react-three/fiber'
 import { SquareSplitHorizontal } from 'lucide-react'
 import Image from 'next/image'
@@ -48,7 +49,6 @@ import {
   startRoomDivide,
 } from '../../lib/room-divide-session'
 import { useRoomHandleDrag } from '../../lib/room-handle-drag'
-import type { RoomSelectionRecord } from '../../lib/room-selection'
 import { requestRoomDeletion } from '../../lib/room-structure-commands'
 import {
   type RoomTransformKind,

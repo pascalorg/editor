@@ -7,7 +7,7 @@ import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
-} from './../../../components/ui/primitives/tooltip'
+} from '@pascal-app/viewer/ui'
 import { cn } from './../../../lib/utils'
 
 export type PanelId = string

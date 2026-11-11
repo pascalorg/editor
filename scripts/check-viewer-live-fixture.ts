@@ -26,6 +26,10 @@ async function run(command: string[], cwd: string) {
 }
 
 // Built from the escape character so the regex literal holds no control character.
+const TRANSPARENT_PNG = Buffer.from(
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=',
+  'base64',
+)
 const ANSI_ESCAPES = new RegExp(`${String.fromCharCode(27)}\\[[0-9;]*m`, 'g')
 
 async function withServer(command: string[], cwd: string, check: (url: string) => Promise<void>) {
@@ -152,6 +156,16 @@ try {
                 },
               })
             })
+          const soundRequests: string[] = []
+          await page.route('**/fixture-sfx/*.mp3', (route) => {
+            soundRequests.push(new URL(route.request().url()).pathname)
+            return route.fulfill({ status: 200, contentType: 'audio/mpeg', body: Buffer.alloc(0) })
+          })
+          const iconRequests: string[] = []
+          await page.route('**/icons/*.webp', (route) => {
+            iconRequests.push(new URL(route.request().url()).pathname)
+            return route.fulfill({ status: 200, contentType: 'image/png', body: TRANSPARENT_PNG })
+          })
           try {
             await page.goto(url)
             await page.waitForFunction(
@@ -186,6 +200,17 @@ try {
             if (errors.length) throw new Error(errors.join('\n'))
             if ((await page.evaluate(() => typeof (globalThis as any).process)) !== 'undefined')
               throw new Error('Fixture must run without a process polyfill')
+            await page.evaluate(() => (window as any).playFixtureSound())
+            for (let i = 0; i < 50 && !soundRequests.includes('/fixture-sfx/door_open.mp3'); i++)
+              await page.waitForTimeout(100)
+            if (!soundRequests.includes('/fixture-sfx/door_open.mp3'))
+              throw new Error(
+                `Sound files did not load from sfxBaseUrl: ${soundRequests.join(', ')}`,
+              )
+            if (!iconRequests.includes('/icons/topview.webp'))
+              throw new Error(
+                `Viewer UI icons did not load from iconsBaseUrl: ${iconRequests.join(', ')}`,
+              )
             console.log(
               `${mode}, storage ${deniedStorage ? 'denied' : 'available'}: scene ready, ` +
                 `non-empty node geometry, ${probe.drawCalls} draw calls, no errors (${elapsed()})`,

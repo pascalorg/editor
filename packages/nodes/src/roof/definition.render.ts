@@ -3,6 +3,7 @@ import {
   RoofNode as RoofNodeSchema,
   type RoofNode as RoofNodeType,
   type RoofSegmentNode,
+  roofFaceShapes,
 } from '@pascal-app/core'
 import type { NodeRenderDefinition } from '../definition-contributions'
 import { RoofNode } from './schema'
@@ -38,10 +39,10 @@ export const roofRenderDefinition: NodeRenderDefinition<typeof RoofNode> & { kin
     // Contribute a plan AABB to the alignment-guide candidate pool so a roof
     // (and any moving sibling) snaps against the roof's outer silhouette.
     // Roof has no centred-box footprint — it's the union of its
-    // `roof-segment` children — so we hand the bridge a resolved `aabb`
-    // directly. The roof moves by its origin via `move-roof-tool`, so it
-    // only ever contributes static candidates; the relocatable-box path
-    // never needs to apply to roofs.
+    // `roof-segment` children and its faces' outlines — so we hand the bridge
+    // a resolved `aabb` directly. The roof moves by its origin via
+    // `move-roof-tool`, so it only ever contributes static candidates; the
+    // relocatable-box path never needs to apply to roofs.
     alignmentFootprint: (node, nodes) => {
       const roof = node as RoofNodeType
       if (!nodes) return null
@@ -52,6 +53,15 @@ export const roofRenderDefinition: NodeRenderDefinition<typeof RoofNode> & { kin
       let maxX = Number.NEGATIVE_INFINITY
       let maxZ = Number.NEGATIVE_INFINITY
       let any = false
+      for (const face of roofFaceShapes(roof, nodes)) {
+        for (const [wx, wz] of face.outline) {
+          minX = Math.min(minX, wx)
+          maxX = Math.max(maxX, wx)
+          minZ = Math.min(minZ, wz)
+          maxZ = Math.max(maxZ, wz)
+          any = true
+        }
+      }
       for (const childId of roof.children ?? []) {
         const segment = nodes[childId as AnyNodeId] as RoofSegmentNode | undefined
         if (segment?.type !== 'roof-segment') continue

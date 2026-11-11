@@ -21,6 +21,8 @@ import { configureViewer, registerViewerPresentation } from '@pascal-app/viewer'
 import { webXRHostPanel, webXRPlugin } from '@webxr/plugin'
 
 configureViewer({
+  sfxBaseUrl: '/audios/sfx',
+  iconsBaseUrl: '/icons',
   assetsBaseUrl: process.env.NEXT_PUBLIC_ASSETS_CDN_URL,
   storageUrl: process.env.NEXT_PUBLIC_SUPABASE_URL,
 })

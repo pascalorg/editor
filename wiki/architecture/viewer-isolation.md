@@ -44,6 +44,13 @@ tools, overlays and host-specific systems. Live scene rendering is available thr
 The render-bundle gate inspects all static and lazy chunks for editor/Next dependencies, and the
 isolated Vite fixture verifies packed packages in dev and production.
 
+The read-only chrome (controls bar, scene header, HUDs, loader, the viewer selection model and the
+primitives they use) is the `@pascal-app/viewer/ui` entry, styled with Tailwind and its shipped
+`theme.css`. It is editor-agnostic like the rest of the package: the editor imports its stores and
+controls from there (one camera-pose, first-person HUD and Follow Pascal store), never the reverse.
+Router pieces come in as props (`linkComponent`); Biome bans `next` in the package and the bundle
+gate builds the entry with editor/Next resolution forbidden.
+
 ## Live graph bootstrap and ownership
 
 ```tsx

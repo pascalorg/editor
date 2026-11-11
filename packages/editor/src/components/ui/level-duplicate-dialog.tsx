@@ -4,7 +4,7 @@ import type { LevelNode, MessageDescriptor } from '@pascal-app/core'
 import { useEffect, useState } from 'react'
 import type { LevelDuplicatePreset } from '@pascal-app/core/building'
 import { useLocale, usePascalI18n } from '@pascal-app/core'
-import { localizedLevelName } from '../../i18n/level-name'
+import { localizedLevelName } from '@pascal-app/viewer/ui'
 import { cn } from '../../lib/utils'
 import {
   Dialog,

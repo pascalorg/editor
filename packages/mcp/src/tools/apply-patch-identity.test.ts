@@ -1,11 +1,15 @@
 import { beforeEach, describe, expect, test } from 'bun:test'
 import { Client } from '@modelcontextprotocol/client'
 import { InMemoryTransport, McpServer } from '@modelcontextprotocol/server'
+import { nodeRegistry, registerNode } from '@pascal-app/core'
 import {
   type AnyNode,
   type AnyNodeId,
+  BaseNode,
   ColumnNode,
   DoorNode,
+  nodeType,
+  objectId,
   RoofNode,
   RoofSegmentNode,
   SiteNode,
@@ -387,6 +391,69 @@ describe('apply_patch identity and validation guards', () => {
     expect(kept?.parentId).toBe(wall.id)
     const host = bridge.getNode(wall.id as AnyNodeId)
     expect(host?.type === 'wall' && host.children).toEqual([window.id])
+  })
+
+  test('a roof plane moves into its roof; a kind that does not roof is refused', async () => {
+    // A host registers the roof, and a plugin's plane kind that roofs (`capabilities.roofs`).
+    const restore = nodeRegistry._snapshot()
+    const kind = (name: string, schema: unknown, capabilities: Record<string, unknown> = {}) =>
+      registerNode({
+        kind: name,
+        schemaVersion: 1,
+        schema,
+        category: 'structure',
+        defaults: () => ({}),
+        capabilities,
+      } as never)
+    try {
+      const Plane = BaseNode.extend({
+        id: objectId('roofplane'),
+        type: nodeType('test:roof-plane'),
+      })
+      const Lamp = BaseNode.extend({ id: objectId('lamp'), type: nodeType('test:lamp') })
+      kind('roof', RoofNode)
+      kind('test:roof-plane', Plane, {
+        roofs: {
+          outline: () => [
+            [0, 0],
+            [4, 0],
+            [4, 2],
+          ],
+          heightAt: () => 2.9,
+        },
+      })
+      kind('test:lamp', Lamp)
+      // This bridge creates core kinds only: the plugin's nodes come with the scene, on the level.
+      const roof = RoofNode.parse({ id: 'roof_main', parentId: level.id })
+      const plane = Plane.parse({ id: 'roofplane_south', parentId: level.id })
+      const lamp = Lamp.parse({ id: 'lamp_one', parentId: level.id })
+      const scene = bridge.exportJSON()
+      const onLevel = scene.nodes[level.id as AnyNodeId] as AnyNode & { children: string[] }
+      bridge.setScene(
+        {
+          ...scene.nodes,
+          [level.id]: { ...onLevel, children: [...onLevel.children, roof.id, plane.id, lamp.id] },
+          [roof.id]: roof,
+          [plane.id]: plane,
+          [lamp.id]: lamp,
+        } as Record<AnyNodeId, AnyNode>,
+        scene.rootNodeIds as AnyNodeId[],
+      )
+
+      expect(
+        await apply([{ op: 'update', id: plane.id, data: { parentId: roof.id } }]),
+      ).toMatchObject({ isError: false })
+      const held = bridge.getNode(roof.id as AnyNodeId)
+      expect(held?.type === 'roof' && held.children).toEqual([plane.id])
+      const kept = bridge.getNode(level.id as AnyNodeId)
+      expect(kept?.type === 'level' && kept.children).not.toContain(plane.id)
+
+      const refused = await refusal([{ op: 'update', id: lamp.id, data: { parentId: roof.id } }])
+      expect(refused).toMatchObject({ code: 'invalid_parent', patchIndex: 0, id: lamp.id })
+      expect(bridge.getNode(lamp.id as AnyNodeId)?.parentId).toBe(level.id)
+    } finally {
+      restore()
+    }
   })
 
   test('refuses a reparent beneath a descendant without changing the scene', async () => {

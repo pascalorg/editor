@@ -7,22 +7,20 @@ import {
   containsPoint,
   DEFAULT_LEVEL_HEIGHT,
   emitter,
-  formatNumber,
-  getAreaUnitLabel,
-  type LinearUnit,
   type PascalI18n,
   type Polygon,
   polygonInteriorPoint,
   type Ring,
   roomFloorElevation,
   sceneRegistry,
-  squareMetersToAreaUnit,
   useLocale,
   usePascalI18n,
   useScene,
   type ZoneNode,
 } from '@pascal-app/core'
 import { timeSpan, useViewer } from '@pascal-app/viewer'
+import type { RoomSelectionRecord } from '@pascal-app/viewer/ui'
+import { displayRoomName, formatRoomArea, selectionModifiersFromEvent } from '@pascal-app/viewer/ui'
 import { useFrame, useThree } from '@react-three/fiber'
 import {
   createContext,
@@ -52,10 +50,7 @@ import {
 } from 'three'
 import { useShallow } from 'zustand/react/shallow'
 import { useRoomRecords } from '../../hooks/use-selected-room'
-import { displayRoomName } from '../../lib/room-name-messages'
-import type { RoomSelectionRecord } from '../../lib/room-selection'
 import { clickZoneArea, hoverZoneArea, leaveZoneArea } from '../../lib/room-zone-routing'
-import { selectionModifiersFromEvent } from '../../lib/selection-routing'
 import useEditor from '../../store/use-editor'
 import useInteractionScope from '../../store/use-interaction-scope'
 import { isViewVisible, VIEW_2D, VIEW_3D } from '../../store/view-layout'
@@ -92,14 +87,6 @@ export function roomLabelsVisible(state: RoomLabelVisibilityState): boolean {
     !state.isThumbnailCapture &&
     state.selectedTypes.every((type) => type !== undefined && CONTEXT_TYPES.has(type))
   )
-}
-
-export function formatRoomArea(squareMeters: number, unit: LinearUnit, locale?: string): string {
-  return `${formatNumber(squareMetersToAreaUnit(squareMeters, unit), {
-    min: 1,
-    max: 1,
-    locale,
-  })} ${getAreaUnitLabel(unit)}`
 }
 
 function useRoomLabelsVisible() {

@@ -1,12 +1,11 @@
 import { describe, expect, test } from 'bun:test'
 import type { Polygon } from '@pascal-app/core'
 import { ZoneNode } from '@pascal-app/core/schema'
+import type { RoomSelectionRecord } from '@pascal-app/viewer/ui'
 import { Object3D, PerspectiveCamera, Vector3 } from 'three'
-import type { RoomSelectionRecord } from '../../lib/room-selection'
 import {
   candidates3D,
   DeclutterClock,
-  formatRoomArea,
   type LabelRect,
   LabelReveal,
   measureFullPill,
@@ -107,11 +106,6 @@ describe('room label pills', () => {
     ] satisfies Partial<RoomLabelVisibilityState>[]) {
       expect(roomLabelsVisible({ ...resting, ...change })).toBe(false)
     }
-  })
-
-  test('read the area in the active unit system', () => {
-    expect(formatRoomArea(33, 'metric')).toBe('33.0 m²')
-    expect(formatRoomArea(10, 'imperial')).toBe('107.6 ft²')
   })
 
   test('a pill is placed centred on where its anchor lands', () => {

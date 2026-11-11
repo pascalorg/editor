@@ -7,7 +7,7 @@ import {
   UnsignedByteType,
   Vector2,
 } from 'three'
-import { Fn, floor, If, int, ivec2, Loop, round, texture, uniform } from 'three/tsl'
+import { Fn, floor, If, int, ivec2, Loop, round, texture, uniform, vec2 } from 'three/tsl'
 
 /**
  * Which room a point is in, at any scale: a sparse, tiled room-id map.
@@ -23,6 +23,10 @@ import { Fn, floor, If, int, ivec2, Loop, round, texture, uniform } from 'three/
  * buildings near it), so neighbouring buildings with different floor heights, or a 40-storey
  * tower, each keep their floors. Within a building, levels sorted by height stay sorted when they
  * explode apart, so the search runs on live heights.
+ *
+ * Each building's map is turned to its own walls: its cells run along the direction most of its
+ * room edges take, so a house drawn at 40° to the world reads exactly like the same house drawn
+ * square. Walls at other angles within a building still cross the cells in steps.
  */
 
 type N = any
@@ -31,6 +35,11 @@ export const CELL = 0.1
 /** Cells per tile side. */
 export const TILE = 16
 const TILE_M = CELL * TILE
+/**
+ * A cell is wall when a wall's footprint reaches this close to its centre (on each axis): thin
+ * walls still mark an unbroken line of cells, and a wall cell ends at most ~10 cm past the face.
+ */
+const WALL_REACH = CELL / 4
 /** Margin around a room: the 2-cell dilation plus polygon slop. */
 const APRON = 0.35
 /** Cells built around a tile so its 2-pass dilation and its edges' neighbours are exact. */
@@ -59,15 +68,20 @@ export type MapRoom = {
   holes?: [number, number][][]
 }
 
+/** A level's walls in plan: triangles of their footprints, six numbers each (world XZ × 3). */
+export type MapWalls = { level: number; triangles: ArrayLike<number> }
+
 /** One tile while it is being built, inside its row's dilated cells (with a margin all round). */
 export type TileCells = {
   level: number
   /** Site cell index of `cells[0]`. */
   ci0: number
   cj0: number
-  /** World XZ of `cells[0]`'s lower corner. */
+  /** XZ of `cells[0]`'s lower corner, in the building's turned frame. */
   x0: number
   z0: number
+  /** The frame's turn [cos, sin]: world x = x·cos − z·sin, world z = x·sin + z·cos. */
+  turn: [number, number]
   /** Cells per buffer row. */
   stride: number
   /** The tile's first cell in the buffer. */
@@ -100,8 +114,13 @@ export class RoomMap {
   private position: number[] = []
   /** Per building: its range in `order`. */
   private buildingRange: [number, number][] = []
+  /** Per building: the turn [cos, sin] that lays its walls along the cells. */
+  private turns: [number, number][] = []
   private originX = 0
   private originZ = 0
+  /** The directory's corner: it stays on the world axes, whatever the buildings' turns. */
+  private dirX = 0
+  private dirZ = 0
   private dirTiles = 8
   private dirW = 0
   private dirH = 0
@@ -115,6 +134,9 @@ export class RoomMap {
 
   readonly u = {
     origin: uniform(new Vector2()) as N,
+    dirOrigin: uniform(new Vector2()) as N,
+    /** The only building's turn (with `single`). */
+    turn: uniform(new Vector2(1, 0)) as N,
     dirTiles: uniform(8, 'int'),
     dirW: uniform(0, 'int'),
     dirH: uniform(0, 'int'),
@@ -131,8 +153,16 @@ export class RoomMap {
   }
   private levelData = new Float32Array(8)
 
-  /** Rebuild from rooms. `onTile` sees every built tile (the doorway search walks room edges). */
-  build(levels: MapLevel[], rooms: MapRoom[], onTile?: (tile: TileCells) => void) {
+  /**
+   * Rebuild from rooms. `onTile` sees every built tile (the doorway search walks room edges).
+   * `walls` keep a room from growing out through them: a wall's far side stays outside.
+   */
+  build(
+    levels: MapLevel[],
+    rooms: MapRoom[],
+    onTile?: (tile: TileCells) => void,
+    walls: MapWalls[] = [],
+  ) {
     this.levels = levels.map((l) => ({ y: l.y, building: l.building, clusters: [] }))
     this.order = levels
       .map((_, i) => i)
@@ -151,7 +181,54 @@ export class RoomMap {
 
     if (rooms.length > MAX_ROOMS)
       console.warn(`[daylight] ${rooms.length} rooms: only the first ${MAX_ROOMS} get room light`)
-    const used = rooms.slice(0, MAX_ROOMS)
+
+    // Each building's turn: the direction its room edges run along, folded to a quarter turn
+    // (walls at right angles agree) and weighted by length.
+    const sums = Array.from({ length: buildings }, () => [0, 0] as [number, number])
+    for (const room of rooms.slice(0, MAX_ROOMS)) {
+      const sum = sums[levels[room.level]?.building ?? -1]
+      if (!sum) continue
+      for (const ring of [room.polygon, ...(room.holes ?? [])])
+        for (let a = 0, b = ring.length - 1; a < ring.length; b = a++) {
+          const dx = ring[a]![0] - ring[b]![0]
+          const dz = ring[a]![1] - ring[b]![1]
+          const length = Math.hypot(dx, dz)
+          const angle = 4 * Math.atan2(dz, dx)
+          sum[0] += length * Math.cos(angle)
+          sum[1] += length * Math.sin(angle)
+        }
+    }
+    // A building already square to the world keeps the plain frame, to the last bit.
+    this.turns = sums.map(([c, s]) => {
+      const angle = Math.hypot(c, s) < 1e-9 ? 0 : Math.atan2(s, c) / 4
+      return Math.abs(angle) < 1e-9 ? IDENTITY : [Math.cos(angle), Math.sin(angle)]
+    })
+    const turnOf = (level: number) => this.turns[levels[level]?.building ?? -1] ?? IDENTITY
+    const turned = (ring: [number, number][], [cos, sin]: [number, number]) =>
+      ring.map(([x, z]) => [x * cos + z * sin, z * cos - x * sin] as [number, number])
+    // From here on rooms and walls are in their building's turned frame.
+    const used = rooms.slice(0, MAX_ROOMS).map((room) => {
+      const turn = turnOf(room.level)
+      return turn === IDENTITY
+        ? room
+        : {
+            level: room.level,
+            polygon: turned(room.polygon, turn),
+            holes: room.holes?.map((hole) => turned(hole, turn)),
+          }
+    })
+    const footprints = walls.map((wall) => {
+      const turn = turnOf(wall.level)
+      const t = wall.triangles
+      if (turn === IDENTITY) return t
+      const [cos, sin] = turn
+      const out = new Float64Array(t.length)
+      for (let k = 0; k + 1 < t.length; k += 2) {
+        out[k] = t[k]! * cos + t[k + 1]! * sin
+        out[k + 1] = t[k + 1]! * cos - t[k]! * sin
+      }
+      return out
+    })
 
     // Site origin on the tile grid; every rect below is in whole tiles from it.
     let minX = Number.POSITIVE_INFINITY
@@ -192,6 +269,26 @@ export class RoomMap {
     const detailTiles: Uint16Array[] = []
     let buffer = new Uint16Array(0)
     let scratch = new Uint16Array(0)
+    let wallBuffer = new Uint8Array(0)
+    // Wall triangles per level and tile row (a row's strip reaches a margin into the next rows).
+    const wallRows: Map<number, number[]>[] = levels.map(() => new Map())
+    const reach = MARGIN * CELL + WALL_REACH
+    walls.forEach((wall, wi) => {
+      const rows = wallRows[wall.level]
+      if (!rows) return
+      const t = footprints[wi]!
+      for (let k = 0; k + 5 < t.length; k += 6) {
+        const zMin = Math.min(t[k + 1]!, t[k + 3]!, t[k + 5]!)
+        const zMax = Math.max(t[k + 1]!, t[k + 3]!, t[k + 5]!)
+        const r0 = Math.floor((zMin - reach - this.originZ) / TILE_M)
+        const r1 = Math.floor((zMax + reach - this.originZ) / TILE_M)
+        for (let r = r0; r <= r1; r++) {
+          const list = rows.get(r)
+          if (list) list.push(wi, k)
+          else rows.set(r, [wi, k])
+        }
+      }
+    })
 
     // Where rooms overlap (an automatic room under drawn ones, a unit around its rooms), the
     // smallest wins: rasterized last, so each level's rooms go largest first.
@@ -237,8 +334,10 @@ export class RoomMap {
         if (buffer.length < stride * rowH) {
           buffer = new Uint16Array(stride * rowH)
           scratch = new Uint16Array(stride * rowH)
+          wallBuffer = new Uint8Array(stride * rowH)
         }
         const strip = buffer.subarray(0, stride * rowH)
+        const wallStrip = wallBuffer.subarray(0, stride * rowH)
         const inRow = new Set<number>()
         for (let tz = tz0; tz <= tz1; tz++) {
           inRow.clear()
@@ -253,7 +352,23 @@ export class RoomMap {
           for (const ri of [...inRow].sort((a, b) => area[b]! - area[a]! || a - b))
             rasterize(used[ri]!, ri + 1, strip, stride, rowH, x0, z0)
           // Growth only fills empty cells: inside a big room there are none.
-          if (strip.includes(0)) dilate(strip, scratch, stride, rowH)
+          if (strip.includes(0)) {
+            const rowWalls = wallRows[li]!.get(tz)
+            if (rowWalls) {
+              wallStrip.fill(0)
+              for (let w = 0; w < rowWalls.length; w += 2)
+                markWall(
+                  footprints[rowWalls[w]!]!,
+                  rowWalls[w + 1]!,
+                  wallStrip,
+                  stride,
+                  rowH,
+                  x0,
+                  z0,
+                )
+            }
+            dilate(strip, scratch, stride, rowH, rowWalls ? wallStrip : undefined)
+          }
           for (let tx = tx0; tx <= tx1; tx++) {
             const t = (tz - tz0) * cluster.tw + (tx - tx0)
             if (!buckets[t]!.length) continue
@@ -290,6 +405,7 @@ export class RoomMap {
               cj0,
               x0,
               z0,
+              turn: turnOf(li),
               stride,
               i0,
               j0: MARGIN,
@@ -320,55 +436,88 @@ export class RoomMap {
     })
 
     // Directory: per cell, the buildings whose clusters reach it (coarser cells on vast sites).
-    let maxTx = 0
-    let maxTz = 0
-    for (const l of this.levels)
+    // On the world axes: each cluster's rect, turned back, as a world box.
+    const boxes: { building: number; x0: number; z0: number; x1: number; z1: number }[] = []
+    for (const l of this.levels) {
+      const [cos, sin] = this.turns[l.building] ?? IDENTITY
       for (const c of l.clusters) {
-        maxTx = Math.max(maxTx, c.tx0 + c.tw)
-        maxTz = Math.max(maxTz, c.tz0 + c.th)
+        const box = {
+          building: l.building,
+          x0: Number.POSITIVE_INFINITY,
+          z0: Number.POSITIVE_INFINITY,
+          x1: Number.NEGATIVE_INFINITY,
+          z1: Number.NEGATIVE_INFINITY,
+        }
+        for (const tx of [c.tx0, c.tx0 + c.tw])
+          for (const tz of [c.tz0, c.tz0 + c.th]) {
+            const mx = this.originX + tx * TILE_M
+            const mz = this.originZ + tz * TILE_M
+            const x = mx * cos - mz * sin
+            const z = mx * sin + mz * cos
+            box.x0 = Math.min(box.x0, x)
+            box.z0 = Math.min(box.z0, z)
+            box.x1 = Math.max(box.x1, x)
+            box.z1 = Math.max(box.z1, z)
+          }
+        boxes.push(box)
       }
+    }
+    this.dirX = boxes.reduce((min, box) => Math.min(min, box.x0), Number.POSITIVE_INFINITY)
+    this.dirZ = boxes.reduce((min, box) => Math.min(min, box.z0), Number.POSITIVE_INFINITY)
+    if (!boxes.length) this.dirX = this.dirZ = 0
+    // Whole tiles; a hair under, so a box ending on a tile edge doesn't claim the next tile.
+    const tiles = (metres: number) => Math.max(0, Math.ceil(metres / TILE_M - 1e-6))
+    const maxTx = boxes.reduce((max, box) => Math.max(max, tiles(box.x1 - this.dirX)), 0)
+    const maxTz = boxes.reduce((max, box) => Math.max(max, tiles(box.z1 - this.dirZ)), 0)
     this.dirTiles = Math.max(8, Math.ceil(Math.sqrt((maxTx * maxTz) / MAX_DIR_CELLS)))
     this.dirW = Math.max(1, Math.ceil(maxTx / this.dirTiles))
     this.dirH = Math.max(1, Math.ceil(maxTz / this.dirTiles))
     this.dirLists = Array.from({ length: this.dirW * this.dirH }, () => [])
-    for (const l of this.levels)
-      for (const c of l.clusters)
+    const dirCell = (metres: number) => Math.floor(metres / TILE_M / this.dirTiles)
+    for (const box of boxes)
+      for (
+        let dz = dirCell(box.z0 - this.dirZ + 1e-6);
+        dz <= Math.min(this.dirH - 1, dirCell(box.z1 - this.dirZ - 1e-6));
+        dz++
+      )
         for (
-          let dz = Math.floor(c.tz0 / this.dirTiles);
-          dz <= Math.floor((c.tz0 + c.th - 1) / this.dirTiles);
-          dz++
-        )
-          for (
-            let dx = Math.floor(c.tx0 / this.dirTiles);
-            dx <= Math.floor((c.tx0 + c.tw - 1) / this.dirTiles);
-            dx++
-          ) {
-            const list = this.dirLists[dz * this.dirW + dx]!
-            if (!list.includes(l.building)) list.push(l.building)
-          }
+          let dx = dirCell(box.x0 - this.dirX + 1e-6);
+          dx <= Math.min(this.dirW - 1, dirCell(box.x1 - this.dirX - 1e-6));
+          dx++
+        ) {
+          const list = this.dirLists[dz * this.dirW + dx]!
+          if (!list.includes(box.building)) list.push(box.building)
+        }
 
     this.upload()
   }
 
   /** CPU lookup in assembled space (same rule as the shader). */
   roomAt(x: number, y: number, z: number): number {
-    const tx = Math.floor((x - this.originX) / TILE_M)
-    const tz = Math.floor((z - this.originZ) / TILE_M)
-    const dx = Math.floor(tx / this.dirTiles)
-    const dz = Math.floor(tz / this.dirTiles)
+    const dx = Math.floor((x - this.dirX) / TILE_M / this.dirTiles)
+    const dz = Math.floor((z - this.dirZ) / TILE_M / this.dirTiles)
     if (dx < 0 || dz < 0 || dx >= this.dirW || dz >= this.dirH) return -1
     for (const b of this.dirLists[dz * this.dirW + dx]!) {
       const [start, count] = this.buildingRange[b]!
       let found = start
       for (let pos = start; pos < start + count; pos++)
         if (this.levels[this.order[pos]!]!.y <= y - 0.12) found = pos
-      const room = this.levelRoomAt(this.order[found]!, x, z, tx, tz)
+      // The point in the building's turned frame.
+      const [cos, sin] = this.turns[b]!
+      const mx = x * cos + z * sin
+      const mz = z * cos - x * sin
+      const tx = Math.floor((mx - this.originX) / TILE_M)
+      const tz = Math.floor((mz - this.originZ) / TILE_M)
+      const room = this.levelRoomAt(this.order[found]!, mx, mz, tx, tz)
       if (room >= 0) return room
     }
     return -1
   }
 
-  /** A level's room at a point; clusters' rects can overlap (a wing around a courtyard pavilion). */
+  /**
+   * A level's room at a point of its building's frame; clusters' rects can overlap (a wing around
+   * a courtyard pavilion).
+   */
   private levelRoomAt(li: number, x: number, z: number, tx: number, tz: number) {
     for (const c of this.levels[li]!.clusters) {
       const lx = tx - c.tx0
@@ -459,8 +608,7 @@ export class RoomMap {
       index[c * 4 + 1] = buildings.length
       for (const b of buildings) {
         const [start, count] = this.buildingRange[b]!
-        index[list * 4] = start
-        index[list * 4 + 1] = count
+        index.set([start, count, ...this.turns[b]!], list * 4)
         list++
       }
     })
@@ -491,6 +639,8 @@ export class RoomMap {
     replace(this.u.levels, floatTexture(this.levelData, LEVEL_W, levelRows))
     replace(this.u.atlas, byteTexture(this.atlas, aw, this.atlas.length / 2 / aw))
     ;(this.u.origin.value as Vector2).set(this.originX, this.originZ)
+    ;(this.u.dirOrigin.value as Vector2).set(this.dirX, this.dirZ)
+    ;(this.u.turn.value as Vector2).set(...(this.turns[0] ?? IDENTITY))
     this.u.indexW.value = indexW
     this.u.dirTiles.value = this.dirTiles
     this.u.dirW.value = this.dirW
@@ -527,15 +677,13 @@ export class RoomMap {
   roomAtNode = Fn(([p]: [N]) => {
     const u = this.u
     const room = int(-1).toVar()
-    const tileF = p.xz.sub(u.origin).div(TILE_M)
-    const tile = ivec2((floor as N)(tileF))
     // Candidate buildings: the only one, or the directory cell's list.
     const count = int(0).toVar()
     const listStart = int(0).toVar()
     If(u.single.equal(1), () => {
       count.assign(1)
     }).Else(() => {
-      const dir = ivec2((floor as N)(tileF.div(u.dirTiles)))
+      const dir = ivec2((floor as N)(p.xz.sub(u.dirOrigin).div(TILE_M).div(u.dirTiles)))
       If(
         dir.x
           .greaterThanEqual(0)
@@ -554,11 +702,18 @@ export class RoomMap {
       If(room.lessThan(0), () => {
         const start = int(0).toVar()
         const levels = u.singleCount.toVar()
+        const turn = u.turn.toVar()
         If(u.single.equal(0), () => {
           const range = this.indexTexel(listStart.add(i))
           start.assign(int(range.x))
           levels.assign(int(range.y))
+          turn.assign(range.zw)
         })
+        // The point in the building's turned frame, from the site origin.
+        const m = vec2(p.x.mul(turn.x).add(p.z.mul(turn.y)), p.z.mul(turn.x).sub(p.x.mul(turn.y)))
+          .sub(u.origin)
+          .toVar()
+        const tile = ivec2((floor as N)(m.div(TILE_M))).toVar()
         // Last level of the building whose live floor is at or below the point (else its lowest).
         const lo = start.toVar()
         const hi = start.add(levels).sub(1).toVar()
@@ -594,7 +749,7 @@ export class RoomMap {
                   room.assign(int(round(e)).sub(1))
                 }).ElseIf(e.lessThan(-0.5), () => {
                   const a = int(round(e.negate())).sub(1)
-                  const cell = ivec2((floor as N)(p.xz.sub(u.origin).div(CELL))).sub(tile.mul(TILE))
+                  const cell = ivec2((floor as N)(m.div(CELL))).sub(tile.mul(TILE))
                   const at = ivec2(
                     a.mod(u.atlasTilesW).mul(TILE).add(cell.x),
                     a.div(u.atlasTilesW).mul(TILE).add(cell.y),
@@ -614,6 +769,8 @@ export class RoomMap {
 }
 
 // ---- build helpers --------------------------------------------------------------------------
+
+const IDENTITY: [number, number] = [1, 0]
 
 /** Groups a level's rooms whose padded tile rects lie within `CLUSTER_GAP` tiles of each other. */
 function clusterRooms(
@@ -696,16 +853,76 @@ function rasterize(
   }
 }
 
-/** Two passes of 4-neighbour growth into empty cells: wall thickness and polygon slop resolve. */
-function dilate(cells: Uint16Array, scratch: Uint16Array, width: number, height: number) {
+/** Marks the cells one footprint triangle (`t[at…at+5]`, world XZ) reaches. */
+function markWall(
+  t: ArrayLike<number>,
+  at: number,
+  wall: Uint8Array,
+  width: number,
+  height: number,
+  x0: number,
+  z0: number,
+) {
+  const zMin = Math.min(t[at + 1]!, t[at + 3]!, t[at + 5]!)
+  const zMax = Math.max(t[at + 1]!, t[at + 3]!, t[at + 5]!)
+  const j0 = Math.max(0, Math.ceil((zMin - WALL_REACH - z0) / CELL - 0.5))
+  const j1 = Math.min(height - 1, Math.floor((zMax + WALL_REACH - z0) / CELL - 0.5))
+  for (let j = j0; j <= j1; j++) {
+    // The triangle's x extent inside the band of z this row's cell centres reach.
+    const lo = z0 + (j + 0.5) * CELL - WALL_REACH
+    const hi = lo + 2 * WALL_REACH
+    let xMin = Number.POSITIVE_INFINITY
+    let xMax = Number.NEGATIVE_INFINITY
+    for (let a = 0; a < 3; a++) {
+      const xa = t[at + a * 2]!
+      const za = t[at + a * 2 + 1]!
+      const xb = t[at + ((a + 1) % 3) * 2]!
+      const zb = t[at + ((a + 1) % 3) * 2 + 1]!
+      if (za >= lo && za <= hi) {
+        xMin = Math.min(xMin, xa)
+        xMax = Math.max(xMax, xa)
+      }
+      for (const z of [lo, hi])
+        if (za < z !== zb < z) {
+          const x = xa + ((xb - xa) * (z - za)) / (zb - za)
+          xMin = Math.min(xMin, x)
+          xMax = Math.max(xMax, x)
+        }
+    }
+    if (xMin > xMax) continue
+    const i0 = Math.max(0, Math.ceil((xMin - WALL_REACH - x0) / CELL - 0.5))
+    const i1 = Math.min(width - 1, Math.floor((xMax + WALL_REACH - x0) / CELL - 0.5))
+    if (i1 >= i0) wall.fill(1, j * width + i0, j * width + i1 + 1)
+  }
+}
+
+/**
+ * Two passes of 4-neighbour growth into empty cells: wall thickness and polygon slop resolve.
+ * A room grows into a wall but never out of it: past a wall's far face is outside, wherever the
+ * room's outline runs inside the wall (its centre line, or either face).
+ */
+function dilate(
+  cells: Uint16Array,
+  scratch: Uint16Array,
+  width: number,
+  height: number,
+  wall?: Uint8Array,
+) {
+  const steps = [-1, 1, -width, width]
   for (let pass = 0; pass < 2; pass++) {
     scratch.set(cells)
     for (let j = 1; j < height - 1; j++)
       for (let i = 1; i < width - 1; i++) {
         const k = j * width + i
         if (scratch[k]) continue
-        const n = scratch[k - 1] || scratch[k + 1] || scratch[k - width] || scratch[k + width]
-        if (n) cells[k] = n
+        const open = !wall || wall[k] === 1
+        for (const step of steps) {
+          const n = scratch[k + step]!
+          if (n && (open || !wall?.[k + step])) {
+            cells[k] = n
+            break
+          }
+        }
       }
   }
 }

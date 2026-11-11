@@ -15,12 +15,12 @@ import {
   openingRoom,
 } from '../../../lib/floor-edit-session'
 import { formatAreaLabel } from '@pascal-app/core'
-import { Button } from '../primitives/button'
-import { Switch } from '../primitives/switch'
+import { Button } from '@pascal-app/viewer/ui'
+import { Switch } from '@pascal-app/viewer/ui'
 import { PanelWrapper } from './panel-wrapper'
-import { localizedLevelName } from '../../../i18n/level-name'
+import { localizedLevelName } from '@pascal-app/viewer/ui'
 import { nodeLabel } from '../../../i18n/node-messages'
-import { displayRoomName } from '../../../lib/room-name-messages'
+import { displayRoomName } from '@pascal-app/viewer/ui'
 
 /**
  * A floor (or ceiling) opening: where it is, what it cuts, and the switch for

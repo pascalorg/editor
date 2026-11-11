@@ -21,6 +21,17 @@ import {
   useViewer,
   ZONE_LAYER,
 } from '@pascal-app/viewer'
+import {
+  type CameraPoseApplicationPlan,
+  frameViewerCamera,
+  normalizeCameraPose,
+  planCameraPoseApplication,
+  publishCameraPose,
+  publishInitialCameraPose,
+  releaseCameraPoseEventSuppression,
+  stepCameraPoseInterpolation,
+  withCameraPoseDistance,
+} from '@pascal-app/viewer/ui'
 import { CameraControls, CameraControlsImpl } from '@react-three/drei'
 import { useFrame, useThree } from '@react-three/fiber'
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef } from 'react'
@@ -33,15 +44,6 @@ import {
   Spherical,
   Vector3,
 } from 'three'
-import {
-  type CameraPoseApplicationPlan,
-  normalizeCameraPose,
-  planCameraPoseApplication,
-  publishInitialCameraPose,
-  releaseCameraPoseEventSuppression,
-  stepCameraPoseInterpolation,
-  withCameraPoseDistance,
-} from '../../lib/camera-pose'
 import { EDITOR_LAYER } from '../../lib/constants'
 import {
   acceptsKeyboardPan,
@@ -65,8 +67,6 @@ import {
 } from '../../lib/orbit-floor-clearance'
 import { orbitNearPlane } from '../../lib/orbit-near-plane'
 import { editorOwnsOneFingerDrag } from '../../lib/touch-gesture-priority'
-import { frameViewerCamera } from '../../lib/viewer-selection'
-import { publishCameraPose } from '../../store/camera-pose-store'
 import useEditor, { takePreviewCameraRestore } from '../../store/use-editor'
 import {
   useActiveHandleDrag,

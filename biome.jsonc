@@ -25,6 +25,11 @@
       "jsxQuoteStyle": "double"
     }
   },
+  "css": {
+    "parser": {
+      "tailwindDirectives": true
+    }
+  },
   "linter": {
     "rules": {
       "style": {
@@ -264,7 +269,8 @@
               "options": {
                 "paths": {
                   "@pascal-app/nodes": "The viewer must not import @pascal-app/nodes — consult nodeRegistry.get(kind) instead. See DECISIONS.md E-002.",
-                  "@pascal-app/editor": "The viewer ships standalone and knows no editor state; pass what it needs through viewer props or the registry. See DECISIONS.md E-001."
+                  "@pascal-app/editor": "The viewer ships standalone and knows no editor state; pass what it needs through viewer props or the registry. See DECISIONS.md E-001.",
+                  "next": "The viewer, its UI included, runs in any React host; take router pieces (links) as props. See DECISIONS.md E-001."
                 },
                 "patterns": [
                   {
@@ -276,6 +282,10 @@
                       "**/editor/src/**"
                     ],
                     "message": "The viewer ships standalone and knows no editor or nodes internals. See DECISIONS.md E-001."
+                  },
+                  {
+                    "group": ["next/**"],
+                    "message": "The viewer, its UI included, runs in any React host; take router pieces (links) as props. See DECISIONS.md E-001."
                   }
                 ]
               }

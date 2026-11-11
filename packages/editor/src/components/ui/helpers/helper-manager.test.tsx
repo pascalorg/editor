@@ -8,7 +8,7 @@ import {
 import { SELECT_HUD_TITLE, toolHudTitle } from '../../../lib/hud-title'
 import { snapContextOf } from '../../../lib/snapping-mode'
 import { cornerHintRows } from '../../../store/use-corner-snap-hint'
-import { TooltipProvider } from '../primitives/tooltip'
+import { TooltipProvider } from '@pascal-app/viewer/ui'
 import { ContextualHelperPanel } from './contextual-helper-panel'
 import {
   mepHandleGesture,

@@ -19,7 +19,7 @@ import {
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { localizedFloorFootprintName } from '../../../i18n/floor-footprint-name'
-import { localizedLevelName } from '../../../i18n/level-name'
+import { localizedLevelName } from '@pascal-app/viewer/ui'
 import { useRef, useState } from 'react'
 import {
   applyFloorFoundation,
@@ -40,7 +40,7 @@ import { formatLinearMeasurement } from '@pascal-app/core'
 import { FinishSwatch } from '../controls/finish-swatch'
 import { MetricControl } from '../controls/metric-control'
 import { SegmentedControl } from '../controls/segmented-control'
-import { Button } from '../primitives/button'
+import { Button } from '@pascal-app/viewer/ui'
 import { PanelWrapper } from './panel-wrapper'
 
 /** Unpainted finishes, as the plate renders them (nodes' slab slot defaults). */

@@ -5,6 +5,7 @@ import { PanelLeftClose } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { triggerSFX } from './../../../lib/sfx-bus'
 import { cn } from './../../../lib/utils'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@pascal-app/viewer/ui'
 
 export type SidebarTab = {
   id: string
