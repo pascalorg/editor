@@ -1647,6 +1647,18 @@ function EditorContent({
     void useSidebarStore.persist.rehydrate()
   }, [])
 
+  // A project opens on the column's tab (the chat) as it starts loading: after the saved layout
+  // is restored (the effect above), once per project, and not again when preview hands the
+  // layout back.
+  const openedOnColumnRef = useRef<string | null>(null)
+  useEffect(() => {
+    if (layoutVersion !== 'v2' || !columnTabId || isMobile) return
+    const project = projectId ?? ''
+    if (openedOnColumnRef.current === project) return
+    openedOnColumnRef.current = project
+    useEditor.getState().setActiveSidebarPanel(columnTabId)
+  }, [projectId, layoutVersion, columnTabId, isMobile])
+
   useEffect(() => {
     useViewer.getState().setProjectId(projectId ?? null)
     useFloorplanMode.getState().setProjectId(projectId ?? null)
@@ -1766,16 +1778,6 @@ function EditorContent({
 
     return () => window.clearTimeout(timer)
   }, [hasLoadedInitialScene, isLoading, isSceneLoading, isViewerSceneReady, sceneReadyKey])
-
-  // A project opens on the column's tab (the chat), once per load: after the saved layout is
-  // restored, and not again when preview hands the layout back.
-  const openedOnColumnRef = useRef<number | null>(null)
-  useEffect(() => {
-    if (sceneReadyKey === 0 || layoutVersion !== 'v2' || !columnTabId || isMobile) return
-    if (openedOnColumnRef.current === sceneReadyKey) return
-    openedOnColumnRef.current = sceneReadyKey
-    useEditor.getState().setActiveSidebarPanel(columnTabId)
-  }, [sceneReadyKey, layoutVersion, columnTabId, isMobile])
 
   // The useAutoFrame emit can be clobbered by the level-follow effect's
   // first-run pivot rest on fast (client-side navigation) loads. Re-emitting

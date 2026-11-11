@@ -450,7 +450,7 @@ export const CustomCameraControls = ({
     useEditor.getState().setOpeningCameraSettled(true)
   }, [])
   // Frames the opening project again; set while the opening follow runs.
-  const reframeOpening = useRef<(() => void) | null>(null)
+  const reframeOpening = useRef<(() => boolean) | null>(null)
   const pendingAppliedPose = useRef<CameraPoseApplicationPlan | null>(null)
   const activePoseInterpolation = useRef<{
     camera: Camera
@@ -784,9 +784,10 @@ export const CustomCameraControls = ({
     openingFrame.current = 'framing'
     let framed: Box3 | null = null
     let framedView = false
-    const frame = (forced = false) => {
+    // True when the opening holds the camera: its saved view, or what it framed.
+    const frame = (forced = false): boolean => {
       const control = controls.current
-      if (openingFrame.current !== 'framing' || !control) return
+      if (openingFrame.current !== 'framing' || !control) return false
       const nodes = Object.values(useScene.getState().nodes)
       const saved = nodes.find(
         (node) => (node.type === 'site' || node.type === 'building') && savedView(node),
@@ -794,24 +795,26 @@ export const CustomCameraControls = ({
       const view = saved ? savedView(saved) : null
       if (view) {
         // The saved view is the opening: the follow leaves it, and a load fit puts it back.
-        if (framedView && !forced) return
+        if (framedView && !forced) return true
         framedView = true
         control.setLookAt(...view.position, ...view.target, true)
-        return
+        return true
       }
       const bounds = openingBounds(nodes)
-      if (!bounds || (framed && boundsClose(framed, bounds))) return
+      if (!bounds) return false
+      if (framed && boundsClose(framed, bounds)) return true
       framed = bounds
       // A sphere keeps the opening's angle (a box fit turns square to it), and a floor of
       // a few metres keeps a single wall from filling the view.
       bounds.getBoundingSphere(openingSphere)
       openingSphere.radius = Math.max(openingSphere.radius, OPENING_FRAME_MIN_RADIUS)
       void control.fitToSphere(openingSphere, true)
+      return true
     }
     frame()
     reframeOpening.current = () => {
       framed = null
-      frame(true)
+      return frame(true)
     }
     const timers = OPENING_FRAME_FOLLOW_MS.map((ms) => window.setTimeout(() => frame(), ms))
     // The follow window over, the opening is settled: later runs (preview, first person) leave it.
@@ -1568,10 +1571,8 @@ export const CustomCameraControls = ({
       // While the project is opening, a fit (the load's own, or a new scene arriving) is the
       // opening frame: it frames everything drawn, scans included, which the plan's node bounds
       // leave out. Taking it here keeps the two from overriding each other.
-      if (openingFrame.current === 'framing' && reframeOpening.current) {
-        reframeOpening.current()
-        return
-      }
+      // With nothing drawn to frame yet (no building or scan meshes), the load's own fit applies.
+      if (openingFrame.current === 'framing' && reframeOpening.current?.()) return
       const plan = planFitSceneOnEvent({
         isPreviewMode,
         isFirstPersonMode,
