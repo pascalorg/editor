@@ -70,8 +70,8 @@ export type CreatePascalMcpServerOptions = {
   sceneViews?: SceneViewHost
   /** Reads catalog items' pictures and surfaces before view_assets and paint. */
   assetViews?: PlanReadingHosts['assetViews']
-  /** A pause after each call of a run_batch, for a host with a scene of its own per request. */
-  betweenBatchCalls?: PlanReadingHosts['betweenBatchCalls']
+  /** A pause between the steps of a long call, for a host with a scene of its own per request. */
+  betweenSteps?: PlanReadingHosts['betweenSteps']
   /** Lines the host adds to what a client reads at connect (the person's own settings). */
   instructions?: string
 }
@@ -97,7 +97,7 @@ export function createPascalMcpServer(opts: CreatePascalMcpServerOptions): McpSe
     readFile: opts.readFile,
     sceneViews: opts.sceneViews,
     assetViews: opts.assetViews,
-    betweenBatchCalls: opts.betweenBatchCalls,
+    betweenSteps: opts.betweenSteps,
   })
   registerVisionTools(server, operations)
   if (opts.services) registerHostedServiceTools(server, opts.services)

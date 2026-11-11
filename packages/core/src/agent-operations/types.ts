@@ -1,5 +1,6 @@
 import type { ZodType } from 'zod'
 import type { DesignBrief } from '../agent-tools/design-brief'
+import type { Steps } from '../lib/steps'
 import type {
   AnyNode,
   Collection,
@@ -114,6 +115,15 @@ export type AgentOperation<Input = never> = (
   input: Input,
   context: AgentContext,
 ) => AgentOperationOutcome
+
+/**
+ * An operation that takes seconds on a large building, in steps: a batch's calls, verify_scene's
+ * checks. A host that can let other work run between them resumes it one step at a time; the
+ * operation of the same name runs it through (`inOneGo`), with the same outcome.
+ */
+export type AgentOperationSteps<Input = never> = (
+  ...args: Parameters<AgentOperation<Input>>
+) => Steps<AgentOperationOutcome>
 
 /** Operations by tool name: core's `AGENT_OPERATIONS`, or a plugin's `./agent-operations` export. */
 export type AgentOperations = Readonly<Record<string, AgentOperation>>

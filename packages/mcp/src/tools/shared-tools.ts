@@ -1,6 +1,7 @@
 import type { McpServer } from '@modelcontextprotocol/server'
 import {
   type AddObjectInput,
+  AGENT_OPERATION_STEPS,
   AGENT_OPERATIONS,
   type AgentContext,
   type AgentHostRuntime,
@@ -13,9 +14,9 @@ import {
   createAssetViewLoader,
   createFetchAssetViewIO,
   furnishingRefusal,
-  RUN_BATCH_STEPS,
   readCatalog,
   type SceneChanges,
+  type Steps,
   startOfSession,
   writeCollections,
 } from '@pascal-app/core/agent-operations'
@@ -121,12 +122,13 @@ export type PlanReadingHosts = {
   /** Compiles one add_object module for a batch before the synchronous operations run. */
   buildObject?: (input: Omit<AddObjectInput, 'compiled'>) => Promise<CompiledGeometryScript>
   /**
-   * Awaited after each call of a run_batch, so the host's timers and I/O run during a long one.
-   * Only for a host whose scene no other call can reach meanwhile (a bridge of its own for each
-   * request): the batch is planned on the scene as its first call found it and applied after its
-   * last. Without it a batch runs uninterrupted.
+   * Awaited between the steps of a call that takes seconds on a large building (after each call of
+   * a run_batch, after each check of a verify_scene, author_scene's closing one included), so the
+   * host's timers and I/O run meanwhile. Only for a host whose scene no other call can reach then
+   * (a bridge of its own for each request): a batch is planned on the scene as its first call
+   * found it and applied after its last. Without it these calls run uninterrupted.
    */
-  betweenBatchCalls?: () => Promise<void>
+  betweenSteps?: () => Promise<void>
 }
 
 const defaultAssetViews = createAssetViewLoader(createFetchAssetViewIO())
@@ -719,14 +721,15 @@ function modelResult(
   return output
 }
 
-/** A batch one call at a time, each in the scene's scope, the host's pause after each. */
-async function runBatchInSteps(
-  bridge: SceneOperations,
-  batch: ReturnType<typeof RUN_BATCH_STEPS>,
+/** Work one step at a time, the host's pause after each; `scope` is where each step runs. */
+export async function pausedBetweenSteps<Result>(
+  steps: Steps<Result>,
   pause: () => Promise<void>,
-) {
+  scope: (step: () => IteratorResult<void, Result>) => IteratorResult<void, Result> = (step) =>
+    step(),
+): Promise<Result> {
   for (;;) {
-    const step = inScene(bridge, () => batch.next())
+    const step = scope(() => steps.next())
     if (step.done) return step.value
     await pause()
   }
@@ -827,12 +830,16 @@ export function registerOperationTool(
           pictures: needs.pictures,
         })
       try {
+        const steps =
+          hosts.betweenSteps && Object.hasOwn(AGENT_OPERATION_STEPS, tool.contract.name)
+            ? AGENT_OPERATION_STEPS[tool.contract.name]
+            : undefined
         outcome =
-          tool.contract.name === runBatchTool.name && hosts.betweenBatchCalls
-            ? await runBatchInSteps(
-                bridge,
-                RUN_BATCH_STEPS(nodes, input as never, context),
-                hosts.betweenBatchCalls,
+          steps && hosts.betweenSteps
+            ? await pausedBetweenSteps(
+                steps(nodes, input as never, context),
+                hosts.betweenSteps,
+                (step) => inScene(bridge, step),
               )
             : inScene(bridge, () => tool.operation(nodes, input as never, context))
       } catch (error) {

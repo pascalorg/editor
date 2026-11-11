@@ -13,7 +13,7 @@ import {
 import { setSdfChecks } from '../spatial/usage-field/flag'
 import './index'
 import type { SceneNodes } from './types'
-import { verifyScene } from './verify-scene'
+import { verifyScene, verifySceneSteps } from './verify-scene'
 
 type Pt = [number, number]
 type Report = { issues: { type: string }[] }
@@ -129,6 +129,16 @@ describe('verify_scene asked for one finding type, with the usage checks on', ()
   test('a misspelt usage type answers with every type the whole report holds', () => {
     const input = { type: 'usage_passage_narow' }
     expect(answer(report(input), input)).toEqual(answer(report({}), input))
+  })
+
+  test('taken a step at a time, it stops between its checks and answers the same report', () => {
+    const steps = verifySceneSteps(nodes, {}, context)
+    let stops = 0
+    let step = steps.next()
+    for (; !step.done; step = steps.next()) stops++
+    // More stops than checks: the circulation measurement stops after each floor.
+    expect(stops).toBeGreaterThan(5)
+    expect(step.value.result).toEqual(report({}))
   })
 
   test('the report for a type that is not a usage finding holds no usage findings', () => {

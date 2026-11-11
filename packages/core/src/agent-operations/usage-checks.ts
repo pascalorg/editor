@@ -1,5 +1,5 @@
 import { isUsageType, ROOM_ENTRY_TYPE, ROOM_FOLDED_TYPES } from '../agent-tools/verify-scene-usage'
-import { USAGE_TYPES, type UsageIssue, usageIssues } from '../spatial/usage-field/findings'
+import { USAGE_TYPES, usageIssueSteps } from '../spatial/usage-field/findings'
 import { sdfChecksOn } from '../spatial/usage-field/flag'
 import { registerSceneCheck } from './verify-scene'
 
@@ -24,5 +24,5 @@ registerSceneCheck({
   name: 'usage',
   order: 60,
   run: (nodes, input) =>
-    sdfChecksOn() ? (usageIssues(nodes, { types: askedTypes(input.type) }) as UsageIssue[]) : [],
+    sdfChecksOn() ? usageIssueSteps(nodes, { types: askedTypes(input.type) }) : [],
 })
