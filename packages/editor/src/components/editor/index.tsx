@@ -3,6 +3,7 @@
 import { Icon } from '@iconify/react'
 import {
   acquireSceneReadOnlyLease,
+  computeSceneBoundsXZ,
   createI18n,
   emitter,
   getCatalogMaterialById,
@@ -86,7 +87,6 @@ import {
   type SceneGraph,
   writePersistedSelection,
 } from '../../lib/scene'
-import { computeSceneBoundsXZ } from '../../lib/scene-bounds'
 import { disposeSFXBus, initSFXBus } from '../../lib/sfx-bus'
 import { useUnitFocusRules } from '../../lib/units'
 import { cn } from '../../lib/utils'

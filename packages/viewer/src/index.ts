@@ -58,6 +58,10 @@ export {
   STAND_FLOAT_HEIGHT,
   WALKTHROUGH_FOV,
 } from './components/viewer/glb-walkthrough-controller'
+export {
+  LiveWalkthroughController,
+  type LiveWalkthroughControllerProps,
+} from './components/viewer/live-walkthrough-controller'
 export type { HoverStyle, HoverStyles } from './components/viewer/post-processing'
 export {
   DEFAULT_HOVER_STYLES,
@@ -329,6 +333,7 @@ export {
   textureMapForSlot,
 } from './lib/texture-reference'
 export { packNormalToRGB, unpackRGBToNormal } from './lib/tsl-compat'
+export { isTypingTarget } from './lib/typing-target'
 export {
   AMBIANCE_SECONDS,
   ambianceNow,
@@ -350,6 +355,11 @@ export {
   type ViewerConfig,
 } from './lib/viewer-config'
 export { createZoneShape, createZoneWallGeometry } from './lib/zone-geometry'
+export {
+  type FirstPersonHudState,
+  useFirstPersonHud,
+  type WalkthroughInteract,
+} from './store/use-first-person-hud'
 export type { LightSource } from './store/use-item-light-pool'
 export { catalogLightSource, useItemLightPool } from './store/use-item-light-pool'
 export {

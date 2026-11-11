@@ -1,3 +1,8 @@
+export {
+  type FirstPersonHudState,
+  useFirstPersonHud,
+  type WalkthroughInteract,
+} from '../store/use-first-person-hud'
 export { ActionButton } from './components/action-button'
 export {
   type ActionMenuPlacement,
@@ -187,9 +192,4 @@ export {
   publishNavigationSyncPose,
   subscribeNavigationSyncPose,
 } from './store/navigation-sync-pose-store'
-export {
-  type FirstPersonHudState,
-  useFirstPersonHud,
-  type WalkthroughInteract,
-} from './store/use-first-person-hud'
 export { FOLLOW_PASCAL_STORAGE_KEY, useFollowPascal } from './store/use-follow-pascal'

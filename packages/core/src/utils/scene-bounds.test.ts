@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
+import { computeSceneBoundsXZ } from '@pascal-app/core'
 import type { AnyNode } from '@pascal-app/core/schema'
-import { computeSceneBoundsXZ } from './scene-bounds'
 
 function makeWall(start: [number, number], end: [number, number]): AnyNode {
   return {

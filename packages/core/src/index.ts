@@ -1356,6 +1356,7 @@ export { wallTrimPatch } from './systems/wall/wall-trim'
 export type { SceneGraph } from './utils/clone-scene-graph'
 export { cloneLevelSubtree, cloneSceneGraph, forkSceneGraph } from './utils/clone-scene-graph'
 export * from './utils/measurement-format'
+export { computeSceneBoundsXZ, type SceneBoundsXZ } from './utils/scene-bounds'
 export { areSemanticValuesEqual } from './utils/semantic-equal'
 export { isObject } from './utils/types'
 export {

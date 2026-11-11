@@ -8,7 +8,7 @@ import {
   useInteractive,
   useScene,
 } from '@pascal-app/core'
-import type { WalkthroughInteract } from '@pascal-app/viewer/ui'
+import type { WalkthroughInteract } from '../../../store/use-first-person-hud'
 
 /**
  * Whether the walkthrough swings this door or window itself, through the native `operationState`

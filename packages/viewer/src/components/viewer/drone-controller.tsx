@@ -13,17 +13,10 @@ import {
   stepDroneFlight,
   turnFirstPersonLook,
 } from '../../lib/drone-flight'
+import { isTypingTarget } from '../../lib/typing-target'
 import useViewer from '../../store/use-viewer'
 import { WALKTHROUGH_FOV } from './glb-walkthrough-controller'
 import { applyWalkthroughCameraClipping } from './viewer-camera'
-
-const TYPING_TARGET =
-  'input, textarea, select, [contenteditable]:not([contenteditable="false"]), [role="combobox"], [role="textbox"], [role="dialog"], [role="alertdialog"]'
-
-function isTypingTarget(target: EventTarget | null) {
-  const element = target as { closest?: (selector: string) => unknown; isContentEditable?: boolean }
-  return !!element && (element.isContentEditable === true || !!element.closest?.(TYPING_TARGET))
-}
 
 function requestLock(canvas: HTMLCanvasElement) {
   // The request can reject asynchronously (the browser's re-lock cooldown);

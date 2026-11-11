@@ -1,6 +1,6 @@
+import { isTypingTarget } from '@pascal-app/viewer'
 import { markToolCancelConsumed } from '../../hooks/use-keyboard'
 import type { ParseMeasurementOptions } from '../../lib/measurement-parser'
-import { isTypingTarget } from '../../lib/typing-target'
 import useEditor from '../../store/use-editor'
 import {
   PLACEMENT_TYPING_LENGTH_ANGLE,

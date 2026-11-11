@@ -86,6 +86,59 @@ rendering.
 See [`fixtures/viewer-live`](../../fixtures/viewer-live) for a complete small graph and the
 isolated packed-package dev/production smoke test.
 
+## Walkthrough for live scenes
+
+`LiveWalkthroughController` is a 3D controller from the main `@pascal-app/viewer` entry.
+Mount it inside `Viewer` alongside your live graph rendered with `renderPlugin`. It is dormant
+until `useViewer.walkthroughMode` is true. `walkthroughMovement` chooses `walk` (gravity,
+BVH collision, crouch, jump and door/window/item/elevator interaction) or `drone` (free flight).
+No editor state, editing plugin or baked asset is required.
+
+```tsx
+import { LiveWalkthroughController, useFirstPersonHud, useViewer, Viewer } from '@pascal-app/viewer'
+import { WalkthroughHud } from '@pascal-app/viewer/ui'
+import { OrbitControls } from '@react-three/drei'
+
+function LiveViewer() {
+  const walking = useViewer(s => s.walkthroughMode)
+  const suspended = useViewer(s => s.walkthroughSuspended)
+  const floorLabel = useFirstPersonHud(s => s.floorLabel)
+  const zoneLabel = useFirstPersonHud(s => s.zoneLabel)
+  const interact = useFirstPersonHud(s => s.interact)
+  const exit = () => useViewer.getState().setWalkthroughMode(false)
+  return (
+    <div style={{ position: 'relative', width: '100vw', height: '100vh' }}>
+      <Viewer>
+        <OrbitControls enabled={!walking} makeDefault />
+        <LiveWalkthroughController />
+      </Viewer>
+      <button onClick={() => useViewer.getState().setWalkthroughMode(!walking)}>Walkthrough</button>
+      {walking && <WalkthroughHud floorLabel={floorLabel} zoneLabel={zoneLabel}
+        interact={interact} suspended={suspended} onExit={exit} />}
+    </div>
+  )
+}
+```
+
+Use the UI styling setup below for the HUD. Click the canvas to lock the pointer; WASD/arrows move,
+Space jumps, Shift runs, Ctrl crouches, E/R or a locked-pointer click operates the targeted object,
+and T closes it. P frees the cursor and click/P resumes. Escape or losing pointer lock exits.
+A placed spawn controls entry position and heading; otherwise the controller derives a grounded
+spawn from the camera and live collider world. Disable other camera controls while walking.
+
+The controller publishes floor, room and interaction prompts to `useFirstPersonHud`. Its main and
+`viewer/ui` exports reference the same store. Mount the HUD outside the canvas and pass those
+values explicitly. Door and drawer cues emit core `interaction:sound`; opt into playback with
+`initInteractionSounds` from `viewer/sfx`. Movement and interaction do not persist document edits.
+
+Optional `LiveWalkthroughControllerProps` let a host own framing: `paused` freezes movement/look,
+`externalFov` leaves FOV application/restoration to the host, `pointerInteraction={false}` reserves
+locked-pointer clicks for the host, and `suspendOnUnlock` keeps walkthrough active when pointer lock
+is lost (Escape with a free cursor exits). `onExit` runs after the controller clears
+`walkthroughMode`. Props remain current during a session without releasing pointer lock.
+For baked scenes, continue using `GlbWalkthroughController`; `DroneController` also works with
+either scene source when only free flight is needed.
+
 ## Custom Camera Controls
 
 ```typescript
@@ -296,7 +349,7 @@ themselves with a `dark` class. Control icons load from `configureViewer({ icons
 `https://editor.pascal.app/icons`); button sounds play through `@pascal-app/viewer/sfx`.
 
 ```tsx
-import { useViewer, Viewer } from '@pascal-app/viewer'
+import { LiveWalkthroughController, useViewer, Viewer } from '@pascal-app/viewer'
 import {
   ParametricViewerRooms,
   SceneLoader,
@@ -314,6 +367,7 @@ function ProjectViewer({ ready, name }: { ready: boolean; name: string }) {
     <div className="relative h-full w-full">
       <ViewerStage>
         <Viewer selectionManager="custom">
+          <LiveWalkthroughController />
           <ViewerSelectionManager />
           <ParametricViewerRooms />
         </Viewer>
@@ -341,8 +395,9 @@ level in the viewer. Room names show as the plan's drawn tags. Control the mode 
 `linkComponent` renders the header's links (a plain `<a>` by default); pass your router's link,
 e.g. Next's `Link`. `ParametricViewerRooms` is `ViewerRooms` over the live scene store; a host with
 another node source (a baked scene) passes `<ViewerRooms source={{ nodes, objectFor }} />`. While
-mounted, zones draw no tinted volume: a room shows through its pill and highlight instead. The walkthrough toggle only flips `walkthroughMode`; mount your own
-first-person controls inside `<Viewer>` to move the camera.
+mounted, zones draw no tinted volume: a room shows through its pill and highlight instead. The walkthrough toggle flips `walkthroughMode`; the mounted
+`LiveWalkthroughController` moves the camera. Read `useFirstPersonHud` for the HUD's room and
+interaction props, as in the live walkthrough example above.
 
 ## Asset CDN Helpers
 

@@ -36,7 +36,7 @@ import {
   type WallNode,
   type WallPushArrowPayload,
 } from '@pascal-app/core'
-import { useViewer } from '@pascal-app/viewer'
+import { isTypingTarget, useViewer } from '@pascal-app/viewer'
 import type { Ray } from 'three'
 import { create } from 'zustand'
 import { ARROW_COLOR } from '../components/editor/handles/handle-arrow'
@@ -65,7 +65,6 @@ import { applyRoomPlan } from './room-structure-commands'
 import { levelSeparatorLines, separatorWallLine } from './separator-lines'
 import { sfxEmitter } from './sfx-bus'
 import { type SpatialPointerId, spatialPointerInput } from './spatial-pointer-input'
-import { isTypingTarget } from './typing-target'
 import {
   nearestWallParallelTarget,
   publishWallParallelGuide,

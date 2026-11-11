@@ -214,13 +214,6 @@ try {
             if (errors.length) throw new Error(errors.join('\n'))
             if ((await page.evaluate(() => typeof (globalThis as any).process)) !== 'undefined')
               throw new Error('Fixture must run without a process polyfill')
-            await page.evaluate(() => (window as any).playFixtureSound())
-            for (let i = 0; i < 50 && !soundRequests.includes('/fixture-sfx/door_open.mp3'); i++)
-              await page.waitForTimeout(100)
-            if (!soundRequests.includes('/fixture-sfx/door_open.mp3'))
-              throw new Error(
-                `Sound files did not load from sfxBaseUrl: ${soundRequests.join(', ')}`,
-              )
             if (!iconRequests.includes('/icons/topview.webp'))
               throw new Error(
                 `Viewer UI icons did not load from iconsBaseUrl: ${iconRequests.join(', ')}`,
@@ -244,6 +237,57 @@ try {
               overlayBefore,
               { timeout: 10_000 },
             )
+            const documentBefore = await page.evaluate(() => (window as any).viewerFixture.document)
+            await page.click('[data-enter-walkthrough]')
+            await page.waitForFunction(() => {
+              const probe = (window as any).viewerFixture
+              return (
+                probe?.walking &&
+                probe.camera[1] > 1 &&
+                probe.camera[1] < 2 &&
+                document.pointerLockElement === document.querySelector('canvas')
+              )
+            })
+            await page.waitForSelector('[data-walkthrough-hud]', { state: 'visible' })
+            await page.waitForSelector('[data-walkthrough-crosshair]', { state: 'visible' })
+            // Wait for the initial capsule/eye placement before measuring keyboard movement.
+            const start: number[] = await page.evaluate(() => (window as any).viewerFixture.camera)
+            await page.keyboard.down('w')
+            try {
+              await page.waitForFunction(
+                (position) => {
+                  const camera = (window as any).viewerFixture.camera
+                  return Math.hypot(camera[0] - position[0], camera[2] - position[2]) > 0.3
+                },
+                start,
+                { timeout: 10_000 },
+              )
+            } finally {
+              await page.keyboard.up('w')
+            }
+            // The placed spawn faces the fixture's south-wall door. This must be the controller's
+            // own centre-ray target and E handler, not a synthetic sound request from the host.
+            await page.waitForFunction(() =>
+              document.querySelector('[data-walkthrough-hud]')?.textContent?.includes('open door'),
+            )
+            await page.keyboard.press('e')
+            await page.waitForFunction(() =>
+              (window as any).viewerFixture.interactionSounds.includes('door-open'),
+            )
+            for (let i = 0; i < 50 && !soundRequests.includes('/fixture-sfx/door_open.mp3'); i++)
+              await page.waitForTimeout(100)
+            if (!soundRequests.includes('/fixture-sfx/door_open.mp3'))
+              throw new Error(
+                `Door sound did not load from sfxBaseUrl: ${soundRequests.join(', ')}`,
+              )
+            const documentAfter = await page.evaluate(() => (window as any).viewerFixture.document)
+            if (documentBefore !== documentAfter)
+              throw new Error(
+                'Walkthrough movement/door interaction changed the read-only document',
+              )
+            await page.keyboard.press('Escape')
+            await page.waitForFunction(() => !(window as any).viewerFixture.walking)
+            await page.waitForSelector('[data-walkthrough-hud]', { state: 'detached' })
             // The packed stage: its switcher shows the read-only plan, drawn by renderPlugin's
             // floor-plan builders alone, then the plan beside the 3D view.
             const planShapes: Record<string, number> = {}
@@ -295,8 +339,8 @@ try {
             console.log(
               `${mode}, storage ${deniedStorage ? 'denied' : 'available'}: scene ready, ` +
                 `non-empty node geometry, ${probe.drawCalls} draw calls, room pill, highlight ` +
-                `and callout, 2D and split plan (${JSON.stringify(planShapes)}), no errors ` +
-                `(${elapsed()})`,
+                `and callout, live walkthrough movement, HUD, door sound, unchanged document, ` +
+                `2D and split plan (${JSON.stringify(planShapes)}), no errors (${elapsed()})`,
             )
           } catch (error) {
             console.error(

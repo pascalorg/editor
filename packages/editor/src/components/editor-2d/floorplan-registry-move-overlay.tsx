@@ -26,7 +26,7 @@ import {
   useScene,
 } from '@pascal-app/core'
 import { nodeLevelFrame } from '@pascal-app/core/procedural-items'
-import { useViewer } from '@pascal-app/viewer'
+import { isTypingTarget, useViewer } from '@pascal-app/viewer'
 import { useEffect, useMemo } from 'react'
 import { commitFreshPlacementSubtree } from '../../lib/fresh-planar-placement'
 import { isHistoryShortcut } from '../../lib/history'
@@ -39,7 +39,6 @@ import {
 import { movementSfxStepKey } from '../../lib/sfx/movement-tick'
 import { sfxEmitter } from '../../lib/sfx-bus'
 import { surfaceAttachmentId } from '../../lib/surface-attachment'
-import { isTypingTarget } from '../../lib/typing-target'
 import { resolveAlignmentForFloorplanView } from '../../lib/world-grid-snap'
 import useAlignmentGuides from '../../store/use-alignment-guides'
 import useEditor, {
