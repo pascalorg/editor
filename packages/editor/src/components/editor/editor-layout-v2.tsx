@@ -507,7 +507,9 @@ export function EditorLayoutV2({
   const columnTab = sidebarTabs.find((t) => t.id === columnTabId)
   // The column's tab is listed in the menu too, so it is one click back from any tool.
   const toolTabs = columnTab ? sidebarTabs.filter((t) => t !== columnTab) : sidebarTabs
-  const showSideColumns = !(isMobile || isCaptureMode) && toolTabs.length > 0
+  // A host with only the column's tab still gets the column (and the menu that lists it).
+  const showSideColumns =
+    !(isMobile || isCaptureMode) && (toolTabs.length > 0 || columnTab !== undefined)
   const isMenuHidden = useSidebarStore((s) => s.isMenuHidden)
   // A project opens on the column's tab (the chat): tools are one click away in the menu.
   const columnTabIdOnOpen = useRef(showSideColumns ? columnTab?.id : undefined)

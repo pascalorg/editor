@@ -444,6 +444,8 @@ export const CustomCameraControls = ({
   const controls = useRef<FloorAwareCameraControls | null>(null)
   // Whether the opening framing may still move the camera: not once anything else has.
   const openingFrame = useRef<'waiting' | 'framing' | 'done'>('waiting')
+  // Frames the opening project again; set while the opening follow runs.
+  const reframeOpening = useRef<(() => void) | null>(null)
   const pendingAppliedPose = useRef<CameraPoseApplicationPlan | null>(null)
   const activePoseInterpolation = useRef<{
     camera: Camera
@@ -774,7 +776,8 @@ export const CustomCameraControls = ({
     if (openingFrame.current !== 'waiting') return
     openingFrame.current = 'framing'
     let framed: Box3 | null = null
-    const frame = () => {
+    let framedView = false
+    const frame = (forced = false) => {
       const control = controls.current
       if (openingFrame.current !== 'framing' || !control) return
       const nodes = Object.values(useScene.getState().nodes)
@@ -783,7 +786,9 @@ export const CustomCameraControls = ({
       )
       const view = saved ? savedView(saved) : null
       if (view) {
-        openingFrame.current = 'done'
+        // The saved view is the opening: the follow leaves it, and a load fit puts it back.
+        if (framedView && !forced) return
+        framedView = true
         control.setLookAt(...view.position, ...view.target, true)
         return
       }
@@ -797,7 +802,11 @@ export const CustomCameraControls = ({
       void control.fitToSphere(openingSphere, true)
     }
     frame()
-    const timers = OPENING_FRAME_FOLLOW_MS.map((ms) => window.setTimeout(frame, ms))
+    reframeOpening.current = () => {
+      framed = null
+      frame(true)
+    }
+    const timers = OPENING_FRAME_FOLLOW_MS.map((ms) => window.setTimeout(() => frame(), ms))
     // The follow window over, the opening is settled: later runs (preview, first person) leave it.
     timers.push(
       window.setTimeout(
@@ -809,6 +818,7 @@ export const CustomCameraControls = ({
     )
     return () => {
       for (const timer of timers) window.clearTimeout(timer)
+      reframeOpening.current = null
       // Interrupted before anything else moved the camera (a remount, preview): frame on the next run.
       if (openingFrame.current === 'framing') openingFrame.current = 'waiting'
     }
@@ -1544,6 +1554,13 @@ export const CustomCameraControls = ({
     }
 
     const handleFitScene = ({ bounds }: CameraControlFitSceneEvent) => {
+      // While the project is opening, a fit (the load's own, or a new scene arriving) is the
+      // opening frame: it frames everything drawn, scans included, which the plan's node bounds
+      // leave out. Taking it here keeps the two from overriding each other.
+      if (openingFrame.current === 'framing' && reframeOpening.current) {
+        reframeOpening.current()
+        return
+      }
       const plan = planFitSceneOnEvent({
         isPreviewMode,
         isFirstPersonMode,
@@ -1562,6 +1579,20 @@ export const CustomCameraControls = ({
       if (controls.current) applyFitLookAt(controls.current, plan.lookAt)
     }
 
+    // Any other camera command ends the opening follow, so its timers never pull the camera back.
+    const endOpening = () => {
+      if (openingFrame.current === 'framing') openingFrame.current = 'done'
+    }
+    const openingEnders = [
+      'camera-controls:capture',
+      'camera-controls:focus',
+      'camera-controls:frame',
+      'camera-controls:view',
+      'camera-controls:top-view',
+      'camera-controls:orbit-cw',
+      'camera-controls:orbit-ccw',
+    ] as const
+    for (const event of openingEnders) emitter.on(event, endOpening)
     emitter.on('camera-controls:capture', handleNodeCapture)
     emitter.on('camera-controls:focus', handleNodeFocus)
     emitter.on('camera-controls:frame', handleFrame)
@@ -1572,6 +1603,7 @@ export const CustomCameraControls = ({
     emitter.on('camera-controls:fit-scene', handleFitScene)
 
     return () => {
+      for (const event of openingEnders) emitter.off(event, endOpening)
       emitter.off('camera-controls:capture', handleNodeCapture)
       emitter.off('camera-controls:focus', handleNodeFocus)
       emitter.off('camera-controls:frame', handleFrame)
