@@ -13958,7 +13958,6 @@ msgstr "输入尺寸以移动墙体"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Room"
-#: packages/editor/src/components/editor/room-labels.tsx
 #: packages/viewer/src/ui/lib/viewer-selection.ts
 #, fuzzy
 msgid "editor.roomLabel.room"
@@ -13969,7 +13968,6 @@ msgstr "房间"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Zone"
-#: packages/editor/src/components/editor/room-labels.tsx
 #: packages/viewer/src/ui/lib/viewer-selection.ts
 #, fuzzy
 msgid "editor.roomLabel.zone"

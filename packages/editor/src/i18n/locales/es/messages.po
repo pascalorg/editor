@@ -13958,7 +13958,6 @@ msgstr "Escribe una medida para mover el muro"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Room"
-#: packages/editor/src/components/editor/room-labels.tsx
 #: packages/viewer/src/ui/lib/viewer-selection.ts
 #, fuzzy
 msgid "editor.roomLabel.room"
@@ -13969,7 +13968,6 @@ msgstr "Estancia"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Zone"
-#: packages/editor/src/components/editor/room-labels.tsx
 #: packages/viewer/src/ui/lib/viewer-selection.ts
 #, fuzzy
 msgid "editor.roomLabel.zone"

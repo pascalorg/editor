@@ -5613,12 +5613,10 @@ msgstr "Floor"
 msgid "editor.roomHandles.typeASizeToMoveThe"
 msgstr "Type a size to move the wall"
 
-#: packages/editor/src/components/editor/room-labels.tsx
 #: packages/viewer/src/ui/lib/viewer-selection.ts
 msgid "editor.roomLabel.room"
 msgstr "Room"
 
-#: packages/editor/src/components/editor/room-labels.tsx
 #: packages/viewer/src/ui/lib/viewer-selection.ts
 msgid "editor.roomLabel.zone"
 msgstr "Zone"
