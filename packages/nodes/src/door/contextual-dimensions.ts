@@ -19,8 +19,8 @@ export function buildDoorContextualDimensions(
     },
     ctx,
     {
-      showClearancesWhileMoving: false,
-      useExteriorNormal: false,
+      showClearancesWhileMoving: true,
+      useExteriorNormal: true,
     },
   )
 }

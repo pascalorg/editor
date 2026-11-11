@@ -145,6 +145,15 @@ export function publishOpeningGuides3D(args: {
         from: toWorld(centerS, 0),
         to: toWorld(centerS, guides.sillHead.bottomY),
         value: guides.sillHead.sill,
+        targetNodeId: args.movingId,
+        wallId: wall.id,
+        role: 'sill',
+        centerS,
+        centerY: args.centerY,
+        width,
+        height: args.height,
+        wallLength,
+        wallHeight,
       })
     }
     if (guides.sillHead.head > MIN_DIMENSION_M) {
@@ -154,6 +163,15 @@ export function publishOpeningGuides3D(args: {
         from: toWorld(centerS, guides.sillHead.topY),
         to: toWorld(centerS, wallHeight),
         value: guides.sillHead.head,
+        targetNodeId: args.movingId,
+        wallId: wall.id,
+        role: 'head',
+        centerS,
+        centerY: args.centerY,
+        width,
+        height: args.height,
+        wallLength,
+        wallHeight,
       })
     }
   }
@@ -165,6 +183,17 @@ export function publishOpeningGuides3D(args: {
       from: toWorld(gap.fromS, centerY),
       to: toWorld(gap.toS, centerY),
       value: gap.distance,
+      targetNodeId: args.movingId,
+      wallId: wall.id,
+      role: `gap:${gap.side}`,
+      gapFromS: gap.fromS,
+      gapToS: gap.toS,
+      centerS,
+      centerY: args.centerY,
+      width,
+      height: args.height,
+      wallLength,
+      wallHeight,
     })
   }
 

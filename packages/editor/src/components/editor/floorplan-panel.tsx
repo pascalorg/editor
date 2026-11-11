@@ -1,6 +1,8 @@
 'use client'
 
 import { Icon } from '@iconify/react'
+import { DimensionInput } from '../tools/shared/dimension-input'
+import { useDimensionDraftStore } from '../../lib/dimension-draft-store'
 import {
   type AnyNode,
   type AnyNodeId,
@@ -48,6 +50,7 @@ import {
   SlabNode as SlabNodeSchema,
   type StairNode,
   StairNode as StairNodeSchema,
+  parseDimension,
   sampleWallCenterline,
   sceneRegistry,
   snapPointAlongAngleRay,
@@ -64,6 +67,7 @@ import {
   WindowNode as WindowNodeSchema,
   wallClosesRoom,
   wallRectangleCorners,
+  wallSegmentsCoverSegment,
 } from '@pascal-app/core'
 import { useSegmentDraftChain, useWallSnapIndicator } from '@pascal-app/editor'
 import { getSceneTheme, useViewer } from '@pascal-app/viewer'
@@ -7996,6 +8000,7 @@ export function FloorplanPanel({
     wallDraftPointerRef.current = null
     usePlacementTyping.getState().clear()
     useSegmentDraftChain.getState().clear('wall')
+    useDimensionDraftStore.getState().reset()
     // A run pulled from a wall end ends with the plan's draft: back to Select.
     endWallPullRun()
   }, [setDraftEnd])
@@ -10064,6 +10069,7 @@ export function FloorplanPanel({
         setWallChainFirstVertex(point)
         setDraftEnd(point)
         setCursorPoint(point)
+        useDimensionDraftStore.getState().startDraft(point)
         return
       }
 
@@ -10125,10 +10131,7 @@ export function FloorplanPanel({
         ? (createdWall.end as WallPlanPoint)
         : (publishedNextStart ?? point)
 
-      if (
-        !wallDraftIsRun() ||
-        (wallChainFirstVertex && isWithinWallJoinSnapRadius(nextStart, wallChainFirstVertex))
-      ) {
+      if (wallChainFirstVertex && isWithinWallJoinSnapRadius(nextStart, wallChainFirstVertex)) {
         clearWallPlacementDraft()
         setCursorPoint(null)
         return
@@ -10154,14 +10157,22 @@ export function FloorplanPanel({
           setCursorPoint(null)
           return
         }
-      } else if (!(viewIs2DOnly || publishedNextStart)) {
-        // Split view: the 3D tool owns both the commit and the continuation
-        // decision, and it clears the published chain start whenever it stops
-        // drafting (room close, T-junction, single). Mirror that here instead
-        // of chaining the 2D draft from a dead point.
-        clearWallPlacementDraft()
-        setCursorPoint(null)
-        return
+      } else {
+        const levelWalls = Object.values(useScene.getState().nodes).filter(
+          (node): node is WallNode => node?.type === 'wall' && node.parentId === levelId,
+        )
+        const isTransit = draftStart && wallSegmentsCoverSegment(draftStart, point, levelWalls)
+        if (isTransit) {
+          // Collinear tracking: start point advances along host wall without creating redundant wall
+        } else if (!(viewIs2DOnly || publishedNextStart)) {
+          // Split view: the 3D tool owns both the commit and the continuation
+          // decision, and it clears the published chain start whenever it stops
+          // drafting (room close, T-junction, single). Mirror that here instead
+          // of chaining the 2D draft from a dead point.
+          clearWallPlacementDraft()
+          setCursorPoint(null)
+          return
+        }
       }
 
       wallRunReferenceRef.current = placedDirection
@@ -10170,6 +10181,16 @@ export function FloorplanPanel({
       setCursorPoint(nextStart)
       // What was typed belongs to this segment; the next starts afresh.
       usePlacementTyping.getState().clear()
+      const dim = useDimensionDraftStore.getState()
+      useDimensionDraftStore.setState({
+        points: [...dim.points, nextStart],
+        previewPoint: null,
+        lengthValue: '',
+        angleValue: '',
+        lockedLength: null,
+        lockedAngle: null,
+        fieldType: 'length',
+      })
     },
     [
       clearWallPlacementDraft,
@@ -12042,6 +12063,15 @@ export function FloorplanPanel({
                 walls={walls}
               />
 
+              {isWallBuildActive && (
+                <FloorplanDimensionGhostWalls
+                  fill={palette.draftFill}
+                  stroke={palette.draftStroke}
+                  toSvgX={toSvgX}
+                  toSvgY={toSvgY}
+                />
+              )}
+
               {selectedGuide && showGuides && (
                 <FloorplanGuideSelectionOverlay
                   guide={selectedGuide}
@@ -12103,7 +12133,234 @@ export function FloorplanPanel({
             )}
           </svg>
         ) : null}
+
+        {/* Floating dimension input overlay for 2D drafting (wall, fence, slab, ceiling) */}
+        {((isWallBuildActive && draftStart) ||
+          (isFenceBuildActive && fenceDraftStart) ||
+          (isPolygonDraftBuildActive && activePolygonDraftPoints.length > 0)) && (
+          <FloorplanDimensionInputOverlay
+            draftStart={
+              isWallBuildActive
+                ? draftStart
+                : isFenceBuildActive
+                ? fenceDraftStart
+                : activePolygonDraftPoints[activePolygonDraftPoints.length - 1] ?? null
+            }
+            onCommitPoint={(pt) => {
+              if (isWallBuildActive) {
+                emitFloorplanGridEvent('click', pt, new MouseEvent('click') as any)
+                handleWallPlacementPoint(pt)
+              } else if (isFenceBuildActive) {
+                handleBackgroundPlacementClick(pt, new MouseEvent('click') as any)
+              } else if (isPolygonDraftBuildActive) {
+                emitFloorplanGridEvent('click', pt, new MouseEvent('click') as any)
+                if (isZoneBuildActive) {
+                  handleZonePlacementPoint(pt)
+                } else if (isCeilingBuildActive) {
+                  handleCeilingPlacementPoint(pt)
+                } else {
+                  handleSlabPlacementPoint(pt)
+                }
+              }
+            }}
+            onCancel={() => {
+              if (isWallBuildActive) clearWallPlacementDraft()
+              else if (isFenceBuildActive) clearFencePlacementDraft()
+              else if (isCeilingBuildActive) clearCeilingPlacementDraft()
+              else if (isZoneBuildActive) clearZonePlacementDraft()
+              else clearSlabPlacementDraft()
+              useDimensionDraftStore.getState().reset()
+            }}
+          />
+        )}
       </div>
+    </div>
+  )
+}
+
+// Ghost wall segments for multi-point dimension drafting in 2D
+function FloorplanDimensionGhostWalls({
+  toSvgX,
+  toSvgY,
+  stroke,
+  fill,
+}: {
+  toSvgX: (x: number) => number
+  toSvgY: (y: number) => number
+  stroke: string
+  fill: string
+}) {
+  const points = useDimensionDraftStore((s) => s.points)
+  const previewPoint = useDimensionDraftStore((s) => s.previewPoint)
+
+  const ghostWalls = useMemo(() => {
+    const allPoints = previewPoint ? [...points, previewPoint] : points
+    if (allPoints.length < 2) return []
+    const segments: Array<{ start: WallPlanPoint; end: WallPlanPoint }> = []
+    for (let i = 1; i < allPoints.length; i++) {
+      const start = allPoints[i - 1]
+      const end = allPoints[i]
+      if (start && end) {
+        segments.push({ start, end })
+      }
+    }
+    return segments
+  }, [points, previewPoint])
+
+  if (ghostWalls.length === 0) return null
+
+  return (
+    <g>
+      {ghostWalls.map((seg, i) => (
+        <line
+          key={i}
+          x1={toSvgX(seg.start[0])}
+          y1={toSvgY(seg.start[1])}
+          x2={toSvgX(seg.end[0])}
+          y2={toSvgY(seg.end[1])}
+          stroke={stroke}
+          strokeOpacity={0.4}
+          strokeWidth={2}
+          strokeDasharray="6 3"
+        />
+      ))}
+    </g>
+  )
+}
+
+// Floating dimension input overlay positioned near the cursor in 2D
+function FloorplanDimensionInputOverlay({
+  draftStart,
+  onCommitPoint,
+  onCancel,
+}: {
+  draftStart: WallPlanPoint | null
+  onCommitPoint: (point: WallPlanPoint) => void
+  onCancel: () => void
+}) {
+  const store = useDimensionDraftStore()
+  const cursorPosition = useFloorplanDraftPreview((s) => s.cursorPosition)
+  const cursorPoint = useFloorplanDraftPreview((s) => s.cursorPoint)
+  const [lastPosition, setLastPosition] = useState<{ x: number; y: number } | null>(null)
+  const overlayRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (cursorPosition) {
+      setLastPosition(cursorPosition)
+    }
+  }, [cursorPosition])
+
+  useEffect(() => {
+    const onFocus = (fieldType: 'length' | 'angle') => {
+      useDimensionDraftStore.getState().setFieldType(fieldType)
+    }
+    emitter.on('dimension:focus', onFocus)
+    return () => {
+      emitter.off('dimension:focus', onFocus)
+    }
+  }, [])
+
+  const handleConfirm = useCallback(() => {
+    const currentDim = useDimensionDraftStore.getState()
+    const lastPt =
+      draftStart ??
+      (currentDim.points.length > 0
+        ? currentDim.points[currentDim.points.length - 1]!
+        : cursorPoint)
+    if (!lastPt) return
+
+    const length =
+      currentDim.lockedLength ??
+      (currentDim.lengthValue ? parseDimension(currentDim.lengthValue) : null)
+    if (length === null || Number.isNaN(length) || length <= 0) return
+
+    let angle = currentDim.lockedAngle
+    if (angle === null) {
+      const curPt = cursorPoint ?? lastPt
+      const dx = curPt[0] - lastPt[0]
+      const dz = curPt[1] - lastPt[1]
+      angle = dx === 0 && dz === 0 ? 0 : (Math.atan2(dz, dx) * 180) / Math.PI
+    }
+
+    const rad = (angle * Math.PI) / 180
+    const nextPoint: WallPlanPoint = [
+      lastPt[0] + Math.cos(rad) * length,
+      lastPt[1] + Math.sin(rad) * length,
+    ]
+
+    useDimensionDraftStore.setState({
+      lockedLength: length,
+      lockedAngle: angle,
+    })
+
+    onCommitPoint(nextPoint)
+
+    useDimensionDraftStore.setState({
+      previewPoint: null,
+      lengthValue: '',
+      angleValue: '',
+      lockedLength: null,
+      lockedAngle: null,
+      fieldType: 'length',
+    })
+  }, [cursorPoint, draftStart, onCommitPoint])
+
+  // Resolve screen position: prefer live cursorPosition, fall back to lastPosition,
+  // or project target point via SVG CTM.
+  const resolvePosition = (): { x: number; y: number } | null => {
+    if (cursorPosition) return cursorPosition
+    if (lastPosition) return lastPosition
+    const targetPoint = cursorPoint ?? draftStart
+    if (!targetPoint || !overlayRef.current) return null
+    const viewportHost = overlayRef.current.parentElement
+    const scene = viewportHost?.querySelector<SVGGElement>('[data-floorplan-scene]')
+    const svg = scene?.ownerSVGElement
+    const ctm = scene?.getScreenCTM()
+    if (!svg || !ctm || !viewportHost) return null
+    const pt = svg.createSVGPoint()
+    pt.x = targetPoint[0]
+    pt.y = targetPoint[1]
+    const screenPt = pt.matrixTransform(ctm)
+    const hostRect = viewportHost.getBoundingClientRect()
+    return {
+      x: screenPt.x - hostRect.left,
+      y: screenPt.y - hostRect.top,
+    }
+  }
+
+  const pos = resolvePosition()
+  if (!pos) return null
+
+  return (
+    <div
+      ref={overlayRef}
+      style={{
+        position: 'absolute',
+        left: Math.max(12, pos.x + 20),
+        top: Math.max(12, pos.y - 44),
+        zIndex: 1000,
+        pointerEvents: 'auto',
+      }}
+    >
+      <DimensionInput
+        state={{
+          active: true,
+          fieldType: store.fieldType,
+          lengthValue: store.lengthValue,
+          angleValue: store.angleValue,
+          lockedLength: store.lockedLength,
+          lockedAngle: store.lockedAngle,
+        }}
+        onChange={(newState) => {
+          store.setValues(newState.lengthValue, newState.angleValue)
+          if (newState.fieldType) store.setFieldType(newState.fieldType)
+        }}
+        onConfirm={handleConfirm}
+        onCancel={() => {
+          store.reset()
+          onCancel()
+        }}
+      />
     </div>
   )
 }

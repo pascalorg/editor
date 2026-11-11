@@ -13,6 +13,7 @@ import {
   getWallMiterBoundaryPoints,
   type LevelNode,
   levelBaseElevationAt,
+  parseDimension,
   type Point2D,
   resolveAlignment,
   sampleFenceSpline,
@@ -42,6 +43,10 @@ import {
   triggerSFX,
   useAlignmentGuides,
   useEditor,
+  DimensionInput,
+  LocalizedHtml as Html,
+  type DimensionInputState,
+  useDimensionDraftStore,
   useFenceCurveDraft,
   useFloorplanDraftPreview,
   usePlacementPreview,
@@ -56,7 +61,7 @@ import {
   useViewer,
 } from '@pascal-app/viewer'
 import { useThree } from '@react-three/fiber'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   BufferGeometry,
   type Camera,
@@ -645,6 +650,84 @@ const StraightFenceTool: React.FC = () => {
   const [axisGuide, setAxisGuide] = useState<DraftAxisGuideState>(null)
   const measurementColor = isDark ? '#ffffff' : '#111111'
   const measurementShadowColor = isDark ? '#111111' : '#ffffff'
+  const dimStore = useDimensionDraftStore()
+  const stopDraftingRef = useRef<() => void>(() => {})
+
+  const handleDimChange = useCallback((state: DimensionInputState) => {
+    useDimensionDraftStore.getState().setValues(state.lengthValue, state.angleValue)
+  }, [])
+
+  const handleDimCancel = useCallback(() => {
+    useDimensionDraftStore.getState().setValues('', '')
+  }, [])
+
+  const handleDimConfirm = useCallback(() => {
+    const currentDim = useDimensionDraftStore.getState()
+    if (buildingState.current !== 1) return
+
+    const length =
+      currentDim.lockedLength ??
+      (currentDim.lengthValue ? parseDimension(currentDim.lengthValue) : null)
+    if (length === null || Number.isNaN(length) || length <= 0) return
+
+    let angle = currentDim.lockedAngle
+    if (angle === null) {
+      const dx = endingPoint.current.x - startingPoint.current.x
+      const dz = endingPoint.current.z - startingPoint.current.z
+      angle = dx === 0 && dz === 0 ? 0 : (Math.atan2(dz, dx) * 180) / Math.PI
+    }
+
+    const rad = (angle * Math.PI) / 180
+    const snappedEnd: FencePlanPoint = [
+      startingPoint.current.x + Math.cos(rad) * length,
+      startingPoint.current.z + Math.sin(rad) * length,
+    ]
+
+    const pointedSurface = constructionSurface.current
+    const createdFence = createFenceOnCurrentLevel(
+      [startingPoint.current.x, startingPoint.current.z],
+      snappedEnd,
+      {
+        supportCap: pointedSurface?.elevation ?? null,
+        preferredSupportSlabId: pointedSurface?.supportSlabId ?? null,
+        constructionElevation: pointedSurface?.sourceNodeId ? pointedSurface.elevation : null,
+      },
+      draftContext,
+    )
+    if (!createdFence) return
+
+    if (useEditor.getState().getContinuation('fence') === 'single') {
+      stopDraftingRef.current?.()
+      return
+    }
+
+    const nextStart = createdFence.end
+    useSegmentDraftChain.getState().setChainStart('fence', [nextStart[0], nextStart[1]])
+    startingPoint.current.set(
+      nextStart[0],
+      constructionSurface.current?.localPoint?.[1] ?? startingPoint.current.y,
+      nextStart[1],
+    )
+    endingPoint.current.copy(startingPoint.current)
+    const draftPreview = useFloorplanDraftPreview.getState()
+    draftPreview.setFenceDraftEnd(null)
+    draftPreview.setFenceDraftStart(nextStart)
+    draftPreview.setFenceDraftEnd(nextStart)
+    cursorRef.current?.position.copy(startingPoint.current)
+    if (previewRef.current) previewRef.current.visible = false
+    setDraftMeasurement(null)
+
+    useDimensionDraftStore.setState({
+      points: [nextStart],
+      previewPoint: null,
+      lengthValue: '',
+      angleValue: '',
+      lockedLength: null,
+      lockedAngle: null,
+      fieldType: 'length',
+      activeTool: 'fence',
+    })
+  }, [draftContext])
 
   // Scope seeded defaults to this tool session: clear on deactivation so a
   // later manual fence draw isn't drawn with a stale preset's parameters.
@@ -706,7 +789,9 @@ const StraightFenceTool: React.FC = () => {
       draftPreview.setFenceDraftEnd(null)
       useSegmentDraftChain.getState().clear('fence')
       useAlignmentGuides.getState().clear()
+      useDimensionDraftStore.getState().reset()
     }
+    stopDraftingRef.current = stopDrafting
 
     const onGridMove = (event: GridEvent) => {
       if (!(cursorRef.current && previewRef.current)) return
@@ -736,18 +821,33 @@ const StraightFenceTool: React.FC = () => {
       // mode, not Alt (continuation is cycled through the HUD / C).
 
       if (buildingState.current === 1) {
-        const angleLocked = isAngleSnapActive()
-        const snappedLocal = alignPoint(
-          snapFenceDraftPoint({
-            point: localPoint,
-            walls,
-            fences,
-            start: angleLocked ? [startingPoint.current.x, startingPoint.current.z] : undefined,
-            angleSnap: angleLocked,
-            magnetic: isMagneticSnapActive(),
-          }),
-          { applySnap: !angleLocked },
-        )
+        let snappedLocal: FencePlanPoint
+        const currentDim = useDimensionDraftStore.getState()
+        if (currentDim.lockedLength !== null) {
+          const angle =
+            currentDim.lockedAngle !== null
+              ? currentDim.lockedAngle
+              : (Math.atan2(localPoint[1] - startingPoint.current.z, localPoint[0] - startingPoint.current.x) * 180) /
+                Math.PI
+          const rad = (angle * Math.PI) / 180
+          snappedLocal = [
+            startingPoint.current.x + Math.cos(rad) * currentDim.lockedLength,
+            startingPoint.current.z + Math.sin(rad) * currentDim.lockedLength,
+          ]
+        } else {
+          const angleLocked = isAngleSnapActive()
+          snappedLocal = alignPoint(
+            snapFenceDraftPoint({
+              point: localPoint,
+              walls,
+              fences,
+              start: angleLocked ? [startingPoint.current.x, startingPoint.current.z] : undefined,
+              angleSnap: angleLocked,
+              magnetic: isMagneticSnapActive(),
+            }),
+            { applySnap: !angleLocked },
+          )
+        }
         endingPoint.current.set(snappedLocal[0], activeY, snappedLocal[1])
         const draftPreview = useFloorplanDraftPreview.getState()
         draftPreview.setFenceDraftStart([startingPoint.current.x, startingPoint.current.z])
@@ -848,19 +948,35 @@ const StraightFenceTool: React.FC = () => {
           y: event.localPosition[1],
           angleLabel: null,
         })
+        useDimensionDraftStore.getState().startDraft(snappedStart, 'fence')
       } else {
-        const angleLocked = isAngleSnapActive()
-        const snappedEnd = alignPoint(
-          snapFenceDraftPoint({
-            point: localClick,
-            walls,
-            fences,
-            start: angleLocked ? [startingPoint.current.x, startingPoint.current.z] : undefined,
-            angleSnap: angleLocked,
-            magnetic: isMagneticSnapActive(),
-          }),
-          { applySnap: !angleLocked },
-        )
+        const currentDim = useDimensionDraftStore.getState()
+        let snappedEnd: FencePlanPoint
+        if (currentDim.lockedLength !== null) {
+          const angle =
+            currentDim.lockedAngle !== null
+              ? currentDim.lockedAngle
+              : (Math.atan2(localClick[1] - startingPoint.current.z, localClick[0] - startingPoint.current.x) * 180) /
+                Math.PI
+          const rad = (angle * Math.PI) / 180
+          snappedEnd = [
+            startingPoint.current.x + Math.cos(rad) * currentDim.lockedLength,
+            startingPoint.current.z + Math.sin(rad) * currentDim.lockedLength,
+          ]
+        } else {
+          const angleLocked = isAngleSnapActive()
+          snappedEnd = alignPoint(
+            snapFenceDraftPoint({
+              point: localClick,
+              walls,
+              fences,
+              start: angleLocked ? [startingPoint.current.x, startingPoint.current.z] : undefined,
+              angleSnap: angleLocked,
+              magnetic: isMagneticSnapActive(),
+            }),
+            { applySnap: !angleLocked },
+          )
+        }
         const dx = snappedEnd[0] - startingPoint.current.x
         const dz = snappedEnd[1] - startingPoint.current.z
         if (dx * dx + dz * dz < 0.01 * 0.01) return
@@ -877,22 +993,15 @@ const StraightFenceTool: React.FC = () => {
         )
         if (!createdFence) return
 
-        // The new segment is now a real node — make it an alignment target
-        // for the next segment, and drop the just-shown guide.
         refreshAlignmentCandidates()
         useAlignmentGuides.getState().clear()
 
-        // Single mode commits one segment per click: stop drafting so the next
-        // click starts a fresh segment instead of chaining off this endpoint.
         if (useEditor.getState().getContinuation('fence') === 'single') {
           stopDrafting()
           return
         }
 
         const nextStart = createdFence.end
-        // Publish the resolved chain start so the 2D floor-plan draft
-        // chains its next segment from the same point (its own snap
-        // pipeline can resolve a slightly different endpoint).
         useSegmentDraftChain.getState().setChainStart('fence', [nextStart[0], nextStart[1]])
         startingPoint.current.set(
           nextStart[0],
@@ -914,10 +1023,25 @@ const StraightFenceTool: React.FC = () => {
           y: event.localPosition[1],
           angleLabel: null,
         })
+        useDimensionDraftStore.setState({
+          points: [nextStart],
+          previewPoint: null,
+          lengthValue: '',
+          angleValue: '',
+          lockedLength: null,
+          lockedAngle: null,
+          fieldType: 'length',
+          activeTool: 'fence',
+        })
       }
     }
 
     const onCancel = () => {
+      const dimState = useDimensionDraftStore.getState()
+      if (dimState.lengthValue !== '' || dimState.angleValue !== '') {
+        useDimensionDraftStore.getState().setValues('', '')
+        return
+      }
       if (buildingState.current === 1) {
         markToolCancelConsumed()
         stopDrafting()
@@ -938,6 +1062,7 @@ const StraightFenceTool: React.FC = () => {
       const draftPreview = useFloorplanDraftPreview.getState()
       draftPreview.setFenceDraftStart(null)
       draftPreview.setFenceDraftEnd(null)
+      useDimensionDraftStore.getState().reset()
     }
   }, [unit, metricNotation, draftContext])
 
@@ -980,6 +1105,34 @@ const StraightFenceTool: React.FC = () => {
             </group>
           ))}
         </>
+      )}
+
+      {/* Floating Dimension Input for Fence */}
+      {typeof document !== 'undefined' && typeof document.createElement === 'function' && dimStore.points.length > 0 && buildingState.current === 1 && (
+        <Html
+          center
+          position={[
+            startingPoint.current.x,
+            startingPoint.current.y + previewHeight + 0.3,
+            startingPoint.current.z,
+          ]}
+          style={{ pointerEvents: 'auto' }}
+          zIndexRange={[100, 0]}
+        >
+          <DimensionInput
+            state={{
+              active: true,
+              fieldType: dimStore.fieldType,
+              lengthValue: dimStore.lengthValue,
+              angleValue: dimStore.angleValue,
+              lockedLength: dimStore.lockedLength,
+              lockedAngle: dimStore.lockedAngle,
+            }}
+            onChange={handleDimChange}
+            onConfirm={handleDimConfirm}
+            onCancel={handleDimCancel}
+          />
+        </Html>
       )}
     </group>
   )

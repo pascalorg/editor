@@ -17,7 +17,7 @@ import { encodeTerrainField } from '../../lib/terrain-codec'
 import { applyHeightPatch, createTerrainField, flattenPatch } from '../../lib/terrain-field'
 import { type AnyNode, type AnyNodeId, DoorNode, WallNode, ZoneNode } from '../../schema'
 import { getWallArcData, getWallCurveFrameAt } from './wall-curve'
-import { planWallInsertion, planWallSplitAtPoint } from './wall-topology'
+import { planWallInsertion, planWallSplitAtPoint, wallSegmentsCoverSegment } from './wall-topology'
 
 const LEVEL_ID = 'level_topology' as AnyNodeId
 
@@ -1123,4 +1123,12 @@ describe('a wall started in a corner block', () => {
     expect(result.plan.resolvedStart).toEqual([-0.5, 0])
     expect(result.plan.changes.delete).toEqual(['wall_across'])
   })
-})
+  test('wallSegmentsCoverSegment identifies collinear segments covered by host wall for tracking transit', () => {
+    // across runs from [-3, 0] to [0, 0]
+    expect(wallSegmentsCoverSegment([-2, 0], [-1, 0], [across])).toBe(true)
+    expect(wallSegmentsCoverSegment([-3, 0], [-1.5, 0], [across])).toBe(true)
+    // perpendicular or outside the host wall
+    expect(wallSegmentsCoverSegment([-1.5, 0], [-1.5, 2], [across])).toBe(false)
+    expect(wallSegmentsCoverSegment([-3, 0], [-4, 0], [across])).toBe(false)
+  })
+});

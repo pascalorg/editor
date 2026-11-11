@@ -133,6 +133,7 @@ export {
   resolveAssemblyStack,
 } from './lib/assembly-stack'
 export { loadAssetUrl, saveAsset } from './lib/asset-storage'
+export { parseAngle, parseDimension, pointFromLengthAngle } from './lib/units'
 export {
   BEAM_MATERIAL_LABELS,
   BEAM_MATERIAL_LIBRARY_REFS,
@@ -1347,6 +1348,7 @@ export {
   planWallEndRejoins,
   planWallInsertion,
   planWallSplitAtPoint,
+  wallSegmentsCoverSegment,
   type WallInsertionPlan,
   type WallJoinResult,
   type WallTopologyChanges,

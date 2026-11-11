@@ -19,6 +19,7 @@ import {
   type WallMiterData,
   type WallNode,
   wallClosesRoom,
+  wallSegmentsCoverSegment,
 } from '@pascal-app/core'
 import {
   addWallPolygonDraftCorner,
@@ -83,11 +84,22 @@ import {
   wallDraftIsRun,
   wallPolygonDraftWalls,
   wallRunDirection,
+  // Dimension drafting
+  buildGhostWalls,
+  DimensionInput,
+  LocalizedHtml as Html,
+  type DimensionDraftState,
+  EMPTY_DIMENSION_DRAFT,
+  isDoubleClick,
+  placeDraftPoint,
+  recordClickTime,
+  updateDraftPreview,
+  useDimensionDraftStore,
 } from '@pascal-app/editor'
 import { getSceneTheme, useViewer } from '@pascal-app/viewer'
 import { useThree } from '@react-three/fiber'
-import { useEffect, useRef, useState } from 'react'
-import { DoubleSide, type Group, type Mesh, Vector3 } from 'three'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { BoxGeometry, DoubleSide, type Group, type Mesh, Vector3 } from 'three'
 import {
   DraftAngleArc,
   type DraftAngleLabel,
@@ -549,11 +561,13 @@ const LineWallTool: React.FC = () => {
   const constructionPlane = useRef<HorizontalConstructionPlane | null>(null)
   const flatConstructionBase = useRef(false)
   const buildingState = useRef(0)
+  const lastClickTime = useRef(0)
   const [draftMeasurement, setDraftMeasurement] = useState<DraftMeasurementState>(null)
   const typingActive = usePlacementTyping((s) => s.isActive)
   // Base Y of an open Polygon room's ghost sides (its construction plane).
   const [polygonGhostY, setPolygonGhostY] = useState(0)
   const [axisGuide, setAxisGuide] = useState<DraftAxisGuideState>(null)
+  const dimStore = useDimensionDraftStore() ?? EMPTY_DIMENSION_DRAFT
   const measurementColor = isDark ? '#ffffff' : '#111111'
   const measurementShadowColor = isDark ? '#111111' : '#ffffff'
 
@@ -674,6 +688,7 @@ const LineWallTool: React.FC = () => {
     const stopDrafting = () => {
       discardWallPolygonDraft()
       buildingState.current = 0
+      useDimensionDraftStore.getState().reset()
       constructionPlane.current = null
       flatConstructionBase.current = false
       chainFirstVertex.current = null
@@ -906,7 +921,10 @@ const LineWallTool: React.FC = () => {
     const onGridClick = (event: GridEvent) => {
       if (!wallPreviewRef.current || planOwnsInput()) return
 
-      if (buildingState.current === 1 && event.nativeEvent.detail >= 2) {
+      if (
+        buildingState.current === 1 &&
+        event.nativeEvent?.detail >= 2
+      ) {
         // A double-click finishes the chain and keeps an open Polygon room.
         commitWallPolygonDraft()
         stopDrafting()
@@ -956,6 +974,11 @@ const LineWallTool: React.FC = () => {
           angleLabel: null,
         })
         triggerSFX('sfx:structure-build-start')
+        useDimensionDraftStore.setState({
+          ...EMPTY_DIMENSION_DRAFT,
+          points: [[snappedStart[0], snappedStart[1]]],
+          fieldType: 'length',
+        })
         const levelId = useViewer.getState().selection.levelId
         if (getWallDrawVariant() === 'polygon' && levelId) {
           startWallPolygonDraft(levelId as AnyNodeId, snappedStart, {
@@ -1024,7 +1047,7 @@ const LineWallTool: React.FC = () => {
         } else {
           const draftPlane = constructionPlane.current
           const commitPointed =
-            draftPlane?.supportSlabId === GROUND_SUPPORT_ID ? null : pointedSurfaceFor(event)
+            draftPlane?.supportSlabId === GROUND_SUPPORT_ID ? null : (event ? pointedSurfaceFor(event) : null)
           // Both start and end are building-local ✓
           // The Walls variant's Invisible draws room separators, not walls.
           const createdWall =
@@ -1047,53 +1070,72 @@ const LineWallTool: React.FC = () => {
                     flatConstructionBase: flatConstructionBase.current,
                   },
                 )
-          if (!createdWall) return
-          chainWallIds.current.push(createdWall.id)
-          // What was typed belongs to this segment; the next starts afresh.
-          usePlacementTyping.getState().clear()
-          // The run's next wall holds square to this one.
-          runReference = wallRunDirection(createdWall.start, createdWall.end)
+          if (!createdWall) {
+            const levelWalls = getCurrentLevelWalls()
+            const startPt: WallPlanPoint = [startingPoint.current.x, startingPoint.current.z]
+            const isCollinearTransit = wallSegmentsCoverSegment(startPt, snappedEnd, levelWalls)
+            if (isCollinearTransit) {
+              nextStart = snappedEnd
+              runReference = wallRunDirection(startPt, snappedEnd)
+              usePlacementTyping.getState().clear()
+              triggerSFX('sfx:grid-snap')
+            } else {
+              return
+            }
+          } else {
+            chainWallIds.current.push(createdWall.id)
+            // What was typed belongs to this segment; the next starts afresh.
+            usePlacementTyping.getState().clear()
+            // The run's next wall holds square to this one.
+            runReference = wallRunDirection(createdWall.start, createdWall.end)
 
-          // The new segment is now a real node — make it an alignment target
-          // for the next segment, and drop the just-shown guide.
-          refreshAlignmentCandidates()
-          useAlignmentGuides.getState().clear()
-          useWallSnapIndicator.getState().clear()
+            // The new segment is now a real node — make it an alignment target
+            // for the next segment, and drop the just-shown guide.
+            refreshAlignmentCandidates()
+            useAlignmentGuides.getState().clear()
+            useWallSnapIndicator.getState().clear()
 
-          // Walls draws one wall per two clicks.
-          if (!wallDraftIsRun()) {
-            stopDrafting()
-            return
+            // Multi-point wall drafting: continue drawing the next segment from the created wall's end point
+
+            const closedToChainStart =
+              chainFirstVertex.current &&
+              isWithinWallJoinSnapRadius(createdWall.end, chainFirstVertex.current)
+
+            // Auto-close also fires when the segment seals a room against the
+            // existing wall network (e.g. a bay closed onto the middle of another
+            // wall), not just when the chain loops back to its own start. Shares the
+            // room graph with auto slab/ceiling detection so the two never disagree.
+            // A resolved end that tees into wall geometry outside the chain also
+            // terminates even without an enclosed room — nobody continues drawing
+            // from a T-junction into an existing wall; a dead end in free space
+            // keeps the chain going.
+            const levelWalls = getCurrentLevelWalls()
+            if (
+              closedToChainStart ||
+              chainEndJoinsExistingWall(createdWall.end, levelWalls, chainWallIds.current) ||
+              (createdWall.type === 'wall' && wallClosesRoom(levelWalls, createdWall))
+            ) {
+              stopDrafting()
+              return
+            }
+            nextStart = createdWall.end
+            const currentDim = useDimensionDraftStore.getState()
+            useDimensionDraftStore.setState({
+              points: [...currentDim.points, nextStart],
+              previewPoint: null,
+              lengthValue: '',
+              angleValue: '',
+              lockedLength: null,
+              lockedAngle: null,
+              fieldType: 'length',
+            })
           }
-
-          const closedToChainStart =
-            chainFirstVertex.current &&
-            isWithinWallJoinSnapRadius(createdWall.end, chainFirstVertex.current)
-
-          // Auto-close also fires when the segment seals a room against the
-          // existing wall network (e.g. a bay closed onto the middle of another
-          // wall), not just when the chain loops back to its own start. Shares the
-          // room graph with auto slab/ceiling detection so the two never disagree.
-          // A resolved end that tees into wall geometry outside the chain also
-          // terminates even without an enclosed room — nobody continues drawing
-          // from a T-junction into an existing wall; a dead end in free space
-          // keeps the chain going.
-          const levelWalls = getCurrentLevelWalls()
-          if (
-            closedToChainStart ||
-            chainEndJoinsExistingWall(createdWall.end, levelWalls, chainWallIds.current) ||
-            (createdWall.type === 'wall' && wallClosesRoom(levelWalls, createdWall))
-          ) {
-            stopDrafting()
-            return
-          }
-          nextStart = createdWall.end
         }
         // Publish the resolved chain start so the 2D floor-plan draft
         // chains its next segment from the same point (its own snap
         // pipeline can resolve a slightly different endpoint).
         useSegmentDraftChain.getState().setChainStart('wall', [nextStart[0], nextStart[1]])
-        const draftY = constructionPlane.current?.localY ?? event.localPosition[1]
+        const draftY = constructionPlane.current?.localY ?? event?.localPosition[1] ?? startingPoint.current.y
         startingPoint.current.set(nextStart[0], draftY, nextStart[1])
         endingPoint.current.copy(startingPoint.current)
         const draftPreview = useFloorplanDraftPreview.getState()
@@ -1115,6 +1157,9 @@ const LineWallTool: React.FC = () => {
           wallPreviewRef.current.visible = false
         }
         setDraftMeasurement(null)
+    }
+    commitWallPointRef.current = commitWallPlacementPoint
+                commitWallPlacementPoint(snappedEnd, event)
       }
     }
 
@@ -1192,6 +1237,50 @@ const LineWallTool: React.FC = () => {
       draftPreview.setWallDraftEnd(null)
     }
   }, [unit, metricNotation])
+
+  const handleDimChange = useCallback((newState: { lengthValue: string; angleValue: string; fieldType?: 'length' | 'angle' }) => {
+    useDimensionDraftStore.getState().setValues(newState.lengthValue, newState.angleValue)
+    if (newState.fieldType) {
+      useDimensionDraftStore.getState().setFieldType(newState.fieldType)
+    }
+  }, [])
+
+  const handleDimConfirm = useCallback(() => {
+    const currentDim = useDimensionDraftStore.getState()
+    const lastPt: WallPlanPoint =
+      currentDim.points.length > 0
+        ? currentDim.points[currentDim.points.length - 1]!
+        : [startingPoint.current.x, startingPoint.current.z]
+
+    const length =
+      currentDim.lockedLength ??
+      (currentDim.lengthValue ? parseDimension(currentDim.lengthValue) : null)
+    if (length === null || Number.isNaN(length) || length <= 0) return
+
+    let angle = currentDim.lockedAngle
+    if (angle === null) {
+      const dx = endingPoint.current.x - lastPt[0]
+      const dz = endingPoint.current.z - lastPt[1]
+      angle = dx === 0 && dz === 0 ? 0 : (Math.atan2(dz, dx) * 180) / Math.PI
+    }
+
+    const rad = (angle * Math.PI) / 180
+    const nextPoint: WallPlanPoint = [
+      lastPt[0] + Math.cos(rad) * length,
+      lastPt[1] + Math.sin(rad) * length,
+    ]
+
+    commitWallPointRef.current(nextPoint)
+    triggerSFX('sfx:structure-build-start')
+  }, [])
+
+  const handleDimCancel = useCallback(() => {
+    useDimensionDraftStore.getState().reset()
+    if (buildingState.current === 1) {
+      markToolCancelConsumed()
+      emitter.emit('tool:cancel')
+    }
+  }, [])
 
   return (
     <group>
@@ -1328,3 +1417,52 @@ export const WallTool: React.FC = () => {
 }
 
 export default WallTool
+
+function GhostWallSegment({
+  start,
+  end,
+  y,
+}: {
+  start: WallPlanPoint
+  end: WallPlanPoint
+  y: number
+}) {
+  const geometry = useMemo(() => {
+    const sx = start[0], sz = start[1]
+    const ex = end[0], ez = end[1]
+    const dx = ex - sx
+    const dz = ez - sz
+    const length = Math.sqrt(dx * dx + dz * dz)
+    if (length < 0.01) return null
+
+    const angle = Math.atan2(dz, dx)
+    const midX = (sx + ex) / 2
+    const midZ = (sz + ez) / 2
+
+    const geo = new BoxGeometry(length, DEFAULT_LEVEL_HEIGHT, DRAFT_WALL_THICKNESS)
+    const matrix = new Vector3(midX, y + DEFAULT_LEVEL_HEIGHT / 2, midZ)
+    return { geo, position: matrix, angle }
+  }, [start, end, y])
+
+  if (!geometry) return null
+
+  return (
+    <mesh
+      layers={EDITOR_LAYER}
+      renderOrder={1}
+      position={geometry.position}
+      rotation={[0, -geometry.angle, 0]}
+      visible
+    >
+      <primitive object={geometry.geo} attach="geometry" />
+      <meshBasicMaterial
+        color="#818cf8"
+        depthTest={false}
+        depthWrite={false}
+        opacity={0.25}
+        side={DoubleSide}
+        transparent
+      />
+    </mesh>
+  )
+}

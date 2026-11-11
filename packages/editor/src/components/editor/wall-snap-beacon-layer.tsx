@@ -16,7 +16,7 @@ import {
 } from '@pascal-app/core'
 import { useWallSnapIndicator, type WallSnapKind } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
-import { Html } from '@react-three/drei'
+import { Html } from './localized-html'
 import { useFrame } from '@react-three/fiber'
 import { memo, useMemo, useRef } from 'react'
 import { BoxGeometry, CircleGeometry, CylinderGeometry, type Group } from 'three'

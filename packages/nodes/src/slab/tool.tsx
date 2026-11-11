@@ -3,6 +3,7 @@
 import {
   DEFAULT_ANGLE_STEP,
   emitter,
+  parseDimension,
   type GridEvent,
   type LevelNode,
   resolveSlabPlacementElevation,
@@ -14,6 +15,9 @@ import {
   CursorSphere,
   clearPlacementSurface,
   clearSlabSnapFeedback,
+  DimensionInput,
+  LocalizedHtml as Html,
+  type DimensionInputState,
   EDITOR_LAYER,
   type HorizontalConstructionPlane,
   isAngleSnapActive,
@@ -28,13 +32,14 @@ import {
   resolvePointerSupportSurface,
   resolveSlabPlanPointSnap,
   triggerSFX,
+  useDimensionDraftStore,
   useEditor,
   useFloorplanDraftPreview,
   visibleScene,
 } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { useThree } from '@react-three/fiber'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { BufferGeometry, DoubleSide, type Group, type Line, Shape, Vector3 } from 'three'
 import { type SlabCompletionTrigger, shouldRegistryCommitSlab } from './placement-ownership'
 import { SlabNode } from './schema'
@@ -45,10 +50,7 @@ import { SlabNode } from './schema'
  * Multi-click polygon drawing: each click adds a vertex; clicking near
  * the first vertex (or double-clicking) closes the polygon and creates
  * the slab. Shift-modifier defeats the 15° angle snap during drag.
- *
- * Not a `DragAction` — same reasoning as `tool.tsx` for fence: this is
- * a stateful sequence of grid:click events with preview state, not a
- * single pointer-down → drag-up.
+ * Supports dynamic dimension input (length & angle) for precise vertex placement.
  */
 
 const Y_OFFSET = 0.02
@@ -63,8 +65,6 @@ function commitSlabDrawing(
   const { createNode, nodes } = useScene.getState()
   const slabCount = Object.values(nodes).filter((n) => n.type === 'slab').length
   const name = `Slab ${slabCount + 1}`
-  // A placed slab preset seeds `toolDefaults.slab` (thickness, material, …)
-  // before the tool activates; the drawn polygon always wins.
   const defaults = useEditor.getState().toolDefaults.slab ?? {}
   const authored = SlabNode.parse({ ...defaults, name, polygon: points })
   const slab = {
@@ -94,6 +94,7 @@ export const SlabTool: React.FC = () => {
   const [levelY, setLevelY] = useState(0)
   const previousSnappedPointRef = useRef<[number, number] | null>(null)
   const constructionPlaneRef = useRef<HorizontalConstructionPlane | null>(null)
+  const dimStore = useDimensionDraftStore()
 
   // Clear preset-seeded defaults on deactivation so a later manual slab draw
   // isn't built with a stale preset's parameters. Unmount-only.
@@ -103,6 +104,7 @@ export const SlabTool: React.FC = () => {
     () => () => {
       clearSlabSnapFeedback()
       clearPlacementSurface()
+      useDimensionDraftStore.getState().reset()
     },
     [],
   )
@@ -127,6 +129,53 @@ export const SlabTool: React.FC = () => {
     [],
   )
 
+  const handleDimChange = useCallback((state: DimensionInputState) => {
+    useDimensionDraftStore.getState().setValues(state.lengthValue, state.angleValue)
+  }, [])
+
+  const handleDimCancel = useCallback(() => {
+    useDimensionDraftStore.getState().setValues('', '')
+  }, [])
+
+  const handleDimConfirm = useCallback(() => {
+    const currentDim = useDimensionDraftStore.getState()
+    const lastPoint = points.length > 0 ? points[points.length - 1] : null
+    if (!lastPoint) return
+
+    const length =
+      currentDim.lockedLength ??
+      (currentDim.lengthValue ? parseDimension(currentDim.lengthValue) : null)
+    if (length === null || Number.isNaN(length) || length <= 0) return
+
+    let angle = currentDim.lockedAngle
+    if (angle === null) {
+      const curPt = snappedCursorPosition
+      const dx = curPt[0] - lastPoint[0]
+      const dz = curPt[1] - lastPoint[1]
+      angle = dx === 0 && dz === 0 ? 0 : (Math.atan2(dz, dx) * 180) / Math.PI
+    }
+
+    const rad = (angle * Math.PI) / 180
+    const nextPoint: [number, number] = [
+      lastPoint[0] + Math.cos(rad) * length,
+      lastPoint[1] + Math.sin(rad) * length,
+    ]
+
+    useDimensionDraftStore.setState({
+      points: [...points, nextPoint],
+      previewPoint: null,
+      lengthValue: '',
+      angleValue: '',
+      lockedLength: null,
+      lockedAngle: null,
+      fieldType: 'length',
+      activeTool: 'slab',
+    })
+
+    setPoints((prev) => [...prev, nextPoint])
+    triggerSFX('sfx:structure-build-start')
+  }, [points, snappedCursorPosition])
+
   useEffect(() => {
     if (!currentLevelId) return
 
@@ -141,6 +190,7 @@ export const SlabTool: React.FC = () => {
       previousSnappedPointRef.current = null
       clearSlabSnapFeedback()
       clearPlacementSurface()
+      useDimensionDraftStore.getState().reset()
     }
 
     const onGridMove = (event: GridEvent) => {
@@ -159,23 +209,34 @@ export const SlabTool: React.FC = () => {
 
       const localPosition = pointed?.localPoint ?? event.localPosition
       const rawPoint: [number, number] = [localPosition[0], localPosition[2]]
-      // Slab drafting is the 'polygon' snap context (grid / lines / off — no
-      // angle, no Shift bypass; Shift cycles the mode, Off is the bypass).
       const gridStep = isGridSnapActive() ? useEditor.getState().gridSnapStep : 0
       const gridPosition: [number, number] = [...snapPointToGrid(rawPoint, gridStep)]
       setCursorPosition(gridPosition)
       const lastPoint = points[points.length - 1]
-      // Angle lock only when the mode asks for it (polygon never does today, but
-      // honour the flag so the behaviour follows the HUD).
       const orthoPoint: [number, number] =
         isAngleSnapActive() && lastPoint
           ? [...snapPointAlongAngleRay(lastPoint, rawPoint, DEFAULT_ANGLE_STEP, gridStep)]
           : gridPosition
-      const displayPoint = resolveSlabPlanPointSnap({
+      let displayPoint = resolveSlabPlanPointSnap({
         rawPoint,
         fallbackPoint: orthoPoint,
         levelId: currentLevelId,
       }).point
+
+      const currentDim = useDimensionDraftStore.getState()
+      if (currentDim.lockedLength !== null && lastPoint) {
+        const angle =
+          currentDim.lockedAngle !== null
+            ? currentDim.lockedAngle
+            : (Math.atan2(displayPoint[1] - lastPoint[1], displayPoint[0] - lastPoint[0]) * 180) /
+              Math.PI
+        const rad = (angle * Math.PI) / 180
+        displayPoint = [
+          lastPoint[0] + Math.cos(rad) * currentDim.lockedLength,
+          lastPoint[1] + Math.sin(rad) * currentDim.lockedLength,
+        ]
+      }
+
       const hoverPlane =
         plane ??
         resampleTerrainConstructionPlane(
@@ -199,7 +260,24 @@ export const SlabTool: React.FC = () => {
 
     const onGridClick = (event: GridEvent) => {
       if (!currentLevelId) return
-      const clickPoint = previousSnappedPointRef.current ?? cursorPosition
+      let clickPoint = previousSnappedPointRef.current ?? cursorPosition
+      const currentDim = useDimensionDraftStore.getState()
+      if (currentDim.lockedLength !== null && points.length > 0) {
+        const lastPoint = points[points.length - 1]
+        if (lastPoint) {
+          const angle =
+            currentDim.lockedAngle !== null
+              ? currentDim.lockedAngle
+              : (Math.atan2(clickPoint[1] - lastPoint[1], clickPoint[0] - lastPoint[0]) * 180) /
+                Math.PI
+          const rad = (angle * Math.PI) / 180
+          clickPoint = [
+            lastPoint[0] + Math.cos(rad) * currentDim.lockedLength,
+            lastPoint[1] + Math.sin(rad) * currentDim.lockedLength,
+          ]
+        }
+      }
+
       const firstPoint = points[0]
       if (
         points.length >= 3 &&
@@ -227,16 +305,26 @@ export const SlabTool: React.FC = () => {
           constructionPlaneRef.current = plane
           setLevelY(plane.localY)
           publishHorizontalConstructionPlane(event, plane)
+          useDimensionDraftStore.getState().startDraft(clickPoint, 'slab')
         }
-        // Every non-closing vertex is a "start" tick; the closing click above
-        // fires the structure-build (end) cue.
         triggerSFX('sfx:structure-build-start')
-        setPoints([...points, clickPoint])
+        setPoints((prev) => {
+          const next = [...prev, clickPoint]
+          useDimensionDraftStore.setState({
+            points: next,
+            previewPoint: null,
+            lengthValue: '',
+            angleValue: '',
+            lockedLength: null,
+            lockedAngle: null,
+            fieldType: 'length',
+            activeTool: 'slab',
+          })
+          return next
+        })
       }
     }
 
-    // Finish the polygon (Enter or double-click): commit once there are enough
-    // vertices. Closing near the first vertex (in onGridClick) is the third way.
     const finishDrawing = (trigger: SlabCompletionTrigger) => {
       if (points.length < 3) return
       if (shouldRegistryCommitSlab(visibleScene(useEditor.getState()), trigger)) {
@@ -255,6 +343,11 @@ export const SlabTool: React.FC = () => {
     }
 
     const onCancel = () => {
+      const dimState = useDimensionDraftStore.getState()
+      if (dimState.lengthValue !== '' || dimState.angleValue !== '') {
+        useDimensionDraftStore.getState().setValues('', '')
+        return
+      }
       if (points.length > 0) markToolCancelConsumed()
       resetDraft()
     }
@@ -279,6 +372,7 @@ export const SlabTool: React.FC = () => {
       emitter.off('grid:click', onGridClick)
       emitter.off('grid:double-click', onGridDoubleClick)
       emitter.off('tool:cancel', onCancel)
+      useDimensionDraftStore.getState().reset()
     }
   }, [currentLevelId, points, cursorPosition, isRecessed, setSelection])
 
@@ -390,6 +484,34 @@ export const SlabTool: React.FC = () => {
           showTooltip={false}
         />
       ))}
+
+      {/* Floating Dimension Input for Slab */}
+      {typeof document !== 'undefined' && typeof document.createElement === 'function' && dimStore.points.length > 0 && points.length > 0 && points[points.length - 1] && (
+        <Html
+          center
+          position={[
+            points[points.length - 1]![0],
+            levelY + Y_OFFSET + 0.3,
+            points[points.length - 1]![1],
+          ]}
+          style={{ pointerEvents: 'auto' }}
+          zIndexRange={[100, 0]}
+        >
+          <DimensionInput
+            state={{
+              active: true,
+              fieldType: dimStore.fieldType,
+              lengthValue: dimStore.lengthValue,
+              angleValue: dimStore.angleValue,
+              lockedLength: dimStore.lockedLength,
+              lockedAngle: dimStore.lockedAngle,
+            }}
+            onChange={handleDimChange}
+            onConfirm={handleDimConfirm}
+            onCancel={handleDimCancel}
+          />
+        </Html>
+      )}
     </group>
   )
 }

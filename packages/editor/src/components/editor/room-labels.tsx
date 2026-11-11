@@ -1697,14 +1697,14 @@ export function RoomLabelAnchor3D({
   useEffect(() => {
     anchors.set(entry.zoneId, position)
   }, [anchors, entry.zoneId, position])
-  if (gone.has(entry.zoneId)) return null
+  const isGone = gone.has(entry.zoneId)
   return (
     <Html
       center
       portal={portal ?? undefined}
       position={position}
       // The wrapper lets the canvas keep everything but the pill itself.
-      style={{ pointerEvents: 'none' }}
+      style={{ pointerEvents: 'none', display: isGone ? 'none' : undefined }}
       zIndexRange={[20, 0]}
     >
       {children}

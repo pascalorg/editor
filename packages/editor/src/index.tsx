@@ -336,9 +336,18 @@ export {
   WALL_GRID_STEP,
   WALL_JOIN_SNAP_RADIUS,
   type WallDraftSnapKind,
-  type WallDraftSnapResult,
+    type WallDraftSnapResult,
   type WallPlanPoint,
   type WallSnapRadii,
+  // Multi-point dimension drafting
+  buildGhostWalls,
+  DOUBLE_CLICK_THRESHOLD_MS,
+  EMPTY_DIMENSION_DRAFT,
+  isDoubleClick,
+  placeDraftPoint,
+  recordClickTime,
+  updateDraftPreview,
+  type DimensionDraftState,
 } from './components/tools/wall/wall-drafting'
 export {
   lockWallPullDirection,
@@ -380,6 +389,8 @@ export {
   BuildToolTile,
 } from './components/ui/build-panel/build-panel'
 export { useCommandPalette } from './components/ui/command-palette'
+export { useDimensionDraftStore } from './lib/dimension-draft-store'
+export { DimensionInput, type DimensionInputState } from './components/tools/shared/dimension-input'
 export { ActionButton, ActionGroup } from './components/ui/controls/action-button'
 // A finish row in a node panel: the paint tool's picker and its write for one paint role.
 export { FinishSwatch } from './components/ui/controls/finish-swatch'

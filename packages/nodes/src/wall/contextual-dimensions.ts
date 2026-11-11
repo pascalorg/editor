@@ -337,7 +337,9 @@ export function buildWallHostedOpeningContextualDimensions(
   }
 
   const offsetNormal = contextualWallDimensionNormal(wall, [-dirY, dirX], ctx.siblings)
-  if (!(options.showClearancesWhileMoving && ctx.viewState?.moving)) {
+  const showClearances =
+    options.showClearancesWhileMoving && (ctx.viewState?.moving || ctx.viewState?.selected)
+  if (!showClearances) {
     return {
       kind: 'dimension',
       start: openingStart,
