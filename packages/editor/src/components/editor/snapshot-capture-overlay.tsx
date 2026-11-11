@@ -1,7 +1,7 @@
 'use client'
 
 import { emitter, type SnapshotSavedEvent } from '@pascal-app/core'
-import { SNAPSHOT_MAX_EDGE } from '@pascal-app/viewer'
+import { isTypingTarget, SNAPSHOT_MAX_EDGE } from '@pascal-app/viewer'
 import { useFirstPersonHud, useIsMobile, WalkthroughCrosshair } from '@pascal-app/viewer/ui'
 import {
   Check,
@@ -18,7 +18,6 @@ import {
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { flushSync } from 'react-dom'
 import { triggerSFX } from '../../lib/sfx-bus'
-import { isTypingTarget } from '../../lib/typing-target'
 import { requestWalkthroughPointerLock } from '../../lib/walkthrough-pointer-lock'
 import useEditor, {
   CAPTURE_FOV_MAX,

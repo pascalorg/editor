@@ -30,7 +30,7 @@ import {
   useSpatialQuery,
   type WallEvent,
 } from '@pascal-app/core'
-import { useViewer } from '@pascal-app/viewer'
+import { isTypingTarget, useViewer } from '@pascal-app/viewer'
 import { LocalizedHtml as Html } from '@pascal-app/viewer/ui'
 import { useFrame, useThree } from '@react-three/fiber'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
@@ -59,7 +59,6 @@ import {
   surfaceFramePose,
   updateSurfaceNode as writeSurfaceNode,
 } from '../../../lib/surface-attachment'
-import { isTypingTarget } from '../../../lib/typing-target'
 import { createWallPointerTracker } from '../../../lib/wall-placement-pointer'
 import {
   projectAlignmentGuidesWorldToActiveBuildingLocal,

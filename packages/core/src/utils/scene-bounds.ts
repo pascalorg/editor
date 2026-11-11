@@ -1,18 +1,5 @@
-/**
- * Scene bounds in the X/Z plane.
- *
- * Used by the auto-frame hook to fit the camera onto a freshly loaded scene
- * (see `../hooks/use-auto-frame`). The hook subscribes to the core scene
- * store and, when `nodes` transitions from empty → non-empty, fires a
- * `camera-controls:fit-scene` event on the core event bus carrying the
- * computed bounds.
- *
- * This module contains no rendering code: it only walks the flat-dict node
- * tree and derives an axis-aligned bounding box on the XZ (plan) plane.
- */
-
-import { turnPlanPoint, yawOf } from '@pascal-app/core'
-import type { AnyNode } from '@pascal-app/core/schema'
+import { turnPlanPoint, yawOf } from '../lib/building-footprint'
+import type { AnyNode } from '../schema'
 
 export type SceneBoundsXZ = {
   /** Min [x, z] in world units (meters). */

@@ -22,6 +22,7 @@ import {
   csgEvaluator,
   generateRoofSegmentGeometry,
   INTERSECTION,
+  isTypingTarget,
   markPureRaycast,
   prepareBrushForCSG,
   useViewer,
@@ -34,7 +35,6 @@ import { LineBasicNodeMaterial, MeshBasicNodeMaterial } from 'three/webgpu'
 import { EDITOR_LAYER } from '../../../lib/constants'
 import { isHistoryShortcut } from '../../../lib/history'
 import { getHoveredRoofSegmentOutlineProxyName } from '../../../lib/roof-hover-outline-proxy'
-import { isTypingTarget } from '../../../lib/typing-target'
 import useInteractionScope, { useMovingNode } from '../../../store/use-interaction-scope'
 import { swallowNextClick } from '../../editor/handles/use-handle-drag'
 

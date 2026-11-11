@@ -13,7 +13,12 @@ import {
   sceneRegistry,
   useScene,
 } from '@pascal-app/core'
-import { getSceneTheme, setSurfaceRaycastLayers, useViewer } from '@pascal-app/viewer'
+import {
+  getSceneTheme,
+  isTypingTarget,
+  setSurfaceRaycastLayers,
+  useViewer,
+} from '@pascal-app/viewer'
 import { LocalizedHtml as Html, type RoomSelectionRecord } from '@pascal-app/viewer/ui'
 import { useFrame, useThree } from '@react-three/fiber'
 import { SquareSplitHorizontal } from 'lucide-react'
@@ -57,7 +62,6 @@ import {
   startRoomTransform,
   useRoomTransform,
 } from '../../lib/room-transform-session'
-import { isTypingTarget } from '../../lib/typing-target'
 import useEditor from '../../store/use-editor'
 import useInteractionScope from '../../store/use-interaction-scope'
 import { isViewVisible, VIEW_2D } from '../../store/view-layout'

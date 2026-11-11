@@ -73,6 +73,7 @@ function rejectUninspectedLoads(path: string, contents: string) {
 
 for (const source of [
   "const dep = globalThis.dep ?? '@pascal-app/editor'; export const lazy = () => import(dep)",
+  // biome-ignore lint/suspicious/noTemplateCurlyInString: source text for the computed-import boundary probe
   'export const lazy = (name) => import(`@pascal-app/${name}`)',
   "const dep = '@pascal-app/editor'; export const load = () => require(dep)",
   "export const modules = import.meta.glob('../editor/src/**/*.ts')",
@@ -154,9 +155,9 @@ const result = await build({
       'render-consumer',
       `
     import { loadPlugin, useScene } from '@pascal-app/core';
-    import { Viewer } from '@pascal-app/viewer';
+    import { LiveWalkthroughController, useFirstPersonHud, Viewer } from '@pascal-app/viewer';
     import { renderPlugin } from '@pascal-app/nodes/render';
-    export { Viewer, renderPlugin };
+    export { LiveWalkthroughController, useFirstPersonHud, Viewer, renderPlugin };
     export async function hydrate(scene) {
       await loadPlugin(renderPlugin);
       useScene.getState().setScene(scene);
@@ -230,6 +231,9 @@ console.log(`Render bundle including all lazy chunks: ${bytes} bytes across ${fi
 const consumer = resolve(root, 'packages/nodes/render-consumer.ts')
 const consumerSource = `
   import type { Plugin } from '@pascal-app/core';
+  import { LiveWalkthroughController, useFirstPersonHud, type LiveWalkthroughControllerProps } from '@pascal-app/viewer';
+  const walkProps: LiveWalkthroughControllerProps = { paused: false };
+  export const walkthrough = { LiveWalkthroughController, useFirstPersonHud, walkProps };
   import { renderPlugin } from '@pascal-app/nodes/render';
   import { playSound, initInteractionSounds, useAudioSettings, type SoundName } from '@pascal-app/viewer/sfx';
   const sound: SoundName = 'menuClick';
@@ -280,10 +284,20 @@ if (diagnostics.length) {
     }),
   )
 }
+if (
+  !program
+    .getSourceFiles()
+    .some((file) =>
+      file.fileName.endsWith('/viewer/dist/components/viewer/live-walkthrough-controller.d.ts'),
+    )
+)
+  throw new Error('Declaration consumer must resolve the built live walkthrough controller')
 if (!program.getSourceFiles().some((file) => file.fileName.endsWith('/nodes/dist/render.d.ts')))
   throw new Error('Declaration consumer must resolve the built render export')
 if (!program.getSourceFiles().some((file) => file.fileName.endsWith('/viewer/dist/sfx/index.d.ts')))
   throw new Error('Declaration consumer must resolve the built SFX export')
 if (!program.getSourceFiles().some((file) => file.fileName.endsWith('/viewer/dist/ui/index.d.ts')))
   throw new Error('Declaration consumer must resolve the built UI export')
-console.log('Render, SFX and UI declaration consumer: passed with editor/Next resolution forbidden')
+console.log(
+  'Render, live walkthrough, SFX and UI declaration consumer: passed with editor/Next resolution forbidden',
+)

@@ -41,11 +41,22 @@
         "measurement_fixture",
         "separator_fixture",
         "ceiling_fixture",
-        "item_fixture"
+        "item_fixture",
+        "spawn_fixture"
       ],
       "level": 0,
       "baseElevation": 0,
       "height": 3
+    },
+    "spawn_fixture": {
+      "object": "node",
+      "id": "spawn_fixture",
+      "type": "spawn",
+      "parentId": "level_fixture",
+      "visible": true,
+      "metadata": {},
+      "position": [-1, 0, -0.2],
+      "rotation": 0
     },
     "wall_south": {
       "object": "node",
@@ -106,7 +117,7 @@
       "parentId": "wall_south",
       "visible": true,
       "metadata": {},
-      "position": [2, 0, 0],
+      "position": [2, 1.05, 0],
       "rotation": [0, 0, 0],
       "floorThresholdVersion": 1,
       "wallId": "wall_south",

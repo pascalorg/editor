@@ -1,6 +1,7 @@
 import {
   acquireSceneReadOnlyLease,
   emitter,
+  type InteractionSound,
   loadPlugin,
   sceneRegistry,
   useScene,
@@ -8,8 +9,10 @@ import {
 import { renderPlugin } from '@pascal-app/nodes/render'
 import {
   configureViewer,
+  LiveWalkthroughController,
   OVERLAY_LAYER,
   pendingSceneBuildCount,
+  useFirstPersonHud,
   useViewer,
   Viewer,
 } from '@pascal-app/viewer'
@@ -19,10 +22,12 @@ import {
   SceneLoader,
   ViewerControlsBar,
   ViewerStage,
+  WalkthroughHud,
 } from '@pascal-app/viewer/ui'
 import { OrbitControls } from '@react-three/drei'
 import { useFrame, useThree } from '@react-three/fiber'
 import { useState } from 'react'
+import { flushSync } from 'react-dom'
 import { createRoot } from 'react-dom/client'
 import type { Mesh } from 'three'
 import type { WebGPURenderer } from 'three/webgpu'
@@ -43,7 +48,8 @@ configureViewer({
 })
 // The packed sfx entry loads its files from the configured base; the check intercepts them.
 initInteractionSounds()
-Object.assign(window, { playFixtureSound: () => emitter.emit('interaction:sound', 'door-open') })
+const interactionSounds: InteractionSound[] = []
+emitter.on('interaction:sound', (sound) => interactionSounds.push(sound))
 await loadPlugin(renderPlugin)
 const releaseReadOnly = acquireSceneReadOnlyLease()
 useScene.getState().setScene(scene.nodes, scene.rootNodeIds, {
@@ -63,6 +69,7 @@ useViewer.getState().setSelection({
 function GeometryProbe() {
   const gl = useThree((state) => state.gl) as unknown as WebGPURenderer
   const root = useThree((state) => state.scene)
+  const camera = useThree((state) => state.camera)
   useFrame(() => {
     const geometry: Record<string, number> = {}
     for (const id of Object.keys(scene.nodes)) {
@@ -83,6 +90,10 @@ function GeometryProbe() {
     Object.assign(window, {
       viewerFixture: {
         geometry,
+        camera: camera.position.toArray(),
+        walking: useViewer.getState().walkthroughMode,
+        interactionSounds,
+        document: JSON.stringify(useScene.getState().nodes),
         pending: pendingSceneBuildCount(),
         overlay,
         itemFailures: useViewer.getState().itemLoadFailures,
@@ -94,7 +105,32 @@ function GeometryProbe() {
   return null
 }
 
+function FixtureHud() {
+  const floorLabel = useFirstPersonHud((state) => state.floorLabel)
+  const zoneLabel = useFirstPersonHud((state) => state.zoneLabel)
+  const interact = useFirstPersonHud((state) => state.interact)
+  const suspended = useViewer((state) => state.walkthroughSuspended)
+  return (
+    <WalkthroughHud
+      floorLabel={floorLabel}
+      zoneLabel={zoneLabel}
+      interact={interact}
+      suspended={suspended}
+      onExit={() => useViewer.getState().setWalkthroughMode(false)}
+    />
+  )
+}
+
 function App() {
+  const walking = useViewer((state) => state.walkthroughMode)
+  const toggleWalkthrough = () => {
+    flushSync(() => useViewer.getState().setWalkthroughMode(!walking))
+    if (!walking) {
+      const canvas = document.querySelector('canvas')!
+      const result = canvas.requestPointerLock?.() as Promise<void> | undefined
+      result?.catch(() => {})
+    }
+  }
   const [ready, setReady] = useState(false)
   // Mounted once the zone's own geometry is proven, as it hides zone volumes. With only the
   // level selected, the level shows its room pills.
@@ -116,13 +152,18 @@ function App() {
           onSceneReadyChange={setReady}
           selectionManager="custom"
         >
-          <OrbitControls makeDefault target={[0, 1, 0]} />
+          <OrbitControls enabled={!walking} makeDefault target={[0, 1, 0]} />
+          <LiveWalkthroughController />
           <GeometryProbe />
           {rooms && <ParametricViewerRooms />}
         </Viewer>
       </ViewerStage>
       {/* The packed UI entry mounts without the editor; its icons load from iconsBaseUrl. */}
-      <ViewerControlsBar onWalkthroughToggle={() => {}} />
+      <ViewerControlsBar onWalkthroughToggle={toggleWalkthrough} walkthroughActive={walking} />
+      <button data-enter-walkthrough onClick={toggleWalkthrough} type="button">
+        {walking ? 'Exit walkthrough' : 'Enter walkthrough'}
+      </button>
+      {walking && <FixtureHud />}
       {!ready && <SceneLoader />}
       <output data-scene-ready={ready}>{ready ? 'Scene ready' : 'Building scene…'}</output>
     </>

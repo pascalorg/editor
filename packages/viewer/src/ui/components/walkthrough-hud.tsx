@@ -2,9 +2,9 @@
 
 import { usePascalI18n } from '@pascal-app/core'
 import { type ReactNode, useMemo } from 'react'
+import type { WalkthroughInteract } from '../../store/use-first-person-hud'
 import { cn } from '../lib/cn'
 import { displayRoomName } from '../lib/room-name-messages'
-import type { WalkthroughInteract } from '../store/use-first-person-hud'
 
 /** A control shown in the HUD's key strip: its keys (as printed on the keycaps) and what they do. */
 export type WalkthroughHint = { keys: readonly string[]; action: string }
@@ -27,7 +27,10 @@ export type WalkthroughHudProps = {
  *  capture overlay so walk / drone framing keeps the same E-to-open pointer. */
 export function WalkthroughCrosshair({ interact }: { interact: WalkthroughInteract }) {
   return (
-    <div className="pointer-events-none absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2">
+    <div
+      className="pointer-events-none absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2"
+      data-walkthrough-crosshair
+    >
       <div
         className={cn(
           'rounded-full transition-all duration-150',
@@ -60,7 +63,10 @@ export function WalkthroughHud({
   )
 
   return (
-    <div className="dark pointer-events-none absolute inset-0 z-30 text-foreground">
+    <div
+      className="dark pointer-events-none absolute inset-0 z-30 text-foreground"
+      data-walkthrough-hud
+    >
       <div className="absolute top-6 left-1/2 flex -translate-x-1/2 flex-col items-center gap-1.5">
         {floorLabel && (
           <div className="font-medium text-[10px] text-muted-foreground uppercase tracking-wider">

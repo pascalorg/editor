@@ -1,6 +1,7 @@
 import {
   type AnyNode,
   type AnyNodeId,
+  computeSceneBoundsXZ,
   coveredBelowGradeFootprints,
   type DoorNode,
   getGarageVisibleOpeningRatio,
@@ -16,7 +17,6 @@ import {
 import * as THREE from 'three'
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import { acceleratedRaycast, computeBoundsTree, disposeBoundsTree } from 'three-mesh-bvh'
-import { computeSceneBoundsXZ } from '../../../lib/scene-bounds'
 import { cutGroundCollider } from './ground-holes'
 import { createTerrainColliderGeometry } from './terrain-collider'
 

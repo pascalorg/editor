@@ -49,12 +49,38 @@ The read-only chrome (the 3D / 2D / Split stage and its floor plan, controls bar
 HUDs, loader, room pills and highlight, the viewer selection model and the primitives they use) is
 the `@pascal-app/viewer/ui` entry, styled with Tailwind and its shipped `theme.css`. It is
 editor-agnostic like the rest of the package: the editor imports its stores and controls from there
-(one camera-pose, 2D↔3D navigation-pose, first-person HUD and Follow Pascal store), never the
-reverse. The plan's SVG geometry renderer is the one the editor's floor plan draws with; the editor
-layers its editing on top (hit targets, handles, drags, snapping) and turns on the typeable
-dimension hit rects with `FloorplanDimensionHitsProvider`, which read-only plans leave off.
+(one camera-pose, 2D↔3D navigation-pose and Follow Pascal store), never the reverse. The first-person
+HUD store lives in the main viewer entry and UI re-exports it, so controllers never import UI chrome.
+The plan's SVG geometry renderer is the one the editor's floor plan draws with; the editor layers
+its editing on top (hit targets, handles, drags, snapping) and turns on the typeable dimension hit
+rects with `FloorplanDimensionHitsProvider`, which read-only plans leave off.
 Router pieces come in as props (`linkComponent`); Biome bans `next` in the package and the bundle
 gate builds the entry with editor/Next resolution forbidden.
+
+## Live walkthrough ownership
+
+`LiveWalkthroughController` belongs to the main `@pascal-app/viewer` entry alongside
+`GlbWalkthroughController`: it is a 3D controller mounted inside `Viewer`, not UI chrome. It reads
+`useViewer.walkthroughMode` and `walkthroughMovement`, builds collision geometry from the live
+registry, and operates transient door/window/item/mechanism/elevator state. The render-only
+`renderPlugin` supplies everything it needs. Walking never writes per-frame scene documents
+(E-007) or changes their schema (E-003).
+
+The main entry owns `useFirstPersonHud`; `viewer/ui` re-exports that same store and renders
+`WalkthroughHud`/`DroneHud` outside the canvas. Controllers update the store without importing UI.
+Interaction sounds still travel through core `interaction:sound` to the optional `viewer/sfx` entry.
+Graph-only XZ bounds live in core; the DOM typing-target predicate lives in viewer.
+
+Editor `FirstPersonControls` is a thin adapter: capture shutter hold, FOV ownership, reserved
+pointer clicks, unlock suspension and editor exit/tool toggles stay there. The shared controller
+accepts neutral `paused`, `externalFov`, `pointerInteraction`, `suspendOnUnlock` and `onExit`
+props. There is one live implementation of movement, collision and interactions. Hosts disable
+other camera controls while walkthrough is active and choose their own entry/pointer-lock UI.
+
+The render-bundle gate imports the built controller in both runtime and declaration consumers
+with editor/Next resolution forbidden. The packed live fixture enters walkthrough with only
+`renderPlugin`, checks keyboard camera movement, HUD/crosshair, a door's sound cue and unchanged
+scene nodes in dev/production with normal/denied storage.
 
 ## Live graph bootstrap and ownership
 

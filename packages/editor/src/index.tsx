@@ -126,6 +126,7 @@ export {
   withFloorplanGeometryMetadata,
 } from '@pascal-app/core'
 export {
+  isTypingTarget,
   MEASUREMENT_ACTIVE_COLOR,
   MEASUREMENT_DANGLING_COLOR,
   MEASUREMENT_FLOORPLAN_COLOR,
@@ -966,7 +967,6 @@ export {
   terrainPointInsideSite,
 } from './lib/terrain-sculpt'
 export { withToolShortcut } from './lib/tool-shortcuts'
-export { isTypingTarget } from './lib/typing-target'
 export { enterUnitFocus } from './lib/units'
 export { exportSceneToUsdz, type UsdzExportOptions } from './lib/usdz-export'
 export { useLinearDisplay } from './lib/use-linear-display'
