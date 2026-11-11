@@ -9,11 +9,12 @@ import type {
 import {
   type AnyNode,
   cornerPair,
+  floorplanGeometryMetadata,
   getWallBodyCenterOffset,
   openingExteriorFace,
   openingHostFacing,
+  readFloorplanContext,
 } from '@pascal-app/core'
-import { floorplanGeometryMetadata, readFloorplanContext } from '@pascal-app/editor'
 import { buildOpeningCasingPlan } from '../shared/opening-casing'
 import {
   buildOpeningMarkAnnotation,

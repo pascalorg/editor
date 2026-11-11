@@ -26,7 +26,6 @@ import {
   roofCatchWalls,
   segmentWallLine,
 } from '../roof/wall-catch'
-import { buildRoofSegmentFloorplan } from './floorplan'
 import {
   roofSegmentMoveTarget,
   roofSegmentResizeAffordance,
@@ -349,7 +348,6 @@ export const roofSegmentEditContribution: NodeEditContribution<typeof RoofSegmen
   },
   parametrics: roofSegmentParametrics,
   handles: resolveRoofSegmentHandles,
-  floorplan: buildRoofSegmentFloorplan,
   // Its roof draws the outline and creases from it: a live edit rebuilds that roof's plan.
   floorplanAffectedIds: roofFloorplanAffectedIds,
   // Body-move target. The generic Path 2 fallback writes plan coords

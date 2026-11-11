@@ -10,10 +10,7 @@ import { getDoorOpeningSize } from '@pascal-app/core'
 import type { FloorplanNodeExtension } from '@pascal-app/editor'
 import type { NodeEditContribution } from '../definition-contributions'
 import { curtainOpeningResizeMax } from '../shared/curtain-opening-limits'
-import {
-  buildDoorFloorplanSchedule,
-  computeDoorFloorplanLevelData,
-} from '../shared/opening-documentation'
+import { buildDoorFloorplanSchedule } from '../shared/opening-documentation'
 import { publishOpeningResizeGuides } from '../shared/opening-guides-runtime'
 import { createOpeningPropertyPreview } from '../shared/opening-property-preview'
 import { openingPropertyPreviewHost } from '../shared/opening-property-preview-host'
@@ -23,7 +20,6 @@ import { readHostWallCeiling, readHostWallCeilingMaxWidth } from '../shared/wall
 import { wallFloorplanSiblingOverrides } from '../wall/floorplan-overrides'
 import { buildDoorContextualDimensions } from './contextual-dimensions'
 import { scaleHandleHeight } from './door-math'
-import { buildDoorFloorplan } from './floorplan'
 import { doorWidthAffordance } from './floorplan-affordances'
 import { doorFloorplanMoveTarget } from './floorplan-move'
 import { doorPaint } from './paint'
@@ -242,10 +238,6 @@ export const doorEditContribution: NodeEditContribution<typeof DoorNode> = {
       ? [doorMoveHandle(), ...scriptedOpeningHandles(node, doorWidthHandle, doorHeightHandle)]
       : doorHandles,
   preview: () => import('./preview'),
-  // Stage C: floor-plan polygon. Needs ctx.parent (the wall) to compute
-  // direction + perpendicular for the cutout footprint.
-  floorplan: buildDoorFloorplan,
-  computeFloorplanLevelData: computeDoorFloorplanLevelData,
   floorplanDependsOnSiblings: true,
   // Opening symbols position from `ctx.parent` (the host wall); merge the
   // walls' live drag overrides so the symbol tracks a wall / group drag in

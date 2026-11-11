@@ -1,5 +1,4 @@
 import {
-  type AnyNodeId,
   computeStairSegmentFloorStackTransforms,
   type HandleDescriptor,
   planStairSweepEdit,
@@ -10,9 +9,7 @@ import {
   type StairSegmentNode,
   useScene,
 } from '@pascal-app/core'
-import type { FloorplanNodeExtension } from '@pascal-app/editor'
 import type { NodeEditContribution } from '../definition-contributions'
-import { buildStairFloorplan } from './floorplan'
 import {
   curvedStairInnerRadiusAffordance,
   curvedStairSweepAffordance,
@@ -407,12 +404,6 @@ function stairHandles(node: StairNodeType): HandleDescriptor<StairNodeType>[] {
 }
 
 export const stairEditContribution: NodeEditContribution<typeof StairNode> = {
-  extensions: {
-    'pascal:editor/floorplan': {
-      linkedLevelIds: (node) =>
-        node.toLevelId && node.toLevelId !== node.parentId ? [node.toLevelId as AnyNodeId] : [],
-    } satisfies FloorplanNodeExtension<StairNodeType>,
-  },
   snapProfile: 'structural',
   // A footprint with a clear front: you approach a stair from the low end,
   // which sits on the -Z side of the run (the run ascends along +Z). Show the
@@ -439,13 +430,6 @@ export const stairEditContribution: NodeEditContribution<typeof StairNode> = {
   tool: () => import('./tool'),
   parametrics: stairParametrics,
   handles: stairHandles,
-  // Stage C — stair is the parent; it walks its `stair-segment` children
-  // via `ctx.children` and emits the whole stack as one registry entry.
-  // Each flight's transform depends on every prior sibling's
-  // `length` / `height` / `attachmentSide`, so individual segments can't
-  // compute their own polygon in isolation. See
-  // `nodes/src/stair/floorplan.ts` for the emitter.
-  floorplan: buildStairFloorplan,
   floorplanMoveTarget: stairFloorplanMoveTarget,
   // 2D drag affordances mirror the 3D in-world arrows on selected stairs:
   //   - `segment-width` / `segment-length` drive per-segment side & length

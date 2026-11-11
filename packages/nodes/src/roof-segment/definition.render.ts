@@ -3,8 +3,8 @@ import {
   type RoofSegmentNode as RoofSegmentNodeType,
 } from '@pascal-app/core'
 import type { NodeRenderDefinition } from '../definition-contributions'
+import { buildRoofSegmentFloorplan } from './floorplan'
 import { matchRoofSegmentMeasurementFeature, roofSegmentMeasurementFeatures } from './measurement'
-
 import { RoofSegmentNode } from './schema'
 import { roofSegmentSlots } from './slots'
 
@@ -61,6 +61,7 @@ export const roofSegmentRenderDefinition: NodeRenderDefinition<typeof RoofSegmen
         maxDistance,
       ),
   },
+  floorplan: buildRoofSegmentFloorplan,
   presentation: {
     label: 'Roof Segment',
     description: 'A single pitched plane of a parent roof.',

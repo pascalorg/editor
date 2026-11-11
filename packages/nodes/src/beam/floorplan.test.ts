@@ -9,10 +9,10 @@ import {
   type FloorplanGeometry,
   type GeometryContext,
   LevelNode,
+  readFloorplanGeometryMetadata,
   useLiveNodeOverrides,
   useScene,
 } from '@pascal-app/core'
-import { readFloorplanGeometryMetadata } from '@pascal-app/editor'
 import { buildBeamFloorplan } from './floorplan'
 import { beamEndpointAffordance } from './floorplan-affordances'
 import { beamFloorplanMoveTarget, movedBeamEnds } from './floorplan-move'

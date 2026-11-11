@@ -21,8 +21,11 @@ is a tiny self-contained cube with a `slot_body` material. There is no baked sce
 
 The readiness probe requires the viewer's scene-ready callback, no pending build work, real node
 geometry and actual draw calls. It also rejects model failures, browser errors and a process
-polyfill. The page mounts the `@pascal-app/viewer/ui` controls bar and loader (unstyled), and the
-check requires their icons to load from `assetsBaseUrl` and a sound from `sfxBaseUrl`. It then
-mounts `ParametricViewerRooms` with only the level selected, requires the zone's room pill, clicks
-it, and requires the room's highlight on the overlay layer and its callout. No Tailwind,
-Next configuration or editor package is used.
+polyfill. The page styles `@pascal-app/viewer/ui` with Tailwind and the shipped `theme.css`, as
+that entry's README describes, and mounts the viewer inside `ViewerStage` with the controls bar and
+loader; the check requires their icons to load from `assetsBaseUrl` and a sound from `sfxBaseUrl`.
+It then mounts `ParametricViewerRooms` with only the level selected, requires the zone's room pill,
+clicks it, and requires the room's highlight on the overlay layer and its callout. Last, it clicks
+the stage switcher's 2D and Split buttons and requires the read-only plan to draw outlines for the
+walls, door, window, roof, ceiling, zone and item from `renderPlugin` alone, beside the 3D view in Split.
+No Next configuration or editor package is used.

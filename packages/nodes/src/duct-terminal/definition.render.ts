@@ -1,4 +1,5 @@
 import type { NodeRenderDefinition } from '../definition-contributions'
+import { buildDuctTerminalFloorplan } from './floorplan'
 import { buildDuctTerminalGeometry } from './geometry'
 import { getDuctTerminalPorts } from './ports'
 import { DuctTerminalNode } from './schema'
@@ -58,6 +59,7 @@ export const ductTerminalRenderDefinition: NodeRenderDefinition<typeof DuctTermi
       n.collarHeight,
     ]),
   ports: getDuctTerminalPorts,
+  floorplan: buildDuctTerminalFloorplan,
   presentation: {
     label: 'Register',
     description:

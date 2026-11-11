@@ -1,5 +1,6 @@
 import type { NodeRenderDefinition } from '../definition-contributions'
 import { perNodeGeometryBatchable } from '../shared/node-batch/batchable'
+import { buildImportedMeshFloorplan } from './floorplan'
 import { buildImportedMeshGeometry } from './geometry'
 import { ImportedMeshNode } from './schema'
 
@@ -28,6 +29,7 @@ export const importedMeshRenderDefinition: NodeRenderDefinition<typeof ImportedM
   },
   geometryKey: (node) => `${node.id}:${node.primitives.length}`,
   geometry: buildImportedMeshGeometry,
+  floorplan: buildImportedMeshFloorplan,
   presentation: {
     label: 'Imported Mesh',
     description: 'Geometry preserved from an imported model when no native Pascal shape exists.',

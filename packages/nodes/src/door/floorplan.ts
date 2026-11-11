@@ -5,12 +5,14 @@ import type {
   GeometryContext,
   WallNode,
 } from '@pascal-app/core'
-import { getDoorOpeningSize, getWallBodyCenterOffset, openingHostFacing } from '@pascal-app/core'
 import {
+  getDoorOpeningSize,
+  getWallBodyCenterOffset,
+  openingHostFacing,
   readFloorplanContext,
   readFloorplanGeometryMetadata,
   withFloorplanGeometryMetadata,
-} from '@pascal-app/editor'
+} from '@pascal-app/core'
 import { buildOpeningCasingPlan } from '../shared/opening-casing'
 import {
   buildOpeningMarkAnnotation,

@@ -1,6 +1,5 @@
 import type { HandleDescriptor, SpawnNode as SpawnNodeType } from '@pascal-app/core'
 import type { NodeEditContribution } from '../definition-contributions'
-import { buildSpawnFloorplan } from './floorplan'
 import { spawnRotateAffordance } from './floorplan-affordances'
 import { spawnFloorplanMoveTarget } from './floorplan-move'
 import { spawnParametrics } from './parametrics'
@@ -54,14 +53,6 @@ export const spawnEditContribution: NodeEditContribution<typeof SpawnNode> = {
   snapProfile: 'item',
   parametrics: spawnParametrics,
   handles: [spawnRotateHandle(), spawnMoveHandle()],
-  // Stage C migration: floor-plan rendering via def.floorplan.
-  // floorplan-panel.tsx's `floorplanSpawnEntries` short-circuits to []
-  // when `nodeRegistry.has('spawn')`, so this builder is the single
-  // path. FloorplanRegistryLayer renders + handles click-to-select;
-  // FloorplanRegistryActionMenu handles move / duplicate (disabled) /
-  // delete. Legacy spawn click handlers in FloorplanNodeLayer become
-  // dead code once Phase 6 cleanup removes the [] entries path.
-  floorplan: buildSpawnFloorplan,
   floorplanMoveTarget: spawnFloorplanMoveTarget,
   floorplanAffordances: {
     'spawn-rotate': spawnRotateAffordance,

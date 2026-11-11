@@ -3,18 +3,21 @@
 import {
   type AnyNode,
   type AnyNodeId,
+  buildFloorplanContext,
+  FLOORPLAN_VIEW_ROTATION_DEG,
   type FloorplanGeometry,
   type FloorplanPalette,
+  floorplanLayerRank,
+  floorplanLocalToWorldPoint,
   type GeometryContext,
   isNodeKindEnabled,
   nodeRegistry,
   useLocale,
   usePascalI18n,
   useScene,
+  worldToFloorplanLocalPoint,
 } from '@pascal-app/core'
 import { AnyNode as AnyNodeSchema } from '@pascal-app/core/schema'
-import { useViewer } from '@pascal-app/viewer'
-import { FloorplanCompassButton, localizedLevelName } from '@pascal-app/viewer/ui'
 import { Maximize2, Minus, Plus } from 'lucide-react'
 import {
   type KeyboardEvent as ReactKeyboardEvent,
@@ -29,24 +32,23 @@ import {
   useState,
 } from 'react'
 import { createPortal } from 'react-dom'
+import useViewer from '../../store/use-viewer'
+import { FloorplanCompassButton } from '../components/floorplan-compass-button'
+import { localizedLevelName } from '../lib/level-name'
 import {
-  FLOORPLAN_VIEW_ROTATION_DEG,
-  floorplanLocalToWorldPoint,
-  worldToFloorplanLocalPoint,
-} from '../../lib/floorplan'
-import { getFloorplanNodeExtension } from '../../lib/floorplan/floorplan-extension'
-import { buildFloorplanContext, floorplanLayerRank } from '../../lib/floorplan/floorplan-readonly'
-import { subscribeNavigationSyncPose } from '../../store/navigation-sync-pose-store'
-import useEditor, { type NavigationSyncPose } from '../../store/use-editor'
+  type NavigationSyncPose,
+  publishNavigationSyncPose,
+  subscribeNavigationSyncPose,
+} from '../store/navigation-sync-pose-store'
 import {
   subscribeFloorplanCameraNavigation,
   useFloorplanCameraSyncBridge,
-} from '../editor/floorplan-camera-sync'
+} from './floorplan-camera-sync'
+import { FloorplanGeometryRenderer } from './floorplan-geometry-renderer'
 import {
   createFloorplanNavigationSyncScheduler,
   setFloorplanCompassRotation,
-} from '../editor/floorplan-navigation-presentation'
-import { FloorplanGeometryRenderer } from '../editor-2d/renderers/floorplan-geometry-renderer'
+} from './floorplan-navigation-sync'
 import {
   type FloorplanBounds,
   type FloorplanViewBox,
@@ -216,7 +218,7 @@ function buildFloorplanGeometries(
   }
   for (const candidate of Object.values(nodes)) {
     const definition = nodeRegistry.get(candidate.type)
-    const linkedLevelIds = getFloorplanNodeExtension(definition)?.linkedLevelIds
+    const linkedLevelIds = definition?.floorplanLinkedLevelIds
     if (
       definition?.floorplan &&
       linkedLevelIds?.(candidate).includes(level.id) &&
@@ -448,7 +450,7 @@ export function FloorplanPreview({
         buildingPosition,
         buildingRotationY,
       )
-      useEditor.getState().publishNavigationSyncPose({
+      publishNavigationSyncPose({
         source: '2d',
         target: [
           worldCenter.x,
@@ -818,7 +820,7 @@ export function FloorplanPreview({
     if (!navigationVisible) {
       const pose = latestNavigationPoseRef.current
       if (!pose) return
-      useEditor.getState().publishNavigationSyncPose({
+      publishNavigationSyncPose({
         source: '2d',
         target: [...pose.target],
         azimuth: cameraAzimuthFromFloorplanRotation(nextRotationDeg),
@@ -946,6 +948,7 @@ export function FloorplanPreview({
           >
             {renderEntries.map((entry) => (
               <g
+                data-floorplan-node-id={entry.id}
                 key={entry.id}
                 ref={(element) => {
                   if (element) fitElementRefs.current.set(entry.id, element)

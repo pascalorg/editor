@@ -3,12 +3,12 @@ import { type AnyNode, nodeRegistry, PipeFittingNode, registerNode } from '@pasc
 import { pipeFittingDefinition } from '../pipe-fitting/definition'
 import { getPipeFittingPorts } from '../pipe-fitting/ports'
 import { createPipeRunEndCap } from '../shared/automatic-run-end-cap'
+import { resolvePipeContinuationSeed } from './continuation'
 import {
   pipeContinuationHandlePlan,
   pipeContinuationHandlePoint,
   pipeEndpointPort,
-  resolvePipeContinuationSeed,
-} from './continuation'
+} from './continuation-handle'
 import { pipeSegmentDefinition } from './definition'
 import { PipeSegmentNode } from './schema'
 

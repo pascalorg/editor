@@ -1,4 +1,5 @@
 import type { NodeRenderDefinition } from '../definition-contributions'
+import { buildPipeSegmentFloorplan } from './floorplan'
 import { buildPipeSegmentGeometry } from './geometry'
 import { PipeSegmentNode } from './schema'
 
@@ -71,6 +72,7 @@ export const pipeSegmentRenderDefinition: NodeRenderDefinition<typeof PipeSegmen
       },
     ]
   },
+  floorplan: buildPipeSegmentFloorplan,
   presentation: {
     label: 'DWV Pipe',
     description:

@@ -17,7 +17,6 @@ import {
 } from '@pascal-app/editor'
 import type { NodeEditContribution } from '../definition-contributions'
 import { sameOutlineSurfaceCounterparts } from '../shared/surface-counterparts'
-import { buildCeilingFloorplan } from './floorplan'
 import {
   ceilingAddVertexAffordance,
   ceilingDeleteVertexAffordance,
@@ -136,7 +135,6 @@ export const ceilingEditContribution: NodeEditContribution<typeof CeilingNode> =
     'hole-edit': () => import('./hole-editor'),
     move: () => import('./move-tool'),
   },
-  floorplan: buildCeilingFloorplan,
   floorplanDependsOnSiblings: true,
   // 2D move handler — translates polygon by cursor delta from first
   // pointer position. Mirror of slab; 3D `MoveCeilingTool` skips

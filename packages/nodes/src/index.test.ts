@@ -2,14 +2,20 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import {
   AnyNode,
   DoorNode,
+  LevelNode,
   loadPlugin,
   nodeKindOf,
   nodeRegistry,
   useInteractive,
   useScene,
+  WallNode,
+  ZoneNode,
 } from '@pascal-app/core'
 import { builtinPlugin } from '@pascal-app/nodes'
 import { renderPlugin } from '@pascal-app/nodes/render'
+import { FloorplanPreview } from '@pascal-app/viewer/ui'
+import { createElement } from 'react'
+import { renderToStaticMarkup } from 'react-dom/server'
 
 describe('builtinPlugin', () => {
   let restoreRegistry: () => void
@@ -67,7 +73,7 @@ describe('builtinPlugin', () => {
     )
   })
 
-  test('render keeps geometry, baking and interaction dispatch without editing contributions', () => {
+  test('render keeps geometry, baking, interaction dispatch and the read-only plan without editing contributions', () => {
     expect(renderPlugin.nodes!.map((definition) => definition.kind)).toEqual(
       builtinPlugin.nodes!.map((definition) => definition.kind),
     )
@@ -84,13 +90,88 @@ describe('builtinPlugin', () => {
       expect(render.exportAnimation).toBe(full.exportAnimation)
       expect(render.capabilities.mechanism).toBe(full.capabilities.mechanism)
       expect(render.capabilities.slots).toBe(full.capabilities.slots)
+      expect(render.floorplan).toBe(full.floorplan)
+      expect(render.computeFloorplanLevelData).toBe(full.computeFloorplanLevelData)
+      expect(render.floorplanScope).toBe(full.floorplanScope)
+      expect(render.floorplanLinkedLevelIds).toBe(full.floorplanLinkedLevelIds)
       expect(render.capabilities.paint).toBeUndefined()
-      expect(render.floorplan).toBeUndefined()
+      expect(render.floorplanAffordances).toBeUndefined()
+      expect(render.floorplanMoveTarget).toBeUndefined()
+      expect(render.floorplanDependencies).toBeUndefined()
+      expect(render.floorplanDependsOnSiblings).toBeUndefined()
+      expect(render.floorplanAffectedIds).toBeUndefined()
+      expect(render.floorplanSiblingOverrides).toBeUndefined()
       expect(render.tool).toBeUndefined()
       expect(render.parametrics).toBeUndefined()
       expect(render.extensions).toBeUndefined()
     }
   })
+})
+
+test('the render entry alone draws the read-only plan of built-in kinds', async () => {
+  const restoreRegistry = nodeRegistry._snapshot()
+  nodeRegistry._reset()
+  try {
+    await loadPlugin(renderPlugin)
+    const walls = [
+      [
+        [0, 0],
+        [4, 0],
+      ],
+      [
+        [4, 0],
+        [4, 3],
+      ],
+      [
+        [4, 3],
+        [0, 3],
+      ],
+      [
+        [0, 3],
+        [0, 0],
+      ],
+    ].map(([start, end], index) =>
+      WallNode.parse({ id: `wall_${index}`, parentId: 'level_plan', start, end }),
+    )
+    const zone = ZoneNode.parse({
+      id: 'zone_plan',
+      parentId: 'level_plan',
+      name: 'Room',
+      polygon: [
+        [0, 0],
+        [4, 0],
+        [4, 3],
+        [0, 3],
+      ],
+    })
+    const level = LevelNode.parse({
+      id: 'level_plan',
+      children: [...walls.map((wall) => wall.id), zone.id],
+    })
+    const nodes = Object.fromEntries([level, ...walls, zone].map((node) => [node.id, node]))
+    const markup = renderToStaticMarkup(
+      createElement(FloorplanPreview, {
+        levelId: level.id,
+        scene: { nodes },
+        showCompass: false,
+        showLevelSelector: false,
+      }),
+    )
+    // The plan's own SVG, before the zoom controls' icons.
+    const plan = markup.slice(
+      markup.indexOf('data-floorplan-preview'),
+      markup.indexOf('</svg>', markup.indexOf('data-floorplan-preview')),
+    )
+    const drawn = new Map(
+      plan
+        .split('data-floorplan-node-id="')
+        .slice(1)
+        .map((part) => [part.slice(0, part.indexOf('"')), /<(path|polygon)\b/.test(part)]),
+    )
+    for (const node of [...walls, zone]) expect(drawn.get(node.id)).toBe(true)
+  } finally {
+    restoreRegistry()
+  }
 })
 
 test.each(['hinged', 'sliding'] as const)(

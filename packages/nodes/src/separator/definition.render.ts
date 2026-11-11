@@ -1,6 +1,7 @@
 import { SeparatorNode } from '@pascal-app/core'
 
 import type { NodeRenderDefinition } from '../definition-contributions'
+import { buildSeparatorFloorplan } from './floorplan'
 
 export const separatorRenderDefinition: NodeRenderDefinition<typeof SeparatorNode> & {
   kind: 'separator'
@@ -23,6 +24,7 @@ export const separatorRenderDefinition: NodeRenderDefinition<typeof SeparatorNod
   dirtyTracking: false,
   rendersChildren: false,
   renderer: { kind: 'parametric', module: () => import('./renderer') },
+  floorplan: buildSeparatorFloorplan,
   presentation: {
     icon: { kind: 'iconify', name: 'lucide:split' },
     label: 'Separator',

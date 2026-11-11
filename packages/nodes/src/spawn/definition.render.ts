@@ -1,4 +1,5 @@
 import type { NodeRenderDefinition } from '../definition-contributions'
+import { buildSpawnFloorplan } from './floorplan'
 import { SpawnNode } from './schema'
 
 export const spawnRenderDefinition: NodeRenderDefinition<typeof SpawnNode> & { kind: 'spawn' } = {
@@ -37,6 +38,7 @@ export const spawnRenderDefinition: NodeRenderDefinition<typeof SpawnNode> & { k
     kind: 'parametric',
     module: () => import('./renderer'),
   },
+  floorplan: buildSpawnFloorplan,
   presentation: {
     label: 'Spawn Point',
     description: 'Player or camera origin within a level. One per level.',

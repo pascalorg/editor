@@ -2,11 +2,12 @@ import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import {
   containsPoint,
+  createFloorplanContextExtensions,
   type FloorplanGeometry,
   type GeometryContext,
+  readFloorplanGeometryMetadata,
   ZoneNode,
 } from '@pascal-app/core'
-import { createFloorplanContextExtensions, readFloorplanGeometryMetadata } from '@pascal-app/editor'
 import { buildZoneFloorplan } from './floorplan'
 
 const context = {

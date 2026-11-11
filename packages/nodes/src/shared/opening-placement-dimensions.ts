@@ -11,11 +11,11 @@ import {
   isCurvedWall,
   type OpeningSpan,
   openingHostFacing,
+  readFloorplanContext,
   useScene,
   type WallNode,
   type WindowNode,
 } from '@pascal-app/core'
-import { readFloorplanContext } from '@pascal-app/editor'
 import { formatConstructionLength } from './construction-length'
 import { resolveWallOpeningCeiling } from './wall-opening-ceiling'
 

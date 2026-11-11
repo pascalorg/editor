@@ -66,11 +66,8 @@ import { planRunTranslationOffsets } from '../shared/run-translation-offset'
 import { ContinuePlusHandle, HandleCube, MoveChevron, RotateArc } from '../shared/selection-handles'
 import { planVerticalOffsets, type VerticalOffsetResult } from '../shared/vertical-offset'
 import { refreshWallRunAttachment } from '../shared/wall-run-move'
-import {
-  activateDuctContinuation,
-  type DuctEndpoint,
-  ductContinuationHandlePlan,
-} from './continuation'
+import { activateDuctContinuation } from './continuation'
+import { type DuctEndpoint, ductContinuationHandlePlan } from './continuation-handle'
 import { INCHES_TO_METERS } from './profile'
 
 /** Port-snap radius for dragged run endpoints (meters, XZ). */

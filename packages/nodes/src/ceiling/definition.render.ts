@@ -7,6 +7,7 @@ import {
 import type { NodeRenderDefinition } from '../definition-contributions'
 import { surfaceBatchable } from '../shared/node-batch/batchable'
 import { polygonMeasurementFeatures } from '../shared/polygon-measurement'
+import { buildCeilingFloorplan } from './floorplan'
 import { CeilingNode } from './schema'
 
 export const ceilingRenderDefinition: NodeRenderDefinition<typeof CeilingNode> & {
@@ -68,6 +69,7 @@ export const ceilingRenderDefinition: NodeRenderDefinition<typeof CeilingNode> &
     module: () => import('./system'),
     priority: 4,
   },
+  floorplan: buildCeilingFloorplan,
   presentation: {
     label: 'Ceiling',
     description: 'A polygon-bounded ceiling surface that hosts ceiling-mounted items.',

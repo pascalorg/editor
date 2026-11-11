@@ -1,6 +1,5 @@
 import type { HandleDescriptor, SolarPanelNode as SolarPanelNodeType } from '@pascal-app/core'
 import type { NodeEditContribution } from '../definition-contributions'
-import { buildSolarPanelFloorplan } from './floorplan'
 import { solarPanelParametrics } from './parametrics'
 import type { SolarPanelNode } from './schema'
 
@@ -222,7 +221,6 @@ export const solarPanelEditContribution: NodeEditContribution<typeof SolarPanelN
   snapProfile: 'item',
   parametrics: solarPanelParametrics,
   handles: solarPanelHandles,
-  floorplan: buildSolarPanelFloorplan,
   preview: () => import('./preview'),
   tool: () => import('./tool'),
   affordanceTools: {

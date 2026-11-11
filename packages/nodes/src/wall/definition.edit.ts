@@ -14,7 +14,6 @@ import {
 import type { NodeEditContribution } from '../definition-contributions'
 import { buildWallContextualDimensions } from './contextual-dimensions'
 import { hasWallCurveBlockingChildren } from './curve-eligibility'
-import { buildWallFloorplan, computeWallFloorplanLevelData } from './floorplan'
 import {
   wallCurveAffordance,
   wallMoveEndpointAffordance,
@@ -141,10 +140,6 @@ export const wallEditContribution: NodeEditContribution<typeof WallNode> = {
     move: () => import('./move-tool'),
     split: () => import('./split-tool'),
   },
-  // Stage C: floor-plan rendering. Precomputes the level miter graph once
-  // per render pass, then the builder reads its own junctions by wall id.
-  computeFloorplanLevelData: computeWallFloorplanLevelData,
-  floorplan: buildWallFloorplan,
   floorplanDependsOnSiblings: true,
   // 2D drag affordances triggered by `endpoint-handle` primitives in
   // `def.floorplan`'s output. Sister to `affordanceTools` (3D) — the

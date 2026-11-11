@@ -1,18 +1,16 @@
 import { describe, expect, test } from 'bun:test'
 import {
   assemblyThickness,
+  createFloorplanContextExtensions,
   type FloorplanGeometry,
   type FloorplanPalette,
   type GeometryContext,
-  WallNode,
-  wallAssemblyFromLegacy,
-} from '@pascal-app/core'
-import {
-  createFloorplanContextExtensions,
   readFloorplanGeometryMetadata,
   WALL_PULL_AFFORDANCE,
   WALL_PUSH_AFFORDANCE,
-} from '@pascal-app/editor'
+  WallNode,
+  wallAssemblyFromLegacy,
+} from '@pascal-app/core'
 import { buildWallFloorplan } from './floorplan'
 
 const palette: FloorplanPalette = {

@@ -121,9 +121,6 @@
     "packages/editor/src/components/editor-2d/renderers/floorplan-dimension-edit-overlay.tsx": [
       "Cannot read \"{?}\""
     ],
-    "packages/editor/src/components/editor-2d/renderers/floorplan-dimension-renderer.tsx": [
-      "override"
-    ],
     "packages/editor/src/components/editor/capture-level-picker.tsx": [
       "Levels in the shot",
       "Whole building"
@@ -798,6 +795,9 @@
       "or click to",
       "to exit",
       "to resume"
+    ],
+    "packages/viewer/src/ui/floorplan/floorplan-dimension-renderer.tsx": [
+      "override"
     ]
   }
 }

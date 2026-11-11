@@ -11,7 +11,7 @@ import type { FloorplanNodeExtension } from '@pascal-app/editor'
 import type { NodeEditContribution } from '../definition-contributions'
 import { itemHasLights, itemMechanism, toggleItemLights } from '../shared/item-interactions'
 import { restingFloorplanAffectedIds } from '../shared/resting-surface-plan'
-import { buildItemContextualDimensions, buildItemFloorplan } from './floorplan'
+import { buildItemContextualDimensions } from './floorplan'
 import { itemFloorplanMoveTarget } from './floorplan-move'
 import { itemPaint } from './paint'
 import { itemParametrics } from './parametrics'
@@ -187,9 +187,6 @@ export const itemEditContribution: NodeEditContribution<typeof ItemNode> = {
   affordanceTools: {
     move: () => import('./move-tool'),
   },
-  // Stage C: floor-plan polygon. ctx.resolve walks the parent chain
-  // (wall / nested item / level) to compute the world-space transform.
-  floorplan: buildItemFloorplan,
   floorplanAffectedIds: (args) => {
     const ids = [...restingFloorplanAffectedIds(args)]
     for (const node of [args.node, getEffectiveCutterNode(args.node)]) {

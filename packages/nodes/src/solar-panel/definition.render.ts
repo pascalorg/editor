@@ -1,5 +1,6 @@
 import { SolarPanelNode as SolarPanelNodeSchema } from '@pascal-app/core'
 import type { NodeRenderDefinition } from '../definition-contributions'
+import { buildSolarPanelFloorplan } from './floorplan'
 import { SolarPanelNode } from './schema'
 
 export const solarPanelRenderDefinition: NodeRenderDefinition<typeof SolarPanelNode> & {
@@ -33,6 +34,7 @@ export const solarPanelRenderDefinition: NodeRenderDefinition<typeof SolarPanelN
     kind: 'parametric',
     module: () => import('./renderer'),
   },
+  floorplan: buildSolarPanelFloorplan,
   presentation: {
     label: 'Solar Panel',
     description: 'Grid of photovoltaic panels mounted on a roof segment.',

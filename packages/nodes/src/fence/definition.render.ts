@@ -13,6 +13,7 @@ import {
   createSceneSupportHeightSampler,
 } from '@pascal-app/viewer'
 import type { NodeRenderDefinition } from '../definition-contributions'
+import { buildFenceFloorplan } from './floorplan'
 import { buildFenceGeometry } from './geometry'
 import { resolveFenceLiftElevation, resolveFenceLiftElevationForNodes } from './lift'
 import { FenceNode } from './schema'
@@ -140,6 +141,7 @@ export const fenceRenderDefinition: NodeRenderDefinition<typeof FenceNode> & { k
     module: () => import('./system'),
     priority: 4,
   },
+  floorplan: buildFenceFloorplan,
   presentation: {
     label: 'Fence',
     description: 'A straight or curved fence segment with configurable posts and infill.',

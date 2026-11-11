@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import type { AnyNode, AnyNodeId } from '@pascal-app/core'
+import type { AnyNode, AnyNodeId } from '../../schema'
 import { persistResolvedMarks, resolveMarkDetail, resolveMarks } from './marks'
 
 /**

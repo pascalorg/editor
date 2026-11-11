@@ -1,6 +1,10 @@
 import { describe, expect, test } from 'bun:test'
-import { ColumnNode, type GeometryContext, StructuralGridNode } from '@pascal-app/core'
-import { readFloorplanGeometryMetadata } from '@pascal-app/editor'
+import {
+  ColumnNode,
+  type GeometryContext,
+  readFloorplanGeometryMetadata,
+  StructuralGridNode,
+} from '@pascal-app/core'
 import { columnFootprintHalf } from './bounds'
 import { columnDefinition } from './definition'
 import {

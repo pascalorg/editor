@@ -125,6 +125,25 @@ therefore keeps one semantic Site child while the same representation appears
 from every level of every building on that Site. Scope discovery is
 registry-driven; editor code must not name plugin kinds.
 
+`def.floorplanLinkedLevelIds(node)` names other levels whose plans also draw
+the node (a stair climbing to an upper floor); the plan builds it there with
+`ctx.parent` set to that level.
+
+The read-only plan is part of a kind's render half. A built-in kind declares
+`floorplan`, `computeFloorplanLevelData`, `floorplanScope` and
+`floorplanLinkedLevelIds` in its `definition.render.ts`, and those builders
+import only `core` and `viewer` — never the editor — so
+`@pascal-app/nodes/render` draws the plan in a viewer without the editor (the
+render bundle gate holds this). The shared plan contract they use
+(`readFloorplanContext`, `floorplanGeometryMetadata`, the SVG path and plan
+math helpers, the wall grip affordance ids) lives in `core`. A builder may emit
+handles while `ctx.viewState.selected`; they are plain data, and a read-only
+host never selects. Plan editing stays in `definition.edit.ts`:
+`floorplanAffordances`, `floorplanMoveTarget`, `floorplanSiblingOverrides`,
+`floorplanAffectedIds`, `floorplanDependencies`, `floorplanDependsOnSiblings`
+and the editor's `pascal:editor/floorplan` extension (tools, contextual and
+selection dimensions, action menus, schedules).
+
 `FloorplanStyle.fillRule` is the winding rule for compound contours. Use
 `'evenodd'` when nested rings represent holes; both the interactive SVG
 renderer and PDFKit export preserve it. `FloorplanImage.url` may also be an

@@ -1,5 +1,6 @@
 import { ductBodySlots } from '@pascal-app/core'
 import type { NodeRenderDefinition } from '../definition-contributions'
+import { buildDuctFittingFloorplan } from './floorplan'
 import { buildDuctFittingGeometry } from './geometry'
 import { getDuctFittingPorts } from './ports'
 import { DuctFittingNode } from './schema'
@@ -74,6 +75,7 @@ export const ductFittingRenderDefinition: NodeRenderDefinition<typeof DuctFittin
       n.slots,
     ]),
   ports: getDuctFittingPorts,
+  floorplan: buildDuctFittingFloorplan,
   presentation: {
     label: 'Duct Fitting',
     description: 'Elbow, tee, reducer, or square-to-round transition connecting duct runs.',

@@ -3,11 +3,11 @@ import {
   type ColumnNode,
   type FloorplanGeometry,
   type FloorplanPoint,
+  floorplanGeometryMetadata,
   type GeometryContext,
   type StructuralGridNode,
   scriptImages,
 } from '@pascal-app/core'
-import { floorplanGeometryMetadata } from '@pascal-app/editor'
 import {
   collectStructuralGridAxes,
   resolveStructuralGridReference,

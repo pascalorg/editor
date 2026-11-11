@@ -1,6 +1,5 @@
 import type { EyebrowVentNode as EyebrowVentNodeType, HandleDescriptor } from '@pascal-app/core'
 import type { NodeEditContribution } from '../definition-contributions'
-import { buildEyebrowVentFloorplan } from './floorplan'
 import { eyebrowVentPaint } from './paint'
 import { eyebrowVentParametrics } from './parametrics'
 import type { EyebrowVentNode } from './schema'
@@ -110,7 +109,6 @@ export const eyebrowVentEditContribution: NodeEditContribution<typeof EyebrowVen
   },
   parametrics: eyebrowVentParametrics,
   handles: eyebrowVentHandles,
-  floorplan: buildEyebrowVentFloorplan,
   preview: () => import('./preview'),
   tool: () => import('./tool'),
   affordanceTools: {

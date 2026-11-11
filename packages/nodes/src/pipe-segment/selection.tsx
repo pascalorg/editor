@@ -43,11 +43,8 @@ import { PipeFittingGhost, PipeSegmentGhost } from '../shared/mep-ghost'
 import { DWV_PORT_SYSTEMS } from '../shared/port-systems'
 import { ContinuePlusHandle, HandleCube, MoveChevron } from '../shared/selection-handles'
 import { refreshWallRunAttachment } from '../shared/wall-run-move'
-import {
-  activatePipeContinuation,
-  type PipeEndpoint,
-  pipeContinuationHandlePlan,
-} from './continuation'
+import { activatePipeContinuation } from './continuation'
+import { type PipeEndpoint, pipeContinuationHandlePlan } from './continuation-handle'
 import { pipeGradeBlockedNotice } from './grade-affordance'
 import { pipeUpdatesPreserveGrades } from './grade-operation'
 import { type PipeRunMoveGhost, type PipeRunMoveKind, startPipeRunMove } from './run-move'

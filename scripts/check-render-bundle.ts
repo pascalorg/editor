@@ -239,6 +239,9 @@ const consumerSource = `
   const link = (props: ViewerLinkProps) => props.href;
   export const ui = { SceneLoader, ViewerControlsBar, ViewerSceneHeader, WalkthroughHud, link };
   export const rooms = { ParametricViewerRooms, RoomPillsLayer2D, RoomPillsLayer3D, ViewerRooms };
+  import { FloorplanPreview, ViewerStage, ViewerStageSwitcher, type ViewerStageMode } from '@pascal-app/viewer/ui';
+  const mode: ViewerStageMode = 'split';
+  export const stage = { FloorplanPreview, ViewerStage, ViewerStageSwitcher, mode };
   const plugin: Plugin = renderPlugin;
   export const version: 1 = plugin.apiVersion;
 `

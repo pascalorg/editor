@@ -5,8 +5,10 @@ import { doorSlots } from '@pascal-app/core'
 import { NEW_DOOR_FRAME_THICKNESS } from '@pascal-app/core/building'
 import type { NodeRenderDefinition } from '../definition-contributions'
 import { doorBatchable } from '../shared/node-batch/batchable'
+import { computeDoorFloorplanLevelData } from '../shared/opening-documentation'
 import { buildRoofWallOpeningCut } from '../shared/roof-wall-opening-cut'
 import { openingSeenFromOutside } from '../wall/exterior'
+import { buildDoorFloorplan } from './floorplan'
 import { doorMechanism } from './mechanism'
 import { DoorNode } from './schema'
 
@@ -81,6 +83,10 @@ export const doorRenderDefinition: NodeRenderDefinition<typeof DoorNode> & { kin
     // before wall mitering at 4).
     priority: 3,
   },
+  // Stage C: floor-plan polygon. Needs ctx.parent (the wall) to compute
+  // direction + perpendicular for the cutout footprint.
+  floorplan: buildDoorFloorplan,
+  computeFloorplanLevelData: computeDoorFloorplanLevelData,
   presentation: {
     label: 'Door',
     description: 'A door cut into a wall. Animated open/close state.',

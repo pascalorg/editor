@@ -1,5 +1,6 @@
 import { EyebrowVentNode as EyebrowVentNodeSchema, eyebrowVentSlots } from '@pascal-app/core'
 import type { NodeRenderDefinition } from '../definition-contributions'
+import { buildEyebrowVentFloorplan } from './floorplan'
 import { EyebrowVentNode } from './schema'
 
 export const eyebrowVentRenderDefinition: NodeRenderDefinition<typeof EyebrowVentNode> & {
@@ -34,6 +35,7 @@ export const eyebrowVentRenderDefinition: NodeRenderDefinition<typeof EyebrowVen
     kind: 'parametric',
     module: () => import('./renderer'),
   },
+  floorplan: buildEyebrowVentFloorplan,
   presentation: {
     label: 'Eyebrow Vent',
     description: 'Low curved lens-shaped roof vent with a louvered front.',

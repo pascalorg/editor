@@ -1,7 +1,6 @@
 import type { FloorplanNodeExtension } from '@pascal-app/editor'
 import type { NodeEditContribution } from '../definition-contributions'
 import { buildZoneContextualDimensions } from './contextual-dimensions'
-import { buildZoneFloorplan } from './floorplan'
 import {
   zoneAddVertexAffordance,
   zoneDeleteVertexAffordance,
@@ -23,7 +22,6 @@ export const zoneEditContribution: NodeEditContribution<typeof ZoneNode> = {
     } satisfies FloorplanNodeExtension<ZoneNode>,
   },
   parametrics: zoneParametrics,
-  floorplan: buildZoneFloorplan,
   // Every unit under the building, not just the current owner: a zone that
   // joins its first unit has no owner to depend on until the unit changes.
   floorplanDependencies: (node, nodes) => [

@@ -13,11 +13,12 @@ import {
   getWallLocalFaceZ,
   type ItemNode,
   type RoofSegmentNode,
+  readFloorplanContext,
+  readFloorplanMetricNotationOverride,
   roofFacePointToSegment,
   scriptImages,
   useLiveTransforms,
 } from '@pascal-app/core'
-import { readFloorplanContext, readFloorplanMetricNotationOverride } from '@pascal-app/editor'
 import { restingNodePlanFrame } from '../shared/resting-surface-plan'
 import { buildPlanItemSymbol, classifyPlanItem, PLAN_SYMBOL_METADATA_KEY } from './plan-symbols'
 

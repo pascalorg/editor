@@ -1,5 +1,6 @@
 import { GutterNode as GutterNodeSchema, gutterSlots } from '@pascal-app/core'
 import type { NodeRenderDefinition } from '../definition-contributions'
+import { buildGutterFloorplan } from './floorplan'
 import { GutterNode } from './schema'
 
 export const gutterRenderDefinition: NodeRenderDefinition<typeof GutterNode> & { kind: 'gutter' } =
@@ -34,6 +35,7 @@ export const gutterRenderDefinition: NodeRenderDefinition<typeof GutterNode> & {
       kind: 'parametric',
       module: () => import('./renderer'),
     },
+    floorplan: buildGutterFloorplan,
     presentation: {
       label: 'Gutter',
       description: 'Rain-water channel running along the eave of a roof segment.',

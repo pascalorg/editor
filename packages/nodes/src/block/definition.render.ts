@@ -6,6 +6,7 @@ import {
 import type { NodeRenderDefinition } from '../definition-contributions'
 import { perNodeGeometryBatchable } from '../shared/node-batch/batchable'
 import { blockFaceHost } from './face-host'
+import { buildBlockFloorplan } from './floorplan'
 import { buildBlockGeometry } from './geometry'
 import { BlockNode } from './schema'
 import { blockSurfaceProvider } from './surface'
@@ -117,6 +118,7 @@ export const blockRenderDefinition: NodeRenderDefinition<typeof BlockNode> & { k
   geometry: buildBlockGeometry,
   geometryChildTypes: [],
   geometryKey: (node) => JSON.stringify([node.topology, node.slots]),
+  floorplan: buildBlockFloorplan,
   presentation: {
     label: 'Block',
     description: 'A topology-backed solid edited directly in the canvas.',

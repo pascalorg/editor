@@ -2,7 +2,6 @@ import type { NodeEditContribution } from '../definition-contributions'
 import { createRunHangerToolHint } from '../shared/run-hanger-mode'
 import { pipeRunToolOptions } from '../shared/run-tool-options'
 import { pipeBranchAffordance, pipeContinuationAffordance } from './continuation'
-import { buildPipeSegmentFloorplan } from './floorplan'
 import { pipeGradePointAffordance } from './grade-affordance'
 import { pipeSegmentParametrics } from './parametrics'
 import type { PipeSegmentNode } from './schema'
@@ -15,7 +14,6 @@ export const pipeSegmentEditContribution: NodeEditContribution<typeof PipeSegmen
   snapProfile: 'structural',
   parametrics: pipeSegmentParametrics,
   floorplanDependsOnSiblings: true,
-  floorplan: buildPipeSegmentFloorplan,
   // 2D selection-time path-point handles — the floor-plan twin of the 3D
   // `affordanceTools.selection` handles. The builder emits an
   // `endpoint-handle` per path vertex; this drags the matching point.

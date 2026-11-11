@@ -5,6 +5,8 @@ import {
   type AnyNode,
   type AnyNodeId,
   type BuildingNode,
+  buildFloorplanContext,
+  buildSvgPolylinePath,
   type CameraControlFrameEvent,
   type CeilingNode,
   CeilingNode as CeilingNodeSchema,
@@ -18,10 +20,13 @@ import {
   type ElevatorNode,
   emitter,
   type FenceNode,
+  FLOORPLAN_VIEW_ROTATION_DEG,
   type FloorplanGeometry,
+  floorplanLocalToWorldPoint,
   formatAngleRadians,
   formatLinearMeasurement,
   formatNumber as formatLocalizedNumber,
+  formatPolygonPath,
   type GeometryContext,
   type GuideNode,
   getRenderableSlabPolygon,
@@ -41,6 +46,7 @@ import {
   type RoofSegmentNode,
   resolveSlabPlacementElevation,
   resolveTerrainWallConstructionOptions,
+  rotatePlanVector as rotateSharedPlanVector,
   runAsSingleSceneHistoryStep,
   type SeparatorNode,
   type SiteNode,
@@ -64,10 +70,24 @@ import {
   WindowNode as WindowNodeSchema,
   wallClosesRoom,
   wallRectangleCorners,
+  worldToFloorplanLocalPoint,
 } from '@pascal-app/core'
 import { useSegmentDraftChain, useWallSnapIndicator } from '@pascal-app/editor'
 import { getSceneTheme, useViewer } from '@pascal-app/viewer'
-import { FloorplanCompassButton, framingAnimates } from '@pascal-app/viewer/ui'
+import {
+  createFloorplanNavigationSyncScheduler,
+  FloorplanCompassButton,
+  FloorplanGeometryRenderer,
+  type FloorplanNavigationSyncScheduler,
+  framingAnimates,
+  type NavigationSyncPose,
+  navigationSyncPoseStore,
+  publishNavigationSyncPose,
+  setFloorplanCompassRotation,
+  subscribeFloorplanCameraNavigation,
+  subscribeNavigationSyncPose,
+  useFloorplanCameraSyncBridge,
+} from '@pascal-app/viewer/ui'
 import { Command, Ruler } from 'lucide-react'
 import {
   type ComponentProps,
@@ -96,14 +116,9 @@ import {
   alignFloorplanDraftPoint,
   buildFloorplanItemEntry,
   collectLevelDescendants,
-  FLOORPLAN_VIEW_ROTATION_DEG,
-  floorplanLocalToWorldPoint,
   getFloorplanWall as getSharedFloorplanWall,
-  rotatePlanVector as rotateSharedPlanVector,
   type FloorplanNodeTransform as SharedFloorplanNodeTransform,
-  worldToFloorplanLocalPoint,
 } from '../../lib/floorplan'
-import { buildFloorplanContext } from '../../lib/floorplan/floorplan-readonly'
 // Site-plan view. Owned under `lib/floorplan/site-plan/**`; this panel
 // only chooses between it and the registry layer, and mounts the switch.
 import {
@@ -176,10 +191,9 @@ import {
 } from '../../lib/wall-run-snap'
 import { snapBuildingLocalToWorldGrid } from '../../lib/world-grid-snap'
 import { nextZoneName } from '../../lib/zone-name'
-import { subscribeNavigationSyncPose } from '../../store/navigation-sync-pose-store'
 import useAlignmentGuides from '../../store/use-alignment-guides'
 import useDrawingView from '../../store/use-drawing-view'
-import type { GuideUiState, NavigationSyncPose } from '../../store/use-editor'
+import type { GuideUiState } from '../../store/use-editor'
 import useEditor, {
   isAngleSnapActive,
   isMagneticSnapActive,
@@ -223,7 +237,6 @@ import { FloorplanSnapBeaconLayer } from '../editor-2d/floorplan-snap-beacon-lay
 import { FloorplanWallMoveGhostLayer } from '../editor-2d/floorplan-wall-move-ghost-layer'
 import { FloorplanDraftLayer } from '../editor-2d/renderers/floorplan-draft-layer'
 import { FloorplanDraftMeasurement } from '../editor-2d/renderers/floorplan-draft-measurement'
-import { FloorplanGeometryRenderer } from '../editor-2d/renderers/floorplan-geometry-renderer'
 import { FloorplanMarqueeLayer } from '../editor-2d/renderers/floorplan-marquee-layer'
 import { FloorplanPlacementPreviewLayer } from '../editor-2d/renderers/floorplan-placement-preview-layer'
 import { FloorplanPlacementTypingHud } from '../editor-2d/renderers/floorplan-placement-typing-hud'
@@ -232,7 +245,6 @@ import {
   RotationAngleOverlay,
 } from '../editor-2d/renderers/floorplan-registry-layer'
 import { FloorplanVoronoiLayer } from '../editor-2d/renderers/floorplan-voronoi-layer'
-import { buildSvgPolylinePath, formatPolygonPath } from '../editor-2d/svg-paths'
 import { snapToHalf } from '../tools/item/placement-math'
 import {
   isBoxSelectPointerSuppressed,
@@ -277,21 +289,14 @@ import {
 import { formatWallDraftHeading, resolveTypedWallEnd } from '../tools/wall/wall-typed-entry'
 import { resolveFloorplanBackgroundSelection } from './floorplan-background-selection'
 import {
-  subscribeFloorplanCameraNavigation,
-  useFloorplanCameraSyncBridge,
-} from './floorplan-camera-sync'
-import {
   canApplyFloorplanNavigationSync,
   canZoomFloorplanDuringNavigation,
-  createFloorplanNavigationSyncScheduler,
-  type FloorplanNavigationSyncScheduler,
   type FloorplanPresentationViewBox,
   finalizeFloorplanNavigation,
   flushFloorplanRotationPresentationRestore,
   getFloorplanRotationOverscanViewBox,
   queueFloorplanRotationPresentationRestore,
   resolveFloorplanPresentationViewBox,
-  setFloorplanCompassRotation,
 } from './floorplan-navigation-presentation'
 import {
   endFloorplanWallTypingOnCancel,
@@ -4912,7 +4917,7 @@ const DRAFT_AXIS_GUIDE_EXTENT = 1000
 export function FloorplanPanel({
   /**
    * Element to portal the compass button into. The 2D/3D navigation poses stay
-   * in sync (`navigationSyncPose`), so hosting the compass on the always-visible
+   * in sync (`navigationSyncPoseStore`), so hosting the compass on the always-visible
    * viewer-area container keeps it correct — needle and align-to-north alike —
    * in 2d, 3d, and split modes, while this panel itself may be display:none.
    */
@@ -4984,7 +4989,7 @@ export function FloorplanPanel({
     viewWidth: number
   } | null>(null)
   const latestNavigationSyncPoseRef = useRef<NavigationSyncPose | null>(
-    useEditor.getState().navigationSyncPose,
+    navigationSyncPoseStore.getState().pose,
   )
   const compassNeedleRef = useRef<SVGSVGElement | null>(null)
   const hiddenCompassAnimationRef = useRef<number | null>(null)
@@ -7405,7 +7410,7 @@ export function FloorplanPanel({
       )
       const targetY = latestNavigationSyncPoseRef.current?.target[1] ?? floorplanGridWorldY
 
-      useEditor.getState().publishNavigationSyncPose({
+      publishNavigationSyncPose({
         source: '2d',
         target: [worldCenter.x, targetY, worldCenter.z],
         azimuth: cameraAzimuthFromFloorplanRotation(userRotationDeg),
@@ -7426,7 +7431,7 @@ export function FloorplanPanel({
       const northAzimuth = cameraAzimuthFromFloorplanRotation(
         nearestEquivalentDegrees(0, currentRotation),
       )
-      useEditor.getState().publishNavigationSyncPose({
+      publishNavigationSyncPose({
         source: '2d',
         target: [...pose.target],
         azimuth: northAzimuth,

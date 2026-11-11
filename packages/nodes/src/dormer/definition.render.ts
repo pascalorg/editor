@@ -5,6 +5,7 @@ import {
 } from '@pascal-app/core'
 import type { NodeRenderDefinition } from '../definition-contributions'
 import { buildDormerRoofCut } from './csg-geometry'
+import { buildDormerFloorplan } from './floorplan'
 import { DormerNode } from './schema'
 
 export const dormerRenderDefinition: NodeRenderDefinition<typeof DormerNode> & { kind: 'dormer' } =
@@ -47,6 +48,7 @@ export const dormerRenderDefinition: NodeRenderDefinition<typeof DormerNode> & {
       kind: 'parametric',
       module: () => import('./renderer'),
     },
+    floorplan: buildDormerFloorplan,
     presentation: {
       label: 'Dormer',
       description: 'House-shaped protrusion on a roof segment.',

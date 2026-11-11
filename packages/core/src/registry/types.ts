@@ -1314,6 +1314,12 @@ export type NodeDefinition<S extends ZodObject<any>> = {
    */
   floorplanScope?: FloorplanScope
   /**
+   * Levels other than its own whose plans also draw this node: a stair that
+   * climbs to an upper floor shows on that floor's plan too. The plan builds
+   * it with `ctx.parent` set to the drawn level.
+   */
+  floorplanLinkedLevelIds?: (node: z.infer<S>) => readonly AnyNodeId[]
+  /**
    * 2D drag affordances keyed by the string identifier emitted on
    * `endpoint-handle` (and similar interactive floor-plan primitives) via
    * the `affordance` field. The floor-plan registry layer calls

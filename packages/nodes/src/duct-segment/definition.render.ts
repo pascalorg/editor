@@ -1,5 +1,6 @@
 import { ductBodySlots } from '@pascal-app/core'
 import type { NodeRenderDefinition } from '../definition-contributions'
+import { buildDuctSegmentFloorplan } from './floorplan'
 import { buildDuctSegmentGeometry } from './geometry'
 import { ductPortDiameterIn } from './profile'
 import { DuctSegmentNode } from './schema'
@@ -82,6 +83,7 @@ export const ductSegmentRenderDefinition: NodeRenderDefinition<typeof DuctSegmen
       },
     ]
   },
+  floorplan: buildDuctSegmentFloorplan,
   presentation: {
     label: 'Duct',
     description: 'HVAC duct run — polyline of round, rect, or flat-oval sections.',

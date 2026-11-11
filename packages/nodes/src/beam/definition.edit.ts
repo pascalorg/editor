@@ -18,7 +18,6 @@ import {
 import { useViewer } from '@pascal-app/viewer'
 import type { NodeEditContribution } from '../definition-contributions'
 import { beamToolOptions } from './draft-settings'
-import { buildBeamFloorplan } from './floorplan'
 import { beamEndpointAffordance } from './floorplan-affordances'
 import { beamFloorplanMoveTarget } from './floorplan-move'
 import { beamPanelModel } from './panel-model'
@@ -148,7 +147,6 @@ export const beamEditContribution: NodeEditContribution<typeof BeamNode> = {
     { key: 'Alt', label: 'Free place' },
     { key: 'Esc', label: 'End the run' },
   ],
-  floorplan: buildBeamFloorplan,
   floorplanMoveTarget: beamFloorplanMoveTarget,
   floorplanAffordances: {
     'move-endpoint': beamEndpointAffordance,

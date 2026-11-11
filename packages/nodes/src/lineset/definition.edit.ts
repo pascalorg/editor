@@ -1,6 +1,5 @@
 import type { NodeEditContribution } from '../definition-contributions'
 import { createPathPointMoveAffordance } from '../shared/path-point-affordance'
-import { buildLinesetFloorplan } from './floorplan'
 import { linesetParametrics } from './parametrics'
 import type { LinesetNode } from './schema'
 
@@ -11,7 +10,6 @@ export const linesetEditContribution: NodeEditContribution<typeof LinesetNode> =
   // lock available as a cyclable mode.
   snapProfile: 'structural',
   parametrics: linesetParametrics,
-  floorplan: buildLinesetFloorplan,
   // 2D selection-time path-point handles — the floor-plan twin of the 3D
   // `affordanceTools.selection` handles. The builder emits an
   // `endpoint-handle` per path vertex; this drags the matching point.

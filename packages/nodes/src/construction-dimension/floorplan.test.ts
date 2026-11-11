@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import {
   type AnyNode,
   ConstructionDimensionNode,
+  createFloorplanContextExtensions,
   type FloorplanGeometry,
   type GeometryContext,
   LevelNode,
@@ -9,7 +10,6 @@ import {
   registerNode,
   WallNode,
 } from '@pascal-app/core'
-import { createFloorplanContextExtensions } from '@pascal-app/editor'
 import { wallDefinition } from '../wall/definition'
 import { buildConstructionDimensionFloorplan } from './floorplan'
 

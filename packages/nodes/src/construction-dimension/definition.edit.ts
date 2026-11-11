@@ -3,7 +3,6 @@ import { measurementAnchorReferenceNodeIds } from '@pascal-app/core'
 import type { FloorplanNodeExtension } from '@pascal-app/editor'
 import type { NodeEditContribution } from '../definition-contributions'
 import { resolveConstructionDimensionForDrawing } from './drawing-coordination'
-import { buildConstructionDimensionFloorplan } from './floorplan'
 import {
   moveConstructionDimensionBaselineAffordance,
   moveConstructionDimensionWitnessAffordance,
@@ -23,7 +22,6 @@ export const constructionDimensionEditContribution: NodeEditContribution<
   },
   snapProfile: 'item',
   parametrics: constructionDimensionParametrics,
-  floorplan: buildConstructionDimensionFloorplan,
   floorplanDependencies: (node) => [
     ...measurementAnchorReferenceNodeIds(node.anchors),
     ...(node.controllingDimensionId ? [node.controllingDimensionId] : []),

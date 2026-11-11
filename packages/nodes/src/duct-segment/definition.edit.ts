@@ -6,7 +6,6 @@ import { createSegmentMoveAffordance } from '../shared/path-segment-affordance'
 import { createRunHangerToolHint } from '../shared/run-hanger-mode'
 import { ductRunToolOptions } from '../shared/run-tool-options'
 import { ductBranchAffordance, ductContinuationAffordance } from './continuation'
-import { buildDuctSegmentFloorplan } from './floorplan'
 import { ductSegmentParametrics } from './parametrics'
 import type { DuctSegmentNode } from './schema'
 
@@ -68,7 +67,6 @@ export const ductSegmentEditContribution: NodeEditContribution<typeof DuctSegmen
     },
   },
   floorplanDependsOnSiblings: true,
-  floorplan: buildDuctSegmentFloorplan,
   // 2D selection-time path-point handles — the floor-plan twin of the 3D
   // `affordanceTools.selection` handles. The builder emits an
   // `endpoint-handle` per path vertex; this drags the matching point.

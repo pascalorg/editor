@@ -12,6 +12,7 @@ import {
   resolveElevatorNodeSupportY,
 } from '@pascal-app/core'
 import type { NodeRenderDefinition } from '../definition-contributions'
+import { buildElevatorFloorplan } from './floorplan'
 import { ElevatorNode } from './schema'
 
 export function elevatorOuterHalfExtents(n: ElevatorNodeType): { halfX: number; halfZ: number } {
@@ -100,6 +101,15 @@ export const elevatorRenderDefinition: NodeRenderDefinition<typeof ElevatorNode>
     module: () => import('./system'),
     priority: 3,
   },
+  floorplan: buildElevatorFloorplan,
+  // Elevators are parented to the building (siblings of levels), so the
+  // floor-plan layer's level-rooted DFS never reaches them. Declaring
+  // `floorplanScope: 'building'` tells `FloorplanRegistryLayer` to walk
+  // building-scoped kinds separately and synthesise `ctx.parent` as the
+  // active level — that's what `buildElevatorFloorplan` reads via
+  // `ctx.parent?.id` to decide whether this floor is in the elevator's
+  // service range.
+  floorplanScope: 'building',
   presentation: {
     label: 'Elevator',
     description: 'A multi-level elevator shaft with configurable openings per level.',

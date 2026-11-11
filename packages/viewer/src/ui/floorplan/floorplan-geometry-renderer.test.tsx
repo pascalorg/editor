@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import type { FloorplanGeometry } from '@pascal-app/core'
+import { floorplanGeometryMetadata } from '@pascal-app/core'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { floorplanGeometryMetadata } from '../../../lib/floorplan/floorplan-extension'
 import { FloorplanGeometryRenderer } from './floorplan-geometry-renderer'
 
 describe('FloorplanGeometryRenderer static labels', () => {

@@ -21,6 +21,8 @@
     "zustand": "^5"
   },
   "devDependencies": {
+    "@tailwindcss/vite": "^4.3.4",
+    "tailwindcss": "^4.3.4",
     "vite": "^7.3.1"
   }
 }

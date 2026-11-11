@@ -21,7 +21,15 @@ import {
   type WallSurfaceSide,
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
-import { cameraPoseStore, type RoomKey, sameRoom } from '@pascal-app/viewer/ui'
+import {
+  cameraPoseStore,
+  type NavigationSyncPose,
+  type NavigationSyncPoseInput,
+  publishNavigationSyncPose,
+  type RoomKey,
+  sameRoom,
+  subscribeNavigationSyncPose,
+} from '@pascal-app/viewer/ui'
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import {
@@ -66,7 +74,6 @@ import {
   snapContextOf,
   snappingModesFor,
 } from '../lib/snapping-mode'
-import { publishNavigationSyncPoseToStore } from './navigation-sync-pose-store'
 import useInteractionScope from './use-interaction-scope'
 import {
   clampViewPaneRatio,
@@ -231,18 +238,6 @@ export type CatalogCategory =
 
 export type FloorplanSelectionTool = 'click' | 'marquee'
 export type GridSnapStep = 0.5 | 0.25 | 0.1 | 0.05
-
-export type NavigationSyncSource = '2d' | '3d'
-
-export type NavigationSyncPose = {
-  source: NavigationSyncSource
-  revision: number
-  target: [number, number, number]
-  azimuth: number
-  viewWidth: number
-}
-
-export type NavigationSyncPoseInput = Omit<NavigationSyncPose, 'revision'>
 
 // Combined tool type. Known literals keep autocomplete; the `(string & {})`
 // arm lets plugin-contributed tool ids (e.g. `'trees:tree'`) typecheck without
@@ -489,12 +484,13 @@ type EditorState = {
   setViewPinned: (viewId: string, pinned: boolean) => void
   isFloorplanHovered: boolean
   setFloorplanHovered: (hovered: boolean) => void
+  /** Mirror of viewer/ui's navigation sync store, kept for plugins that read it here. */
+  navigationSyncPose: NavigationSyncPose | null
+  publishNavigationSyncPose: (pose: NavigationSyncPoseInput) => void
   // Toggleable DWV riser-diagram (plumbing isometric) overlay.
   isRiserOpen: boolean
   setRiserOpen: (open: boolean) => void
   toggleRiserOpen: () => void
-  navigationSyncPose: NavigationSyncPose | null
-  publishNavigationSyncPose: (pose: NavigationSyncPoseInput) => void
   floorplanSelectionTool: FloorplanSelectionTool
   setFloorplanSelectionTool: (tool: FloorplanSelectionTool) => void
   gridSnapStep: GridSnapStep
@@ -1537,18 +1533,11 @@ const useEditor = create<EditorState>()(
         set((state) => ({ pinnedViews: { ...state.pinnedViews, [viewId]: pinned } })),
       isFloorplanHovered: false,
       setFloorplanHovered: (hovered) => set({ isFloorplanHovered: hovered }),
+      navigationSyncPose: null,
+      publishNavigationSyncPose,
       isRiserOpen: false,
       setRiserOpen: (open) => set({ isRiserOpen: open }),
       toggleRiserOpen: () => set((state) => ({ isRiserOpen: !state.isRiserOpen })),
-      navigationSyncPose: null,
-      publishNavigationSyncPose: (pose) => {
-        const navigationSyncPose = {
-          ...pose,
-          revision: (get().navigationSyncPose?.revision ?? 0) + 1,
-        }
-        publishNavigationSyncPoseToStore(navigationSyncPose)
-        set({ navigationSyncPose })
-      },
       floorplanSelectionTool: 'click' as FloorplanSelectionTool,
       setFloorplanSelectionTool: (tool) => set({ floorplanSelectionTool: tool }),
       gridSnapStep: DEFAULT_PERSISTED_EDITOR_LAYOUT_STATE.gridSnapStep,
@@ -1861,5 +1850,8 @@ usePaintRegionMode.subscribe((state) => {
   const paintEraser = state.mode === 'erase'
   if (useEditor.getState().paintEraser !== paintEraser) useEditor.setState({ paintEraser })
 })
+
+// Published plugins read the 2D/3D navigation pose from the editor store; the shared store owns it.
+subscribeNavigationSyncPose((navigationSyncPose) => useEditor.setState({ navigationSyncPose }))
 
 export default useEditor

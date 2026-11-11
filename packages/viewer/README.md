@@ -273,10 +273,12 @@ remain in the same settings record so editor consumers continue to share one sto
 
 ## Viewer UI (`@pascal-app/viewer/ui`)
 
-Pascal's read-only viewer chrome as React components: the controls bar (levels, walls, display,
-daylight, sky, walkthrough), the scene header (project card, breadcrumb, floor list), the hover
-label, the room pills, room highlight and selected-room callout (`ViewerRooms`), the walkthrough
-and drone HUDs, the loader, the selection model behind them
+Pascal's read-only viewer chrome as React components: the 3D / 2D / Split stage (`ViewerStage`)
+with its read-only floor plan (`FloorplanPreview`, kept in step with the 3D camera, with its compass
+and floor picker), the controls bar (levels, walls, display, daylight, sky, walkthrough), the scene
+header (project card, breadcrumb, floor list), the hover label, the room pills, room highlight and
+selected-room callout (`ViewerRooms`), the walkthrough and drone HUDs, the loader, the selection
+model behind them
 (`applyViewerClick`, `ViewerSelectionManager`) and the primitives they are built from (`Button`,
 `DropdownMenu*`, `Popover*`, `Tooltip*`, `Switch`). The entry never imports the editor or Next.
 
@@ -301,6 +303,7 @@ import {
   ViewerControlsBar,
   ViewerSceneHeader,
   ViewerSelectionManager,
+  ViewerStage,
   WalkthroughHud,
 } from '@pascal-app/viewer/ui'
 
@@ -309,10 +312,12 @@ function ProjectViewer({ ready, name }: { ready: boolean; name: string }) {
   const toggleWalk = () => useViewer.getState().setWalkthroughMode(!walking)
   return (
     <div className="relative h-full w-full">
-      <Viewer selectionManager="custom">
-        <ViewerSelectionManager />
-        <ParametricViewerRooms />
-      </Viewer>
+      <ViewerStage>
+        <Viewer selectionManager="custom">
+          <ViewerSelectionManager />
+          <ParametricViewerRooms />
+        </Viewer>
+      </ViewerStage>
       <ViewerSceneHeader backHref={null} linkComponent={MyLink} projectName={name} />
       <ViewerControlsBar onWalkthroughToggle={toggleWalk} walkthroughActive={walking} />
       {walking && <WalkthroughHud onExit={toggleWalk} />}
@@ -321,6 +326,17 @@ function ProjectViewer({ ready, name }: { ready: boolean; name: string }) {
   )
 }
 ```
+
+`ViewerStage` shows its children (the 3D canvas) in 3D, the floor plan in 2D, and both side by side
+in Split; the switcher picks among `modes` (all three by default) and Split falls back to 2D on
+narrow screens. Panning, zooming or turning the plan moves the 3D camera and the reverse, through the
+navigation pose store (`navigationSyncPoseStore`); on the 3D side, drive your drei `CameraControls`
+through `useViewerCameraNavigationSync(controlsRef)`, as Pascal's camera does
+(`synchronizeNavigation={false}` turns the link off). The plan draws each kind's `def.floorplan`,
+which `renderPlugin` carries; without a `scene` prop it reads the live scene store, and a host with
+another node source passes `scene={{ nodes, installedPlugins }}`. Picking a floor in 2D selects that
+level in the viewer. Room names show as the plan's drawn tags. Control the mode with `mode` /
+`onModeChange` or let the stage hold it (`defaultMode`).
 
 `linkComponent` renders the header's links (a plain `<a>` by default); pass your router's link,
 e.g. Next's `Link`. `ParametricViewerRooms` is `ViewerRooms` over the live scene store; a host with

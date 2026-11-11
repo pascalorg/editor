@@ -1,4 +1,5 @@
 import type { NodeRenderDefinition } from '../definition-contributions'
+import { buildPipeFittingFloorplan } from './floorplan'
 import { buildPipeFittingGeometry } from './geometry'
 import { getPipeFittingPorts } from './ports'
 import { PipeFittingNode } from './schema'
@@ -44,6 +45,7 @@ export const pipeFittingRenderDefinition: NodeRenderDefinition<typeof PipeFittin
       n.system,
     ]),
   ports: getPipeFittingPorts,
+  floorplan: buildPipeFittingFloorplan,
   presentation: {
     label: 'Pipe Fitting',
     description: 'DWV joint — elbow bend, 45° wye, or sanitary tee.',

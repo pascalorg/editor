@@ -3,6 +3,7 @@ import type { NodeRenderDefinition } from '../definition-contributions'
 import { itemMechanism } from '../shared/item-interactions'
 import { itemBatchable } from '../shared/node-batch/batchable'
 import { authoredItemFaceHost } from './authored-face-host'
+import { buildItemFloorplan } from './floorplan'
 import { ItemNode } from './schema'
 
 export const itemRenderDefinition: NodeRenderDefinition<typeof ItemNode> & { kind: 'item' } = {
@@ -121,6 +122,9 @@ export const itemRenderDefinition: NodeRenderDefinition<typeof ItemNode> & { kin
     // Same priority as the legacy ItemSystem.
     priority: 2,
   },
+  // Stage C: floor-plan polygon. ctx.resolve walks the parent chain
+  // (wall / nested item / level) to compute the world-space transform.
+  floorplan: buildItemFloorplan,
   presentation: {
     label: 'Item',
     description: 'A catalog-backed item (furniture, fixtures, decorations).',

@@ -17,11 +17,12 @@ import {
 import {
   MEASUREMENT_ACTIVE_COLOR,
   MEASUREMENT_DANGLING_COLOR,
+  MEASUREMENT_FLOORPLAN_COLOR,
   MEASUREMENT_PERSISTENT_COLOR,
+  measurementFloorplanPresentationColor,
   measurementPresentationColor,
 } from '@pascal-app/viewer'
 import { measurementHint, parseMeasurement } from '../index'
-import { MEASUREMENT_FLOORPLAN_COLOR, measurementFloorplanPresentationColor } from './measurements'
 
 describe('measurement presentation', () => {
   test('uses black at rest, indigo while active, and red for dangling references', () => {

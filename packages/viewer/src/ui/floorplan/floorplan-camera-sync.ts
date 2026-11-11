@@ -1,10 +1,13 @@
 'use client'
 
 import { type CameraPose, emitter } from '@pascal-app/core'
-import { subscribeCameraPose } from '@pascal-app/viewer/ui'
 import { useEffect, useRef } from 'react'
-import { subscribeNavigationSyncPose } from '../../store/navigation-sync-pose-store'
-import type { NavigationSyncPose, NavigationSyncPoseInput } from '../../store/use-editor'
+import { subscribeCameraPose } from '../store/camera-pose-store'
+import {
+  type NavigationSyncPose,
+  type NavigationSyncPoseInput,
+  subscribeNavigationSyncPose,
+} from '../store/navigation-sync-pose-store'
 
 const POSITION_EPSILON = 0.001
 const AZIMUTH_EPSILON = 1e-4

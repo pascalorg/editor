@@ -36,8 +36,9 @@ await loadPlugin(renderPlugin)
 ```
 
 Load exactly one built-in entry per runtime. Both use the `pascal:core` plugin id and API version 1;
-`renderPlugin` supplies schemas, geometry, renderers, systems and runtime interactions, while
-`builtinPlugin` also supplies tools, inspectors, paint and floor plans.
+`renderPlugin` supplies schemas, geometry, renderers, systems, runtime interactions and the
+read-only floor plan (`def.floorplan`), while `builtinPlugin` also supplies tools, inspectors, paint
+and floor-plan editing (handles, drags, snapping).
 
 See the
 [`@pascal-app/viewer` quick start](https://github.com/pascalorg/editor/tree/main/packages/viewer#usage)

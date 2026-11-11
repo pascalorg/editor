@@ -13,10 +13,7 @@ import {
 import type { FloorplanNodeExtension } from '@pascal-app/editor'
 import type { NodeEditContribution } from '../definition-contributions'
 import { curtainOpeningResizeMax } from '../shared/curtain-opening-limits'
-import {
-  buildWindowFloorplanSchedule,
-  computeWindowFloorplanLevelData,
-} from '../shared/opening-documentation'
+import { buildWindowFloorplanSchedule } from '../shared/opening-documentation'
 import { publishOpeningResizeGuides } from '../shared/opening-guides-runtime'
 import { createOpeningPropertyPreview } from '../shared/opening-property-preview'
 import { openingPropertyPreviewHost } from '../shared/opening-property-preview-host'
@@ -26,7 +23,6 @@ import { readHostWallCeiling, readHostWallCeilingMaxWidth } from '../shared/wall
 import { wallFloorplanSiblingOverrides } from '../wall/floorplan-overrides'
 import { buildWindowContextualDimensions } from './contextual-dimensions'
 import { resolveWindowHandlePortalTarget } from './definition.render'
-import { buildWindowFloorplan } from './floorplan'
 import { windowWidthAffordance } from './floorplan-affordances'
 import { windowFloorplanMoveTarget } from './floorplan-move'
 import { windowPaint } from './paint'
@@ -279,10 +275,6 @@ export const windowEditContribution: NodeEditContribution<typeof WindowNode> = {
       ? scriptedOpeningHandles(node, windowWidthHandle, () => windowHeightHandle('top'))
       : windowHandles,
   preview: () => import('./preview'),
-  // Stage C: floor-plan polygon. ctx.parent gives the wall for direction
-  // + thickness — same shape as door.
-  floorplan: buildWindowFloorplan,
-  computeFloorplanLevelData: computeWindowFloorplanLevelData,
   floorplanDependsOnSiblings: true,
   // Opening symbols position from `ctx.parent` (the host wall); merge the
   // walls' live drag overrides so the symbol tracks a wall / group drag in

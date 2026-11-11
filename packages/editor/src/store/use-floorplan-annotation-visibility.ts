@@ -1,5 +1,10 @@
 'use client'
 
+import {
+  DEFAULT_FLOORPLAN_WALL_DIMENSION_FACES,
+  type FloorplanWallDimensionFaces,
+  normalizeFloorplanWallDimensionFaces,
+} from '@pascal-app/core'
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import {
@@ -8,11 +13,6 @@ import {
   type FloorplanAnnotationVisibility,
   normalizeFloorplanAnnotationVisibility,
 } from '../lib/floorplan/annotation-visibility'
-import {
-  DEFAULT_FLOORPLAN_WALL_DIMENSION_FACES,
-  type FloorplanWallDimensionFaces,
-  normalizeFloorplanWallDimensionFaces,
-} from '../lib/floorplan/floorplan-extension'
 
 type PersistedFloorplanAnnotationState = {
   visibility: FloorplanAnnotationVisibility

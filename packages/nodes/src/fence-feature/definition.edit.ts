@@ -12,7 +12,6 @@ import type { FloorplanNodeExtension } from '@pascal-app/editor'
 
 import { useViewer } from '@pascal-app/viewer'
 import type { NodeEditContribution } from '../definition-contributions'
-import { buildFenceFeatureFloorplan } from './floorplan'
 import { fenceFeatureAffordance } from './floorplan-affordances'
 import { fenceFeatureHandles } from './handles'
 import { FenceFeatureEditor } from './inspector'
@@ -46,7 +45,6 @@ const parametrics: ParametricDescriptor<FenceFeatureNode> = {
 export const fenceGateEditContribution: NodeEditContribution<
   typeof FenceGateNode | typeof FenceOpeningNode
 > = {
-  floorplan: buildFenceFeatureFloorplan,
   floorplanDependencies: (node: FenceFeatureNode) =>
     node.parentId ? [node.parentId as AnyNodeId] : [],
   floorplanAffordances: { 'move-feature': fenceFeatureAffordance },
@@ -76,7 +74,6 @@ export const fenceGateEditContribution: NodeEditContribution<
 export const fenceOpeningEditContribution: NodeEditContribution<
   typeof FenceGateNode | typeof FenceOpeningNode
 > = {
-  floorplan: buildFenceFeatureFloorplan,
   floorplanDependencies: (node: FenceFeatureNode) =>
     node.parentId ? [node.parentId as AnyNodeId] : [],
   floorplanAffordances: { 'move-feature': fenceFeatureAffordance },

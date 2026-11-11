@@ -1,4 +1,5 @@
 import type { NodeRenderDefinition } from '../definition-contributions'
+import { buildMeasurementFloorplan } from './floorplan'
 import { MeasurementNode } from './schema'
 
 export const measurementRenderDefinition: NodeRenderDefinition<typeof MeasurementNode> & {
@@ -34,6 +35,7 @@ export const measurementRenderDefinition: NodeRenderDefinition<typeof Measuremen
     kind: 'parametric',
     module: () => import('./renderer'),
   },
+  floorplan: buildMeasurementFloorplan,
   presentation: {
     label: 'Measurement',
     description: 'A persistent distance, angle, area, perimeter, or volume annotation.',

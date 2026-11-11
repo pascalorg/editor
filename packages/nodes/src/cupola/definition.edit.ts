@@ -1,6 +1,5 @@
 import type { CupolaNode as CupolaNodeType, HandleDescriptor } from '@pascal-app/core'
 import type { NodeEditContribution } from '../definition-contributions'
-import { buildCupolaFloorplan } from './floorplan'
 import { cupolaPaint } from './paint'
 import { cupolaParametrics } from './parametrics'
 import type { CupolaNode } from './schema'
@@ -106,7 +105,6 @@ export const cupolaEditContribution: NodeEditContribution<typeof CupolaNode> = {
   },
   parametrics: cupolaParametrics,
   handles: cupolaHandles,
-  floorplan: buildCupolaFloorplan,
   preview: () => import('./preview'),
   tool: () => import('./tool'),
   affordanceTools: {

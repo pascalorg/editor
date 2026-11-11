@@ -4,7 +4,6 @@ import { withHostedChildren } from '../shared/hosted-resize'
 import { rebuildScriptedSize } from '../shared/scripted-opening-handles'
 import { columnFootprintHalf } from './bounds'
 import { columnEditPatch, isManagedColumn } from './edit-policy'
-import { buildColumnFloorplan, computeColumnFloorplanLevelData } from './floorplan'
 import { columnResizeAffordance, columnRotateAffordance } from './floorplan-affordances'
 import { columnFloorplanMoveTarget } from './floorplan-move'
 import { columnHostedPolicy } from './hosted-resize'
@@ -331,9 +330,7 @@ export const columnEditContribution: NodeEditContribution<typeof ColumnNode> = {
     { key: 'Left click', label: 'Place column' },
     { key: 'Esc', label: 'Cancel' },
   ],
-  computeFloorplanLevelData: computeColumnFloorplanLevelData,
   floorplanDependsOnSiblings: true,
-  floorplan: buildColumnFloorplan,
   // 2D body move routes through this kind-specific target so the column
   // aligns by its footprint *edges* (and snaps flush to wall faces) instead
   // of the overlay's generic free-translate path, which aligned by bbox

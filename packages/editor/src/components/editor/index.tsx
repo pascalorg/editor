@@ -44,6 +44,8 @@ import {
   useViewerFloorDisplay,
   ViewerHoverLabel,
   ViewerSelectionManager,
+  ViewerStage,
+  type ViewerStageMode,
 } from '@pascal-app/viewer/ui'
 import {
   type CSSProperties,
@@ -93,6 +95,7 @@ import useEditor from '../../store/use-editor'
 import useFloorplanMode from '../../store/use-floorplan-mode'
 import useSessionGroups from '../../store/use-session-groups'
 import { paneOfView, VIEW_2D, VIEW_3D, type ViewPaneIndex } from '../../store/view-layout'
+import { FloorplanDimensionHitsGate } from '../editor-2d/renderers/floorplan-dimension-edit-overlay'
 import { PointAskLayer } from '../point-ask/point-ask-layer'
 import { CeilingSelectionAffordanceSystem } from '../systems/ceiling/ceiling-selection-affordance-system'
 import { CeilingSystem, CeilingTopsSync } from '../systems/ceiling/ceiling-system'
@@ -118,8 +121,6 @@ import { SettingsPanel, type SettingsPanelProps } from '../ui/sidebar/panels/set
 import { SitePanel, type SitePanelProps } from '../ui/sidebar/panels/site-panel'
 import type { SidebarTab } from '../ui/sidebar/tab-bar'
 import { useHostPanels } from '../ui/sidebar/use-plugin-panels'
-import { ViewerStage } from '../viewer/viewer-stage'
-import type { ViewerStageMode } from '../viewer/viewer-stage-modes'
 import { CaptureCameraRig } from './capture-camera-rig'
 import { CustomCameraControls } from './custom-camera-controls'
 import { DeleteConfirmationDialog } from './delete-confirmation-dialog'
@@ -2082,7 +2083,9 @@ function EditorContent({
 function EditorFrame(props: EditorProps) {
   return (
     <Profiler id="editor" onRender={recordEditorRender}>
-      <EditorContent {...props} />
+      <FloorplanDimensionHitsGate>
+        <EditorContent {...props} />
+      </FloorplanDimensionHitsGate>
     </Profiler>
   )
 }

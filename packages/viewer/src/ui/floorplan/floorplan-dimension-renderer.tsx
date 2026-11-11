@@ -1,5 +1,7 @@
+'use client'
+
 import type { FloorplanGeometry, FloorplanPoint } from '@pascal-app/core'
-import { useDimensionEditAllowed } from './floorplan-dimension-edit-overlay'
+import { createContext, useContext } from 'react'
 import { resolveFloorplanLabelAngle } from './floorplan-label-angle'
 
 const EXTENSION_START_GAP = 0.075
@@ -25,18 +27,24 @@ type FloorplanDimensionRenderMode = 'screen' | 'pdf'
 /**
  * Click-to-type dimensions (WS3).
  *
- * On screen the label plate carries an invisible hit rect plus the data the
- * editing layer needs to drive geometry from a typed value. The layer picks
- * it up by DOM delegation (`FloorplanDimensionEditOverlay` below), so every
- * producer of `dimension` / `dimension-string` geometry — wall automatic
- * dimensions, contextual dimensions, manual construction-dimension nodes —
- * becomes editable without each one wiring up a callback.
+ * On screen, under an editing host (`FloorplanDimensionHitsProvider` set to
+ * true), the label plate carries an invisible hit rect plus the data the
+ * editing layer needs to drive geometry from a typed value. The editor's
+ * layer picks it up by DOM delegation, so every producer of `dimension` /
+ * `dimension-string` geometry — wall automatic dimensions, contextual
+ * dimensions, manual construction-dimension nodes — becomes editable without
+ * each one wiring up a callback. Read-only plans carry no hit rects.
  *
  * Witness points are the measured feature points in level-plan metres; the
  * value is the length the label actually reads (dimension-line points when
  * the producer supplied them, witness points otherwise).
  */
 export const FLOORPLAN_DIMENSION_HIT_ATTRIBUTE = 'data-floorplan-dimension-hit'
+
+const DimensionHitsContext = createContext(false)
+
+/** Whether the dimension labels below it carry typeable hit rects; off unless a host sets it. */
+export const FloorplanDimensionHitsProvider = DimensionHitsContext.Provider
 
 type DimensionGeometry = Extract<FloorplanGeometry, { kind: 'dimension' }>
 type DimensionStringGeometry = Extract<FloorplanGeometry, { kind: 'dimension-string' }>
@@ -548,7 +556,7 @@ function DimensionLabel({
   const plateWidth = width + fontSize * 0.5
   const plateHeight = fontSize * 1.2
   const plateY = y - fontSize * 0.82
-  const editable = useDimensionEditAllowed()
+  const editable = useContext(DimensionHitsContext)
 
   return (
     <>

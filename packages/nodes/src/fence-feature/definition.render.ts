@@ -2,6 +2,7 @@ import { FenceGateNode, FenceOpeningNode } from '@pascal-app/core'
 
 import { AnimationClip, type Object3D, QuaternionKeyframeTrack } from 'three'
 import type { NodeRenderDefinition } from '../definition-contributions'
+import { buildFenceFeatureFloorplan } from './floorplan'
 import { buildFenceFeatureGeometry } from './geometry'
 
 function bakeFenceGateClip(id: string, object: Object3D): AnimationClip | null {
@@ -47,6 +48,7 @@ export const fenceGateRenderDefinition: NodeRenderDefinition<
     const { id, type, ...rest } = FenceGateNode.parse({})
     return rest
   },
+  floorplan: buildFenceFeatureFloorplan,
   presentation: {
     label: 'Gate',
     description: 'A gate hosted by a fence.',
@@ -73,6 +75,7 @@ export const fenceOpeningRenderDefinition: NodeRenderDefinition<
     const { id, type, ...rest } = FenceOpeningNode.parse({})
     return rest
   },
+  floorplan: buildFenceFeatureFloorplan,
   presentation: {
     label: 'Open Passage',
     description: 'An intentional opening in a fence.',

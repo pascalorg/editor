@@ -1,5 +1,6 @@
 import { TurbineVentNode as TurbineVentNodeSchema, turbineVentSlots } from '@pascal-app/core'
 import type { NodeRenderDefinition } from '../definition-contributions'
+import { buildTurbineVentFloorplan } from './floorplan'
 import { TurbineVentNode } from './schema'
 
 export const turbineVentRenderDefinition: NodeRenderDefinition<typeof TurbineVentNode> & {
@@ -31,6 +32,7 @@ export const turbineVentRenderDefinition: NodeRenderDefinition<typeof TurbineVen
     kind: 'parametric',
     module: () => import('./renderer'),
   },
+  floorplan: buildTurbineVentFloorplan,
   presentation: {
     label: 'Turbine Vent',
     description: 'Wind-driven spinning whirlybird exhaust vent for a roof slope.',

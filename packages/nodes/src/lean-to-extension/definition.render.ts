@@ -1,5 +1,6 @@
 import { leanToSlots } from '@pascal-app/core'
 import type { NodeRenderDefinition } from '../definition-contributions'
+import { buildLeanToExtensionFloorplan } from './floorplan'
 import { buildLeanToExtensionGeometry, leanToExtensionGeometryKey } from './geometry'
 import { LeanToExtensionNode } from './schema'
 
@@ -36,6 +37,7 @@ export const leanToExtensionRenderDefinition: NodeRenderDefinition<typeof LeanTo
     module: () => import('./system'),
     priority: 1,
   },
+  floorplan: buildLeanToExtensionFloorplan,
   presentation: {
     label: 'Canopy',
     description:

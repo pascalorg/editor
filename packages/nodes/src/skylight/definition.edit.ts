@@ -1,6 +1,5 @@
 import type { AnyNode, HandleDescriptor, SkylightNode as SkylightNodeType } from '@pascal-app/core'
 import type { NodeEditContribution } from '../definition-contributions'
-import { buildSkylightFloorplan } from './floorplan'
 import {
   closeSkylightOpenState,
   isOperableSkylightNode,
@@ -214,7 +213,6 @@ export const skylightEditContribution: NodeEditContribution<typeof SkylightNode>
   snapProfile: 'item',
   parametrics: skylightParametrics,
   handles: skylightHandles,
-  floorplan: buildSkylightFloorplan,
   preview: () => import('./preview'),
   tool: () => import('./tool'),
   affordanceTools: {

@@ -1,7 +1,6 @@
 import type { HandleDescriptor, RidgeVentNode as RidgeVentNodeType } from '@pascal-app/core'
 import type { NodeEditContribution } from '../definition-contributions'
 import { surfacePaintCapability } from '../shared/surface-paint'
-import { buildRidgeVentFloorplan } from './floorplan'
 import { ridgeVentParametrics } from './parametrics'
 import type { RidgeVentNode } from './schema'
 
@@ -152,7 +151,6 @@ export const ridgeVentEditContribution: NodeEditContribution<typeof RidgeVentNod
   },
   parametrics: ridgeVentParametrics,
   handles: ridgeVentHandles,
-  floorplan: buildRidgeVentFloorplan,
   preview: () => import('./preview'),
   tool: () => import('./tool'),
   affordanceTools: {

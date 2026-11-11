@@ -10,8 +10,10 @@ import { windowSlots } from '@pascal-app/core'
 import { NEW_WINDOW_FRAME_THICKNESS } from '@pascal-app/core/building'
 import type { NodeRenderDefinition } from '../definition-contributions'
 import { windowBatchable } from '../shared/node-batch/batchable'
+import { computeWindowFloorplanLevelData } from '../shared/opening-documentation'
 import { buildRoofWallOpeningCut } from '../shared/roof-wall-opening-cut'
 import { openingSeenFromOutside } from '../wall/exterior'
+import { buildWindowFloorplan } from './floorplan'
 import { windowMechanism } from './mechanism'
 import { WindowNode } from './schema'
 
@@ -85,6 +87,10 @@ export const windowRenderDefinition: NodeRenderDefinition<typeof WindowNode> & {
       module: () => import('./system'),
       priority: 3,
     },
+    // Stage C: floor-plan polygon. ctx.parent gives the wall for direction
+    // + thickness — same shape as door.
+    floorplan: buildWindowFloorplan,
+    computeFloorplanLevelData: computeWindowFloorplanLevelData,
     presentation: {
       label: 'Window',
       description: 'A window cut into a wall. Animated open/close for opening windows.',

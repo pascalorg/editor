@@ -1,4 +1,5 @@
 import type { NodeRenderDefinition } from '../definition-contributions'
+import { buildConstructionDimensionFloorplan } from './floorplan'
 import { ConstructionDimensionNode } from './schema'
 
 export const constructionDimensionRenderDefinition: NodeRenderDefinition<
@@ -44,6 +45,7 @@ export const constructionDimensionRenderDefinition: NodeRenderDefinition<
     presettable: false,
   },
   dirtyTracking: false,
+  floorplan: buildConstructionDimensionFloorplan,
   presentation: {
     label: 'Construction Dimension',
     description: 'Associative linear, curved, circular, angular, or coordinate plan dimension.',

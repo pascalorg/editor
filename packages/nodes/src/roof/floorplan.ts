@@ -2,17 +2,18 @@ import {
   type AnyNodeId,
   type FloorplanGeometry,
   type FloorplanPoint,
+  floorplanGeometryMetadata,
   type GeometryContext,
   getGlazedRoofPlanLines,
   getRoofSegmentVisibleTopBounds,
   getSegmentSlopeFrame,
   type RoofNode,
   type RoofSegmentNode,
+  readFloorplanContext,
   roofPlanOverlapEntryOwns,
   subtractPolygonsFromPolygon,
   unionPolygons,
 } from '@pascal-app/core'
-import { floorplanGeometryMetadata, readFloorplanContext } from '@pascal-app/editor'
 import { getConicalRoofPlanFootprint, getRoofSegmentPlanLinework } from '../roof-segment/floorplan'
 import { getRoofSurfaceCreases, type RoofCreaseSurface, type RoofPlane } from './roof-plan-creases'
 
