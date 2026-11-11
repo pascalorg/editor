@@ -2,6 +2,7 @@ import { expect, test } from 'bun:test'
 import {
   type AnyNode,
   type AnyNodeId,
+  BlockNode,
   BuildingNode,
   ColumnNode,
   emitter,
@@ -10,6 +11,8 @@ import {
   nodeRegistry,
   nodeType,
   objectId,
+  RoofNode,
+  RoofSegmentNode,
   registerNode,
   ShelfNode,
   SiteNode,
@@ -250,6 +253,85 @@ test('wall-side item → shelf → catalog: plan equals the mounted wall-face po
     await renderer.unmount()
   }
 })
+
+// Each host frame the plan used to rebuild by hand, nested three items deep (#992).
+for (const anchor of ['block-top', 'block-bottom', 'roof-face', 'shelf-on-wall', 'wall-back'])
+  test(`${anchor} chain: every item's plan pose equals its mounted pose`, async () => {
+    const entries: AnyNode[] = []
+    const wall = WallNode.parse({ parentId: level.id, start: [2, 3], end: [6, 5], thickness: 0.4 })
+    let host: AnyNode
+    let mount: Partial<ItemNode> = {}
+    if (anchor.startsWith('block-')) {
+      host = BlockNode.parse({ parentId: level.id, position: [2, 0.4, 3], rotation: 0.6 })
+      // Kept off the upright rotation the face host places with, so the face frame tilts the chain.
+      mount = { blockFaceId: anchor === 'block-top' ? 'f-top' : 'f-bottom' }
+    } else if (anchor === 'roof-face') {
+      const roof = RoofNode.parse({ parentId: level.id, position: [2, 0.4, 3], rotation: 0.6 })
+      entries.push(roof)
+      host = RoofSegmentNode.parse({
+        parentId: roof.id,
+        position: [1, 2, 1],
+        rotation: 0.3,
+        roofType: 'hip',
+      })
+      mount = {
+        roofFace: 'front',
+        roofSegmentId: host.id,
+        asset: { ...asset, attachTo: 'wall-side' },
+        side: 'front',
+      }
+    } else if (anchor === 'shelf-on-wall') {
+      entries.push(wall)
+      host = ShelfNode.parse({ parentId: wall.id, position: [2, 0.4, 3], rotation: [0, 0.6, 0] })
+    } else {
+      host = wall
+      mount = {
+        asset: { ...asset, attachTo: 'wall-side' },
+        side: 'back',
+        rotation: [0, Math.PI + 0.6, 0],
+      }
+    }
+    entries.push(host)
+    let parent = ItemNode.parse({
+      parentId: host.id,
+      asset,
+      position: [0.2, 0.4, 0.1],
+      rotation: [0, 0.6, 0],
+      ...mount,
+    })
+    entries.push(parent)
+    for (let i = 0; i < 2; i++) {
+      const shelf = ShelfNode.parse({
+        parentId: parent.id,
+        position: [0.1, 0.2, -0.1],
+        rotation: [0, 0.2, 0],
+      })
+      parent = ItemNode.parse({
+        parentId: shelf.id,
+        asset,
+        position: [0.1, 0.3, 0.2],
+        rotation: [0, 0.15, 0],
+      })
+      entries.push(shelf, parent)
+    }
+    seed(entries)
+    const renderer = await create(<Scene />)
+    try {
+      await settle(renderer)
+      for (const item of entries.filter((n): n is ItemNode => n.type === 'item')) {
+        const p = plan(item)
+        const rendered = world(item.id)
+        expect(p.x).toBeCloseTo(rendered.x, 8)
+        expect(p.y).toBeCloseTo(rendered.z, 8)
+        const matrix = sceneRegistry.nodes.get(item.id)!.matrixWorld.elements
+        const yaw = Math.atan2(matrix[8]!, matrix[10]!)
+        expect(Math.sin(p.rotation)).toBeCloseTo(Math.sin(yaw), 8)
+        expect(Math.cos(p.rotation)).toBeCloseTo(Math.cos(yaw), 8)
+      }
+    } finally {
+      await renderer.unmount()
+    }
+  })
 
 for (const rootKind of ['column', 'plugin'])
   for (const depth of [1, 2, 3])

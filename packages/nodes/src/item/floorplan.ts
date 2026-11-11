@@ -1,21 +1,11 @@
 import {
-  type AnyNode,
-  type AnyNodeId,
   type FloorplanGeometry,
   type FloorplanPoint,
   formatLinearMeasurement,
   type GeometryContext,
-  getBlockFaceFrame,
-  getEffectiveNode,
-  getRoofWallFaceFrame,
   getScaledDimensions,
-  getWallBodyCenterOffset,
-  getWallLocalFaceZ,
   type ItemNode,
-  type RoofSegmentNode,
-  roofFacePointToSegment,
   scriptImages,
-  useLiveTransforms,
 } from '@pascal-app/core'
 import { readFloorplanContext, readFloorplanMetricNotationOverride } from '@pascal-app/editor'
 import { restingNodePlanFrame } from '../shared/resting-surface-plan'
@@ -24,13 +14,10 @@ import { buildPlanItemSymbol, classifyPlanItem, PLAN_SYMBOL_METADATA_KEY } from 
 /**
  * Stage C floor-plan builder for item.
  *
- * Items can be parented to a wall, ceiling, slab, or another item.
- * Position is in the parent's local frame, so we walk the parent chain
- * via `ctx.resolve` to compute the world-space (level-local) transform.
- *
- * Mirrors `getItemFloorplanTransform` from editor/lib/floorplan/items.ts
- * but uses the registry's resolve callback instead of a node map. Logic
- * is identical so visual output matches the legacy.
+ * Items can be parented to a wall, ceiling, slab, roof face, block face or
+ * another hosted node. The plan pose is the item's level frame — the pose
+ * the viewer mounts it at — so the footprint sits where the item does in 3D
+ * for every host chain.
  *
  * Returns a rotated rectangle of width × depth at the resolved position.
  * Phase 5 follow-up may render `asset.floorPlanUrl` as a custom image
@@ -51,223 +38,19 @@ function rotateVec(x: number, y: number, angle: number): [number, number] {
   return [x * c + y * s, -x * s + y * c]
 }
 
-function needsFullAncestorFrame(item: ItemNode, ctx: GeometryContext): boolean {
-  let id = item.parentId
-  const visited = new Set<string>([item.id])
-  while (id && !visited.has(id)) {
-    visited.add(id)
-    const parent = ctx.resolve(id as AnyNodeId)
-    if (!parent || parent.type === 'level') break
-    if (
-      ![
-        'wall',
-        'ceiling',
-        'roof',
-        'roof-segment',
-        'item',
-        'shelf',
-        'cabinet',
-        'cabinet-module',
-        'procedural-item',
-        'block',
-        'slab',
-      ].includes(parent.type)
-    ) {
-      const effective = getEffectiveNode(parent) as AnyNode & {
-        position?: number[]
-        rotation?: number | number[]
-      }
-      const live = useLiveTransforms.getState().get(parent.id)
-      const position = live?.position ?? effective.position
-      const rotation = effective.rotation
-      // Main's level-local fallback already handles identity plugins directly on a level.
-      if (
-        parent.type === 'column' ||
-        (parent.parentId && ctx.resolve(parent.parentId as AnyNodeId)?.type !== 'level') ||
-        position?.some((v) => v !== 0) ||
-        live?.rotation ||
-        (Array.isArray(rotation) ? rotation.some((v) => v !== 0) : rotation)
-      )
-        return true
-    }
-    id = parent.parentId
+export function resolveItemTransform(item: ItemNode, ctx: GeometryContext): Transform | null {
+  let f: ReturnType<typeof restingNodePlanFrame>
+  try {
+    f = restingNodePlanFrame(item, ctx.resolve)
+  } catch {
+    // A host chain that no longer resolves (a deleted host mid-edit) has no pose to draw.
+    return null
   }
-  return false
-}
-
-export function resolveItemTransform(
-  item: ItemNode,
-  ctx: GeometryContext,
-  cache = new Map<AnyNodeId, Transform | null>(),
-): Transform | null {
-  const cached = cache.get(item.id as AnyNodeId)
-  if (cached !== undefined) return cached
-
-  if (needsFullAncestorFrame(item, ctx)) {
-    const f = restingNodePlanFrame(item, ctx.resolve)
-    const result = {
-      x: f.position[0],
-      y: f.position[2],
-      rotation: Math.atan2(f.axes[2][0], f.axes[2][2]),
-    }
-    cache.set(item.id, result)
-    return result
+  return {
+    x: f.position[0],
+    y: f.position[2],
+    rotation: Math.atan2(f.axes[2][0], f.axes[2][2]),
   }
-
-  const localRotation = item.rotation[1] ?? 0
-  let result: Transform | null = null
-
-  const parentNode: AnyNode | undefined = item.parentId
-    ? ctx.resolve(item.parentId as AnyNodeId)
-    : undefined
-
-  if (parentNode?.type === 'wall') {
-    // Wall-aligned: rotate item.position by wall's angle, anchor at wall.start.
-    const wall = parentNode as AnyNode & {
-      start: [number, number]
-      end: [number, number]
-      thickness?: number
-    }
-    const wallRotation = -Math.atan2(wall.end[1] - wall.start[1], wall.end[0] - wall.start[0])
-    const wallLocalZ =
-      item.asset.attachTo === 'wall-side'
-        ? getWallLocalFaceZ(parentNode, item.side === 'front' ? 'a' : 'b')
-        : item.position[2] +
-          (item.asset.attachTo === 'wall' ? getWallBodyCenterOffset(parentNode) : 0)
-    const [offsetX, offsetY] = rotateVec(item.position[0], wallLocalZ, wallRotation)
-    result = {
-      x: wall.start[0] + offsetX,
-      y: wall.start[1] + offsetY,
-      rotation: wallRotation + localRotation,
-    }
-  } else if (parentNode?.type === 'item') {
-    // Nested item: recursively resolve parent's transform.
-    const parentT = resolveItemTransform(parentNode as ItemNode, ctx, cache)
-    if (parentT) {
-      const [offsetX, offsetY] = rotateVec(item.position[0], item.position[2], parentT.rotation)
-      result = {
-        x: parentT.x + offsetX,
-        y: parentT.y + offsetY,
-        rotation: parentT.rotation + localRotation,
-      }
-    }
-  } else if (
-    parentNode?.type === 'cabinet' ||
-    parentNode?.type === 'cabinet-module' ||
-    parentNode?.type === 'procedural-item'
-  ) {
-    const f = restingNodePlanFrame(item, ctx.resolve)
-    result = {
-      x: f.position[0],
-      y: f.position[2],
-      rotation: Math.atan2(f.axes[2][0], f.axes[2][2]),
-    }
-  } else if (parentNode?.type === 'shelf') {
-    // Shelf-hosted item: `item.position` is in shelf-local coords. The
-    // shelf has its own `position` + `rotation[1]` in its parent (level)
-    // frame, so the item's plan-space position composes the shelf's
-    // pose with the item's local offset. Without this branch the
-    // `else` below would treat shelf-local coords as level-local and
-    // the item would render at the wrong spot whenever the shelf is
-    // anywhere other than (0, 0, 0).
-    //
-    // We also check `useLiveTransforms` for the shelf — if the shelf is
-    // mid-move (3D or 2D), its scene-state `position` is still at the
-    // pre-move spot but the live transform carries the cursor-tracked
-    // position. Reading the live value here keeps the hosted item
-    // following the shelf in 2D throughout the drag, mirroring how the
-    // shelf's own entry follows via the layer's effectiveNode override.
-    const shelf = parentNode as AnyNode & {
-      position: [number, number, number]
-      rotation: [number, number, number]
-    }
-    const live = useLiveTransforms.getState().get(shelf.id as AnyNodeId)
-    if (
-      shelf.parentId &&
-      ['item', 'shelf', 'cabinet', 'cabinet-module', 'procedural-item'].includes(
-        ctx.resolve(shelf.parentId as AnyNodeId)?.type ?? '',
-      )
-    ) {
-      const parentT = resolveItemTransform(
-        {
-          ...shelf,
-          position: live?.position ?? shelf.position,
-          rotation: [0, live?.rotation ?? shelf.rotation[1], 0],
-        } as ItemNode,
-        ctx,
-        cache,
-      )
-      if (!parentT) return null
-      const [x, y] = rotateVec(item.position[0], item.position[2], parentT.rotation)
-      return { x: parentT.x + x, y: parentT.y + y, rotation: parentT.rotation + localRotation }
-    }
-    const shelfX = live?.position[0] ?? shelf.position[0]
-    const shelfZ = live?.position[2] ?? shelf.position[2]
-    const shelfRotationY = live?.rotation ?? shelf.rotation[1] ?? 0
-    const [offsetX, offsetY] = rotateVec(item.position[0], item.position[2], shelfRotationY)
-    result = {
-      x: shelfX + offsetX,
-      y: shelfZ + offsetY,
-      rotation: shelfRotationY + localRotation,
-    }
-  } else if (parentNode?.type === 'roof-segment') {
-    // Roof-hosted wall item: FACE-LOCAL position mapped through the face
-    // frame, then composed through the segment's and parent roof's poses
-    // into level-local plan coords.
-    const segment = parentNode as RoofSegmentNode
-    const roof = segment.parentId
-      ? (ctx.resolve(segment.parentId as AnyNodeId) as
-          | (AnyNode & { position: [number, number, number]; rotation: number })
-          | undefined)
-      : undefined
-    if (roof?.type === 'roof' && item.roofFace) {
-      const frame = getRoofWallFaceFrame(segment, item.roofFace)
-      const segLocal = roofFacePointToSegment(segment, item.roofFace, item.position)
-      const [sx, sz] = rotateVec(segLocal[0], segLocal[2], segment.rotation ?? 0)
-      const [rx, rz] = rotateVec(
-        sx + segment.position[0],
-        sz + segment.position[2],
-        roof.rotation ?? 0,
-      )
-      result = {
-        x: rx + roof.position[0],
-        y: rz + roof.position[2],
-        rotation: (roof.rotation ?? 0) + (segment.rotation ?? 0) + frame.yaw + localRotation,
-      }
-    }
-  } else if (parentNode?.type === 'block' && item.blockFaceId) {
-    const frame = getBlockFaceFrame(parentNode.topology, item.blockFaceId)
-    if (frame) {
-      const localX =
-        frame.origin[0] +
-        frame.xAxis[0] * item.position[0] +
-        frame.yAxis[0] * item.position[1] +
-        frame.normal[0] * item.position[2]
-      const localZ =
-        frame.origin[2] +
-        frame.xAxis[2] * item.position[0] +
-        frame.yAxis[2] * item.position[1] +
-        frame.normal[2] * item.position[2]
-      const hostRotation = parentNode.rotation ?? 0
-      const [offsetX, offsetZ] = rotateVec(localX, localZ, hostRotation)
-      const faceRotation = -Math.atan2(frame.xAxis[2], frame.xAxis[0])
-      result = {
-        x: parentNode.position[0] + offsetX,
-        y: parentNode.position[2] + offsetZ,
-        rotation: hostRotation + faceRotation + localRotation,
-      }
-    }
-  } else {
-    // Level / slab / ceiling parent — item.position is level-local.
-    result = {
-      x: item.position[0],
-      y: item.position[2],
-      rotation: localRotation,
-    }
-  }
-
-  cache.set(item.id as AnyNodeId, result)
-  return result
 }
 
 export function buildItemContextualDimensions(

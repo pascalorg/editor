@@ -317,10 +317,6 @@ function approximationReason(node: AnyNode, nodes: Nodes): string | undefined {
       return parent?.type === 'wall'
         ? 'placed along its host wall centreline; the point uses a straight wall frame'
         : undefined
-    case 'item':
-      return node.asset.attachTo === 'wall-side'
-        ? 'rendered on the wall face (± half the wall thickness); the point is on the wall centreline'
-        : undefined
     default:
       return undefined
   }
