@@ -20,6 +20,7 @@ import {
   ZoneNode,
 } from '@pascal-app/core'
 import type { RoomSelectionRecord } from '@pascal-app/viewer/ui'
+import { resolveRoomAssemblyHeights } from '@pascal-app/viewer/ui'
 import { moveTogetherLabel } from '../components/ui/panels/floor-foundation-panel'
 import {
   applyFloorFoundation,
@@ -36,7 +37,6 @@ import {
   roomFootprint,
   roomOwnedPlateDrillTarget,
 } from './floor-footprints'
-import { resolveRoomAssemblyHeights } from './room-assembly-overlay'
 import { roomConstructionState } from './room-construction'
 import {
   addRoomConstruction,

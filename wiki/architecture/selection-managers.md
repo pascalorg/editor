@@ -76,8 +76,9 @@ instead of gliding under reduced motion. The plan follows the framed camera; wit
 screen it answers the request itself, once the selection that came with it has rendered (so a node
 on another floor or building is placed with that building's transform), fitting the node's box to
 the pane at the current turn and aspect, or centring a saved view's target at the current zoom.
-`ViewerRooms` draws the editor's room pills (same visibility rule, same declutter) and the editor's
-room highlight for the selected or hovered room and a focused unit's rooms. `useViewerFloorDisplay`
+`ViewerRooms` (`@pascal-app/viewer/ui`) draws the room pills (the editor's selection rule and
+declutter, from the same module) and the room highlight for the selected or hovered room and a
+focused unit's rooms, with the selected room's callout. `useViewerFloorDisplay`
 hides the levels above the current floor outside the walkthrough.
 
 Preview borrows the shared store: `setPreviewMode(true)` saves the editor's `selection` and

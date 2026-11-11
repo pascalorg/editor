@@ -32,6 +32,7 @@ import {
 import { useViewerUiSounds } from '@pascal-app/viewer/sfx'
 import {
   type ActionMenuPlacement,
+  ParametricViewerRooms,
   SceneLoader,
   SceneLoadFailed,
   SKY_DOCK_HEIGHT,
@@ -117,7 +118,6 @@ import { SettingsPanel, type SettingsPanelProps } from '../ui/sidebar/panels/set
 import { SitePanel, type SitePanelProps } from '../ui/sidebar/panels/site-panel'
 import type { SidebarTab } from '../ui/sidebar/tab-bar'
 import { useHostPanels } from '../ui/sidebar/use-plugin-panels'
-import { ParametricViewerRooms } from '../viewer/viewer-rooms'
 import { ViewerStage } from '../viewer/viewer-stage'
 import type { ViewerStageMode } from '../viewer/viewer-stage-modes'
 import { CaptureCameraRig } from './capture-camera-rig'

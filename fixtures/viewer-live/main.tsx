@@ -6,9 +6,15 @@ import {
   useScene,
 } from '@pascal-app/core'
 import { renderPlugin } from '@pascal-app/nodes/render'
-import { configureViewer, pendingSceneBuildCount, useViewer, Viewer } from '@pascal-app/viewer'
+import {
+  configureViewer,
+  OVERLAY_LAYER,
+  pendingSceneBuildCount,
+  useViewer,
+  Viewer,
+} from '@pascal-app/viewer'
 import { initInteractionSounds } from '@pascal-app/viewer/sfx'
-import { SceneLoader, ViewerControlsBar } from '@pascal-app/viewer/ui'
+import { ParametricViewerRooms, SceneLoader, ViewerControlsBar } from '@pascal-app/viewer/ui'
 import { OrbitControls } from '@react-three/drei'
 import { useFrame, useThree } from '@react-three/fiber'
 import { useState } from 'react'
@@ -50,6 +56,7 @@ useViewer.getState().setSelection({
 // Inspect the real scene roots rather than counting the viewer's grid/backdrop.
 function GeometryProbe() {
   const gl = useThree((state) => state.gl) as unknown as WebGPURenderer
+  const root = useThree((state) => state.scene)
   useFrame(() => {
     const geometry: Record<string, number> = {}
     for (const id of Object.keys(scene.nodes)) {
@@ -60,10 +67,18 @@ function GeometryProbe() {
       })
       geometry[id] = vertices
     }
+    // The room highlight draws on the overlay layer only.
+    let overlay = 0
+    root.traverse((object) => {
+      const mesh = object as Mesh
+      if (mesh.layers.mask === 1 << OVERLAY_LAYER)
+        overlay += mesh.geometry?.getAttribute('position')?.count ?? 0
+    })
     Object.assign(window, {
       viewerFixture: {
         geometry,
         pending: pendingSceneBuildCount(),
+        overlay,
         itemFailures: useViewer.getState().itemLoadFailures,
         drawCalls: gl.info.render.drawCalls,
       },
@@ -75,6 +90,15 @@ function GeometryProbe() {
 
 function App() {
   const [ready, setReady] = useState(false)
+  // Mounted once the zone's own geometry is proven, as it hides zone volumes. With only the
+  // level selected, the level shows its room pills.
+  const [rooms, setRooms] = useState(false)
+  Object.assign(window, {
+    showFixtureRooms: () => {
+      useViewer.getState().setSelection({ zoneId: null })
+      setRooms(true)
+    },
+  })
   return (
     <>
       <Viewer
@@ -86,6 +110,7 @@ function App() {
       >
         <OrbitControls makeDefault target={[0, 1, 0]} />
         <GeometryProbe />
+        {rooms && <ParametricViewerRooms />}
       </Viewer>
       {/* The packed UI entry mounts without the editor; its icons load from iconsBaseUrl. */}
       <ViewerControlsBar onWalkthroughToggle={() => {}} />

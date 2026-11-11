@@ -12,7 +12,7 @@ import {
   useScene,
 } from '@pascal-app/core'
 import { MEASUREMENT_ACTIVE_COLOR, useViewer } from '@pascal-app/viewer'
-import type { RoomSelectionRecord } from '@pascal-app/viewer/ui'
+import { LocalizedHtml as Html, type RoomSelectionRecord } from '@pascal-app/viewer/ui'
 import { type ThreeEvent, useFrame, useThree } from '@react-three/fiber'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
@@ -60,7 +60,6 @@ import {
 import { suppressBoxSelectForPointer } from '../tools/select/box-select-state'
 import { ARROW_COLOR, ARROW_SCALE, HandleArrow } from './handles/handle-arrow'
 import { resolveResizeSnapValue } from './handles/resize-snap'
-import { Html } from './localized-html'
 import { formatMeasurement } from './measurement-pill'
 import { useSelectedWallDimensions } from './room-handles-2d'
 import { WallPushArrow } from './wall-push-arrow'

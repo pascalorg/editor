@@ -44,6 +44,7 @@
     "build": "tsc --build && cp src/ui/theme.css dist/ui/theme.css",
     "dev": "mkdir -p dist/ui && cp src/ui/theme.css dist/ui/theme.css && tsgo --build --watch",
     "test": "bun test src",
+    "bench:room-labels": "bun run src/ui/components/rooms/__bench__/room-label-placement.bench.ts",
     "prepublishOnly": "npm run build"
   },
   "peerDependencies": {

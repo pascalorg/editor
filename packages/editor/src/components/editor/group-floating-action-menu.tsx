@@ -2,6 +2,7 @@
 
 import { type AnyNodeId, useScene } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
+import { LocalizedHtml as Html } from '@pascal-app/viewer/ui'
 import { useFrame } from '@react-three/fiber'
 import { useCallback, useMemo, useRef } from 'react'
 import * as THREE from 'three'
@@ -20,7 +21,6 @@ import {
   computeGroupPlanBox,
   levelFrame,
 } from './group-transform-shared'
-import { Html } from './localized-html'
 import { NodeActionMenu } from './node-action-menu'
 import { useMeshSettleEpoch } from './use-mesh-settle-epoch'
 

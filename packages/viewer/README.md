@@ -275,7 +275,8 @@ remain in the same settings record so editor consumers continue to share one sto
 
 Pascal's read-only viewer chrome as React components: the controls bar (levels, walls, display,
 daylight, sky, walkthrough), the scene header (project card, breadcrumb, floor list), the hover
-label, the walkthrough and drone HUDs, the loader, the selection model behind them
+label, the room pills, room highlight and selected-room callout (`ViewerRooms`), the walkthrough
+and drone HUDs, the loader, the selection model behind them
 (`applyViewerClick`, `ViewerSelectionManager`) and the primitives they are built from (`Button`,
 `DropdownMenu*`, `Popover*`, `Tooltip*`, `Switch`). The entry never imports the editor or Next.
 
@@ -295,6 +296,7 @@ themselves with a `dark` class. Control icons load from `configureViewer({ icons
 ```tsx
 import { useViewer, Viewer } from '@pascal-app/viewer'
 import {
+  ParametricViewerRooms,
   SceneLoader,
   ViewerControlsBar,
   ViewerSceneHeader,
@@ -309,6 +311,7 @@ function ProjectViewer({ ready, name }: { ready: boolean; name: string }) {
     <div className="relative h-full w-full">
       <Viewer selectionManager="custom">
         <ViewerSelectionManager />
+        <ParametricViewerRooms />
       </Viewer>
       <ViewerSceneHeader backHref={null} linkComponent={MyLink} projectName={name} />
       <ViewerControlsBar onWalkthroughToggle={toggleWalk} walkthroughActive={walking} />
@@ -320,7 +323,9 @@ function ProjectViewer({ ready, name }: { ready: boolean; name: string }) {
 ```
 
 `linkComponent` renders the header's links (a plain `<a>` by default); pass your router's link,
-e.g. Next's `Link`. The walkthrough toggle only flips `walkthroughMode`; mount your own
+e.g. Next's `Link`. `ParametricViewerRooms` is `ViewerRooms` over the live scene store; a host with
+another node source (a baked scene) passes `<ViewerRooms source={{ nodes, objectFor }} />`. While
+mounted, zones draw no tinted volume: a room shows through its pill and highlight instead. The walkthrough toggle only flips `walkthroughMode`; mount your own
 first-person controls inside `<Viewer>` to move the camera.
 
 ## Asset CDN Helpers

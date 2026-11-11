@@ -26,12 +26,12 @@ import {
   useEditor,
   useInteractionScope,
 } from '@pascal-app/editor'
+import { LocalizedHtml as Html } from '@pascal-app/viewer/ui'
 import { useThree } from '@react-three/fiber'
 import { type RefObject, useCallback, useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { type Group, Vector3 } from 'three'
 import { messageWithSlot } from '../../../i18n/message-slot'
-import { Html } from '../../editor/localized-html'
 import type { RunSurfaceBounds, RunSurfaceTarget } from './distribution-run-contract'
 import { clearDrawAlignment } from './draw-alignment'
 import type { RunBodyHit, ScenePort } from './ports'

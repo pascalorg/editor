@@ -22,6 +22,7 @@ import {
   useScene,
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
+import { LocalizedHtml as Html } from '@pascal-app/viewer/ui'
 import { createPortal, type ThreeEvent, useFrame, useThree } from '@react-three/fiber'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
@@ -76,7 +77,6 @@ import {
 import { createLinearResizeDragBinding, linearResizeFactor } from './handles/linear-resize-drag'
 import { resolveResizeSnapValue } from './handles/resize-snap'
 import { type HandleDragControls, useHandleDrag } from './handles/use-handle-drag'
-import { Html } from './localized-html'
 
 // Pooled scratch for the handle rig's world-relative pose mapping.
 const _rigRelative = new Matrix4()
