@@ -5,7 +5,7 @@ import { addLevel } from './add-level'
 import { addObjectInBatch } from './add-object'
 import { addWall } from './add-wall'
 import { viewAssets } from './asset-views'
-import { createBatchOperation } from './batch'
+import { createBatchOperation, createBatchSteps } from './batch'
 import { addCornerWindow } from './corner-window'
 import { createRoof } from './create-roof'
 import { createRoom } from './create-room'
@@ -169,6 +169,9 @@ export const AGENT_OPERATIONS = {
   ...SINGLE_OPERATIONS,
   run_batch: createBatchOperation(BATCHED_OPERATIONS, AGENT_TOOL_CONTRACTS),
 } as const satisfies AgentOperations
+
+/** `run_batch` one call at a time, for a host that lets other work run between a batch's calls. */
+export const RUN_BATCH_STEPS = createBatchSteps(BATCHED_OPERATIONS, AGENT_TOOL_CONTRACTS)
 
 export {
   type AssetViewFacts,

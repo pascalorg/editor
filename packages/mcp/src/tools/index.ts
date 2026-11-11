@@ -52,11 +52,20 @@ export type ToolHosts = PlanReadingHosts & {
 export function registerTools(
   server: McpServer,
   operations: SceneOperations,
-  { catalog, geometryScripts, objectMakers, readFile, sceneViews, assetViews }: ToolHosts = {},
+  {
+    catalog,
+    geometryScripts,
+    objectMakers,
+    readFile,
+    sceneViews,
+    assetViews,
+    betweenBatchCalls,
+  }: ToolHosts = {},
 ): void {
   registerGetScene(server, operations)
   registerSharedTools(server, operations, catalog, {
     assetViews,
+    betweenBatchCalls,
     buildObject: (input) => compileObjectOnHost(geometryScripts, operations, input),
   })
   registerAddColumn(server, operations, geometryScripts)
