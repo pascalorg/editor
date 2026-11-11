@@ -954,10 +954,7 @@ const PostProcessingPasses = ({
         }
         const submittedAt = PERF_OVERLAY_ENABLED ? performance.now() : 0
         timeSpan('render-encode', () => {
-          renderWithSceneMatrices(scene, () => {
-            ;(renderer as any).render(scene, camera)
-            renderOverlayOnTop(renderer, scene, camera)
-          })
+          renderWithSceneMatrices(scene, () => renderDirect(renderer, scene, camera))
         })
         if (PERF_OVERLAY_ENABLED) recordFrameGpuTiming(renderer, submittedAt)
       } catch (fallbackError) {
@@ -1013,15 +1010,18 @@ const PostProcessingPasses = ({
 export default PostProcessingPasses
 
 /**
- * Without the pipeline there is no overlay composite, so overlays (selection highlights, room
- * assemblies) draw in a second pass over the frame, like the composite: no scene-depth test.
+ * Without the pipeline there is no overlay composite: the scene draws without the overlay layer,
+ * then overlays (selection highlights, room assemblies) draw over it with no scene-depth test,
+ * like the composite, whether or not the camera already enables that layer.
  */
-function renderOverlayOnTop(renderer: any, scene: Scene, camera: Camera) {
+function renderDirect(renderer: any, scene: Scene, camera: Camera) {
   const mask = camera.layers.mask
   const autoClear = renderer.autoClear
-  camera.layers.set(OVERLAY_LAYER)
-  renderer.autoClear = false
   try {
+    camera.layers.disable(OVERLAY_LAYER)
+    renderer.render(scene, camera)
+    camera.layers.set(OVERLAY_LAYER)
+    renderer.autoClear = false
     renderer.clearDepth()
     renderer.render(scene, camera)
   } finally {
