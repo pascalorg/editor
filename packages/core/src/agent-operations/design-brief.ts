@@ -83,6 +83,8 @@ const CATALOG_WORDS = [
   "pascal's objects",
   'pascal items',
   'pascal objects',
+  'item library',
+  'library item',
   'from the stock',
   'in stock',
   'du stock',

@@ -1,5 +1,6 @@
 import { refuse } from '../agent-tools/refusal'
-import { type AnyNode, type AssetInput, ItemNode } from '../schema'
+import { type AnyNode, ItemNode } from '../schema'
+import { type CatalogAsset, catalogItemFields } from './catalog-asset'
 import {
   aabbsOverlap,
   collectDoorKeepouts,
@@ -311,7 +312,7 @@ export const placeInRoom: AgentOperation<PlaceInRoomInput> = (nodes, input, cont
     )
   const catalog = context.catalog
   if (!catalog) refuse('no_catalog', 'This host has no item catalog to place from.')
-  const asset: AssetInput | undefined = catalog.find((entry) => entry.id === input.assetId)
+  const asset: CatalogAsset | undefined = catalog.find((entry) => entry.id === input.assetId)
   if (!asset)
     refuse(
       'asset_not_found',
@@ -395,7 +396,7 @@ export const placeInRoom: AgentOperation<PlaceInRoomInput> = (nodes, input, cont
   }
   const place = (pose: Pose, where: Record<string, unknown>) => {
     const node = ItemNode.parse({
-      asset,
+      ...catalogItemFields(asset),
       name: asset.name,
       parentId: levelId,
       position: [pose.x, 0, pose.z],

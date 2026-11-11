@@ -17,6 +17,7 @@ import {
   WindowNode,
   ZoneNode,
 } from '../../schema'
+import type { CatalogAsset } from '../catalog-asset'
 import type { AgentContext } from '../types'
 import type { SessionRecord } from '../scene-checkpoint'
 import type { AssetViewFacts } from '../asset-views'
@@ -72,7 +73,7 @@ export type AgentToolCase = {
   input: Record<string, unknown>
   context?: {
     activeLevelId?: string | null
-    catalog?: AssetInput[]
+    catalog?: CatalogAsset[]
     assetViews?: Record<string, AssetViewFacts>
     session?: () => SessionRecord
     designBrief?: AgentContext['designBrief']
