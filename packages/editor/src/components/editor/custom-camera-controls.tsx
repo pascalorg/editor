@@ -819,8 +819,11 @@ export const CustomCameraControls = ({
     return () => {
       for (const timer of timers) window.clearTimeout(timer)
       reframeOpening.current = null
-      // Interrupted before anything else moved the camera (a remount, preview): frame on the next run.
-      if (openingFrame.current === 'framing') openingFrame.current = 'waiting'
+      if (openingFrame.current !== 'framing') return
+      // Walking or previewing moves the camera too: the opening is over. Only a remount (or a
+      // new load, reset above) frames again.
+      const { isFirstPersonMode, isPreviewMode } = useEditor.getState()
+      openingFrame.current = isFirstPersonMode || isPreviewMode ? 'done' : 'waiting'
     }
   }, [sceneReady, isPreviewMode, isFirstPersonMode])
 
