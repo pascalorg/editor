@@ -21,7 +21,15 @@ import {
   type WallSurfaceSide,
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
-import { cameraPoseStore, type RoomKey, sameRoom } from '@pascal-app/viewer/ui'
+import {
+  cameraPoseStore,
+  type NavigationSyncPose,
+  type NavigationSyncPoseInput,
+  publishNavigationSyncPose,
+  type RoomKey,
+  sameRoom,
+  subscribeNavigationSyncPose,
+} from '@pascal-app/viewer/ui'
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import {
@@ -476,6 +484,9 @@ type EditorState = {
   setViewPinned: (viewId: string, pinned: boolean) => void
   isFloorplanHovered: boolean
   setFloorplanHovered: (hovered: boolean) => void
+  /** Mirror of viewer/ui's navigation sync store, kept for plugins that read it here. */
+  navigationSyncPose: NavigationSyncPose | null
+  publishNavigationSyncPose: (pose: NavigationSyncPoseInput) => void
   // Toggleable DWV riser-diagram (plumbing isometric) overlay.
   isRiserOpen: boolean
   setRiserOpen: (open: boolean) => void
@@ -1522,6 +1533,8 @@ const useEditor = create<EditorState>()(
         set((state) => ({ pinnedViews: { ...state.pinnedViews, [viewId]: pinned } })),
       isFloorplanHovered: false,
       setFloorplanHovered: (hovered) => set({ isFloorplanHovered: hovered }),
+      navigationSyncPose: null,
+      publishNavigationSyncPose,
       isRiserOpen: false,
       setRiserOpen: (open) => set({ isRiserOpen: open }),
       toggleRiserOpen: () => set((state) => ({ isRiserOpen: !state.isRiserOpen })),
@@ -1837,5 +1850,8 @@ usePaintRegionMode.subscribe((state) => {
   const paintEraser = state.mode === 'erase'
   if (useEditor.getState().paintEraser !== paintEraser) useEditor.setState({ paintEraser })
 })
+
+// Published plugins read the 2D/3D navigation pose from the editor store; the shared store owns it.
+subscribeNavigationSyncPose((navigationSyncPose) => useEditor.setState({ navigationSyncPose }))
 
 export default useEditor
