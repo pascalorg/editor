@@ -242,6 +242,35 @@ function ViewerControls() {
 }
 ```
 
+## Sound effects (`@pascal-app/viewer/sfx`)
+
+Opt in to building interactions and selection/hover cues from any viewer or custom UI.
+The default files come from `https://editor.pascal.app/audios/sfx`; hosts serving the files
+locally should configure their own base URL before preloading. Importing the entry creates no
+Howl instances or interaction subscriptions. Playback starts after the browser allows audio;
+selection/hover cues stay silent until user activation and during walkthrough.
+
+```tsx
+import { useEffect } from 'react'
+import { configureViewer } from '@pascal-app/viewer'
+import { initInteractionSounds, playSound, useAudioSettings, useViewerUiSounds } from '@pascal-app/viewer/sfx'
+configureViewer({ sfxBaseUrl: '/audios/sfx' })
+function SoundControls() {
+  useEffect(() => initInteractionSounds(), [])
+  useViewerUiSounds()
+  const toggleMute = useAudioSettings(s => s.toggleMute)
+  return <button onPointerEnter={() => playSound('menuHover')} onClick={() => { playSound('menuClick'); toggleMute() }}>Toggle sound</button>
+}
+```
+
+`SOUNDS` lists the built-in cue definitions. `playSound(name, options?)` supports gain
+(`volumeMultiplier`) and stereo positioning. `preloadSounds()` warms files without playing;
+`disposeSounds()` releases the shared cache when the host runtime shuts down. Host cues can use
+`SoundDefinition` objects with the same player, including `startSoundLoop` / `stopSoundLoop`.
+`useAudioSettings` shares master/effects volumes across tabs and keeps mute per tab, preserving
+existing Pascal storage keys. Denied storage falls back to memory. Existing radio preferences
+remain in the same settings record so editor consumers continue to share one store.
+
 ## Asset CDN Helpers
 
 ```typescript

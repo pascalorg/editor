@@ -3,12 +3,9 @@
 import { create } from 'zustand'
 import { createJSONStorage, persist } from 'zustand/middleware'
 
+/** Persisted volume and playback preferences shared across tabs. */
 export const AUDIO_SETTINGS_STORAGE_KEY = 'pascal-audio-settings'
-/**
- * Mute is each tab's own, so someone working in two projects can silence one and hear the other.
- * Under this key `sessionStorage` holds this tab's mute (kept across its reloads) and
- * `localStorage` the last choice made in any tab, which a new tab starts from.
- */
+/** Per-tab session mute and the local preference inherited by new tabs. */
 export const AUDIO_MUTED_STORAGE_KEY = 'pascal-audio-muted'
 
 interface AudioState {
@@ -91,7 +88,7 @@ const settingsStorage = createJSONStorage<StoredSettings>(() => ({
   },
 }))
 
-const useAudio = create<AudioState>()(
+const audioStore = create<AudioState>()(
   persist(
     (set) => ({
       masterVolume: 70,
@@ -111,6 +108,10 @@ const useAudio = create<AudioState>()(
     }),
     {
       name: AUDIO_SETTINGS_STORAGE_KEY,
+      skipHydration: true,
+      onRehydrateStorage: () => {
+        attachStorageListener()
+      },
       storage: settingsStorage,
       partialize: ({ masterVolume, sfxVolume, radioVolume, isRadioPlaying, autoplay }) => ({
         masterVolume,
@@ -158,12 +159,46 @@ function adoptOtherTabSettings(event: StorageEvent) {
   if (typeof stored?.autoplay === 'boolean') shared.autoplay = stored.autoplay
   adopting = true
   try {
-    useAudio.setState(shared)
+    audioStore.setState(shared)
   } finally {
     adopting = false
   }
 }
 
-globalThis.addEventListener?.('storage', adoptOtherTabSettings)
+let initialized = false
+let listening = false
+function attachStorageListener() {
+  initialized = true
+  if (listening || !globalThis.addEventListener) return
+  globalThis.addEventListener('storage', adoptOtherTabSettings)
+  listening = true
+}
 
-export default useAudio
+function initializeSettings() {
+  if (initialized) return
+  initialized = true
+  void audioStore.persist.rehydrate()
+}
+
+/** Shared audio preferences; storage is read lazily and denied storage stays in memory. */
+export const useAudioSettings = Object.assign(
+  <T = AudioState>(selector: (state: AudioState) => T = (state) => state as unknown as T): T => {
+    initializeSettings()
+    return audioStore(selector)
+  },
+  audioStore,
+  {
+    getState: () => {
+      initializeSettings()
+      return audioStore.getState()
+    },
+    setState: ((...args: Parameters<typeof audioStore.setState>) => {
+      initializeSettings()
+      return audioStore.setState(...args)
+    }) as typeof audioStore.setState,
+    subscribe: (...args: Parameters<typeof audioStore.subscribe>) => {
+      initializeSettings()
+      return audioStore.subscribe(...args)
+    },
+  },
+)

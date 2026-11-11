@@ -1,11 +1,11 @@
-import { emitter, type InteractionSound, type TerrainVerb } from '@pascal-app/core'
+import type { TerrainVerb } from '@pascal-app/core'
+import { initInteractionSounds } from '@pascal-app/viewer/sfx'
 import mitt from 'mitt'
-import useAudio from '../store/use-audio'
 import {
   disposeSFX,
   type LoopSFXName,
   playSFX,
-  type SFXName,
+  preloadSFX,
   startLoopSFX,
   stopLoopSFX,
   updateSFXVolumes,
@@ -73,30 +73,7 @@ const TERRAIN_LOOP_BY_VERB = {
 } as const satisfies Record<TerrainVerb, LoopSFXName>
 const handleTerrainSculptStart = (verb: TerrainVerb) => startLoopSFX(TERRAIN_LOOP_BY_VERB[verb])
 const handleTerrainSculptStop = () => stopLoopSFX()
-let unsubscribeAudio: (() => void) | null = null
-
-/** Windows ride the door recordings, softer: a sash weighs less than a leaf. */
-const INTERACTION_SFX: Record<InteractionSound, [SFXName, number]> = {
-  'door-open': ['doorOpen', 1],
-  'door-swing': ['doorSwing', 1],
-  'door-close': ['doorClose', 1],
-  'window-open': ['doorOpen', 0.6],
-  'window-swing': ['doorSwing', 0.6],
-  'window-close': ['doorClose', 0.6],
-  garage: ['garageDoor', 1],
-  'shutters-open': ['shuttersOpen', 1],
-  'shutters-close': ['shuttersClose', 1],
-  // Cabinet doors and drawers: the panel recordings, as the marketing house plays its cabinets.
-  'panel-open': ['shuttersOpen', 0.75],
-  'panel-swing': ['doorSwing', 0.45],
-  'panel-close': ['shuttersClose', 0.75],
-  'switch-on': ['switchOn', 1],
-  'switch-off': ['switchOff', 1],
-}
-const handleInteractionSound = (sound: InteractionSound) => {
-  const [name, volumeMultiplier] = INTERACTION_SFX[sound]
-  playSFX(name, { volumeMultiplier })
-}
+let unsubscribeInteractions: (() => void) | null = null
 
 /**
  * Initialize SFX Bus - connects SFX events to actual sound playback.
@@ -124,8 +101,8 @@ export function initSFXBus() {
   sfxEmitter.on('sfx:turn-needs-input', handleTurnNeedsInput)
   sfxEmitter.on('sfx:terrain-sculpt-start', handleTerrainSculptStart)
   sfxEmitter.on('sfx:terrain-sculpt-stop', handleTerrainSculptStop)
-  emitter.on('interaction:sound', handleInteractionSound)
-  unsubscribeAudio = useAudio.subscribe(updateSFXVolumes)
+  unsubscribeInteractions = initInteractionSounds()
+  preloadSFX()
   updateSFXVolumes()
 }
 
@@ -150,9 +127,8 @@ export function disposeSFXBus() {
     sfxEmitter.off('sfx:turn-needs-input', handleTurnNeedsInput)
     sfxEmitter.off('sfx:terrain-sculpt-start', handleTerrainSculptStart)
     sfxEmitter.off('sfx:terrain-sculpt-stop', handleTerrainSculptStop)
-    emitter.off('interaction:sound', handleInteractionSound)
-    unsubscribeAudio?.()
-    unsubscribeAudio = null
+    unsubscribeInteractions?.()
+    unsubscribeInteractions = null
     sfxBusInitialized = false
   }
   disposeSFX()

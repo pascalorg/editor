@@ -1,8 +1,8 @@
 'use client'
 
-import { useViewer } from '@pascal-app/viewer'
 import { useEffect } from 'react'
-import { playSFX } from '../../lib/sfx-player'
+import type useViewer from '../store/use-viewer'
+import { playSound, preloadSounds } from './player'
 
 type Selection = ReturnType<typeof useViewer.getState>['selection']
 
@@ -23,24 +23,27 @@ export function selectionCue(
   return released ? 'viewerDeselect' : null
 }
 
-/**
- * The viewer's pointer ticks, as on the marketing house: a faint one when the
- * pointer finds something new, one on select and a softer one on deselect.
- * Silent in walkthrough, and until the person has interacted with the page, so
- * loading a scene with a default selection makes no sound.
- */
+/** Play selection and hover cues after user activation, except during walkthrough. */
 export function useViewerUiSounds() {
-  useEffect(
-    () =>
-      useViewer.subscribe((state, previous) => {
-        if (state.walkthroughMode || !navigator.userActivation?.hasBeenActive) return
+  useEffect(() => {
+    let disposed = false
+    let unsubscribe: (() => void) | undefined
+    preloadSounds()
+    void import('../store/use-viewer').then(({ default: viewer }) => {
+      if (disposed) return
+      unsubscribe = viewer.subscribe((state, previous) => {
+        if (state.walkthroughMode || !globalThis.navigator?.userActivation?.hasBeenActive) return
         if (state.selection !== previous.selection) {
           const cue = selectionCue(previous.selection, state.selection)
-          if (cue) playSFX(cue)
+          if (cue) playSound(cue)
         }
         if (state.hoveredId && state.hoveredId !== previous.hoveredId && !state.cameraDragging)
-          playSFX('viewerHover')
-      }),
-    [],
-  )
+          playSound('viewerHover')
+      })
+    })
+    return () => {
+      disposed = true
+      unsubscribe?.()
+    }
+  }, [])
 }
