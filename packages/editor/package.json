@@ -23,8 +23,8 @@
     "@react-three/drei": "^10",
     "@react-three/fiber": "^9",
     "next": ">=15",
-    "react": "^18 || ^19",
-    "react-dom": "^18 || ^19",
+    "react": "^19",
+    "react-dom": "^19",
     "three": "^0.187"
   },
   "dependencies": {
