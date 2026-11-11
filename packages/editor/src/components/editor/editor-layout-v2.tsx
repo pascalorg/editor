@@ -511,12 +511,6 @@ export function EditorLayoutV2({
   const showSideColumns =
     !(isMobile || isCaptureMode) && (toolTabs.length > 0 || columnTab !== undefined)
   const isMenuHidden = useSidebarStore((s) => s.isMenuHidden)
-  // A project opens on the column's tab (the chat): tools are one click away in the menu.
-  const columnTabIdOnOpen = useRef(showSideColumns ? columnTab?.id : undefined)
-  useEffect(() => {
-    if (columnTabIdOnOpen.current)
-      useEditor.getState().setActiveSidebarPanel(columnTabIdOnOpen.current)
-  }, [])
   // On a phone the column tab is one more sheet, so it stays a pickable tab.
   const isCollapsed = useSidebarStore((s) => s.isCollapsed)
   // The column tab picked before its column was there to take it (a host

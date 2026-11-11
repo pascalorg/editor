@@ -444,6 +444,11 @@ export const CustomCameraControls = ({
   const controls = useRef<FloorAwareCameraControls | null>(null)
   // Whether the opening framing may still move the camera: not once anything else has.
   const openingFrame = useRef<'waiting' | 'framing' | 'done'>('waiting')
+  // Over for this load: the store keeps it across a remount (preview swaps these controls out).
+  const settleOpening = useCallback(() => {
+    openingFrame.current = 'done'
+    useEditor.getState().setOpeningCameraSettled(true)
+  }, [])
   // Frames the opening project again; set while the opening follow runs.
   const reframeOpening = useRef<(() => void) | null>(null)
   const pendingAppliedPose = useRef<CameraPoseApplicationPlan | null>(null)
@@ -547,14 +552,14 @@ export const CustomCameraControls = ({
   const beginLocalCameraInteraction = useCallback(
     ({ dragging = true }: { dragging?: boolean } = {}) => {
       cancelPoseApplication()
-      openingFrame.current = 'done'
+      settleOpening()
       if (dragging) {
         controls.current?.releaseWrittenPose()
         cameraDraggingLifecycle.begin()
       }
       emitter.emit('camera-controls:interaction-start', undefined)
     },
-    [cameraDraggingLifecycle, cancelPoseApplication],
+    [cameraDraggingLifecycle, cancelPoseApplication, settleOpening],
   )
 
   const applyPendingPose = useCallback(() => {
@@ -621,7 +626,7 @@ export const CustomCameraControls = ({
   useEffect(() => {
     const handleAppliedPose = (pose: CameraPose) => {
       if (isFirstPersonMode) return
-      openingFrame.current = 'done'
+      settleOpening()
 
       const plan = planCameraPoseApplication(pose)
       if (!plan) return
@@ -654,6 +659,7 @@ export const CustomCameraControls = ({
     freezeActivePoseInterpolation,
     isFirstPersonMode,
     isPreviewMode,
+    settleOpening,
   ])
 
   useEffect(() => cancelPoseApplication, [cancelPoseApplication])
@@ -773,6 +779,7 @@ export const CustomCameraControls = ({
 
   useEffect(() => {
     if (!sceneReady || isPreviewMode || isFirstPersonMode) return
+    if (useEditor.getState().openingCameraSettled) openingFrame.current = 'done'
     if (openingFrame.current !== 'waiting') return
     openingFrame.current = 'framing'
     let framed: Box3 | null = null
@@ -811,7 +818,7 @@ export const CustomCameraControls = ({
     timers.push(
       window.setTimeout(
         () => {
-          if (openingFrame.current === 'framing') openingFrame.current = 'done'
+          if (openingFrame.current === 'framing') settleOpening()
         },
         Math.max(...OPENING_FRAME_FOLLOW_MS) + 1,
       ),
@@ -823,9 +830,10 @@ export const CustomCameraControls = ({
       // Walking or previewing moves the camera too: the opening is over. Only a remount (or a
       // new load, reset above) frames again.
       const { isFirstPersonMode, isPreviewMode } = useEditor.getState()
-      openingFrame.current = isFirstPersonMode || isPreviewMode ? 'done' : 'waiting'
+      if (isFirstPersonMode || isPreviewMode) settleOpening()
+      else openingFrame.current = 'waiting'
     }
-  }, [sceneReady, isPreviewMode, isFirstPersonMode])
+  }, [sceneReady, isPreviewMode, isFirstPersonMode, settleOpening])
 
   useEffect(() => {
     if (isFirstPersonMode || !controls.current) return
@@ -1584,7 +1592,7 @@ export const CustomCameraControls = ({
 
     // Any other camera command ends the opening follow, so its timers never pull the camera back.
     const endOpening = () => {
-      if (openingFrame.current === 'framing') openingFrame.current = 'done'
+      if (openingFrame.current === 'framing') settleOpening()
     }
     const openingEnders = [
       'camera-controls:capture',
@@ -1623,6 +1631,7 @@ export const CustomCameraControls = ({
     focusNode,
     isPreviewMode,
     isFirstPersonMode,
+    settleOpening,
   ])
 
   // Apply a fit that arrived while first-person (orbit unmounted). Wait one

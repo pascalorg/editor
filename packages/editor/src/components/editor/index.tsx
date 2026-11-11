@@ -1686,6 +1686,8 @@ function EditorContent({
           // The store holds the loaded graph: autosave resumes now, not on a
           // frame — a tab loaded while hidden never gets one.
           completeSceneLoad()
+          // A new project gets its own opening camera frame.
+          useEditor.getState().setOpeningCameraSettled(false)
           setIsViewerSceneReady(false)
           setSceneReadyKey((key) => key + 1)
         }
@@ -1764,6 +1766,16 @@ function EditorContent({
 
     return () => window.clearTimeout(timer)
   }, [hasLoadedInitialScene, isLoading, isSceneLoading, isViewerSceneReady, sceneReadyKey])
+
+  // A project opens on the column's tab (the chat), once per load: after the saved layout is
+  // restored, and not again when preview hands the layout back.
+  const openedOnColumnRef = useRef<number | null>(null)
+  useEffect(() => {
+    if (sceneReadyKey === 0 || layoutVersion !== 'v2' || !columnTabId || isMobile) return
+    if (openedOnColumnRef.current === sceneReadyKey) return
+    openedOnColumnRef.current = sceneReadyKey
+    useEditor.getState().setActiveSidebarPanel(columnTabId)
+  }, [sceneReadyKey, layoutVersion, columnTabId, isMobile])
 
   // The useAutoFrame emit can be clobbered by the level-follow effect's
   // first-run pivot rest on fast (client-side navigation) loads. Re-emitting
