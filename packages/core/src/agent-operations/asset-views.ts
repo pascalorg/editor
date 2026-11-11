@@ -17,8 +17,16 @@ export type AssetViewFacts = {
 
 type ViewAssetsInput = { ids: string[] }
 
-/** The item a host reads: `id` keys its facts, `src` is its model, `thumbnail` its picture. */
-export type AssetViewSubject = Pick<AssetInput, 'id' | 'src'> & { thumbnail?: string }
+/**
+ * The item a host reads: `id` keys its facts, `src` is its model, `thumbnail` its picture. An item
+ * built from a script names its `surfaces` (its manifest's slots), so its model is not read.
+ */
+export type AssetViewSubject = {
+  id: string
+  src?: string
+  thumbnail?: string
+  surfaces?: readonly string[]
+}
 
 const round = (value: number) => Math.round(value * 100) / 100
 
@@ -164,7 +172,11 @@ export function createAssetViewLoader(io: AssetViewIO): AssetViewLoader {
     const entries = await Promise.all(
       subjects.map(async (subject): Promise<[string, AssetViewFacts]> => {
         const [surface, picture] = await Promise.allSettled([
-          subject.src ? surfacesOf(subject.src) : Promise.reject(new Error('it has no model')),
+          subject.surfaces
+            ? [...subject.surfaces]
+            : subject.src
+              ? surfacesOf(subject.src)
+              : Promise.reject(new Error('it has no model')),
           pictures && subject.thumbnail
             ? io.picture(subject.thumbnail)
             : Promise.reject(new Error(pictures ? 'it has no picture' : 'not asked')),
@@ -224,7 +236,16 @@ export function assetViewNeeds(
   if (tool === 'view_assets') {
     const ids = (input as { ids?: unknown })?.ids
     const wanted = new Set(Array.isArray(ids) ? ids : [])
-    return { subjects: catalog.filter((item) => wanted.has(item.id)), pictures: true }
+    return {
+      subjects: catalog
+        .filter((item) => wanted.has(item.id))
+        .map(({ id, src, thumbnail, script }) =>
+          script
+            ? { id, thumbnail, surfaces: script.manifest.slots.map((slot) => slot.id) }
+            : { id, src, thumbnail },
+        ),
+      pictures: true,
+    }
   }
   const subjects = new Map<string, AssetViewSubject>()
   for (const { targets } of roleLessPaints(tool, input))
@@ -232,7 +253,12 @@ export function assetViewNeeds(
       const node = typeof id === 'string' ? nodes[id] : undefined
       if (node?.type !== 'item' || !node.asset?.id) continue
       const entry = catalog.find((item) => item.id === node.asset.id)
-      if (entry?.src) subjects.set(entry.id, { id: entry.id, src: entry.src })
+      if (entry?.script)
+        subjects.set(entry.id, {
+          id: entry.id,
+          surfaces: entry.script.manifest.slots.map((slot) => slot.id),
+        })
+      else if (entry?.src) subjects.set(entry.id, { id: entry.id, src: entry.src })
     }
   return { subjects: [...subjects.values()], pictures: false }
 }

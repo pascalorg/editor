@@ -2,7 +2,6 @@ import type { ZodType } from 'zod'
 import type { DesignBrief } from '../agent-tools/design-brief'
 import type {
   AnyNode,
-  AssetInput,
   Collection,
   CompiledGeometryScript,
   SceneMaterial,
@@ -10,6 +9,7 @@ import type {
 } from '../schema'
 import type { AssetSearchResult } from './asset-catalog'
 import type { AssetViewFacts } from './asset-views'
+import type { CatalogAsset } from './catalog-asset'
 import type { SessionKeep, SessionRecord } from './scene-checkpoint'
 
 export type SceneNodes = Readonly<Record<string, AnyNode>>
@@ -38,7 +38,7 @@ export type AgentContext = {
   checkpoint?: { name: string; measure: unknown }
   /** The agent's session so far. The host keeps it where its sessions live; it is never scene data. */
   session?: SessionRecord
-  catalog?: readonly AssetInput[]
+  catalog?: readonly CatalogAsset[]
   /** The library's answers to the call's searches, by `assetSearchKey`; set, they are what search_assets lists. */
   catalogSearches?: Readonly<Record<string, AssetSearchResult>>
   /**
