@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import type { CameraPose } from '@pascal-app/core'
-import { publishInitialCameraPose } from '../../lib/camera-pose'
+import { publishInitialCameraPose } from '@pascal-app/viewer/ui'
 import type { NavigationSyncPose } from '../../store/use-editor'
 import {
   cameraPoseToFloorplanNavigationPose,

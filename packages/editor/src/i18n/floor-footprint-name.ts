@@ -4,7 +4,7 @@ import {
   type PascalI18n,
   type SlabNode,
 } from '@pascal-app/core'
-import { displayRoomName } from '../lib/room-name-messages'
+import { displayRoomName } from '@pascal-app/viewer/ui'
 
 /** `floorFootprintName` in the UI language; MCP and agents keep core's English. */
 export function localizedFloorFootprintName(

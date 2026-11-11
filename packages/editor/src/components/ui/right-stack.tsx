@@ -1,7 +1,7 @@
 'use client'
 
 import { createContext, type ReactNode, useContext, useLayoutEffect, useRef } from 'react'
-import { useIsMobile } from '../../hooks/use-mobile'
+import { useIsMobile } from '@pascal-app/viewer/ui'
 import { cn } from '../../lib/utils'
 import { TOP_MENU_CLEARANCE } from './action-menu/placement'
 

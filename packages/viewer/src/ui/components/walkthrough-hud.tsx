@@ -2,11 +2,9 @@
 
 import { usePascalI18n } from '@pascal-app/core'
 import { type ReactNode, useMemo } from 'react'
+import { cn } from '../lib/cn'
 import { displayRoomName } from '../lib/room-name-messages'
-import { cn } from '../lib/utils'
 import type { WalkthroughInteract } from '../store/use-first-person-hud'
-
-export type { WalkthroughInteract } from '../store/use-first-person-hud'
 
 /** A control shown in the HUD's key strip: its keys (as printed on the keycaps) and what they do. */
 export type WalkthroughHint = { keys: readonly string[]; action: string }

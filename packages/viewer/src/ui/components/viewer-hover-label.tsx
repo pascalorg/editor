@@ -1,10 +1,10 @@
 'use client'
 
 import { usePascalI18n, useScene } from '@pascal-app/core'
-import { useViewer } from '@pascal-app/viewer'
-import { nodeDisplayLabel } from '../../lib/node-display-label'
-import type { DescriptorTranslator } from '../../lib/room-name-messages'
-import { type ViewerNodes, zoneLabel } from '../../lib/viewer-selection'
+import useViewer from '../../store/use-viewer'
+import { nodeDisplayLabel } from '../lib/node-display-label'
+import type { DescriptorTranslator } from '../lib/room-name-messages'
+import { type ViewerNodes, zoneLabel } from '../lib/viewer-selection'
 
 /** The hovered node's name, for the bottom pill. A room reads as the room. */
 export function viewerHoverLabel(

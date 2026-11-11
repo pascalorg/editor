@@ -1,5 +1,5 @@
 import { Volume2, VolumeX } from 'lucide-react'
-import { Button } from '../../../../../components/ui/primitives/button'
+import { Button } from '@pascal-app/viewer/ui'
 import {
   Dialog,
   DialogContent,

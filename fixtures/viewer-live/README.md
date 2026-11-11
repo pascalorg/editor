@@ -21,4 +21,6 @@ is a tiny self-contained cube with a `slot_body` material. There is no baked sce
 
 The readiness probe requires the viewer's scene-ready callback, no pending build work, real node
 geometry and actual draw calls. It also rejects model failures, browser errors and a process
-polyfill. No Tailwind, Next configuration or editor package is used.
+polyfill. The page mounts the `@pascal-app/viewer/ui` controls bar and loader (unstyled), and the
+check requires their icons to load from `assetsBaseUrl` and a sound from `sfxBaseUrl`. No Tailwind,
+Next configuration or editor package is used.

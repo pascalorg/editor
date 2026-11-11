@@ -8,7 +8,7 @@ import {
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
   DropdownMenuTrigger,
-} from '../primitives/dropdown-menu'
+} from '@pascal-app/viewer/ui'
 
 interface SelectControlProps<T extends string> {
   label: string

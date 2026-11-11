@@ -20,25 +20,25 @@ import {
 } from '@pascal-app/core'
 import { migrateRoomZones } from '@pascal-app/core/scene-migrations'
 import { resolveGlbPick, useViewer } from '@pascal-app/viewer'
-import { CameraControlsImpl } from '@react-three/drei'
-import { createElement } from 'react'
-import * as THREE from 'three'
-import { Group, Vector3 } from 'three'
-import { viewerHoverLabel } from '../components/viewer/viewer-hover-label'
-import { ViewerSelectionManager } from '../components/viewer/viewer-selection-manager'
-import { publishCameraPose } from '../store/camera-pose-store'
-import useEditor, { takePreviewCameraRestore } from '../store/use-editor'
-import { withSelectionHarness } from '../test-utils/selection-harness'
 import {
   frameViewerCamera,
+  publishCameraPose,
   resolveViewerClick,
   resolveViewerHover,
   selectViewerRoom,
   type ViewerSelection,
+  ViewerSelectionManager,
   viewerBreadcrumb,
+  viewerHoverLabel,
   viewerPickFromNodeEvent,
   viewerSidebarSections,
-} from './viewer-selection'
+} from '@pascal-app/viewer/ui'
+import { CameraControlsImpl } from '@react-three/drei'
+import { createElement } from 'react'
+import * as THREE from 'three'
+import { Group, Vector3 } from 'three'
+import useEditor, { takePreviewCameraRestore } from '../store/use-editor'
+import { withSelectionHarness } from '../test-utils/selection-harness'
 
 const english = {
   _: (descriptor: { id: string; message?: string }) => descriptor.message ?? descriptor.id,

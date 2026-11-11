@@ -27,9 +27,9 @@ import { cn } from '../../../lib/utils'
 import useEditor from '../../../store/use-editor'
 import { VIEW_2D } from '../../../store/view-layout'
 import useFloorplanMode from '../../../store/use-floorplan-mode'
-import { Popover, PopoverContent, PopoverTrigger } from '../primitives/popover'
-import { ActionButton } from './action-button'
-import { useActionMenuPopupSide } from './placement'
+import { Popover, PopoverContent, PopoverTrigger } from '@pascal-app/viewer/ui'
+import { ActionButton } from '@pascal-app/viewer/ui'
+import { useActionMenuPopupSide } from '@pascal-app/viewer/ui'
 
 const measurementOptions = [
   { kind: 'distance', label: /* i18n */ { id: 'editor.actionMenu.measurementControl.distance', message: 'Distance' }, icon: Ruler },

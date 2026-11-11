@@ -94,10 +94,14 @@ import {
   toggleDoorOpenState,
   toggleWindowOpenState,
 } from '@pascal-app/core'
+import {
+  DroneHud,
+  useFirstPersonHud,
+  WalkthroughHud,
+  type WalkthroughInteract,
+} from '@pascal-app/viewer/ui'
 import { isTypingTarget } from '../../lib/typing-target'
 import useEditor from '../../store/use-editor'
-import { useFirstPersonHud, type WalkthroughInteract } from '../../store/use-first-person-hud'
-import { DroneHud, WalkthroughHud } from '../walkthrough-hud'
 import {
   buildFirstPersonColliderWorldFromRegistry,
   deriveFirstPersonSpawn,

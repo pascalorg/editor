@@ -25,6 +25,15 @@
       "types": "./dist/sfx/index.d.ts",
       "import": "./dist/sfx/index.js",
       "default": "./dist/sfx/index.js"
+    },
+    "./ui": {
+      "types": "./dist/ui/index.d.ts",
+      "import": "./dist/ui/index.js",
+      "default": "./dist/ui/index.js"
+    },
+    "./ui/theme.css": {
+      "style": "./dist/ui/theme.css",
+      "default": "./dist/ui/theme.css"
     }
   },
   "files": [
@@ -32,8 +41,8 @@
     "README.md"
   ],
   "scripts": {
-    "build": "tsc --build",
-    "dev": "tsgo --build --watch",
+    "build": "tsc --build && cp src/ui/theme.css dist/ui/theme.css",
+    "dev": "mkdir -p dist/ui && cp src/ui/theme.css dist/ui/theme.css && tsgo --build --watch",
     "test": "bun test src",
     "prepublishOnly": "npm run build"
   },
@@ -41,14 +50,24 @@
     "@pascal-app/core": "^1.1.0",
     "@react-three/drei": "^10",
     "@react-three/fiber": "^9",
-    "react": "^18 || ^19",
-    "react-dom": "^18 || ^19",
+    "react": "^19",
+    "react-dom": "^19",
     "three": "^0.187"
   },
   "dependencies": {
+    "@radix-ui/react-dropdown-menu": "^2.2.1",
+    "@radix-ui/react-popover": "^1.3.1",
+    "@radix-ui/react-slot": "^1.5.0",
+    "@radix-ui/react-switch": "^1.4.1",
+    "@radix-ui/react-tooltip": "^1.4.1",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
     "howler": "^2.2.4",
+    "lucide-react": "^1.69.0",
+    "tailwind-merge": "^3.7.0",
     "three-bvh-csg": "^0.0.18",
     "three-mesh-bvh": "~0.9.18",
+    "tw-animate-css": "^1.4.0",
     "zustand": "^5"
   },
   "devDependencies": {

@@ -67,6 +67,7 @@ import {
 } from '@pascal-app/core'
 import { useSegmentDraftChain, useWallSnapIndicator } from '@pascal-app/editor'
 import { getSceneTheme, useViewer } from '@pascal-app/viewer'
+import { FloorplanCompassButton, framingAnimates } from '@pascal-app/viewer/ui'
 import { Command, Ruler } from 'lucide-react'
 import {
   type ComponentProps,
@@ -147,7 +148,6 @@ import {
   zoneAtLevelPoint,
 } from '../../lib/units'
 import { cn } from '../../lib/utils'
-import { framingAnimates } from '../../lib/viewer-selection'
 import {
   getWallDrawVariant,
   getWallLineKind,
@@ -275,7 +275,6 @@ import {
   type WallPlanPoint,
 } from '../tools/wall/wall-drafting'
 import { formatWallDraftHeading, resolveTypedWallEnd } from '../tools/wall/wall-typed-entry'
-import { FloorplanCompassButton } from '../viewer/floorplan-compass-button'
 import { resolveFloorplanBackgroundSelection } from './floorplan-background-selection'
 import {
   subscribeFloorplanCameraNavigation,

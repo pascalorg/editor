@@ -1,7 +1,6 @@
 'use client'
 
 import { emitter, type PascalI18n, usePascalI18n } from '@pascal-app/core'
-import { CLAY_PALETTE, getSceneTheme, SCENE_THEMES, useViewer } from '@pascal-app/viewer'
 import {
   Camera,
   Check,
@@ -18,11 +17,13 @@ import {
   Square,
   SwatchBook,
 } from 'lucide-react'
-import { useIsMobile } from '../../hooks/use-mobile'
-import { sceneThemeName } from '../../i18n/scene-theme-name'
-import { cn } from '../../lib/utils'
-import { ActionButton } from '../ui/action-menu/action-button'
-import { FollowPascalToggle } from '../ui/action-menu/follow-pascal-toggle'
+import { CLAY_PALETTE } from '../../lib/materials'
+import { getSceneTheme, SCENE_THEMES } from '../../lib/scene-themes'
+import { getViewerConfig } from '../../lib/viewer-config'
+import useViewer from '../../store/use-viewer'
+import { useIsMobile } from '../hooks/use-mobile'
+import { cn } from '../lib/cn'
+import { sceneThemeName } from '../lib/scene-theme-name'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -32,21 +33,20 @@ import {
   DropdownMenuSubContent,
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
-} from '../ui/primitives/dropdown-menu'
-import { TooltipProvider } from '../ui/primitives/tooltip'
+} from '../primitives/dropdown-menu'
+import { TooltipProvider } from '../primitives/tooltip'
+import { ActionButton } from './action-button'
+import { FollowPascalToggle } from './follow-pascal-toggle'
 import { DaylightMenu, EdgesToggleItem, QualityMenu } from './render-settings-menu'
 import { SKY_DOCK_HEIGHT, SkyControl } from './sky-control'
 
+// Resolved per render from `configureViewer({ iconsBaseUrl })`: app icons, not item assets.
+const iconUrl = (name: string) => `${getViewerConfig().iconsBaseUrl}/${name}.webp`
+
 const wallModeConfig = {
-  up: {
-    icon: '/icons/room.webp',
-  },
-  cutaway: {
-    icon: '/icons/wallcut.webp',
-  },
-  down: {
-    icon: '/icons/walllow.webp',
-  },
+  up: { icon: 'room' },
+  cutaway: { icon: 'wallcut' },
+  down: { icon: 'walllow' },
 } as const
 
 function levelModeLabel(
@@ -103,7 +103,7 @@ function VisibilityMenu({
           <DropdownMenuItem
             onSelect={(e) => keepOpen(e, () => useViewer.getState().setShowScans(!showScans))}
           >
-            <img alt="" className="h-4 w-4 object-contain" src="/icons/mesh.webp" />
+            <img alt="" className="h-4 w-4 object-contain" src={iconUrl('mesh')} />
             <span>{i18n._({ id: 'viewer.visibility.scans', message: 'Scans' })}</span>
             {showScans ? (
               <Eye className="ml-auto h-4 w-4 text-foreground" />
@@ -116,7 +116,7 @@ function VisibilityMenu({
           <DropdownMenuItem
             onSelect={(e) => keepOpen(e, () => useViewer.getState().setShowGuides(!showGuides))}
           >
-            <img alt="" className="h-4 w-4 object-contain" src="/icons/floorplan.webp" />
+            <img alt="" className="h-4 w-4 object-contain" src={iconUrl('floorplan')} />
             <span>{i18n._({ id: 'viewer.visibility.guides', message: 'Guides' })}</span>
             {showGuides ? (
               <Eye className="ml-auto h-4 w-4 text-foreground" />
@@ -371,7 +371,7 @@ export const ViewerControlsBar = ({
                   alt={wallModeLabel(safeWallMode, i18n)}
                   className="h-[28px] w-[28px]"
                   height={28}
-                  src={wallModeConfig[safeWallMode].icon}
+                  src={iconUrl(wallModeConfig[safeWallMode].icon)}
                   width={28}
                 />
               </ActionButton>
@@ -453,7 +453,7 @@ export const ViewerControlsBar = ({
               <img
                 alt={i18n._({ id: 'viewer.camera.orbitLeft', message: 'Orbit left' })}
                 className="h-[28px] w-[28px] -scale-x-100 object-contain opacity-70 transition-opacity group-hover:opacity-100"
-                src="/icons/rotate.webp"
+                src={iconUrl('rotate')}
               />
             </ActionButton>
 
@@ -469,7 +469,7 @@ export const ViewerControlsBar = ({
               <img
                 alt={i18n._({ id: 'viewer.camera.orbitRight', message: 'Orbit right' })}
                 className="h-[28px] w-[28px] object-contain opacity-70 transition-opacity group-hover:opacity-100"
-                src="/icons/rotate.webp"
+                src={iconUrl('rotate')}
               />
             </ActionButton>
 
@@ -485,7 +485,7 @@ export const ViewerControlsBar = ({
               <img
                 alt={i18n._({ id: 'viewer.camera.topView', message: 'Top view' })}
                 className="h-[28px] w-[28px] object-contain opacity-70 transition-opacity group-hover:opacity-100"
-                src="/icons/topview.webp"
+                src={iconUrl('topview')}
               />
             </ActionButton>
           </div>

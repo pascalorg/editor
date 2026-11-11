@@ -2,14 +2,6 @@
 
 import { type PascalI18n, usePascalI18n, useScene } from '@pascal-app/core'
 import {
-  type RenderQuality,
-  requestDeviceLocation,
-  resolveLocation,
-  type TimeOfDay,
-  useViewer,
-  type Weather,
-} from '@pascal-app/viewer'
-import {
   ArrowDownLeft,
   Check,
   Cloud,
@@ -23,12 +15,16 @@ import {
   Sunset,
 } from 'lucide-react'
 import { useState } from 'react'
+import { requestDeviceLocation, resolveLocation } from '../../lib/daylight/location'
+import type { Weather } from '../../lib/daylight/sky'
+import type { TimeOfDay } from '../../lib/daylight/solar'
+import useViewer, { type RenderQuality } from '../../store/use-viewer'
 import {
   DropdownMenuItem,
   DropdownMenuSub,
   DropdownMenuSubContent,
   DropdownMenuSubTrigger,
-} from '../ui/primitives/dropdown-menu'
+} from '../primitives/dropdown-menu'
 import { openSkyPanel, useSkyPanel, weatherIcon } from './sky-control'
 
 /**

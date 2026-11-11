@@ -1,8 +1,8 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { cn } from '../../lib/utils'
-import { Button } from './primitives/button'
+import { cn } from '../lib/cn'
+import { Button } from '../primitives/button'
 
 const LOADERS = [
   'pascal-loader-1',

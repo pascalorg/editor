@@ -2,8 +2,8 @@
 
 import { usePascalI18n } from '@pascal-app/core'
 import { Video } from 'lucide-react'
-import { cn } from '../../../lib/utils'
-import useFollowPascal from '../../../store/use-follow-pascal'
+import { cn } from '../lib/cn'
+import { useFollowPascal } from '../store/use-follow-pascal'
 import { ActionButton } from './action-button'
 
 /** The toolbar's switch for Follow Pascal: the camera follows what the agent builds. */
@@ -29,7 +29,10 @@ export function FollowPascalToggle({
       label={
         on
           ? i18n._({ id: 'editor.actionMenu.followPascalToggle.on', message: 'Follow Pascal: On' })
-          : i18n._({ id: 'editor.actionMenu.followPascalToggle.off', message: 'Follow Pascal: Off' })
+          : i18n._({
+              id: 'editor.actionMenu.followPascalToggle.off',
+              message: 'Follow Pascal: Off',
+            })
       }
       onClick={() => setOn(!on)}
       size="icon"

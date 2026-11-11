@@ -8,7 +8,7 @@ import {
 } from '../../../../../store/use-construction-reveal'
 import { SegmentedControl } from '../../../controls/segmented-control'
 import { Badge } from '../../../primitives/badge'
-import { Tooltip, TooltipContent, TooltipTrigger } from '../../../primitives/tooltip'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@pascal-app/viewer/ui'
 
 /** Why Framing is greyed out. */
 export const FRAMING_NEEDS_ARCHITECT = 'Framing needs the Architect plugin.'

@@ -1,4 +1,4 @@
-import { cameraPoseStore } from '../store/camera-pose-store'
+import { cameraPoseStore } from '@pascal-app/viewer/ui'
 import useEditor from '../store/use-editor'
 import { getActiveBuildingPose } from './world-grid-snap'
 

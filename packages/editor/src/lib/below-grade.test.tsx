@@ -10,16 +10,16 @@ import {
 } from '@pascal-app/core'
 import { buildGroundLevelChanges } from '@pascal-app/core/building'
 import { useViewer } from '@pascal-app/viewer'
-import { act, create } from '@react-three/test-renderer'
-import useEditor from '../store/use-editor'
-import villaAurelia from './__fixtures__/owner-villa-aurelia-basement.json'
 import {
   belowGradeShown,
   followBelowGrade,
   followGroundWindowBox,
   gradeStandingShown,
   groundWindowBoxShown,
-} from './below-grade'
+} from '@pascal-app/viewer/ui'
+import { act, create } from '@react-three/test-renderer'
+import useEditor from '../store/use-editor'
+import villaAurelia from './__fixtures__/owner-villa-aurelia-basement.json'
 import { useEditorLevelDisplay } from './editor-level-display'
 
 // The owner's villa (13 Oct), trimmed: its Lower Ground lies 3.35 m under the lawn.

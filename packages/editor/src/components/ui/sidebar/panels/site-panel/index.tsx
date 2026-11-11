@@ -52,7 +52,7 @@ import {
   Popover,
   PopoverContent,
   PopoverTrigger,
-} from './../../../../../components/ui/primitives/popover'
+} from '@pascal-app/viewer/ui'
 import {
   buildLevelDuplicateCreateOps,
   type LevelDuplicatePreset,
@@ -81,7 +81,7 @@ import { focusTreeNode, TreeNode, TreeNodeWrapper } from './tree-node'
 import { TreeNodeDragProvider } from './tree-node-drag'
 import { zoneDefaultName } from './default-names'
 import { nodeLabelDescriptor } from '../../../../../i18n/node-messages'
-import { authoredLevelName, localizedLevelName } from '../../../../../i18n/level-name'
+import { authoredLevelName, localizedLevelName } from '@pascal-app/viewer/ui'
 
 // ============================================================================
 // PROPERTY LINE SECTION

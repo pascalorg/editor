@@ -8,18 +8,18 @@ import { useViewer } from '@pascal-app/viewer'
 import { Camera, Hexagon, Save, Trash2 } from 'lucide-react'
 import { useState } from 'react'
 import { sfxEmitter } from './../../../../../lib/sfx-bus'
-import { collectZoneContentIds } from './../../../../../lib/zone-content'
+import { collectZoneContentIds } from '@pascal-app/viewer/ui'
 import { ColorDot } from './../../../../../components/ui/primitives/color-dot'
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
-} from './../../../../../components/ui/primitives/popover'
+} from '@pascal-app/viewer/ui'
 import { cn } from './../../../../../lib/utils'
 import useEditor from './../../../../../store/use-editor'
 import { ActionButton } from '../../../controls/action-button'
 import { PanelSection } from '../../../controls/panel-section'
-import { displayRoomName } from '../../../../../lib/room-name-messages'
+import { displayRoomName } from '@pascal-app/viewer/ui'
 
 function ZoneItem({ zone }: { zone: ZoneNode }) {
   const i18n = usePascalI18n()

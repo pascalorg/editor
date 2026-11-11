@@ -13,7 +13,7 @@ import {
   type WallNode,
   type ZoneNode,
 } from '@pascal-app/core'
-import type { SelectionModifierKeys } from './selection-routing'
+import type { SelectionModifierKeys } from './selection-modifiers'
 import { polygonMatchesZoneFootprint } from './zone-content'
 
 export type RoomKey = { levelId: string; zoneId: string }

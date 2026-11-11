@@ -1,13 +1,9 @@
 import * as React from 'react'
-import { Button } from './../../../components/ui/primitives/button'
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from './../../../components/ui/primitives/tooltip'
-import { triggerSFX } from './../../../lib/sfx-bus'
-import { cn } from './../../../lib/utils'
-import { useActionMenuPopupSide } from './placement'
+import { playSound } from '../../sfx/player'
+import { cn } from '../lib/cn'
+import { Button } from '../primitives/button'
+import { Tooltip, TooltipContent, TooltipTrigger } from '../primitives/tooltip'
+import { useActionMenuPopupSide } from './action-menu-placement'
 
 interface ActionButtonProps extends React.ComponentProps<typeof Button> {
   label: string
@@ -48,11 +44,11 @@ export const ActionButton = React.forwardRef<HTMLButtonElement, ActionButtonProp
             aria-label={label}
             className={cn('relative h-11 w-11 transition-all', className)}
             onClick={(event) => {
-              triggerSFX('sfx:menu-click')
+              playSound('menuClick')
               onClick?.(event)
             }}
             onMouseEnter={(event) => {
-              triggerSFX('sfx:menu-hover')
+              playSound('menuHover')
               onMouseEnter?.(event)
             }}
             ref={ref}

@@ -1,14 +1,14 @@
 'use client'
 
 import { type CameraPose, emitter } from '@pascal-app/core'
-import { useViewer } from '@pascal-app/viewer'
 import type { CameraControlsImpl } from '@react-three/drei'
 import { useThree } from '@react-three/fiber'
 import { type RefObject, useCallback, useEffect, useRef } from 'react'
 import type { Camera, OrthographicCamera, PerspectiveCamera } from 'three'
 import { Vector3 } from 'three'
-import { normalizeCameraPose } from '../../lib/camera-pose'
-import { publishCameraPose } from '../../store/camera-pose-store'
+import useViewer from '../../store/use-viewer'
+import { normalizeCameraPose } from '../lib/camera-pose'
+import { publishCameraPose } from '../store/camera-pose-store'
 
 const position = new Vector3()
 const target = new Vector3()

@@ -13,7 +13,7 @@ import {
 } from '@pascal-app/core'
 import { useState } from 'react'
 import { materialSwatchStyle } from '../../../lib/material-swatch-style'
-import { Popover, PopoverContent, PopoverTrigger } from '../primitives/popover'
+import { Popover, PopoverContent, PopoverTrigger } from '@pascal-app/viewer/ui'
 import { MaterialPicker } from './material-picker'
 
 type Swatch = { label: string; color: string | null; image: string | null; tinted?: boolean }

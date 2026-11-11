@@ -2,8 +2,8 @@
 
 import { usePascalI18n } from '@pascal-app/core'
 import type React from 'react'
-import { cn } from '../../lib/utils'
-import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/primitives/tooltip'
+import { cn } from '../lib/cn'
+import { Tooltip, TooltipContent, TooltipTrigger } from '../primitives/tooltip'
 import { SKY_COMPASS_BOTTOM, useSkyPanel } from './sky-control'
 
 export type FloorplanCompassButtonProps = {

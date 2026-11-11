@@ -2,21 +2,6 @@
 
 import { type PascalI18n, usePascalI18n, useScene } from '@pascal-app/core'
 import {
-  presetInstant,
-  requestDeviceLocation,
-  resolveLocation,
-  type SkyPhase,
-  skyPhase,
-  solarClockInstant,
-  solarClockMinutes,
-  solarPosition,
-  sunEvents,
-  type TimeOfDay,
-  useViewer,
-  WEATHER_COVER,
-  type Weather,
-} from '@pascal-app/viewer'
-import {
   Cloud,
   CloudSun,
   Cloudy,
@@ -38,9 +23,22 @@ import {
   useState,
 } from 'react'
 import { create } from 'zustand'
-import { cn } from '../../lib/utils'
-import { Popover, PopoverAnchor, PopoverContent } from '../ui/primitives/popover'
-import { Switch } from '../ui/primitives/switch'
+import { requestDeviceLocation, resolveLocation } from '../../lib/daylight/location'
+import { WEATHER_COVER, type Weather } from '../../lib/daylight/sky'
+import {
+  presetInstant,
+  type SkyPhase,
+  skyPhase,
+  solarClockInstant,
+  solarClockMinutes,
+  solarPosition,
+  sunEvents,
+  type TimeOfDay,
+} from '../../lib/daylight/solar'
+import useViewer from '../../store/use-viewer'
+import { cn } from '../lib/cn'
+import { Popover, PopoverAnchor, PopoverContent } from '../primitives/popover'
+import { Switch } from '../primitives/switch'
 
 /**
  * The sky (time of day and weather) as a chip beside the compass, opening a panel: the sun's
