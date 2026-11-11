@@ -1,6 +1,4 @@
-'use client'
-
-import type { Point2D } from '@pascal-app/core'
+import type { Point2D } from '../../systems/wall/wall-mitering'
 
 function toSvgX(value: number) {
   return value
@@ -120,5 +118,3 @@ export function buildSvgArrowHeadPoints(point: Point2D, angle: number, size: num
 
   return [point, left, right]
 }
-
-export { toSvgPoint, toSvgX, toSvgY }

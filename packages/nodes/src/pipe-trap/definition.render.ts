@@ -1,4 +1,5 @@
 import type { NodeRenderDefinition } from '../definition-contributions'
+import { buildPipeTrapFloorplan } from './floorplan'
 import { buildPipeTrapGeometry } from './geometry'
 import { getPipeTrapPorts } from './ports'
 import { PipeTrapNode } from './schema'
@@ -35,6 +36,7 @@ export const pipeTrapRenderDefinition: NodeRenderDefinition<typeof PipeTrapNode>
   geometry: buildPipeTrapGeometry,
   geometryKey: (n) => JSON.stringify([n.diameter, n.pipeMaterial, n.armLengthM]),
   ports: getPipeTrapPorts,
+  floorplan: buildPipeTrapFloorplan,
   presentation: {
     label: 'Trap',
     description: 'DWV P-trap — water seal on the waste line. The trap arm runs to the vent.',

@@ -6,9 +6,9 @@ import {
   type GeometryContext,
   getBlockFaceNormal,
   pointInPolygon2D,
+  readFloorplanContext,
   unionPolygons,
 } from '@pascal-app/core'
-import { readFloorplanContext } from '@pascal-app/editor'
 
 /**
  * The plan cut: a floor plan is the storey sliced 4 ft above the floor and

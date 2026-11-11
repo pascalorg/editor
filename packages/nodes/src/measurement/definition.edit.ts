@@ -2,13 +2,11 @@ import { measurementReferenceNodeIds } from '@pascal-app/core'
 
 import type { FloorplanNodeExtension } from '@pascal-app/editor'
 import type { NodeEditContribution } from '../definition-contributions'
-import { buildMeasurementFloorplan } from './floorplan'
 import { measurementMoveVertexAffordance } from './floorplan-affordance'
 import type { MeasurementNode } from './schema'
 
 export const measurementEditContribution: NodeEditContribution<typeof MeasurementNode> = {
   snapProfile: 'structural',
-  floorplan: buildMeasurementFloorplan,
   floorplanDependencies: (node) => measurementReferenceNodeIds(node.measurement),
   extensions: {
     'pascal:editor/floorplan': {

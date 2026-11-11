@@ -1,6 +1,5 @@
 import type { NodeEditContribution } from '../definition-contributions'
 import { createPathPointMoveAffordance } from '../shared/path-point-affordance'
-import { buildLiquidLineFloorplan } from './floorplan'
 import { liquidLineParametrics } from './parametrics'
 import type { LiquidLineNode } from './schema'
 
@@ -11,7 +10,6 @@ export const liquidLineEditContribution: NodeEditContribution<typeof LiquidLineN
   // lock available as a cyclable mode.
   snapProfile: 'structural',
   parametrics: liquidLineParametrics,
-  floorplan: buildLiquidLineFloorplan,
   // 2D selection-time path-point handles — the floor-plan twin of the 3D
   // `affordanceTools.selection` handles.
   floorplanAffordances: {

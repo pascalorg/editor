@@ -3,10 +3,8 @@
 import { usePascalI18n } from '@pascal-app/core'
 import { Box, Columns2, Map as MapIcon } from 'lucide-react'
 import type { ReactNode } from 'react'
-import { cn } from '../../lib/utils'
+import { cn } from '../lib/cn'
 import { normalizeViewerStageModes, type ViewerStageMode } from './viewer-stage-modes'
-
-export type { ViewerStageMode } from './viewer-stage-modes'
 
 export type ViewerStageSwitcherProps = {
   className?: string

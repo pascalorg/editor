@@ -16,7 +16,6 @@ import {
   isCabinetModule,
   isCabinetRun,
 } from './definition.render'
-import { buildCabinetFloorplan, buildCabinetModuleFloorplan } from './floorplan'
 import { cabinetModuleFloorplanMoveTarget } from './floorplan-move'
 import { cabinetFloorplanSiblingOverrides } from './floorplan-overrides'
 import { withCabinetHostedChildren } from './hosted-resize'
@@ -1714,7 +1713,6 @@ export const cabinetEditContribution: NodeEditContribution<typeof CabinetNode> =
   parametrics: cabinetParametrics,
   handles: (node, sceneApi) => cabinetHandles(node, sceneApi).map(withCabinetHostedChildren),
   placementNotice: cabinetPlacementNotice,
-  floorplan: buildCabinetFloorplan,
   floorplanSiblingOverrides: cabinetFloorplanSiblingOverrides,
   floorplanAffectedIds: cabinetFloorplanAffectedIds,
   quickActionNodeScope: 'level',
@@ -1756,7 +1754,6 @@ export const cabinetModuleEditContribution: NodeEditContribution<typeof CabinetM
   parametrics: cabinetModuleParametrics,
   handles: () => cabinetModuleHandles().map(withCabinetHostedChildren),
   placementNotice: cabinetPlacementNotice,
-  floorplan: buildCabinetModuleFloorplan,
   floorplanSiblingOverrides: cabinetFloorplanSiblingOverrides,
   floorplanAffectedIds: cabinetFloorplanAffectedIds,
   // 2D ↔ 3D parity: module position is run-local, so the generic overlay's

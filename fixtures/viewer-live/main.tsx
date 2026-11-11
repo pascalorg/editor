@@ -14,7 +14,12 @@ import {
   Viewer,
 } from '@pascal-app/viewer'
 import { initInteractionSounds } from '@pascal-app/viewer/sfx'
-import { ParametricViewerRooms, SceneLoader, ViewerControlsBar } from '@pascal-app/viewer/ui'
+import {
+  ParametricViewerRooms,
+  SceneLoader,
+  ViewerControlsBar,
+  ViewerStage,
+} from '@pascal-app/viewer/ui'
 import { OrbitControls } from '@react-three/drei'
 import { useFrame, useThree } from '@react-three/fiber'
 import { useState } from 'react'
@@ -22,6 +27,7 @@ import { createRoot } from 'react-dom/client'
 import type { Mesh } from 'three'
 import type { WebGPURenderer } from 'three/webgpu'
 import sceneJson from './scene.json'
+import './style.css'
 
 type SceneInput = Parameters<ReturnType<typeof useScene.getState>['setScene']>
 // JSON imports widen discriminants; setScene validates and migrates the graph on load.
@@ -101,17 +107,20 @@ function App() {
   })
   return (
     <>
-      <Viewer
-        daylight={false}
-        defaultRender={{ textures: false }}
-        disablePostFx
-        onSceneReadyChange={setReady}
-        selectionManager="custom"
-      >
-        <OrbitControls makeDefault target={[0, 1, 0]} />
-        <GeometryProbe />
-        {rooms && <ParametricViewerRooms />}
-      </Viewer>
+      {/* The stage opens on 3D; its switcher shows the read-only plan in 2D and Split. */}
+      <ViewerStage>
+        <Viewer
+          daylight={false}
+          defaultRender={{ textures: false }}
+          disablePostFx
+          onSceneReadyChange={setReady}
+          selectionManager="custom"
+        >
+          <OrbitControls makeDefault target={[0, 1, 0]} />
+          <GeometryProbe />
+          {rooms && <ParametricViewerRooms />}
+        </Viewer>
+      </ViewerStage>
       {/* The packed UI entry mounts without the editor; its icons load from iconsBaseUrl. */}
       <ViewerControlsBar onWalkthroughToggle={() => {}} />
       {!ready && <SceneLoader />}

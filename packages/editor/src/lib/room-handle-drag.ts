@@ -34,6 +34,7 @@ import {
   useLiveNodeOverrides,
   useScene,
   type WallNode,
+  type WallPushArrowPayload,
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import type { Ray } from 'three'
@@ -1468,16 +1469,6 @@ export function wallPointAt(wall: WallNode, t: number): Point {
   const frame = getWallCurveFrameAt(wall, t)
   return [frame.point.x, frame.point.y]
 }
-
-/**
- * The affordance a floor-plan `move-arrow` carries to be a wall push arrow;
- * its payload is a `WallPushArrowPayload`. The floor plan starts
- * `runFloorplanWallPush` for it instead of a registry affordance session.
- */
-export const WALL_PUSH_AFFORDANCE = 'wall-push'
-
-/** A wall's or an invisible wall's side arrow: `wallId` is either. */
-export type WallPushArrowPayload = { wallId: string; side: 'a' | 'b' }
 
 type PlanPointer = (clientX: number, clientY: number) => readonly [number, number] | null
 

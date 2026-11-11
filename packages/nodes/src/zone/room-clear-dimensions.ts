@@ -4,11 +4,11 @@ import {
   type FloorplanPoint,
   type GeometryContext,
   getWallLocalFaceZ,
+  readFloorplanContext,
   type SpaceBoundaryFace,
   type WallNode,
   type ZoneNode,
 } from '@pascal-app/core'
-import { readFloorplanContext } from '@pascal-app/editor'
 import {
   type ConstructionLengthProfile,
   type ConstructionMetricNotation,

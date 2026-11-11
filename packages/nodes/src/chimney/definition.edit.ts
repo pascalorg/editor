@@ -7,7 +7,6 @@ import {
   type SceneApi,
 } from '@pascal-app/core'
 import type { NodeEditContribution } from '../definition-contributions'
-import { buildChimneyFloorplan } from './floorplan'
 import { chimneyPaint } from './paint'
 import { chimneyParametrics } from './parametrics'
 import type { ChimneyNode } from './schema'
@@ -233,7 +232,6 @@ export const chimneyEditContribution: NodeEditContribution<typeof ChimneyNode> =
   },
   parametrics: chimneyParametrics,
   handles: chimneyHandles,
-  floorplan: buildChimneyFloorplan,
   preview: () => import('./preview'),
   tool: () => import('./tool'),
   toolHints: [

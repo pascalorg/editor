@@ -1,12 +1,13 @@
 'use client'
 
-import { type FloorplanGeometry, loadAssetUrl } from '@pascal-app/core'
-import { memo, useEffect, useState } from 'react'
-import { readFloorplanGeometryMetadata } from '../../../lib/floorplan/floorplan-extension'
 import {
+  type FloorplanGeometry,
   floorplanAnnotationObstacleMode,
   isFloorplanAnnotationObstacleGeometry,
-} from './floorplan-annotation-layout'
+  loadAssetUrl,
+  readFloorplanGeometryMetadata,
+} from '@pascal-app/core'
+import { memo, useEffect, useState } from 'react'
 import {
   FloorplanDimensionRenderer,
   FloorplanDimensionStringRenderer,

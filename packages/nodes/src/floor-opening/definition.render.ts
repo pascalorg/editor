@@ -1,6 +1,7 @@
 import { FloorOpeningNode } from '@pascal-app/core'
 
 import type { NodeRenderDefinition } from '../definition-contributions'
+import { buildFloorOpeningFloorplan } from './floorplan'
 
 export const floorOpeningRenderDefinition: NodeRenderDefinition<typeof FloorOpeningNode> & {
   kind: 'floor-opening'
@@ -32,6 +33,8 @@ export const floorOpeningRenderDefinition: NodeRenderDefinition<typeof FloorOpen
   },
   dirtyTracking: false,
   rendersChildren: false,
+  // The void on the plan, and its corners while selected.
+  floorplan: buildFloorOpeningFloorplan,
   presentation: {
     icon: { kind: 'iconify', name: 'lucide:square-dashed' },
     label: 'Floor opening',

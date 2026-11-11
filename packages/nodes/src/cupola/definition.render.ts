@@ -4,6 +4,7 @@ import {
   cupolaSlots,
 } from '@pascal-app/core'
 import type { NodeRenderDefinition } from '../definition-contributions'
+import { buildCupolaFloorplan } from './floorplan'
 import { CupolaNode } from './schema'
 
 export const cupolaRenderDefinition: NodeRenderDefinition<typeof CupolaNode> & { kind: 'cupola' } =
@@ -37,6 +38,7 @@ export const cupolaRenderDefinition: NodeRenderDefinition<typeof CupolaNode> & {
       kind: 'parametric',
       module: () => import('./renderer'),
     },
+    floorplan: buildCupolaFloorplan,
     presentation: {
       label: 'Cupola',
       description: 'Louvered roof lantern with a dome or pyramid cap and optional finial.',

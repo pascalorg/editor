@@ -6,7 +6,7 @@ import {
 } from '@pascal-app/core'
 import { INCHES_TO_METERS } from '../duct-segment/profile'
 import { runHangerFloorplan } from '../shared/run-hangers'
-import { pipeContinuationHandlePlan, pipeEndpointPort } from './continuation'
+import { pipeContinuationHandlePlan, pipeEndpointPort } from './continuation-handle'
 import { formatPipeGradePercent } from './grade-label'
 import type { PipeSegmentNode } from './schema'
 import { pipeGrade } from './slope'

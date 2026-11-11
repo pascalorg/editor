@@ -12,7 +12,6 @@ import {
   type FloorplanNodeExtension,
   publishResolvedElevationGuide,
 } from '@pascal-app/editor'
-import { buildLeanToExtensionFloorplan } from './floorplan'
 import { leanToResizeAffordance, leanToRotateAffordance } from './floorplan-affordances'
 import { leanToFloorplanMoveTarget } from './floorplan-move'
 import {
@@ -446,7 +445,6 @@ export const leanToExtensionEditContribution: NodeEditContribution<typeof LeanTo
   },
   parametrics: leanToExtensionParametrics,
   handles: leanToExtensionHandles,
-  floorplan: buildLeanToExtensionFloorplan,
   floorplanMoveTarget: leanToFloorplanMoveTarget,
   floorplanAffordances: {
     'lean-to-resize': leanToResizeAffordance,

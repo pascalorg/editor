@@ -1,5 +1,6 @@
 import { ChimneyNode as ChimneyNodeSchema } from '@pascal-app/core'
 import type { NodeRenderDefinition } from '../definition-contributions'
+import { buildChimneyFloorplan } from './floorplan'
 import { ChimneyNode } from './schema'
 
 // Every fresh chimney starts as plain white (body + top). The paint
@@ -51,6 +52,7 @@ export const chimneyRenderDefinition: NodeRenderDefinition<typeof ChimneyNode> &
     kind: 'parametric',
     module: () => import('./renderer'),
   },
+  floorplan: buildChimneyFloorplan,
   presentation: {
     label: 'Chimney',
     description: 'Vertical masonry stack on a roof segment.',

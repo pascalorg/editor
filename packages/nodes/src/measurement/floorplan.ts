@@ -15,13 +15,13 @@ import {
   measurementDistance,
   measurementPerimeter,
   measurementPrismVolume,
+  readFloorplanContext,
+  withFloorplanGeometryMetadata,
 } from '@pascal-app/core'
 import {
   measurementFloorplanPresentationColor,
-  readFloorplanContext,
-  withFloorplanGeometryMetadata,
-} from '@pascal-app/editor'
-import { measurementPolygonLabelAnchor } from '@pascal-app/viewer'
+  measurementPolygonLabelAnchor,
+} from '@pascal-app/viewer'
 import { measurementResolvedEditPoints } from './edit'
 import { resolveMeasurementNode } from './resolve'
 

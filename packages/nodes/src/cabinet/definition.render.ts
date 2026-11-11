@@ -22,6 +22,7 @@ import type { NodeRenderDefinition } from '../definition-contributions'
 import { findWallOpeningConflicts } from '../shared/wall-opening-clearance'
 import { bakeCabinetAnimationClip } from './animation'
 import { cabinetBatchable } from './batchable'
+import { buildCabinetFloorplan, buildCabinetModuleFloorplan } from './floorplan'
 import { buildCabinetGeometry } from './geometry'
 import { cabinetModuleParentFrame } from './move-frame'
 import { resolveCabinetGridPosition } from './placement-snap'
@@ -778,6 +779,7 @@ export const cabinetRenderDefinition: NodeRenderDefinition<typeof CabinetNode> &
     hidden: cabinetTreeHidden,
     childIds: cabinetTreeChildIds,
   },
+  floorplan: buildCabinetFloorplan,
   presentation: {
     label: 'Modular Cabinet',
     description: 'A configurable parametric base cabinet.',
@@ -927,6 +929,7 @@ export const cabinetModuleRenderDefinition: NodeRenderDefinition<typeof CabinetM
     bypassDirectPick: (node, proxyTarget) =>
       node.type === 'cabinet-module' && proxyTarget.type === 'cabinet',
   },
+  floorplan: buildCabinetModuleFloorplan,
   presentation: {
     label: 'Cabinet Module',
     description: 'An editable module inside a modular cabinet run.',

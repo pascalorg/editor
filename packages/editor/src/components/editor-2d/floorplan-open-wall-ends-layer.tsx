@@ -2,6 +2,7 @@
 
 import type { AnyNodeId, OpenWallEnd } from '@pascal-app/core'
 import { MEASUREMENT_DANGLING_COLOR, useViewer } from '@pascal-app/viewer'
+import { resolveFloorplanLabelAngle } from '@pascal-app/viewer/ui'
 import { memo, useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import {
@@ -15,7 +16,6 @@ import { isViewVisible, VIEW_2D } from '../../store/view-layout'
 import { JoinWallsPill } from '../editor/join-walls-pill'
 import { OpenWallEndsHint } from '../editor/open-wall-ends-hint'
 import { useFloorplanRender } from './floorplan-render-context'
-import { resolveFloorplanLabelAngle } from './renderers/floorplan-label-angle'
 
 function sceneScreenPoint(point: [number, number]): { left: number; top: number } | null {
   const scene = document.querySelector<SVGGElement>('[data-floorplan-scene]')

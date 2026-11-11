@@ -66,7 +66,6 @@ import {
   snapContextOf,
   snappingModesFor,
 } from '../lib/snapping-mode'
-import { publishNavigationSyncPoseToStore } from './navigation-sync-pose-store'
 import useInteractionScope from './use-interaction-scope'
 import {
   clampViewPaneRatio,
@@ -231,18 +230,6 @@ export type CatalogCategory =
 
 export type FloorplanSelectionTool = 'click' | 'marquee'
 export type GridSnapStep = 0.5 | 0.25 | 0.1 | 0.05
-
-export type NavigationSyncSource = '2d' | '3d'
-
-export type NavigationSyncPose = {
-  source: NavigationSyncSource
-  revision: number
-  target: [number, number, number]
-  azimuth: number
-  viewWidth: number
-}
-
-export type NavigationSyncPoseInput = Omit<NavigationSyncPose, 'revision'>
 
 // Combined tool type. Known literals keep autocomplete; the `(string & {})`
 // arm lets plugin-contributed tool ids (e.g. `'trees:tree'`) typecheck without
@@ -493,8 +480,6 @@ type EditorState = {
   isRiserOpen: boolean
   setRiserOpen: (open: boolean) => void
   toggleRiserOpen: () => void
-  navigationSyncPose: NavigationSyncPose | null
-  publishNavigationSyncPose: (pose: NavigationSyncPoseInput) => void
   floorplanSelectionTool: FloorplanSelectionTool
   setFloorplanSelectionTool: (tool: FloorplanSelectionTool) => void
   gridSnapStep: GridSnapStep
@@ -1540,15 +1525,6 @@ const useEditor = create<EditorState>()(
       isRiserOpen: false,
       setRiserOpen: (open) => set({ isRiserOpen: open }),
       toggleRiserOpen: () => set((state) => ({ isRiserOpen: !state.isRiserOpen })),
-      navigationSyncPose: null,
-      publishNavigationSyncPose: (pose) => {
-        const navigationSyncPose = {
-          ...pose,
-          revision: (get().navigationSyncPose?.revision ?? 0) + 1,
-        }
-        publishNavigationSyncPoseToStore(navigationSyncPose)
-        set({ navigationSyncPose })
-      },
       floorplanSelectionTool: 'click' as FloorplanSelectionTool,
       setFloorplanSelectionTool: (tool) => set({ floorplanSelectionTool: tool }),
       gridSnapStep: DEFAULT_PERSISTED_EDITOR_LAYOUT_STATE.gridSnapStep,

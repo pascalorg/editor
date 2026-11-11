@@ -1,22 +1,20 @@
 import type { Point2D, StairNode, StairSegmentNode } from '@pascal-app/core'
 import {
+  clampPlanValue,
   computeSegmentTransforms,
+  getPlanPointDistance,
+  getThickPlanLinePolygon,
+  interpolatePlanPoint,
   measureStairDetail,
+  movePlanPointTowards,
   resolveStairArcDimensions,
   resolveStairConstruction,
   resolveStairWalkingPaths,
   resolveStairWinder,
   resolveStairWinderFootprint,
+  rotatePlanVector,
   stairSegmentDetailError,
 } from '@pascal-app/core'
-import {
-  clampPlanValue,
-  getPlanPointDistance,
-  getThickPlanLinePolygon,
-  interpolatePlanPoint,
-  movePlanPointTowards,
-  rotatePlanVector,
-} from '@pascal-app/editor'
 
 type FloorplanLineSegment = { start: Point2D; end: Point2D }
 export type FloorplanStairSegmentEntry = {

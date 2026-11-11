@@ -89,6 +89,20 @@ async function withServer(command: string[], cwd: string, check: (url: string) =
   }
 }
 
+// Fixture nodes whose plan geometry includes filled outlines.
+const PLAN_NODE_IDS = [
+  'wall_south',
+  'wall_east',
+  'wall_north',
+  'wall_west',
+  'door_fixture',
+  'window_fixture',
+  'roof_fixture',
+  'ceiling_fixture',
+  'zone_fixture',
+  'item_fixture',
+]
+
 let failed = false
 try {
   await run(
@@ -212,8 +226,7 @@ try {
                 `Viewer UI icons did not load from iconsBaseUrl: ${iconRequests.join(', ')}`,
               )
             // The packed rooms layer: the level's pill, then the room it selects, highlighted
-            // on the overlay layer with its callout. The fixture is unstyled, so the pill
-            // inherits its wrapper's `pointer-events: none`; click it directly.
+            // on the overlay layer with its callout.
             await page.evaluate(() => (window as any).showFixtureRooms())
             const pill = '[data-room-label="zone_fixture"]'
             await page.waitForSelector(pill, { state: 'attached', timeout: 10_000 })
@@ -231,11 +244,59 @@ try {
               overlayBefore,
               { timeout: 10_000 },
             )
+            // The packed stage: its switcher shows the read-only plan, drawn by renderPlugin's
+            // floor-plan builders alone, then the plan beside the 3D view.
+            const planShapes: Record<string, number> = {}
+            for (const [label, stage] of [
+              ['2D', '2d'],
+              ['Split', 'split'],
+            ] as const) {
+              await page
+                .locator('[data-pascal-viewer-stage] [role="group"] button', { hasText: label })
+                .click({ timeout: 10_000 })
+              await page.waitForSelector(`[data-pascal-viewer-stage="${stage}"]`, {
+                timeout: 10_000,
+              })
+              await page.waitForFunction(
+                (ids) =>
+                  ids.every(
+                    (id) =>
+                      document.querySelectorAll(
+                        `[data-floorplan-preview] [data-floorplan-node-id="${id}"] :is(path, polygon)`,
+                      ).length > 0,
+                  ),
+                PLAN_NODE_IDS,
+                { timeout: 10_000 },
+              )
+              Object.assign(
+                planShapes,
+                await page.evaluate(
+                  (ids) =>
+                    Object.fromEntries(
+                      ids.map((id) => [
+                        id,
+                        document.querySelectorAll(
+                          `[data-floorplan-preview] [data-floorplan-node-id="${id}"] :is(path, polygon)`,
+                        ).length,
+                      ]),
+                    ),
+                  PLAN_NODE_IDS,
+                ),
+              )
+            }
+            const panes = await page.evaluate(() =>
+              ['[data-pascal-viewer-3d]', '[data-floorplan-preview]'].map(
+                (selector) => document.querySelector(selector)?.getBoundingClientRect().width ?? 0,
+              ),
+            )
+            if (!panes.every((width) => width > 100 && width < 960))
+              throw new Error(`Split must show the 3D view and the plan side by side: ${panes}`)
             if (errors.length) throw new Error(errors.join('\n'))
             console.log(
               `${mode}, storage ${deniedStorage ? 'denied' : 'available'}: scene ready, ` +
                 `non-empty node geometry, ${probe.drawCalls} draw calls, room pill, highlight ` +
-                `and callout, no errors (${elapsed()})`,
+                `and callout, 2D and split plan (${JSON.stringify(planShapes)}), no errors ` +
+                `(${elapsed()})`,
             )
           } catch (error) {
             console.error(

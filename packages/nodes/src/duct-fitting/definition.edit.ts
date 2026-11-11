@@ -2,7 +2,6 @@ import type { NodeEditContribution } from '../definition-contributions'
 import { ductBodyPaint } from '../shared/duct-body-paint'
 import { rotateFittingNode } from '../shared/fitting-rotation'
 import { ductFittingToolOptions } from '../shared/fitting-tool-options'
-import { buildDuctFittingFloorplan } from './floorplan'
 import { ductFittingParametrics } from './parametrics'
 import type { DuctFittingNode } from './schema'
 
@@ -12,7 +11,6 @@ export const ductFittingEditContribution: NodeEditContribution<typeof DuctFittin
     paint: ductBodyPaint,
   },
   parametrics: ductFittingParametrics,
-  floorplan: buildDuctFittingFloorplan,
   // R/T rotate a selected fitting ±45° around the shared active axis.
   // The default editor rotate only knows Y; fittings need X/Z for
   // risers, so this overrides it. Alt-cycling of the axis + the axis

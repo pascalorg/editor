@@ -1,6 +1,7 @@
 import { ZoneNode as ZoneNodeSchema } from '@pascal-app/core'
 import type { NodeRenderDefinition } from '../definition-contributions'
 import { polygonMeasurementFeatures } from '../shared/polygon-measurement'
+import { buildZoneFloorplan } from './floorplan'
 import { zoneQuickMeasurement } from './quick-measurement'
 import { ZoneNode } from './schema'
 
@@ -45,6 +46,7 @@ export const zoneRenderDefinition: NodeRenderDefinition<typeof ZoneNode> & { kin
     module: () => import('./system'),
     priority: 4,
   },
+  floorplan: buildZoneFloorplan,
   presentation: {
     label: 'Zone',
     description: 'A polygonal site zone (lawn, water, paving) with a TSL gradient material.',

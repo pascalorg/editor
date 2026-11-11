@@ -1,5 +1,6 @@
 import { BoxVentNode as BoxVentNodeSchema, boxVentSlots } from '@pascal-app/core'
 import type { NodeRenderDefinition } from '../definition-contributions'
+import { buildBoxVentFloorplan } from './floorplan'
 import { BoxVentNode } from './schema'
 
 export const boxVentRenderDefinition: NodeRenderDefinition<typeof BoxVentNode> & {
@@ -31,6 +32,7 @@ export const boxVentRenderDefinition: NodeRenderDefinition<typeof BoxVentNode> &
     kind: 'parametric',
     module: () => import('./renderer'),
   },
+  floorplan: buildBoxVentFloorplan,
   presentation: {
     label: 'Box Vent',
     description: 'Small louvered exhaust vent that sits on a roof slope.',

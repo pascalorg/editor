@@ -1,6 +1,5 @@
 import type { DormerNode as DormerNodeType, HandleDescriptor } from '@pascal-app/core'
 import type { NodeEditContribution } from '../definition-contributions'
-import { buildDormerFloorplan } from './floorplan'
 import { dormerPaint } from './paint'
 import { dormerParametrics } from './parametrics'
 import type { DormerNode } from './schema'
@@ -219,7 +218,6 @@ export const dormerEditContribution: NodeEditContribution<typeof DormerNode> = {
   },
   parametrics: dormerParametrics,
   handles: dormerHandles,
-  floorplan: buildDormerFloorplan,
   preview: () => import('./preview'),
   tool: () => import('./tool'),
   toolHints: [

@@ -14,6 +14,7 @@ import {
 } from '../structural-grid/coordination'
 import { columnFootprintHalf } from './bounds'
 import { isManagedColumn } from './edit-policy'
+import { buildColumnFloorplan, computeColumnFloorplanLevelData } from './floorplan'
 import { ColumnNode } from './schema'
 import { columnSurfaceProvider } from './surface'
 
@@ -90,6 +91,8 @@ export const columnRenderDefinition: NodeRenderDefinition<typeof ColumnNode> & {
       kind: 'parametric',
       module: () => import('./renderer'),
     },
+    computeFloorplanLevelData: computeColumnFloorplanLevelData,
+    floorplan: buildColumnFloorplan,
     presentation: {
       label: 'Column',
       description: 'A parametric column with configurable cross-section, base, and capital.',

@@ -1,6 +1,6 @@
 import type { FloorplanGeometry, FloorplanPoint, GeometryContext } from '@pascal-app/core'
 import { runHangerFloorplan } from '../shared/run-hangers'
-import { ductContinuationHandlePlan, ductEndpointPort } from './continuation'
+import { ductContinuationHandlePlan, ductEndpointPort } from './continuation-handle'
 import { INCHES_TO_METERS } from './profile'
 import type { DuctSegmentNode } from './schema'
 

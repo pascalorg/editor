@@ -1,4 +1,5 @@
 import type { NodeRenderDefinition } from '../definition-contributions'
+import { buildLiquidLineFloorplan } from './floorplan'
 import { buildLiquidLineGeometry } from './geometry'
 import { LiquidLineNode } from './schema'
 
@@ -63,6 +64,7 @@ export const liquidLineRenderDefinition: NodeRenderDefinition<typeof LiquidLineN
       },
     ]
   },
+  floorplan: buildLiquidLineFloorplan,
   presentation: {
     label: 'Liquid Line',
     description:

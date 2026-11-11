@@ -1,5 +1,6 @@
 import { RidgeVentNode as RidgeVentNodeSchema } from '@pascal-app/core'
 import type { NodeRenderDefinition } from '../definition-contributions'
+import { buildRidgeVentFloorplan } from './floorplan'
 import { RidgeVentNode } from './schema'
 
 export const ridgeVentRenderDefinition: NodeRenderDefinition<typeof RidgeVentNode> & {
@@ -33,6 +34,7 @@ export const ridgeVentRenderDefinition: NodeRenderDefinition<typeof RidgeVentNod
     kind: 'parametric',
     module: () => import('./renderer'),
   },
+  floorplan: buildRidgeVentFloorplan,
   presentation: {
     label: 'Ridge Vent',
     description: 'Ventilation strip running along the ridge of a roof segment.',

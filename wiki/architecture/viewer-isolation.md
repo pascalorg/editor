@@ -39,15 +39,20 @@ export function EditorCanvas() {
 ```
 
 The viewer accepts `children` inside its R3F canvas. This is the extension point for controls,
-tools, overlays and host-specific systems. Live scene rendering is available through
-`@pascal-app/nodes/render`; it does not depend on the full editing plugin, Next.js or Tailwind.
+tools, overlays and host-specific systems. Live scene rendering, 3D and the read-only floor plan, is
+available through `@pascal-app/nodes/render`; it does not depend on the full editing plugin, Next.js
+or Tailwind.
 The render-bundle gate inspects all static and lazy chunks for editor/Next dependencies, and the
 isolated Vite fixture verifies packed packages in dev and production.
 
-The read-only chrome (controls bar, scene header, HUDs, loader, room pills and highlight, the viewer
-selection model and the primitives they use) is the `@pascal-app/viewer/ui` entry, styled with Tailwind and its shipped
-`theme.css`. It is editor-agnostic like the rest of the package: the editor imports its stores and
-controls from there (one camera-pose, first-person HUD and Follow Pascal store), never the reverse.
+The read-only chrome (the 3D / 2D / Split stage and its floor plan, controls bar, scene header,
+HUDs, loader, room pills and highlight, the viewer selection model and the primitives they use) is
+the `@pascal-app/viewer/ui` entry, styled with Tailwind and its shipped `theme.css`. It is
+editor-agnostic like the rest of the package: the editor imports its stores and controls from there
+(one camera-pose, 2D↔3D navigation-pose, first-person HUD and Follow Pascal store), never the
+reverse. The plan's SVG geometry renderer is the one the editor's floor plan draws with; the editor
+layers its editing on top (hit targets, handles, drags, snapping) and turns on the typeable
+dimension hit rects with `FloorplanDimensionHitsProvider`, which read-only plans leave off.
 Router pieces come in as props (`linkComponent`); Biome bans `next` in the package and the bundle
 gate builds the entry with editor/Next resolution forbidden.
 

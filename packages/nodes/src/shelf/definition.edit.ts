@@ -2,7 +2,6 @@ import type { HandleDescriptor, ShelfNode as ShelfNodeType } from '@pascal-app/c
 import type { NodeEditContribution } from '../definition-contributions'
 import { restingFloorplanAffectedIds } from '../shared/resting-surface-plan'
 import { sanitizeShelfDimensions } from './dimensions'
-import { buildShelfFloorplan } from './floorplan'
 import { shelfResizeAffordance, shelfRotateAffordance } from './floorplan-affordances'
 import { shelfFloorplanMoveTarget } from './floorplan-move'
 import { shelfPaint } from './paint'
@@ -145,7 +144,6 @@ export const shelfEditContribution: NodeEditContribution<typeof ShelfNode> = {
   },
   parametrics: shelfParametrics,
   handles: shelfHandles,
-  floorplan: buildShelfFloorplan,
   floorplanAffectedIds: restingFloorplanAffectedIds,
   // 2D move handler — Path 1 in `FloorplanRegistryMoveOverlay`. Without
   // this the overlay falls through to Path 2 which stomps the SVG

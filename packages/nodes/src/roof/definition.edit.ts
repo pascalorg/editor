@@ -14,7 +14,6 @@ import {
 } from '@pascal-app/editor'
 import type { NodeEditContribution } from '../definition-contributions'
 import { MIN_ROOF_FOOTPRINT } from './definition.render'
-import { buildRoofFloorplan } from './floorplan'
 import { roofFloorplanAffectedIds, roofFloorplanSiblingOverrides } from './floorplan-overrides'
 import { roofPaint } from './paint'
 import { roofPanelModel } from './panel-model'
@@ -215,7 +214,6 @@ export const roofEditContribution: NodeEditContribution<typeof RoofNode> = {
   ],
   parametrics: roofParametrics,
   handles: resolveRoofHandles,
-  floorplan: buildRoofFloorplan,
   floorplanSiblingOverrides: roofFloorplanSiblingOverrides,
   floorplanAffectedIds: roofFloorplanAffectedIds,
 }

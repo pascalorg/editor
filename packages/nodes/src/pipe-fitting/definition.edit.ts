@@ -3,14 +3,12 @@ import type { NodeEditContribution } from '../definition-contributions'
 import { getRotationAxis, rotateEulerWorld } from '../shared/fitting-rotation'
 import { pipeFittingToolOptions } from '../shared/fitting-tool-options'
 import { pipeFittingQuickActions } from '../shared/mep-fitting-actions'
-import { buildPipeFittingFloorplan } from './floorplan'
 import { pipeFittingParametrics } from './parametrics'
 import type { PipeFittingNode } from './schema'
 
 export const pipeFittingEditContribution: NodeEditContribution<typeof PipeFittingNode> = {
   snapProfile: 'item',
   parametrics: pipeFittingParametrics,
-  floorplan: buildPipeFittingFloorplan,
   quickActions: pipeFittingQuickActions,
   quickActionNodeScope: 'level',
   // R/T rotate a selected fitting ±45° around the shared active axis —

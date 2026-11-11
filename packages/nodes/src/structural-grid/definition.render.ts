@@ -1,4 +1,5 @@
 import type { NodeRenderDefinition } from '../definition-contributions'
+import { buildStructuralGridFloorplan } from './floorplan'
 import { StructuralGridNode } from './schema'
 
 export const structuralGridRenderDefinition: NodeRenderDefinition<typeof StructuralGridNode> & {
@@ -26,6 +27,7 @@ export const structuralGridRenderDefinition: NodeRenderDefinition<typeof Structu
     presettable: false,
   },
   dirtyTracking: false,
+  floorplan: buildStructuralGridFloorplan,
   presentation: {
     label: 'Structural Grid',
     description: 'Persistent construction grid axis with identification bubbles.',

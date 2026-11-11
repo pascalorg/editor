@@ -6,6 +6,7 @@ import {
   roofFaceShapes,
 } from '@pascal-app/core'
 import type { NodeRenderDefinition } from '../definition-contributions'
+import { buildRoofFloorplan } from './floorplan'
 import { RoofNode } from './schema'
 
 export const MIN_ROOF_FOOTPRINT = 1
@@ -100,6 +101,7 @@ export const roofRenderDefinition: NodeRenderDefinition<typeof RoofNode> & { kin
     module: () => import('./system'),
     priority: 3,
   },
+  floorplan: buildRoofFloorplan,
   presentation: {
     label: 'Roof',
     description: 'A pitched / hip / gable roof composed of one or more segments.',

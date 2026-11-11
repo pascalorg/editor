@@ -33,6 +33,7 @@ import {
   measurementPolygonLabelAnchor,
   useViewer,
 } from '@pascal-app/viewer'
+import { resolveFloorplanLabelAngle } from '@pascal-app/viewer/ui'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   clearSurfacePlanSnapFeedback,
@@ -48,7 +49,6 @@ import {
 } from '../../store/use-measurement-draft'
 import { FloorplanQuickMeasureLayer } from './floorplan-quick-measure-layer'
 import { useFloorplanRender } from './floorplan-render-context'
-import { resolveFloorplanLabelAngle } from './renderers/floorplan-label-angle'
 
 const DRAFT_COLOR = MEASUREMENT_ACTIVE_COLOR
 const X_AXIS_COLOR = '#ef4444'

@@ -2,13 +2,13 @@ import { describe, expect, test } from 'bun:test'
 import {
   type AnyNode,
   type AnyNodeId,
+  createFloorplanContextExtensions,
   type FloorplanGeometry,
   type GeometryContext,
   getRoofSegmentVisibleTopBounds,
   RoofNode,
   RoofSegmentNode,
 } from '@pascal-app/core'
-import { createFloorplanContextExtensions } from '@pascal-app/editor'
 import { buildRoofFloorplan } from './floorplan'
 
 /**

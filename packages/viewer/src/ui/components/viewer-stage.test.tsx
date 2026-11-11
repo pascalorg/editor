@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import { LevelNode } from '@pascal-app/core/schema'
 import { renderToStaticMarkup } from 'react-dom/server'
-import type { FloorplanPreviewScene } from './floorplan-preview'
+import type { FloorplanPreviewScene } from '../floorplan/floorplan-preview'
 import { ViewerStage } from './viewer-stage'
 
 const level = LevelNode.parse({ id: 'level_ground', type: 'level' })

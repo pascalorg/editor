@@ -39049,49 +39049,49 @@ msgstr "北を上に表示"
 # Source-Hash: 286a757d8b52bb02
 # Review: human
 # English: "No floor plans are available for this scene."
-#: packages/editor/src/components/viewer/floorplan-preview.tsx
+#: packages/viewer/src/ui/floorplan/floorplan-preview.tsx
 msgid "viewer.floorplan.empty"
 msgstr "このシーンには表示できる平面図がありません。"
 
 # Source-Hash: bf63c679ab94dbcd
 # Review: human
 # English: "Fit floor plan"
-#: packages/editor/src/components/viewer/floorplan-preview.tsx
+#: packages/viewer/src/ui/floorplan/floorplan-preview.tsx
 msgid "viewer.floorplan.fit"
 msgstr "全体を表示"
 
 # Source-Hash: d7148fa065bc709b
 # Review: human
 # English: "Floor"
-#: packages/editor/src/components/viewer/floorplan-preview.tsx
+#: packages/viewer/src/ui/floorplan/floorplan-preview.tsx
 msgid "viewer.floorplan.floor"
 msgstr "階"
 
 # Source-Hash: fee6203bb9046929
 # Review: human
 # English: "Floor plan"
-#: packages/editor/src/components/viewer/floorplan-preview.tsx
+#: packages/viewer/src/ui/floorplan/floorplan-preview.tsx
 msgid "viewer.floorplan.floorPlan"
 msgstr "平面図"
 
 # Source-Hash: 28b255b7bf5f1084
 # Review: human
 # English: "{floor} 2D view"
-#: packages/editor/src/components/viewer/floorplan-preview.tsx
+#: packages/viewer/src/ui/floorplan/floorplan-preview.tsx
 msgid "viewer.floorplan.viewLabel"
 msgstr "{floor}の2Dビュー"
 
 # Source-Hash: d17804412f8dd081
 # Review: human
 # English: "Zoom in"
-#: packages/editor/src/components/viewer/floorplan-preview.tsx
+#: packages/viewer/src/ui/floorplan/floorplan-preview.tsx
 msgid "viewer.floorplan.zoomIn"
 msgstr "拡大"
 
 # Source-Hash: 23b012a283b2c14a
 # Review: human
 # English: "Zoom out"
-#: packages/editor/src/components/viewer/floorplan-preview.tsx
+#: packages/viewer/src/ui/floorplan/floorplan-preview.tsx
 msgid "viewer.floorplan.zoomOut"
 msgstr "縮小"
 
@@ -39182,14 +39182,14 @@ msgstr "積層"
 # Source-Hash: 9dd21ca47cffa3b8
 # Review: human
 # English: "Viewer layout"
-#: packages/editor/src/components/viewer/viewer-stage-switcher.tsx
+#: packages/viewer/src/ui/components/viewer-stage-switcher.tsx
 msgid "viewer.stage.layout"
 msgstr "ビュー配置"
 
 # Source-Hash: e4cd64b1680ac0d2
 # Review: human
 # English: "Split"
-#: packages/editor/src/components/viewer/viewer-stage-switcher.tsx
+#: packages/viewer/src/ui/components/viewer-stage-switcher.tsx
 msgid "viewer.stage.split"
 msgstr "分割"
 

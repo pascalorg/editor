@@ -1,12 +1,13 @@
 'use client'
 
 import { type AnyNode, type AnyNodeId, useScene } from '@pascal-app/core'
-import { markPerfAction, useViewer } from '@pascal-app/viewer'
 import type { ReactNode } from 'react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
-import { cn } from '../../lib/utils'
-import { FloorplanPreview, type FloorplanPreviewScene } from './floorplan-preview'
+import { markPerfAction } from '../../lib/perf-actions'
+import useViewer from '../../store/use-viewer'
+import { FloorplanPreview, type FloorplanPreviewScene } from '../floorplan/floorplan-preview'
+import { cn } from '../lib/cn'
 import {
   normalizeViewerStageModes,
   resolveMobileViewerStageMode,

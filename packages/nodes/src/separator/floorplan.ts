@@ -1,5 +1,5 @@
 import type { FloorplanGeometry, GeometryContext, SeparatorNode } from '@pascal-app/core'
-import { WALL_PUSH_AFFORDANCE, type WallPushArrowPayload } from '@pascal-app/editor'
+import { WALL_PUSH_AFFORDANCE, type WallPushArrowPayload } from '@pascal-app/core'
 
 /** How far off the line (m) a selected invisible wall's side arrows sit. */
 const SIDE_ARROW_OFFSET = 0.12

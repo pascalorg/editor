@@ -345,6 +345,7 @@ export {
   withFloorStepOverride,
   withoutFloorStepOverrideKeys,
 } from './lib/floor-step-finish'
+export * from './lib/floorplan'
 export {
   FOUNDATION_CONSTRUCTIONS,
   type FoundationConstruction,

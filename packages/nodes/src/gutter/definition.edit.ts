@@ -1,6 +1,5 @@
 import type { GutterNode as GutterNodeType, HandleDescriptor } from '@pascal-app/core'
 import type { NodeEditContribution } from '../definition-contributions'
-import { buildGutterFloorplan } from './floorplan'
 import { snapLengthToCorner } from './length-snap'
 import { gutterPaint } from './paint'
 import { gutterParametrics } from './parametrics'
@@ -130,7 +129,6 @@ export const gutterEditContribution: NodeEditContribution<typeof GutterNode> = {
   },
   parametrics: gutterParametrics,
   handles: gutterHandles,
-  floorplan: buildGutterFloorplan,
   floorplanDependsOnSiblings: true,
   preview: () => import('./preview'),
   tool: () => import('./tool'),

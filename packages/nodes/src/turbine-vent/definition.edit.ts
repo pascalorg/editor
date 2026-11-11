@@ -1,6 +1,5 @@
 import type { HandleDescriptor, TurbineVentNode as TurbineVentNodeType } from '@pascal-app/core'
 import type { NodeEditContribution } from '../definition-contributions'
-import { buildTurbineVentFloorplan } from './floorplan'
 import { turbineVentPaint } from './paint'
 import { turbineVentParametrics } from './parametrics'
 import type { TurbineVentNode } from './schema'
@@ -65,7 +64,6 @@ export const turbineVentEditContribution: NodeEditContribution<typeof TurbineVen
   },
   parametrics: turbineVentParametrics,
   handles: turbineVentHandles,
-  floorplan: buildTurbineVentFloorplan,
   preview: () => import('./preview'),
   tool: () => import('./tool'),
   affordanceTools: {

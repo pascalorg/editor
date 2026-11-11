@@ -1,4 +1,5 @@
 import type { NodeRenderDefinition } from '../definition-contributions'
+import { buildHvacEquipmentFloorplan } from './floorplan'
 import { buildHvacEquipmentGeometry } from './geometry'
 import { getHvacEquipmentPorts } from './ports'
 import { HvacEquipmentNode } from './schema'
@@ -64,6 +65,7 @@ export const hvacEquipmentRenderDefinition: NodeRenderDefinition<typeof HvacEqui
       n.returnHeight,
     ]),
   ports: getHvacEquipmentPorts,
+  floorplan: buildHvacEquipmentFloorplan,
   presentation: {
     label: 'HVAC Unit',
     description:

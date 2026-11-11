@@ -1,6 +1,5 @@
 import type { BoxVentNode as BoxVentNodeType, HandleDescriptor } from '@pascal-app/core'
 import type { NodeEditContribution } from '../definition-contributions'
-import { buildBoxVentFloorplan } from './floorplan'
 import { boxVentPaint } from './paint'
 import { boxVentParametrics } from './parametrics'
 import type { BoxVentNode } from './schema'
@@ -154,7 +153,6 @@ export const boxVentEditContribution: NodeEditContribution<typeof BoxVentNode> =
   },
   parametrics: boxVentParametrics,
   handles: boxVentHandles,
-  floorplan: buildBoxVentFloorplan,
   preview: () => import('./preview'),
   tool: () => import('./tool'),
   affordanceTools: {

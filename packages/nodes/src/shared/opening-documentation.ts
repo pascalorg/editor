@@ -8,17 +8,15 @@ import type {
 } from '@pascal-app/core'
 import {
   doorHandleStyle,
+  type FloorplanSchedule,
   getDoorOpeningSize,
   getOpeningFloorDatum,
   getWallLocalFaceZ,
   resolveHostedOpeningFrameDepth,
-  wallSupportForNodes,
-} from '@pascal-app/core'
-import {
-  type FloorplanSchedule,
   resolveMarkDetail,
+  wallSupportForNodes,
   withFloorplanGeometryMetadata,
-} from '@pascal-app/editor'
+} from '@pascal-app/core'
 import {
   type ConstructionLengthProfile,
   type ConstructionLinearUnit,

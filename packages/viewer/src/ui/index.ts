@@ -36,6 +36,19 @@ export {
   type ViewerSceneHeaderProps,
 } from './components/viewer-scene-header'
 export { ViewerSelectionManager } from './components/viewer-selection-manager'
+export { ViewerStage, type ViewerStageProps } from './components/viewer-stage'
+export {
+  normalizeViewerStageModes,
+  resolveMobileViewerStageMode,
+  resolveViewerStageMode,
+  VIEWER_STAGE_MODES,
+  type ViewerStageMode,
+  viewerStageIncludes3D,
+} from './components/viewer-stage-modes'
+export {
+  ViewerStageSwitcher,
+  type ViewerStageSwitcherProps,
+} from './components/viewer-stage-switcher'
 export {
   DroneHud,
   WalkthroughCrosshair,
@@ -43,6 +56,37 @@ export {
   WalkthroughHud,
   type WalkthroughHudProps,
 } from './components/walkthrough-hud'
+export {
+  subscribeFloorplanCameraNavigation,
+  useFloorplanCameraSyncBridge,
+} from './floorplan/floorplan-camera-sync'
+export {
+  type ArchitecturalDimensionLayout,
+  computeArchitecturalDimensionLayout,
+  FloorplanDimensionHitsProvider,
+  FloorplanDimensionRenderer,
+} from './floorplan/floorplan-dimension-renderer'
+export {
+  documentCircleGeometryAttrs,
+  documentRectGeometryAttrs,
+  FloorplanGeometryRenderer,
+  resolveDocumentAnnotationGroupChildren,
+} from './floorplan/floorplan-geometry-renderer'
+export {
+  resolveFloorplanAnnotationUpdate,
+  resolveFloorplanLabelAngle,
+  updateSvgFloorplanLabelOrientations,
+} from './floorplan/floorplan-label-angle'
+export {
+  createFloorplanNavigationSyncScheduler,
+  type FloorplanNavigationSyncScheduler,
+  setFloorplanCompassRotation,
+} from './floorplan/floorplan-navigation-sync'
+export {
+  FloorplanPreview,
+  type FloorplanPreviewProps,
+  type FloorplanPreviewScene,
+} from './floorplan/floorplan-preview'
 export { useIsMobile } from './hooks/use-mobile'
 export {
   belowGradeShown,
@@ -135,6 +179,14 @@ export { Popover, PopoverAnchor, PopoverContent, PopoverTrigger } from './primit
 export { Switch } from './primitives/switch'
 export { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './primitives/tooltip'
 export { cameraPoseStore, publishCameraPose, subscribeCameraPose } from './store/camera-pose-store'
+export {
+  type NavigationSyncPose,
+  type NavigationSyncPoseInput,
+  type NavigationSyncSource,
+  navigationSyncPoseStore,
+  publishNavigationSyncPose,
+  subscribeNavigationSyncPose,
+} from './store/navigation-sync-pose-store'
 export {
   type FirstPersonHudState,
   useFirstPersonHud,

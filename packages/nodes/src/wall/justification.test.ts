@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, jest, spyOn, test } from 'bun:test'
 import {
+  createFloorplanContextExtensions,
   DoorNode,
   emitter,
   type GeometryContext,
@@ -11,7 +12,6 @@ import {
   WallNode,
   WindowNode,
 } from '@pascal-app/core'
-import { createFloorplanContextExtensions } from '@pascal-app/editor'
 import { Html } from '@react-three/drei'
 import { act, create } from '@react-three/test-renderer'
 import { createElement, type ReactNode } from 'react'

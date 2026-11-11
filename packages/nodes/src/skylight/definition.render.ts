@@ -5,6 +5,7 @@ import {
   type SkylightNode as SkylightNodeType,
 } from '@pascal-app/core'
 import type { NodeRenderDefinition } from '../definition-contributions'
+import { buildSkylightFloorplan } from './floorplan'
 import { buildSkylightRoofCut } from './roof-cut'
 import { SkylightNode } from './schema'
 
@@ -47,6 +48,7 @@ export const skylightRenderDefinition: NodeRenderDefinition<typeof SkylightNode>
     module: () => import('./system'),
     priority: 3,
   },
+  floorplan: buildSkylightFloorplan,
   presentation: {
     label: 'Skylight',
     description: 'Framed glass opening on a roof segment.',

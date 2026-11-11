@@ -27,7 +27,6 @@ import {
   getSlabBaseElevation,
   slabElevationUpperBound,
 } from './elevation-limit'
-import { buildSlabFloorplan } from './floorplan'
 import {
   slabAddVertexAffordance,
   slabDeleteVertexAffordance,
@@ -285,9 +284,6 @@ export const slabEditContribution: NodeEditContribution<typeof SlabNode> = {
   // The fill reads walls + sibling slabs via ctx (per-edge render offsets),
   // so committed sibling edits must invalidate the cached floor-plan entry.
   floorplanDependsOnSiblings: true,
-  // Stage C: floor-plan rendering. Legacy `slabPolygons` short-circuits
-  // to [] when slab is registered (see floorplan-panel.tsx).
-  floorplan: buildSlabFloorplan,
   // 2D move handler — translates polygon by cursor delta from first
   // pointer position. The 3D `MoveSlabTool` in `affordanceTools.move`
   // skips events sourced from the 2D scene so the two paths don't

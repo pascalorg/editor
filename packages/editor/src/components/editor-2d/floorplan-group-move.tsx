@@ -18,6 +18,7 @@ import {
   useScene,
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
+import { FloorplanDimensionRenderer } from '@pascal-app/viewer/ui'
 import { memo, type PointerEvent as ReactPointerEvent, useEffect, useMemo, useState } from 'react'
 import { create } from 'zustand'
 import { GROUP_MOVE_DRAG_LABEL, GROUP_ROTATE_DRAG_LABEL } from '../../lib/contextual-help'
@@ -55,7 +56,6 @@ import {
 import { swallowNextClick } from '../editor/handles/use-handle-drag'
 import { useMeshSettleEpoch } from '../editor/use-mesh-settle-epoch'
 import { useFloorplanSceneRotation } from './floorplan-render-context'
-import { FloorplanDimensionRenderer } from './renderers/floorplan-dimension-renderer'
 
 // 2D sibling of the 3D body-drag group move (`group-move-3d.ts`): dragging
 // any selected element of a multi-selection slides the whole selection

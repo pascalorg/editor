@@ -3,12 +3,12 @@ import { type AnyNode, DuctFittingNode, nodeRegistry, registerNode } from '@pasc
 import { ductFittingDefinition } from '../duct-fitting/definition'
 import { getDuctFittingPorts } from '../duct-fitting/ports'
 import { createDuctRunEndCap } from '../shared/automatic-run-end-cap'
+import { resolveDuctContinuationSeed } from './continuation'
 import {
   ductContinuationHandlePlan,
   ductContinuationHandlePoint,
   ductEndpointPort,
-  resolveDuctContinuationSeed,
-} from './continuation'
+} from './continuation-handle'
 import { ductSegmentDefinition } from './definition'
 import { buildDuctSegmentFloorplan } from './floorplan'
 import { DuctSegmentNode } from './schema'

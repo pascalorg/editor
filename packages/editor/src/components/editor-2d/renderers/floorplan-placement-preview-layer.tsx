@@ -10,12 +10,11 @@ import {
   useScene,
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
+import { FloorplanDimensionRenderer, FloorplanGeometryRenderer } from '@pascal-app/viewer/ui'
 import { memo, useMemo } from 'react'
 import usePlacementPreview from '../../../store/use-placement-preview'
 import { usePlacementTyping } from '../../../store/use-placement-typing'
 import { useFloorplanRender, useFloorplanSceneRotation } from '../floorplan-render-context'
-import { FloorplanDimensionRenderer } from './floorplan-dimension-renderer'
-import { FloorplanGeometryRenderer } from './floorplan-geometry-renderer'
 import { FloorplanPlacementTypingHud } from './floorplan-placement-typing-hud'
 
 export interface FloorplanNodePreviewProps {

@@ -1,4 +1,5 @@
 import type { NodeRenderDefinition } from '../definition-contributions'
+import { buildBeamFloorplan } from './floorplan'
 import { BeamNode } from './schema'
 
 export const beamRenderDefinition: NodeRenderDefinition<typeof BeamNode> & { kind: 'beam' } = {
@@ -21,6 +22,7 @@ export const beamRenderDefinition: NodeRenderDefinition<typeof BeamNode> & { kin
   dirtyTracking: false,
   rendersChildren: false,
   renderer: { kind: 'parametric', module: () => import('./renderer') },
+  floorplan: buildBeamFloorplan,
   presentation: {
     label: 'Beam',
     description: 'A framing beam drawn end to end: a porch header, a deck beam, a girder.',

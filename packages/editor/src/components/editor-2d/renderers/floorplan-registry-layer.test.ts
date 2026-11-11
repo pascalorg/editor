@@ -7,15 +7,17 @@ import type {
   FloorplanPalette,
   LiveNodeOverrides,
 } from '@pascal-app/core'
-import { type AnyNodeDefinition, emitter, nodeRegistry, registerNode } from '@pascal-app/core'
+import {
+  type AnyNodeDefinition,
+  emitter,
+  floorplanGeometryMetadata,
+  nodeRegistry,
+  registerNode,
+} from '@pascal-app/core'
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { z } from 'zod'
 import { AXIS_MOVE_DRAG_LABEL, PATH_POINT_DRAG_LABEL } from '../../../lib/contextual-help'
-import {
-  FLOORPLAN_NODE_EXTENSION_KEY,
-  floorplanGeometryMetadata,
-} from '../../../lib/floorplan/floorplan-extension'
 import type { SessionWrites } from '../../../lib/session-writes'
 import { snapContextOf } from '../../../lib/snapping-mode'
 import {
@@ -776,11 +778,7 @@ describe('collectFloorplanLinkedLevelNodes', () => {
       category: 'structure',
       defaults: () => ({}) as never,
       floorplan: () => null,
-      extensions: {
-        [FLOORPLAN_NODE_EXTENSION_KEY]: {
-          linkedLevelIds: () => ['level_upper' as AnyNodeId],
-        },
-      },
+      floorplanLinkedLevelIds: () => ['level_upper' as AnyNodeId],
     } as unknown as AnyNodeDefinition)
     const child = {
       id: 'linked_child',

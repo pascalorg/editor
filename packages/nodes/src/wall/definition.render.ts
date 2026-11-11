@@ -8,6 +8,7 @@ import {
 } from '@pascal-app/core'
 import type { NodeRenderDefinition } from '../definition-contributions'
 import { wallSeenFromOutside } from './exterior'
+import { buildWallFloorplan, computeWallFloorplanLevelData } from './floorplan'
 import {
   matchWallMeasurementFeature,
   resolveWallMeasurementFeature,
@@ -106,6 +107,10 @@ export const wallRenderDefinition: NodeRenderDefinition<typeof WallNode> & { kin
       matchWallMeasurementFeature(node, point, maxDistance),
     resolve: (node, _ctx, reference) => resolveWallMeasurementFeature(node, reference),
   },
+  // Stage C: floor-plan rendering. Precomputes the level miter graph once
+  // per render pass, then the builder reads its own junctions by wall id.
+  computeFloorplanLevelData: computeWallFloorplanLevelData,
+  floorplan: buildWallFloorplan,
   presentation: {
     label: 'Wall',
     description:

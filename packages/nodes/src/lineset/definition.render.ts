@@ -1,4 +1,5 @@
 import type { NodeRenderDefinition } from '../definition-contributions'
+import { buildLinesetFloorplan } from './floorplan'
 import { buildLinesetGeometry } from './geometry'
 import { LinesetNode } from './schema'
 
@@ -65,6 +66,7 @@ export const linesetRenderDefinition: NodeRenderDefinition<typeof LinesetNode> &
       },
     ]
   },
+  floorplan: buildLinesetFloorplan,
   presentation: {
     label: 'Lineset',
     description:

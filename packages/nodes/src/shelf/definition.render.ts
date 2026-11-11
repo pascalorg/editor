@@ -2,6 +2,7 @@ import { shelfSlots } from '@pascal-app/core'
 import type { NodeRenderDefinition } from '../definition-contributions'
 import { staticBatchable } from '../shared/node-batch/batchable'
 import { sanitizeShelfDimensions } from './dimensions'
+import { buildShelfFloorplan } from './floorplan'
 import { buildShelfGeometry, shelfRowSurfaceYs } from './geometry'
 import { ShelfNode } from './schema'
 
@@ -112,6 +113,7 @@ export const shelfRenderDefinition: NodeRenderDefinition<typeof ShelfNode> & { k
       JSON.stringify(s.slots ?? null),
     ])
   },
+  floorplan: buildShelfFloorplan,
   presentation: {
     label: 'Shelf',
     description: 'A configurable shelving unit. Items host on each row.',

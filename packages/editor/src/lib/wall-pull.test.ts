@@ -12,6 +12,7 @@ import {
   WallNode as WallSchema,
   wallAssemblyPatch,
   wallClosesRoom,
+  wallPullSeed,
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { createWallOnCurrentLevel } from '../components/tools/wall/wall-drafting'
@@ -23,7 +24,6 @@ import {
   startWallPull,
   useWallPullRun,
   wallDraftIsRun,
-  wallPullSeed,
   wallPullTypePatch,
 } from './wall-pull'
 import { isWallRunFree, snapWallRunDraftPoint, wallRunDirection } from './wall-run-snap'

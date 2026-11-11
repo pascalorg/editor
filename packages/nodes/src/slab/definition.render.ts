@@ -7,6 +7,7 @@ import {
 import type { NodeRenderDefinition } from '../definition-contributions'
 import { surfaceBatchable } from '../shared/node-batch/batchable'
 import { polygonMeasurementFeatures } from '../shared/polygon-measurement'
+import { buildSlabFloorplan } from './floorplan'
 import { buildSlabGeometry } from './geometry'
 import { slabQuickMeasurement } from './quick-measurement'
 import { SlabNode } from './schema'
@@ -92,6 +93,9 @@ export const slabRenderDefinition: NodeRenderDefinition<typeof SlabNode> & { kin
     module: () => import('./system'),
     priority: 4,
   },
+  // Stage C: floor-plan rendering. Legacy `slabPolygons` short-circuits
+  // to [] when slab is registered (see floorplan-panel.tsx).
+  floorplan: buildSlabFloorplan,
   presentation: {
     label: 'Slab',
     description: 'A polygon-bounded floor surface that hosts items on top.',

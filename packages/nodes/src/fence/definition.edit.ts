@@ -17,7 +17,6 @@ import {
 import type { NodeEditContribution } from '../definition-contributions'
 import { fenceBaseElevation } from './definition.render'
 import { snapFenceDraftPoint } from './drafting'
-import { buildFenceFloorplan } from './floorplan'
 import {
   fenceControlPointAffordance,
   fenceCurveAffordance,
@@ -295,11 +294,6 @@ export const fenceEditContribution: NodeEditContribution<typeof FenceNode> = {
   // tools[phase][tool] map when missing.
   tool: () => import('./tool'),
   floorplanDependencies: (node) => (node.children ?? []) as AnyNodeId[],
-  // Stage C: floor-plan rendering. FloorplanRegistryLayer iterates kinds
-  // with `floorplan` set and renders via FloorplanGeometryRenderer.
-  // Legacy `floorplanFenceEntries` short-circuits to [] when fence is
-  // registered (see floorplan-panel.tsx).
-  floorplan: buildFenceFloorplan,
   // 2D drag affordances — sister to `actions/move-endpoint.ts`. The 3D
   // DragAction drives R3F grid events through `createDragSession`; these
   // drive SVG pointer events through the floor-plan registry

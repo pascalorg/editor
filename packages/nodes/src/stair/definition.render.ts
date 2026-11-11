@@ -1,4 +1,5 @@
 import {
+  type AnyNodeId,
   getStairFloorPlacedFootprints,
   StairNode as StairNodeSchema,
   type StairNode as StairNodeType,
@@ -6,6 +7,7 @@ import {
   stairSlots,
 } from '@pascal-app/core'
 import type { NodeRenderDefinition } from '../definition-contributions'
+import { buildStairFloorplan } from './floorplan'
 import { StairNode } from './schema'
 
 export const stairRenderDefinition: NodeRenderDefinition<typeof StairNode> & { kind: 'stair' } = {
@@ -61,6 +63,16 @@ export const stairRenderDefinition: NodeRenderDefinition<typeof StairNode> & { k
     module: () => import('./system'),
     priority: 3,
   },
+  // Stage C — stair is the parent; it walks its `stair-segment` children
+  // via `ctx.children` and emits the whole stack as one registry entry.
+  // Each flight's transform depends on every prior sibling's
+  // `length` / `height` / `attachmentSide`, so individual segments can't
+  // compute their own polygon in isolation. See
+  // `nodes/src/stair/floorplan.ts` for the emitter.
+  floorplan: buildStairFloorplan,
+  // A stair that climbs to an upper floor shows on that floor's plan too.
+  floorplanLinkedLevelIds: (node) =>
+    node.toLevelId && node.toLevelId !== node.parentId ? [node.toLevelId as AnyNodeId] : [],
   presentation: {
     label: 'Stair',
     description:

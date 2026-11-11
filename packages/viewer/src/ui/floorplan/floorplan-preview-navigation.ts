@@ -1,4 +1,4 @@
-import type { NavigationSyncPose } from '../../store/use-editor'
+import type { NavigationSyncPose } from '../store/navigation-sync-pose-store'
 import type { FloorplanViewBox } from './floorplan-preview-geometry'
 
 export type FloorplanPreviewViewportSize = {
