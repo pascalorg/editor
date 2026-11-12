@@ -26,6 +26,10 @@ describe('canOptimizeImageSrc', () => {
     expect(canOptimizeImageSrc('https://prod.supabase.co/storage/thumb.webp', config)).toBe(false)
     expect(canOptimizeImageSrc('//prod.supabase.co/thumb.webp', config)).toBe(false)
   })
+
+  test('keeps optimizing when the config carries no host lists, as in production builds', () => {
+    expect(canOptimizeImageSrc('https://prod.supabase.co/storage/thumb.webp', {})).toBe(true)
+  })
 })
 
 describe('NodeIconImage', () => {

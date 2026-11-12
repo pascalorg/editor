@@ -20,6 +20,8 @@ const configEnv = process.env.__NEXT_IMAGE_OPTS as unknown as ImageHostConfig | 
  */
 export function canOptimizeImageSrc(src: string, config: ImageHostConfig): boolean {
   if (src.startsWith('/') && !src.startsWith('//')) return true
+  // Production builds inline no host lists, and next/image validates none then.
+  if (!config.domains && !config.remotePatterns) return true
   let url: URL
   try {
     url = new URL(src)
