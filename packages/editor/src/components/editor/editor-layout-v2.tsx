@@ -4,7 +4,7 @@ import { usePascalI18n } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { useIsMobile } from '@pascal-app/viewer/ui'
 import { PanelLeftOpen, X } from 'lucide-react'
-import { type ReactNode, useCallback, useEffect, useRef } from 'react'
+import { type ReactNode, useCallback, useEffect, useLayoutEffect, useRef } from 'react'
 import {
   openSidebarPanel,
   SIDEBAR_MIN_WIDTH,
@@ -164,14 +164,12 @@ function useSideMenuBehavior({
     })
   }, [enabled])
 
-  // No tool panel open any more puts a build tool down, so a click on the 3D
-  // view selects instead of drawing.
+  // No tool panel open any more puts whatever tool it armed down (a build
+  // tool, Paint's brush, the site editor), so a click on the 3D view selects.
   useEffect(() => {
     if (!enabled || toolOpen) return
     const { mode, setMode } = useEditor.getState()
-    if (mode === 'build') {
-      setMode('select')
-    }
+    if (mode !== 'select') setMode('select')
   }, [enabled, toolOpen])
 }
 
@@ -199,6 +197,14 @@ function ChatColumn({
     return () => setColumnPanelId(null)
   }, [tabId])
 
+  // Hidden, the composer must not keep the keyboard: typing would go nowhere
+  // visible and Escape would never reach the tool panel.
+  useLayoutEffect(() => {
+    if (!hidden) return
+    const focused = document.activeElement
+    if (focused instanceof HTMLElement && columnRef.current?.contains(focused)) focused.blur()
+  }, [hidden])
+
   const handleResizerDown = useCallback(
     (e: React.PointerEvent) => {
       e.preventDefault()
@@ -215,6 +221,7 @@ function ChatColumn({
         hidden ? 'hidden' : 'flex',
       )}
       data-surface="chat-column"
+      inert={hidden}
       ref={columnRef}
       style={{ width }}
     >
