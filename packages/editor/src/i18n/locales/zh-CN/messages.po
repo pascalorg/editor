@@ -15593,45 +15593,56 @@ msgstr "更新快照"
 msgid "editor.sidebar.panels.zonePanel.viewSnapshot"
 msgstr "查看快照"
 
-# Source-Hash: 9fc7a39bc32f287a
+# English: "Browse plugins"
+# Source-Hash: 7890c110650ad1e5
 # Review: required
-# AI-Provider: claude-code
-# AI-Model: claude-opus-5-5
-# English: "Plugins"
-#: packages/editor/src/components/ui/sidebar/use-plugin-panels.tsx
+#: packages/editor/src/components/ui/sidebar/plugins-menu-panel.tsx
 #, fuzzy
-msgid "editor.sidebar.sideMenu.plugins"
-msgstr "插件"
+msgid "editor.sidebar.pluginsMenu.browse"
+msgstr "浏览插件"
+
+# English: "No plugins in this project yet."
+# Source-Hash: fd7380e83e3c88b3
+# Review: required
+#: packages/editor/src/components/ui/sidebar/plugins-menu-panel.tsx
+#, fuzzy
+msgid "editor.sidebar.pluginsMenu.empty"
+msgstr "此项目还没有插件。"
 
 # English: "Hide menu"
+# Source-Hash: 8284b6d9e4c05fb1
+# Review: required
 #: packages/editor/src/components/ui/sidebar/tab-bar.tsx
 #, fuzzy
 msgid "editor.sidebar.sideMenu.hide"
 msgstr "隐藏菜单"
 
+# Source-Hash: 9fc7a39bc32f287a
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Plugins"
+#: packages/editor/src/components/editor/index.tsx
+#: packages/editor/src/components/ui/sidebar/use-plugin-panels.tsx
+#, fuzzy
+msgid "editor.sidebar.sideMenu.plugins"
+msgstr "插件"
+
 # English: "Menu"
+# Source-Hash: 1340afc2c56c0229
+# Review: required
 #: packages/editor/src/components/editor/editor-layout-v2.tsx
 #, fuzzy
 msgid "editor.sidebar.sideMenu.show"
 msgstr "菜单"
 
 # English: "Show menu"
+# Source-Hash: 5e1ae5cd25820c60
+# Review: required
 #: packages/editor/src/components/editor/editor-layout-v2.tsx
 #, fuzzy
 msgid "editor.sidebar.sideMenu.showLabel"
 msgstr "显示菜单"
-
-# English: "No plugins in this project yet."
-#: packages/editor/src/components/ui/sidebar/plugins-menu-panel.tsx
-#, fuzzy
-msgid "editor.sidebar.pluginsMenu.empty"
-msgstr "此项目还没有插件。"
-
-# English: "Browse plugins"
-#: packages/editor/src/components/ui/sidebar/plugins-menu-panel.tsx
-#, fuzzy
-msgid "editor.sidebar.pluginsMenu.browse"
-msgstr "浏览插件"
 
 # Source-Hash: 316a5e154c1e0257
 # Review: required
