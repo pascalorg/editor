@@ -119,8 +119,9 @@ import { AppSidebar } from '../ui/sidebar/app-sidebar'
 import type { ExtraPanel } from '../ui/sidebar/icon-rail'
 import { SettingsPanel, type SettingsPanelProps } from '../ui/sidebar/panels/settings-panel'
 import { SitePanel, type SitePanelProps } from '../ui/sidebar/panels/site-panel'
+import { PluginsMenuPanel } from '../ui/sidebar/plugins-menu-panel'
 import type { SidebarTab } from '../ui/sidebar/tab-bar'
-import { useHostPanels } from '../ui/sidebar/use-plugin-panels'
+import { PLUGINS_MANAGER_PANEL_ID, useHostPanels } from '../ui/sidebar/use-plugin-panels'
 import { CaptureCameraRig } from './capture-camera-rig'
 import { CustomCameraControls } from './custom-camera-controls'
 import { DeleteConfirmationDialog } from './delete-confirmation-dialog'
@@ -236,6 +237,20 @@ export interface EditorProps {
   // UI slots (v2)
   navbarSlot?: ReactNode
   sidebarTabs?: (SidebarTab & { component: React.ComponentType })[]
+  /**
+   * The tab (one of `sidebarTabs`) shown on desktop in the column beside the
+   * side menu whenever no tool panel is open: a tool panel takes its place
+   * there, and closing the tool brings it back.
+   */
+  columnTabId?: string
+  /** Listed after the side menu's entries (v2 desktop), e.g. recent chats. */
+  sideMenuFooter?: ReactNode
+  /**
+   * The v2 side menu heading the one Plugins entry joins, e.g. the host's
+   * "Project". The project's plugins open from that entry instead of each
+   * having its own. Defaults to a Plugins heading of its own.
+   */
+  pluginsMenuSection?: string
   viewerToolbarLeft?: ReactNode
   viewerToolbarRight?: ReactNode
   /**
@@ -980,7 +995,7 @@ const ViewerSceneContent = memo(function ViewerSceneContent({
       {!(isLoading || noEditing) && <ToolManager />}
       {isFirstPersonMode && <FirstPersonControls />}
       {isCaptureMode && !isXRMode && <CaptureCameraRig />}
-      {!isXRMode && <CustomCameraControls />}
+      {!isXRMode && <CustomCameraControls sceneReady={!isLoading} />}
       {!isXRMode && <FollowPascal />}
       {!isXRMode && <ThumbnailGenerator onThumbnailCapture={onThumbnailCapture} />}
       {!isXRMode && <VectorEdgeExtractor />}
@@ -1518,6 +1533,9 @@ function EditorContent({
   sidebarTop,
   navbarSlot,
   sidebarTabs,
+  columnTabId,
+  sideMenuFooter,
+  pluginsMenuSection,
   viewerToolbarLeft,
   viewerToolbarRight,
   stageOverlay,
@@ -1550,6 +1568,7 @@ function EditorContent({
   extraSidebarPanels,
   commandPaletteEmptyAction,
 }: EditorProps) {
+  const i18n = usePascalI18n()
   const isMobile = useIsMobile()
   // A top-docked menu sits at the top of the scene panes on desktop (layout v2).
   const dockMenuOnTop = actionMenuPlacement === 'top' && !isMobile
@@ -1636,6 +1655,29 @@ function EditorContent({
     void useSidebarStore.persist.rehydrate()
   }, [])
 
+  // A project opens on the column's tab (the chat) as it starts loading: once the saved layout
+  // is restored (the effect above), once per project, and not again when preview hands the
+  // layout back.
+  const openedOnColumnRef = useRef<string | null>(null)
+  useEffect(() => {
+    if (layoutVersion !== 'v2' || !columnTabId) return
+    const project = projectId ?? ''
+    if (openedOnColumnRef.current === project) return
+    // A project opened on a phone has had its opening: widening the window later keeps the tab
+    // and tool in use.
+    if (isMobile) {
+      openedOnColumnRef.current = project
+      return
+    }
+    const open = () => {
+      openedOnColumnRef.current = project
+      useEditor.getState().setActiveSidebarPanel(columnTabId)
+    }
+    // The restore may still be running; switching before it ends would be overwritten by it.
+    if (useEditor.persist.hasHydrated()) open()
+    else return useEditor.persist.onFinishHydration(open)
+  }, [projectId, layoutVersion, columnTabId, isMobile])
+
   useEffect(() => {
     useViewer.getState().setProjectId(projectId ?? null)
     useFloorplanMode.getState().setProjectId(projectId ?? null)
@@ -1675,6 +1717,8 @@ function EditorContent({
           // The store holds the loaded graph: autosave resumes now, not on a
           // frame — a tab loaded while hidden never gets one.
           completeSceneLoad()
+          // A new project gets its own opening camera frame.
+          useEditor.getState().setOpeningCameraSettled(false)
           setIsViewerSceneReady(false)
           setSceneReadyKey((key) => key + 1)
         }
@@ -1902,7 +1946,20 @@ function EditorContent({
       }
     }
 
+    // The project's plugins fold into the one Plugins entry, whose panel lists them.
+    const hasPluginsEntry = hostRailPanels.some((p) => p.id === PLUGINS_MANAGER_PANEL_ID)
+    const pluginsHeading = i18n._({ id: 'editor.sidebar.sideMenu.plugins', message: 'Plugins' })
+    // A plugin that names a section of its own keeps its own entry there.
+    const isListedPlugin = (p: (typeof hostRailPanels)[number]) =>
+      hasPluginsEntry && p.pluginId !== undefined && p.section === pluginsHeading
+    const listedPlugins = hostRailPanels
+      .filter(isListedPlugin)
+      .map((p) => ({ id: p.id, label: p.label, icon: p.icon }))
+
     const renderTabContent = (tabId: string) => {
+      if (tabId === PLUGINS_MANAGER_PANEL_ID) {
+        return <PluginsMenuPanel plugins={listedPlugins} />
+      }
       // Built-in panels
       if (tabId === 'site') {
         return <SitePanel {...sitePanelProps} />
@@ -1918,27 +1975,45 @@ function EditorContent({
     }
 
     const tabBarTabs = [
-      ...(sidebarTabs?.map(({ id, label, mobileDefaultSnap, mobileIcon, icon, noPanel }) => ({
-        id,
-        label,
-        mobileDefaultSnap,
-        mobileIcon,
-        icon,
-        noPanel,
-      })) ?? []),
+      ...(sidebarTabs?.map(
+        ({ id, label, mobileDefaultSnap, mobileIcon, icon, noPanel, section }) => ({
+          id,
+          label,
+          mobileDefaultSnap,
+          mobileIcon,
+          icon,
+          noPanel,
+          section,
+        }),
+      ) ?? []),
       // Host panels appear after the explicit tabs in the rail. The icon
       // doubles as the mobile icon; a half-height sheet is a sensible default.
-      ...hostRailPanels.map((p) => ({
-        id: p.id,
-        label: p.label,
-        mobileDefaultSnap: 0.5,
-        mobileIcon: p.icon,
-        icon: p.icon,
-        noPanel: p.noPanel,
-        onSelect: p.onSelect,
-        stageActive: p.stageActive,
-        onDeselect: p.onDeselect,
-      })),
+      // Plugins is one entry: a panel listing the project's plugins and the
+      // directory, so the menu keeps its room for the host's footer.
+      ...hostRailPanels.map((p) =>
+        p.id === PLUGINS_MANAGER_PANEL_ID
+          ? {
+              id: p.id,
+              label: p.label,
+              section: pluginsMenuSection ?? p.section,
+              mobileDefaultSnap: 0.5,
+              mobileIcon: p.icon,
+              icon: p.icon,
+            }
+          : {
+              id: p.id,
+              label: p.label,
+              section: p.section,
+              menuParent: isListedPlugin(p) ? PLUGINS_MANAGER_PANEL_ID : undefined,
+              mobileDefaultSnap: 0.5,
+              mobileIcon: p.icon,
+              icon: p.icon,
+              noPanel: p.noPanel,
+              onSelect: p.onSelect,
+              stageActive: p.stageActive,
+              onDeselect: p.onDeselect,
+            },
+      ),
     ]
 
     return (
@@ -2007,6 +2082,8 @@ function EditorContent({
               }
               renderTabContent={renderTabContent}
               sidebarOverlay={sidebarOverlay}
+              columnTabId={columnTabId}
+              sideMenuFooter={sideMenuFooter}
               sidebarTabs={tabBarTabs}
               stageOverlay={stageOverlay}
               viewBar={viewBar}

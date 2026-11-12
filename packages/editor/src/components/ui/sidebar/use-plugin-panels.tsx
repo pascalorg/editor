@@ -28,8 +28,10 @@ import type { ExtraPanel } from './icon-rail'
 // The rail's "+" puts the plugin directory on the stage, as a view in the
 // focused pane, and stays lit while it is there instead of leaving an
 // unrelated panel open beside it. `component` serves the v1 sidebar.
+export const PLUGINS_MANAGER_PANEL_ID = 'plugins'
+
 const pluginsManagerPanel: Omit<ExtraPanel, 'label'> = {
-  id: 'plugins',
+  id: PLUGINS_MANAGER_PANEL_ID,
   icon: <img alt="" className="size-8 object-contain" src="/icons/plugins.webp" />,
   component: PluginsView,
   noPanel: true,
@@ -120,6 +122,7 @@ export function useHostPanels(hostPanels?: ExtraPanel[]): ExtraPanel[] {
   const readOnly = useScene((s) => s.readOnly)
   const pluginsViewShown = useEditor((s) => isViewVisible(s, PLUGINS_VIEW_ID))
   const hostIds = new Set(hostPanels?.map((p) => p.id))
+  const pluginsSection = i18n._({ id: 'editor.sidebar.sideMenu.plugins', message: 'Plugins' })
 
   useEffect(() => {
     const scene = useScene.getState()
@@ -143,6 +146,7 @@ export function useHostPanels(hostPanels?: ExtraPanel[]): ExtraPanel[] {
         icon: renderIconRef(p.icon),
         component: resolvePanelComponent(p),
         pluginId: p.pluginId,
+        section: p.section ?? (p.pluginId ? pluginsSection : undefined),
       }),
     )
   // The manager tab is the one panel the editor contributes itself, so it is
@@ -159,6 +163,7 @@ export function useHostPanels(hostPanels?: ExtraPanel[]): ExtraPanel[] {
             ...pluginsManagerPanel,
             label: i18n._({ id: 'editor.sidebar.usePluginPanels.plugins', message: 'Plugins' }),
             stageActive: pluginsViewShown,
+            section: pluginsSection,
           },
         ]
       : []

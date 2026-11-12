@@ -15,6 +15,15 @@ export function setSidebarTabIds(ids: readonly string[]): void {
   sidebarTabIds = ids
 }
 
+// The panel the desktop layout shows as its own column (the host's chat),
+// published while it is mounted. Picking it brings it back in place of an
+// open tool panel; it never opens the tool panel itself.
+let columnPanelId: string | null = null
+
+export function setColumnPanelId(id: string | null): void {
+  columnPanelId = id
+}
+
 /**
  * Pick panel `id` and expand a collapsed sidebar onto it, at a usable width.
  * The pick goes first: expanding first would reopen the panel left open for a
@@ -23,7 +32,7 @@ export function setSidebarTabIds(ids: readonly string[]): void {
 export function showSidebarPanel(id: string): void {
   useEditor.getState().setActiveSidebarPanel(id)
   const sidebar = useSidebarStore.getState()
-  if (!sidebar.isCollapsed) return
+  if (id === columnPanelId || !sidebar.isCollapsed) return
   sidebar.setIsCollapsed(false)
   if (sidebar.width < SIDEBAR_MIN_WIDTH) sidebar.setWidth(SIDEBAR_MIN_WIDTH)
 }
@@ -34,7 +43,9 @@ export function showSidebarPanel(id: string): void {
  * mobile).
  */
 export function openSidebarPanel(preferred: readonly string[]): string | null {
-  const id = preferred.find((candidate) => sidebarTabIds.includes(candidate))
+  const id = preferred.find(
+    (candidate) => sidebarTabIds.includes(candidate) || candidate === columnPanelId,
+  )
   if (!id) return null
   showSidebarPanel(id)
   return id

@@ -37,7 +37,10 @@ import { useFrame, useThree } from '@react-three/fiber'
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef } from 'react'
 import {
   Box3,
+  type BufferGeometry,
   type Camera,
+  type InstancedMesh,
+  type Object3D,
   type OrthographicCamera,
   type PerspectiveCamera,
   Sphere,
@@ -87,6 +90,60 @@ import { FloorSurface } from './floor-surface'
 
 const currentTarget = new Vector3()
 const tempBox = new Box3()
+const OPENING_FRAME_FOLLOW_MS = [1500, 4000] as const
+const OPENING_FRAME_MIN_RADIUS = 8
+const openingSphere = new Sphere()
+const openingObjectBox = new Box3()
+
+/** A view saved on a node (`node.camera`), when it is complete. */
+function savedView(
+  node: AnyNode,
+): { position: [number, number, number]; target: [number, number, number] } | null {
+  const position = node.camera?.position
+  const target = node.camera?.target
+  if (!(position && target) || position.length < 3 || target.length < 3) return null
+  const values = [...position.slice(0, 3), ...target.slice(0, 3)]
+  if (!values.every((v) => typeof v === 'number' && Number.isFinite(v))) return null
+  return {
+    position: [position[0], position[1], position[2]] as [number, number, number],
+    target: [target[0], target[1], target[2]] as [number, number, number],
+  }
+}
+
+/**
+ * `Box3.expandByObject` without what is hidden: it walks invisible objects too,
+ * so a hidden building would widen the frame to content that is not drawn.
+ */
+function expandByVisibleObject(bounds: Box3, object: Object3D) {
+  if (!object.visible) return
+  object.updateWorldMatrix(false, false)
+  const instanced = object as InstancedMesh
+  const geometry = (object as { geometry?: BufferGeometry }).geometry
+  if (instanced.isInstancedMesh) {
+    if (!instanced.boundingBox) instanced.computeBoundingBox()
+    bounds.union(openingObjectBox.copy(instanced.boundingBox!).applyMatrix4(object.matrixWorld))
+  } else if (geometry) {
+    if (!geometry.boundingBox) geometry.computeBoundingBox()
+    bounds.union(openingObjectBox.copy(geometry.boundingBox!).applyMatrix4(object.matrixWorld))
+  }
+  for (const child of object.children) expandByVisibleObject(bounds, child)
+}
+
+/** What a project holds on screen: its buildings and scans, as drawn. Null when nothing is. */
+function openingBounds(nodes: readonly AnyNode[]): Box3 | null {
+  const bounds = new Box3()
+  for (const node of nodes) {
+    if (node.type !== 'building' && node.type !== 'scan') continue
+    const object = sceneRegistry.nodes.get(node.id)
+    if (object) expandByVisibleObject(bounds, object)
+  }
+  return bounds.isEmpty() ? null : bounds
+}
+
+/** Within half a metre at every corner: a re-check that found nothing new. */
+function boundsClose(a: Box3, b: Box3): boolean {
+  return a.min.distanceTo(b.min) < 0.5 && a.max.distanceTo(b.max) < 0.5
+}
 const tempCenter = new Vector3()
 const tempDelta = new Vector3()
 const tempPosition = new Vector3()
@@ -399,8 +456,24 @@ function useFirstPersonCameraPoseRestore(
   return useCallback(() => isRestoring.current, [])
 }
 
-export const CustomCameraControls = ({ paused = false }: { paused?: boolean }) => {
+export const CustomCameraControls = ({
+  paused = false,
+  sceneReady = true,
+}: {
+  paused?: boolean
+  /** False while the project is still opening; the first framing waits for it. */
+  sceneReady?: boolean
+}) => {
   const controls = useRef<FloorAwareCameraControls | null>(null)
+  // Whether the opening framing may still move the camera: not once anything else has.
+  const openingFrame = useRef<'waiting' | 'framing' | 'done'>('waiting')
+  // Over for this load: the store keeps it across a remount (preview swaps these controls out).
+  const settleOpening = useCallback(() => {
+    openingFrame.current = 'done'
+    useEditor.getState().setOpeningCameraSettled(true)
+  }, [])
+  // Frames the opening project again; set while the opening follow runs.
+  const reframeOpening = useRef<(() => boolean) | null>(null)
   const pendingAppliedPose = useRef<CameraPoseApplicationPlan | null>(null)
   const activePoseInterpolation = useRef<{
     camera: Camera
@@ -502,13 +575,14 @@ export const CustomCameraControls = ({ paused = false }: { paused?: boolean }) =
   const beginLocalCameraInteraction = useCallback(
     ({ dragging = true }: { dragging?: boolean } = {}) => {
       cancelPoseApplication()
+      settleOpening()
       if (dragging) {
         controls.current?.releaseWrittenPose()
         cameraDraggingLifecycle.begin()
       }
       emitter.emit('camera-controls:interaction-start', undefined)
     },
-    [cameraDraggingLifecycle, cancelPoseApplication],
+    [cameraDraggingLifecycle, cancelPoseApplication, settleOpening],
   )
 
   const applyPendingPose = useCallback(() => {
@@ -575,6 +649,7 @@ export const CustomCameraControls = ({ paused = false }: { paused?: boolean }) =
   useEffect(() => {
     const handleAppliedPose = (pose: CameraPose) => {
       if (isFirstPersonMode) return
+      settleOpening()
 
       const plan = planCameraPoseApplication(pose)
       if (!plan) return
@@ -607,6 +682,7 @@ export const CustomCameraControls = ({ paused = false }: { paused?: boolean }) =
     freezeActivePoseInterpolation,
     isFirstPersonMode,
     isPreviewMode,
+    settleOpening,
   ])
 
   useEffect(() => cancelPoseApplication, [cancelPoseApplication])
@@ -657,11 +733,13 @@ export const CustomCameraControls = ({ paused = false }: { paused?: boolean }) =
     // level will settle, in the CURRENT presentation mode.
     const targetY = orbitGroundY(currentLevelId, levelMode)
     if (!controls.current) return
+    const levelChanged = previousLevelIdRef.current !== currentLevelId
+    const modeChanged = previousLevelModeRef.current !== levelMode
     const plan = planLevelFollow({
       firstLoad: firstLoad.current,
       sceneEmpty: Object.keys(useScene.getState().nodes).length === 0,
-      levelChanged: previousLevelIdRef.current !== currentLevelId,
-      modeChanged: previousLevelModeRef.current !== levelMode,
+      levelChanged,
+      modeChanged,
       cameraChanged: previousCameraRef.current !== camera,
     })
     firstLoad.current = false
@@ -669,6 +747,10 @@ export const CustomCameraControls = ({ paused = false }: { paused?: boolean }) =
     previousLevelModeRef.current = levelMode
     previousCameraRef.current = camera
     if (plan === 'none') return
+    // A floor or level mode picked while the project opens ends the opening (below, once the
+    // camera actually moves); fresh controls alone (drei swapping the camera) keep it.
+    const floorPicked = levelChanged || modeChanged
+    if (openingFrame.current === 'framing' && !floorPicked && reframeOpening.current?.()) return
     if (plan === 'default-pose') {
       controls.current.setLookAt(
         20,
@@ -685,6 +767,8 @@ export const CustomCameraControls = ({ paused = false }: { paused?: boolean }) =
     // Idempotence guard: skip when already there — also swallows the thumbnail
     // generator's synchronous stacked→restore levelMode round-trip.
     if (Math.abs(currentTarget.y - targetY) < 1e-3) return
+    // Like any other camera command: the opening follow must not pull it back afterwards.
+    if (floorPicked && openingFrame.current === 'framing') settleOpening()
     // The pivot goes down with the level; the eye follows it unless that would sink it under the
     // ground (a basement four storeys down): then it stays over the ground, looking down.
     controls.current.getPosition(tempPosition, false)
@@ -712,7 +796,86 @@ export const CustomCameraControls = ({ paused = false }: { paused?: boolean }) =
     isPreviewMode,
     isFirstPersonMode,
     isRestoringFirstPersonPose,
+    settleOpening,
   ])
+
+  // The first pose is a fixed one about 20 m out, which a big project (a scanned house tens of
+  // metres across) fills from the roof. Once the project is open, frame what it holds instead,
+  // unless the camera already has somewhere to be: a view saved on the site or a building, a pose
+  // applied to it, or the person moving it. Scans and models finish streaming in after the scene
+  // reports ready, so the frame follows them for a few seconds while nothing else has moved it.
+  // These controls outlive a project: each one that loads gets its own opening frame.
+  useEffect(() => {
+    if (!sceneReady) openingFrame.current = 'waiting'
+  }, [sceneReady])
+
+  useEffect(() => {
+    if (!sceneReady) return
+    if (isPreviewMode || isFirstPersonMode) {
+      // Walking or previewing as the project opens has moved the camera first: leaving that
+      // mode later must not start the opening.
+      if (openingFrame.current === 'waiting') settleOpening()
+      return
+    }
+    if (useEditor.getState().openingCameraSettled) openingFrame.current = 'done'
+    if (openingFrame.current !== 'waiting') return
+    openingFrame.current = 'framing'
+    let framed: Box3 | null = null
+    let framedView = false
+    // True when the opening holds the camera: its saved view, or what it framed.
+    const frame = (forced = false): boolean => {
+      const control = controls.current
+      if (openingFrame.current !== 'framing' || !control) return false
+      const nodes = Object.values(useScene.getState().nodes)
+      // The project's (site) view first, then a building's.
+      const saved =
+        nodes.find((node) => node.type === 'site' && savedView(node)) ??
+        nodes.find((node) => node.type === 'building' && savedView(node))
+      const view = saved ? savedView(saved) : null
+      if (view) {
+        // The saved view is the opening: the follow leaves it, and a load fit puts it back.
+        if (framedView && !forced) return true
+        framedView = true
+        control.setLookAt(...view.position, ...view.target, true)
+        return true
+      }
+      const bounds = openingBounds(nodes)
+      if (!bounds) return false
+      if (framed && boundsClose(framed, bounds)) return true
+      framed = bounds
+      // A sphere keeps the opening's angle (a box fit turns square to it), and a floor of
+      // a few metres keeps a single wall from filling the view.
+      bounds.getBoundingSphere(openingSphere)
+      openingSphere.radius = Math.max(openingSphere.radius, OPENING_FRAME_MIN_RADIUS)
+      void control.fitToSphere(openingSphere, true)
+      return true
+    }
+    frame()
+    reframeOpening.current = () => {
+      framed = null
+      return frame(true)
+    }
+    const timers = OPENING_FRAME_FOLLOW_MS.map((ms) => window.setTimeout(() => frame(), ms))
+    // The follow window over, the opening is settled: later runs (preview, first person) leave it.
+    timers.push(
+      window.setTimeout(
+        () => {
+          if (openingFrame.current === 'framing') settleOpening()
+        },
+        Math.max(...OPENING_FRAME_FOLLOW_MS) + 1,
+      ),
+    )
+    return () => {
+      for (const timer of timers) window.clearTimeout(timer)
+      reframeOpening.current = null
+      if (openingFrame.current !== 'framing') return
+      // Walking or previewing moves the camera too: the opening is over. Only a remount (or a
+      // new load, reset above) frames again.
+      const { isFirstPersonMode, isPreviewMode } = useEditor.getState()
+      if (isFirstPersonMode || isPreviewMode) settleOpening()
+      else openingFrame.current = 'waiting'
+    }
+  }, [sceneReady, isPreviewMode, isFirstPersonMode, settleOpening])
 
   useEffect(() => {
     if (isFirstPersonMode || !controls.current) return
@@ -1444,6 +1607,11 @@ export const CustomCameraControls = ({ paused = false }: { paused?: boolean }) =
     }
 
     const handleFitScene = ({ bounds }: CameraControlFitSceneEvent) => {
+      // While the project is opening, a fit (the load's own, or a new scene arriving) is the
+      // opening frame: it frames everything drawn, scans included, which the plan's node bounds
+      // leave out. Taking it here keeps the two from overriding each other.
+      // With nothing drawn to frame yet (no building or scan meshes), the load's own fit applies.
+      if (openingFrame.current === 'framing' && reframeOpening.current?.()) return
       const plan = planFitSceneOnEvent({
         isPreviewMode,
         isFirstPersonMode,
@@ -1462,6 +1630,20 @@ export const CustomCameraControls = ({ paused = false }: { paused?: boolean }) =
       if (controls.current) applyFitLookAt(controls.current, plan.lookAt)
     }
 
+    // Any other camera command ends the opening follow, so its timers never pull the camera back.
+    const endOpening = () => {
+      if (openingFrame.current === 'framing') settleOpening()
+    }
+    const openingEnders = [
+      'camera-controls:capture',
+      'camera-controls:focus',
+      'camera-controls:frame',
+      'camera-controls:view',
+      'camera-controls:top-view',
+      'camera-controls:orbit-cw',
+      'camera-controls:orbit-ccw',
+    ] as const
+    for (const event of openingEnders) emitter.on(event, endOpening)
     emitter.on('camera-controls:capture', handleNodeCapture)
     emitter.on('camera-controls:focus', handleNodeFocus)
     emitter.on('camera-controls:frame', handleFrame)
@@ -1472,6 +1654,7 @@ export const CustomCameraControls = ({ paused = false }: { paused?: boolean }) =
     emitter.on('camera-controls:fit-scene', handleFitScene)
 
     return () => {
+      for (const event of openingEnders) emitter.off(event, endOpening)
       emitter.off('camera-controls:capture', handleNodeCapture)
       emitter.off('camera-controls:focus', handleNodeFocus)
       emitter.off('camera-controls:frame', handleFrame)
@@ -1488,6 +1671,7 @@ export const CustomCameraControls = ({ paused = false }: { paused?: boolean }) =
     focusNode,
     isPreviewMode,
     isFirstPersonMode,
+    settleOpening,
   ])
 
   // Apply a fit that arrived while first-person (orbit unmounted). Wait one
