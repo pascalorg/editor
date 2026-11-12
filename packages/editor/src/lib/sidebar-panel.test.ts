@@ -9,36 +9,35 @@ import {
   showSidebarPanel,
 } from './sidebar-panel'
 
-// The desktop layout shows the host's chat as a column of its own: asking for it must not take
-// the tool panel down, as it did while the chat was one of the panels.
+// The desktop layout shows the host's chat in the column an open tool panel takes over: asking
+// for the chat brings it back in the tool's place.
 describe('showing the chat when it has a column', () => {
   afterEach(() => {
     setColumnPanelId(null)
     setSidebarTabIds([])
   })
 
-  test('leaves the open tool panel as it is', () => {
+  test('takes the place of the open tool panel', () => {
     setSidebarTabIds(['build', 'paint'])
     setColumnPanelId('ai')
     useEditor.getState().setActiveSidebarPanel('paint')
     useSidebarStore.setState({ isCollapsed: false })
 
     expect(openSidebarPanel(['ai'])).toBe('ai')
-    showSidebarPanel('ai')
 
-    expect(useEditor.getState().activeSidebarPanel).toBe('paint')
-    expect(useSidebarStore.getState().isCollapsed).toBe(false)
+    expect(useEditor.getState().activeSidebarPanel).toBe('ai')
   })
 
   test('a closed tool panel stays closed', () => {
     setColumnPanelId('ai')
     useEditor.getState().setActiveSidebarPanel('build')
-    useSidebarStore.setState({ isCollapsed: true })
+    useSidebarStore.setState({ isCollapsed: true, width: 120 })
 
     showSidebarPanel('ai')
 
-    expect(useEditor.getState().activeSidebarPanel).toBe('build')
+    expect(useEditor.getState().activeSidebarPanel).toBe('ai')
     expect(useSidebarStore.getState().isCollapsed).toBe(true)
+    expect(useSidebarStore.getState().width).toBe(120)
   })
 
   test('without a column (a phone), the chat opens like any panel', () => {
