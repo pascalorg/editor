@@ -1,11 +1,16 @@
 'use client'
 
 import { ARTIFACT_URL_PREFIX, resolveArtifactUrl } from '@pascal-app/core'
-import Image, { type ImageProps } from 'next/image'
-import { useImageConfig } from 'next/dist/client/use-image-config'
+import { type ImageConfigComplete, imageConfigDefault } from 'next/dist/shared/lib/image-config'
+import { ImageConfigContext } from 'next/dist/shared/lib/image-config-context.shared-runtime'
 import { hasRemoteMatch } from 'next/dist/shared/lib/match-remote-pattern'
+import Image, { type ImageProps } from 'next/image'
+import { useContext } from 'react'
 
-type ImageHostConfig = Pick<ReturnType<typeof useImageConfig>, 'domains' | 'remotePatterns'>
+type ImageHostConfig = Partial<Pick<ImageConfigComplete, 'domains' | 'remotePatterns'>>
+
+// Inlined by Next's bundler define, as next/image itself reads it.
+const configEnv = process.env.__NEXT_IMAGE_OPTS as unknown as ImageHostConfig | undefined
 
 /**
  * Whether next/image can optimize `src`. An absolute URL on a host missing
@@ -31,7 +36,8 @@ export function canOptimizeImageSrc(src: string, config: ImageHostConfig): boole
  * private project's artifact with.
  */
 export function NodeIconImage({ src, ...props }: Omit<ImageProps, 'src'> & { src: string }) {
-  const config = useImageConfig()
+  const configContext = useContext(ImageConfigContext)
+  const config = configEnv || configContext || imageConfigDefault
   if (!src.startsWith(ARTIFACT_URL_PREFIX)) {
     return <Image src={src} unoptimized={!canOptimizeImageSrc(src, config)} {...props} />
   }
