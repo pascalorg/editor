@@ -353,6 +353,7 @@ import { LiveWalkthroughController, useViewer, Viewer } from '@pascal-app/viewer
 import {
   ParametricViewerRooms,
   SceneLoader,
+  ViewerCameraControls,
   ViewerControlsBar,
   ViewerSceneHeader,
   ViewerSelectionManager,
@@ -367,6 +368,7 @@ function ProjectViewer({ ready, name }: { ready: boolean; name: string }) {
     <div className="relative h-full w-full">
       <ViewerStage>
         <Viewer selectionManager="custom">
+          <ViewerCameraControls />
           <LiveWalkthroughController />
           <ViewerSelectionManager />
           <ParametricViewerRooms />
@@ -398,6 +400,28 @@ another node source (a baked scene) passes `<ViewerRooms source={{ nodes, object
 mounted, zones draw no tinted volume: a room shows through its pill and highlight instead. The walkthrough toggle flips `walkthroughMode`; the mounted
 `LiveWalkthroughController` moves the camera. Read `useFirstPersonHud` for the HUD's room and
 interaction props, as in the live walkthrough example above.
+
+### Camera controls and opening poses
+
+Mount `ViewerCameraControls` (`ViewerCameraControlsProps`) inside `Viewer` for right-drag orbit,
+middle-drag or Space + left-drag pan, wheel dolly (orthographic zoom), touch controls and the
+controls bar's frame, top-view and 90° orbit events. It synchronizes navigation with the floor
+plan, opens live scenes on the site's saved camera and unmounts its controls during walkthrough.
+Both optional props default to `false`: `glbActive` lets `GlbScene` frame the baked scene, and
+`holdOpening` leaves the opening view to an explicit pose. Distance limits remain 5–100 metres.
+
+`parseOpeningCamera(raw: string | null)` reads `px,py,pz,tx,ty,tz[,fov]` or returns `'saved'`;
+invalid input returns `null`. Coordinates are bounded to ±1000 metres, position and target must
+be at least 0.01 metres apart, and optional FOV is 10–120 degrees. `savedSceneCamera(nodes)`
+resolves the site's saved camera, then the building's, returning `OpeningCameraPose | null`.
+`OpeningCameraPose` has `position` and `target` tuples and an optional `fov`.
+
+For an explicit pose, pass `holdOpening={true}` to the controls and mount `ViewerOpeningCamera`
+(`ViewerOpeningCameraProps`) inside `Viewer` with `pose`, `ready` and `onApplied`. Once the scene
+is ready and controls exist, it applies the pose on the next animation frame without a transition,
+updates perspective FOV when supplied, then calls `onApplied`. It applies once per mount; keep
+the loader visible until the callback fires. Resolve `'saved'` through `savedSceneCamera` before
+passing a pose. These components and helpers all export from `@pascal-app/viewer/ui`.
 
 ## Asset CDN Helpers
 
