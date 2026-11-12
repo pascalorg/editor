@@ -26,6 +26,12 @@ const CHAT_MIN_WIDTH = 320
 const CHAT_MAX_WIDTH = 600
 // The tool column is narrower at most than the chat can be: the stage stays the widest surface.
 const TOOL_MAX_WIDTH = 520
+// Beside the side menu, neither column may take the stage from a narrow desktop window.
+const COLUMN_MAX_VIEWPORT_SHARE = 0.4
+
+function columnMaxWidth(max: number): number {
+  return Math.min(max, window.innerWidth * COLUMN_MAX_VIEWPORT_SHARE)
+}
 
 /** Follow the pointer from a resize handle until it is let go. */
 function startResize(onMove: (clientX: number) => void, onEnd?: () => void) {
@@ -209,7 +215,9 @@ function ChatColumn({
     (e: React.PointerEvent) => {
       e.preventDefault()
       const left = columnRef.current?.getBoundingClientRect().left ?? 0
-      startResize((x) => setWidth(Math.max(CHAT_MIN_WIDTH, Math.min(x - left, CHAT_MAX_WIDTH))))
+      startResize((x) =>
+        setWidth(Math.max(CHAT_MIN_WIDTH, Math.min(x - left, columnMaxWidth(CHAT_MAX_WIDTH)))),
+      )
     },
     [setWidth],
   )
@@ -223,7 +231,7 @@ function ChatColumn({
       data-surface="chat-column"
       inert={hidden}
       ref={columnRef}
-      style={{ width }}
+      style={{ width, maxWidth: `${COLUMN_MAX_VIEWPORT_SHARE * 100}vw` }}
     >
       <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
         {children}
@@ -305,7 +313,8 @@ function ToolColumn({
       const left = toolRef.current?.getBoundingClientRect().left ?? 0
       setIsDragging(true)
       startResize(
-        (x) => setWidth(Math.max(SIDEBAR_MIN_WIDTH, Math.min(x - left, TOOL_MAX_WIDTH))),
+        (x) =>
+          setWidth(Math.max(SIDEBAR_MIN_WIDTH, Math.min(x - left, columnMaxWidth(TOOL_MAX_WIDTH)))),
         () => setIsDragging(false),
       )
     },
@@ -320,6 +329,7 @@ function ToolColumn({
       ref={toolRef}
       style={{
         width: Math.max(SIDEBAR_MIN_WIDTH, Math.min(width, TOOL_MAX_WIDTH)),
+        maxWidth: `${COLUMN_MAX_VIEWPORT_SHARE * 100}vw`,
         transition: isDragging ? 'none' : 'width 150ms ease',
       }}
     >
