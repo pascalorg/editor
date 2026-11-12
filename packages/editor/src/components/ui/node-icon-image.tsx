@@ -2,6 +2,27 @@
 
 import { ARTIFACT_URL_PREFIX, resolveArtifactUrl } from '@pascal-app/core'
 import Image, { type ImageProps } from 'next/image'
+import { useImageConfig } from 'next/dist/client/use-image-config'
+import { hasRemoteMatch } from 'next/dist/shared/lib/match-remote-pattern'
+
+type ImageHostConfig = Pick<ReturnType<typeof useImageConfig>, 'domains' | 'remotePatterns'>
+
+/**
+ * Whether next/image can optimize `src`. An absolute URL on a host missing
+ * from `images.remotePatterns` makes next/image throw during render (e.g. a
+ * catalog thumbnail on production storage while running against local
+ * Supabase), so those render unoptimized, straight from their host.
+ */
+export function canOptimizeImageSrc(src: string, config: ImageHostConfig): boolean {
+  if (src.startsWith('/') && !src.startsWith('//')) return true
+  let url: URL
+  try {
+    url = new URL(src)
+  } catch {
+    return false
+  }
+  return hasRemoteMatch(config.domains ?? [], config.remotePatterns ?? [], url)
+}
 
 /**
  * A node's icon or thumbnail. A scripted object's thumbnail is an
@@ -10,7 +31,10 @@ import Image, { type ImageProps } from 'next/image'
  * private project's artifact with.
  */
 export function NodeIconImage({ src, ...props }: Omit<ImageProps, 'src'> & { src: string }) {
-  if (!src.startsWith(ARTIFACT_URL_PREFIX)) return <Image src={src} {...props} />
+  const config = useImageConfig()
+  if (!src.startsWith(ARTIFACT_URL_PREFIX)) {
+    return <Image src={src} unoptimized={!canOptimizeImageSrc(src, config)} {...props} />
+  }
   const url = resolveArtifactUrl(src)
   return url ? <Image src={url} unoptimized {...props} /> : null
 }
