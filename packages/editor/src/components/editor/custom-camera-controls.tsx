@@ -37,7 +37,10 @@ import { useFrame, useThree } from '@react-three/fiber'
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef } from 'react'
 import {
   Box3,
+  type BufferGeometry,
   type Camera,
+  type InstancedMesh,
+  type Object3D,
   type OrthographicCamera,
   type PerspectiveCamera,
   Sphere,
@@ -90,6 +93,7 @@ const tempBox = new Box3()
 const OPENING_FRAME_FOLLOW_MS = [1500, 4000] as const
 const OPENING_FRAME_MIN_RADIUS = 8
 const openingSphere = new Sphere()
+const openingObjectBox = new Box3()
 
 /** A view saved on a node (`node.camera`), when it is complete. */
 function savedView(
@@ -106,13 +110,32 @@ function savedView(
   }
 }
 
+/**
+ * `Box3.expandByObject` without what is hidden: it walks invisible objects too,
+ * so a hidden building would widen the frame to content that is not drawn.
+ */
+function expandByVisibleObject(bounds: Box3, object: Object3D) {
+  if (!object.visible) return
+  object.updateWorldMatrix(false, false)
+  const instanced = object as InstancedMesh
+  const geometry = (object as { geometry?: BufferGeometry }).geometry
+  if (instanced.isInstancedMesh) {
+    if (!instanced.boundingBox) instanced.computeBoundingBox()
+    bounds.union(openingObjectBox.copy(instanced.boundingBox!).applyMatrix4(object.matrixWorld))
+  } else if (geometry) {
+    if (!geometry.boundingBox) geometry.computeBoundingBox()
+    bounds.union(openingObjectBox.copy(geometry.boundingBox!).applyMatrix4(object.matrixWorld))
+  }
+  for (const child of object.children) expandByVisibleObject(bounds, child)
+}
+
 /** What a project holds on screen: its buildings and scans, as drawn. Null when nothing is. */
 function openingBounds(nodes: readonly AnyNode[]): Box3 | null {
   const bounds = new Box3()
   for (const node of nodes) {
     if (node.type !== 'building' && node.type !== 'scan') continue
     const object = sceneRegistry.nodes.get(node.id)
-    if (object) bounds.expandByObject(object)
+    if (object) expandByVisibleObject(bounds, object)
   }
   return bounds.isEmpty() ? null : bounds
 }
