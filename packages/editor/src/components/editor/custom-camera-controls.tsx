@@ -810,7 +810,13 @@ export const CustomCameraControls = ({
   }, [sceneReady])
 
   useEffect(() => {
-    if (!sceneReady || isPreviewMode || isFirstPersonMode) return
+    if (!sceneReady) return
+    if (isPreviewMode || isFirstPersonMode) {
+      // Walking or previewing as the project opens has moved the camera first: leaving that
+      // mode later must not start the opening.
+      if (openingFrame.current === 'waiting') settleOpening()
+      return
+    }
     if (useEditor.getState().openingCameraSettled) openingFrame.current = 'done'
     if (openingFrame.current !== 'waiting') return
     openingFrame.current = 'framing'
