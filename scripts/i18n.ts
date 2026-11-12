@@ -84,6 +84,10 @@ function compiledCatalogPath(locale: string): string {
   return join(CATALOG_ROOT, locale, 'messages.ts')
 }
 
+function englishFormattingFallbackPath(): string {
+  return join(ROOT, 'packages/core/src/i18n/english-formatting-fallback.ts')
+}
+
 function readJson<T>(path: string): T {
   return JSON.parse(readFileSync(path, 'utf8')) as T
 }
@@ -566,6 +570,24 @@ function compiledCatalog(locale: string, sources: SourceMessage[]) {
   })
 }
 
+function compiledEnglishFormattingFallback(sources: SourceMessage[]) {
+  return createCompiledCatalog(
+    'en',
+    Object.fromEntries(
+      sources
+        .filter((source) =>
+          source.context.some((path) => /^packages\/(core|viewer|nodes)\/src\//.test(path)),
+        )
+        .filter(({ message }) => {
+          const compiled = compileMessageOrThrow(message)
+          return compiled.length !== 1 || compiled[0] !== message
+        })
+        .map(({ id, message }) => [id, message]),
+    ),
+    { namespace: 'ts', outputPrefix: '/*eslint-disable*/', strict: true },
+  )
+}
+
 function writeCompiledCatalogs(strict = false): void {
   const sources = readSourceMessages()
   if (strict) {
@@ -577,13 +599,21 @@ function writeCompiledCatalogs(strict = false): void {
     )
     if (errors.length > 0) throw new Error(errors.join('\n'))
   }
-  const compiled = ALL_LOCALES.map((locale) => [locale, compiledCatalog(locale, sources)] as const)
-  const errors = compiled.flatMap(([locale, result]) =>
-    result.errors.map(({ id, error }) => `${locale}: failed to compile "${id}": ${error.message}`),
+  const compiled = [
+    ...ALL_LOCALES.map(
+      (locale) => [compiledCatalogPath(locale), compiledCatalog(locale, sources)] as const,
+    ),
+    [englishFormattingFallbackPath(), compiledEnglishFormattingFallback(sources)] as const,
+  ]
+  const errors = compiled.flatMap(([path, result]) =>
+    result.errors.map(
+      ({ id, error }) => `${relative(ROOT, path)}: failed to compile "${id}": ${error.message}`,
+    ),
   )
   if (errors.length > 0) throw new Error(errors.join('\n'))
-  for (const [locale, result] of compiled) {
-    writeFileSync(compiledCatalogPath(locale), result.source)
+  for (const [path, result] of compiled) {
+    mkdirSync(dirname(path), { recursive: true })
+    writeFileSync(path, result.source)
   }
   writePseudoCatalog(sources)
 }
@@ -1142,15 +1172,18 @@ function checkEnglishCatalog(
 }
 
 function checkCompiledCatalogs(sources: SourceMessage[]): string[] {
-  return ALL_LOCALES.flatMap((locale) => {
-    const compiled = compiledCatalog(locale, sources)
+  const catalogs = [
+    ...ALL_LOCALES.map(
+      (locale) => [compiledCatalogPath(locale), compiledCatalog(locale, sources)] as const,
+    ),
+    [englishFormattingFallbackPath(), compiledEnglishFormattingFallback(sources)] as const,
+  ]
+  return catalogs.flatMap(([path, compiled]) => {
     const errors = compiled.errors.map(
-      ({ id, error }) => `${locale}: failed to compile "${id}": ${error.message}`,
+      ({ id, error }) => `${relative(ROOT, path)}: failed to compile "${id}": ${error.message}`,
     )
-    if (compiled.source !== readFileSync(compiledCatalogPath(locale), 'utf8')) {
-      errors.push(
-        `${relative(ROOT, compiledCatalogPath(locale))} is not synchronized; run bun run i18n:compile`,
-      )
+    if (!existsSync(path) || compiled.source !== readFileSync(path, 'utf8')) {
+      errors.push(`${relative(ROOT, path)} is not synchronized; run bun run i18n:compile`)
     }
     return errors
   })
