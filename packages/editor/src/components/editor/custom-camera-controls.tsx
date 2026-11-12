@@ -761,6 +761,9 @@ export const CustomCameraControls = ({
     // Idempotence guard: skip when already there — also swallows the thumbnail
     // generator's synchronous stacked→restore levelMode round-trip.
     if (Math.abs(currentTarget.y - targetY) < 1e-3) return
+    // A floor (or level mode, or camera) picked while the project opens moves the camera like
+    // any other command: the opening follow must not pull it back afterwards.
+    if (openingFrame.current === 'framing') settleOpening()
     // The pivot goes down with the level; the eye follows it unless that would sink it under the
     // ground (a basement four storeys down): then it stays over the ground, looking down.
     controls.current.getPosition(tempPosition, false)
@@ -788,6 +791,7 @@ export const CustomCameraControls = ({
     isPreviewMode,
     isFirstPersonMode,
     isRestoringFirstPersonPose,
+    settleOpening,
   ])
 
   // The first pose is a fixed one about 20 m out, which a big project (a scanned house tens of
