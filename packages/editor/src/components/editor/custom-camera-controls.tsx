@@ -733,11 +733,13 @@ export const CustomCameraControls = ({
     // level will settle, in the CURRENT presentation mode.
     const targetY = orbitGroundY(currentLevelId, levelMode)
     if (!controls.current) return
+    const levelChanged = previousLevelIdRef.current !== currentLevelId
+    const modeChanged = previousLevelModeRef.current !== levelMode
     const plan = planLevelFollow({
       firstLoad: firstLoad.current,
       sceneEmpty: Object.keys(useScene.getState().nodes).length === 0,
-      levelChanged: previousLevelIdRef.current !== currentLevelId,
-      modeChanged: previousLevelModeRef.current !== levelMode,
+      levelChanged,
+      modeChanged,
       cameraChanged: previousCameraRef.current !== camera,
     })
     firstLoad.current = false
@@ -745,6 +747,10 @@ export const CustomCameraControls = ({
     previousLevelModeRef.current = levelMode
     previousCameraRef.current = camera
     if (plan === 'none') return
+    // A floor or level mode picked while the project opens ends the opening (below, once the
+    // camera actually moves); fresh controls alone (drei swapping the camera) keep it.
+    const floorPicked = levelChanged || modeChanged
+    if (openingFrame.current === 'framing' && !floorPicked && reframeOpening.current?.()) return
     if (plan === 'default-pose') {
       controls.current.setLookAt(
         20,
@@ -761,9 +767,8 @@ export const CustomCameraControls = ({
     // Idempotence guard: skip when already there — also swallows the thumbnail
     // generator's synchronous stacked→restore levelMode round-trip.
     if (Math.abs(currentTarget.y - targetY) < 1e-3) return
-    // A floor (or level mode, or camera) picked while the project opens moves the camera like
-    // any other command: the opening follow must not pull it back afterwards.
-    if (openingFrame.current === 'framing') settleOpening()
+    // Like any other camera command: the opening follow must not pull it back afterwards.
+    if (floorPicked && openingFrame.current === 'framing') settleOpening()
     // The pivot goes down with the level; the eye follows it unless that would sink it under the
     // ground (a basement four storeys down): then it stays over the ground, looking down.
     controls.current.getPosition(tempPosition, false)
