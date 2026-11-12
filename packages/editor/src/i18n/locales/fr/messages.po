@@ -15593,6 +15593,56 @@ msgstr "Mettre à jour l’instantané"
 msgid "editor.sidebar.panels.zonePanel.viewSnapshot"
 msgstr "Voir l’instantané"
 
+# Source-Hash: 9fc7a39bc32f287a
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Plugins"
+#: packages/editor/src/components/ui/sidebar/use-plugin-panels.tsx
+#, fuzzy
+msgid "editor.sidebar.sideMenu.plugins"
+msgstr "Plugins"
+
+# English: "Hide menu"
+#: packages/editor/src/components/ui/sidebar/tab-bar.tsx
+#, fuzzy
+msgid "editor.sidebar.sideMenu.hide"
+msgstr "Masquer le menu"
+
+# English: "Menu"
+#: packages/editor/src/components/editor/editor-layout-v2.tsx
+#, fuzzy
+msgid "editor.sidebar.sideMenu.show"
+msgstr "Menu"
+
+# English: "Show menu"
+#: packages/editor/src/components/editor/editor-layout-v2.tsx
+#, fuzzy
+msgid "editor.sidebar.sideMenu.showLabel"
+msgstr "Afficher le menu"
+
+# English: "No plugins in this project yet."
+#: packages/editor/src/components/ui/sidebar/plugins-menu-panel.tsx
+#, fuzzy
+msgid "editor.sidebar.pluginsMenu.empty"
+msgstr "Aucun plugin dans ce projet pour l’instant."
+
+# English: "Browse plugins"
+#: packages/editor/src/components/ui/sidebar/plugins-menu-panel.tsx
+#, fuzzy
+msgid "editor.sidebar.pluginsMenu.browse"
+msgstr "Parcourir les plugins"
+
+# Source-Hash: 316a5e154c1e0257
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Close panel"
+#: packages/editor/src/components/editor/editor-layout-v2.tsx
+#, fuzzy
+msgid "editor.sidebar.toolDock.close"
+msgstr "Fermer le panneau"
+
 # Source-Hash: 58b05af5b5724efb
 # Review: required
 # AI-Provider: claude-code

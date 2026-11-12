@@ -590,6 +590,10 @@ type EditorState = {
   // Read by the mobile layout so the viewer container can shrink to preview edits.
   mobilePanelSheetHeight: number
   setMobilePanelSheetHeight: (px: number) => void
+  // The loaded project's opening camera frame is over (framed, or the camera moved otherwise).
+  // Kept here, not in the camera controls, which preview unmounts; each load clears it.
+  openingCameraSettled: boolean
+  setOpeningCameraSettled: (settled: boolean) => void
   modelExport: ModelExport | null
   setModelExport: (modelExport: ModelExport | null) => void
 }
@@ -1662,6 +1666,8 @@ const useEditor = create<EditorState>()(
       sidebarPanels: DEFAULT_PERSISTED_EDITOR_LAYOUT_STATE.sidebarPanels,
       mobilePanelSheetHeight: 0,
       setMobilePanelSheetHeight: (px) => set({ mobilePanelSheetHeight: Math.max(0, px) }),
+      openingCameraSettled: false,
+      setOpeningCameraSettled: (settled) => set({ openingCameraSettled: settled }),
       modelExport: null,
       setModelExport: (modelExport) => set({ modelExport }),
     }),
