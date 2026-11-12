@@ -1943,8 +1943,9 @@ function EditorContent({
     // The project's plugins fold into the one Plugins entry, whose panel lists them.
     const hasPluginsEntry = hostRailPanels.some((p) => p.id === PLUGINS_MANAGER_PANEL_ID)
     const pluginsHeading = i18n._({ id: 'editor.sidebar.sideMenu.plugins', message: 'Plugins' })
+    // A plugin that names a section of its own keeps its own entry there.
     const isListedPlugin = (p: (typeof hostRailPanels)[number]) =>
-      hasPluginsEntry && p.id !== PLUGINS_MANAGER_PANEL_ID && p.section === pluginsHeading
+      hasPluginsEntry && p.pluginId !== undefined && p.section === pluginsHeading
     const listedPlugins = hostRailPanels
       .filter(isListedPlugin)
       .map((p) => ({ id: p.id, label: p.label, icon: p.icon }))
