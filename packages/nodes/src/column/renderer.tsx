@@ -2089,7 +2089,11 @@ export const ColumnRenderer = ({ node: rawNode }: { node: ColumnNode }) => {
           {...handlers}
         >
           <group ref={bodyRef} name="column-body">
-            {node.source ? <ScriptedOpeningModel node={node} /> : <ColumnBody node={node} />}
+            {node.source ? (
+              <ScriptedOpeningModel host={ref} node={node} />
+            ) : (
+              <ColumnBody node={node} />
+            )}
           </group>
           {node.children.map((id) => (
             <NodeRenderer key={id} nodeId={id as AnyNodeId} />
