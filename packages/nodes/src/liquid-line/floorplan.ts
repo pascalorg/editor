@@ -1,5 +1,5 @@
 import type { FloorplanGeometry, FloorplanPoint, GeometryContext } from '@pascal-app/core'
-import { INCHES_TO_METERS } from '../duct-segment/geometry'
+import { INCHES_TO_METERS } from '../duct-segment/profile'
 import type { LiquidLineNode } from './schema'
 
 const COPPER_LINE = '#b06b3f'

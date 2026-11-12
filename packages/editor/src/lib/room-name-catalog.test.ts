@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { type AnyNode, ZoneNode } from '@pascal-app/core'
+import { ROOM_NAME_MESSAGES } from '@pascal-app/viewer/ui'
 import {
   MEZZANINE_NAME_SECTION,
   numberedRoomName,
@@ -8,7 +9,7 @@ import {
   roomNameSections,
   roomNameUseCount,
 } from './room-name-catalog'
-import { ROOM_NAME_MESSAGES, ROOM_NAME_SECTION_TITLES } from './room-name-messages'
+import { ROOM_NAME_SECTION_TITLES } from './room-name-messages'
 
 const square: [number, number][] = [
   [0, 0],

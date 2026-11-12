@@ -27,7 +27,7 @@ import { useViewer } from '@pascal-app/viewer'
 import { ArrowDown, ArrowUp, Plus, X } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { formatLayerThickness, parseLayerThickness } from '../../../lib/layer-thickness'
-import type { LinearUnit } from '../../../lib/measurements'
+import type { LinearUnit } from '@pascal-app/core'
 import { cn } from '../../../lib/utils'
 import {
   saveProjectWallType,
@@ -36,7 +36,7 @@ import {
   type WallTypePlacement,
   type WallTypeSaveResult,
 } from '../../../lib/wall-type'
-import { Button } from '../primitives/button'
+import { Button } from '@pascal-app/viewer/ui'
 import {
   Dialog,
   DialogContent,

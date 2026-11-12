@@ -25,7 +25,11 @@ import {
   useWallDrawVariant,
   withToolShortcut,
 } from '@pascal-app/editor'
-import { framingPostToolChoices, useLiquidLineToolOptions } from '@pascal-app/nodes'
+import {
+  framingPostToolChoices,
+  RoofTypeThumbnail,
+  useLiquidLineToolOptions,
+} from '@pascal-app/nodes'
 import { useViewer } from '@pascal-app/viewer'
 import Image from 'next/image'
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react'
@@ -307,14 +311,14 @@ export function BuildTab() {
                 <div className="px-0.5 pt-1 font-medium text-muted-foreground text-xs">
                   {i18n._({ id: 'app.buildTab.roofType', message: 'Roof type' })}
                 </div>
-                <div className="grid grid-cols-2 gap-1.5">
+                <div className="grid grid-cols-4 gap-1.5">
                   {ROOF_TYPE_OPTIONS.map((roofType) => {
                     const active = activeTool === 'roof' && activeRoofType === roofType.value
                     return (
                       <button
                         aria-pressed={active}
                         className={cn(
-                          'rounded-lg px-2.5 py-2 text-left font-medium text-xs transition-colors',
+                          'flex flex-col items-center gap-1 rounded-lg px-2.5 py-2 text-center font-medium text-xs transition-colors',
                           active
                             ? 'bg-primary/10 text-primary ring-1 ring-primary/50'
                             : 'bg-muted/40 text-muted-foreground hover:bg-muted hover:text-foreground',
@@ -327,6 +331,7 @@ export function BuildTab() {
                         onMouseEnter={() => triggerSFX('sfx:menu-hover')}
                         type="button"
                       >
+                        <RoofTypeThumbnail type={roofType.value} />
                         {i18n._(roofType.label)}
                       </button>
                     )
@@ -621,6 +626,10 @@ export function BuildTab() {
                   })}
                 </div>
               </TooltipProvider>
+
+              {(activeTool === 'duct-segment' || activeTool === 'pipe-segment') && (
+                <ToolOptionsPanel kind={activeTool} />
+              )}
 
               {(['duct-fitting', 'pipe-fitting'] as const)
                 .filter((kind) => (kind === 'duct-fitting' ? ductContext : pipeContext))

@@ -2,6 +2,7 @@ import type { ParametricDescriptor } from '@pascal-app/core'
 import type { DuctTerminalNode } from './schema'
 
 export const ductTerminalParametrics: ParametricDescriptor<DuctTerminalNode> = {
+  trailingSection: () => import('../shared/duct-collar-inspector'),
   groups: [
     {
       label: 'Terminal',

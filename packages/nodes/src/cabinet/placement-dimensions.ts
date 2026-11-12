@@ -1,4 +1,4 @@
-import type { AnyNode, AnyNodeId } from '@pascal-app/core'
+import { type AnyNode, type AnyNodeId, getWallCurveFrameAt, isCurvedWall } from '@pascal-app/core'
 import { runLocalToPlan } from './run-layout'
 import {
   collectCabinetWallSnapNeighbors,
@@ -19,6 +19,113 @@ export type CabinetPlacementDimension = {
   value: number
   renderIn3d?: boolean
   renderInFloorplan?: boolean
+}
+
+type CabinetPlacementWallHit = NonNullable<ReturnType<typeof findClosestCabinetWallInPlan>>
+
+export type CabinetPlacementCoordinates = {
+  distance: number
+  offset: number
+}
+
+function cabinetWallFrameAtLocalX(hit: CabinetPlacementWallHit, localX: number) {
+  if (isCurvedWall(hit.wall)) {
+    return getWallCurveFrameAt(hit.wall, localX / hit.wallLength)
+  }
+  return {
+    point: {
+      x: hit.wall.start[0] + hit.dirX * localX,
+      y: hit.wall.start[1] + hit.dirY * localX,
+    },
+    tangent: { x: hit.dirX, y: hit.dirY },
+    normal: { x: -hit.dirY, y: hit.dirX },
+  }
+}
+
+/**
+ * Cabinet distance is measured from the wall start to the cabinet's near edge;
+ * offset is signed away from the selected wall face.
+ */
+export function getCabinetPlacementCoordinates({
+  depth,
+  hit,
+  levelId,
+  nodes,
+  position,
+  width,
+}: {
+  depth: number
+  hit: CabinetPlacementWallHit
+  levelId: AnyNodeId
+  nodes: Readonly<Record<AnyNodeId, AnyNode>>
+  position: readonly [number, number, number]
+  width: number
+}): CabinetPlacementCoordinates {
+  const frame = cabinetWallFrameAtLocalX(hit, hit.localX)
+  const faceOffset = resolveCabinetWallFaceOffset({
+    hit,
+    nodes: nodes as Record<AnyNodeId, AnyNode>,
+    parentLevelId: levelId,
+  })
+  const normalScale = hit.side === 'front' ? 1 : -1
+  const wallToPosition = [position[0] - frame.point.x, position[2] - frame.point.y] as const
+  const actualOffset =
+    (wallToPosition[0] * frame.normal.x + wallToPosition[1] * frame.normal.y) * normalScale
+  const flushOffset = faceOffset * normalScale + depth / 2
+
+  return {
+    distance: Math.max(0, Math.min(hit.wallLength - width, hit.localX - width / 2)),
+    offset: actualOffset - flushOffset,
+  }
+}
+
+export function resolveCabinetTypedPlacementPosition({
+  depth,
+  distance,
+  hit,
+  levelId,
+  nodes,
+  offset,
+  position,
+  width,
+}: {
+  depth: number
+  distance: number
+  hit: CabinetPlacementWallHit
+  levelId: AnyNodeId
+  nodes: Readonly<Record<AnyNodeId, AnyNode>>
+  offset: number
+  position: readonly [number, number, number]
+  width: number
+}): { position: [number, number, number]; wallLocalX: number; yaw: number } | null {
+  if (!Number.isFinite(distance) || !Number.isFinite(offset)) return null
+  // A cabinet wider than the wall still places (wall snap allows the pose),
+  // and wall snap centers it on the wall (empty span → midpoint). Typed
+  // distance collapses to that centered pose instead of mapping 0 to
+  // width / 2, which would slide the cabinet off the wall center.
+  const maxDistance = Math.max(0, hit.wallLength - width)
+  if (distance < -DIMENSION_EPSILON || distance > maxDistance + DIMENSION_EPSILON) return null
+  const clampedDistance = Math.min(Math.max(distance, 0), maxDistance)
+  const localX = hit.wallLength <= width ? hit.wallLength / 2 : clampedDistance + width / 2
+  const frame = cabinetWallFrameAtLocalX(hit, localX)
+  // Sample the miter at the destination station — the frozen hit's localX is
+  // the pre-typing snap, so its face offset is wrong on mitered corners.
+  const faceOffset = resolveCabinetWallFaceOffset({
+    hit: { ...hit, localX },
+    nodes: nodes as Record<AnyNodeId, AnyNode>,
+    parentLevelId: levelId,
+  })
+  const normalScale = hit.side === 'front' ? 1 : -1
+  const centerOffset = faceOffset + normalScale * (depth / 2 + offset)
+  return {
+    position: [
+      frame.point.x + frame.normal.x * centerOffset,
+      position[1],
+      frame.point.y + frame.normal.y * centerOffset,
+    ],
+    wallLocalX: localX,
+    yaw: Math.atan2(frame.normal.x * normalScale, frame.normal.y * normalScale),
+  }
 }
 
 export function buildCabinetPlacementSizeDimensions({
@@ -140,6 +247,7 @@ export function resolveCabinetPlacementDimensions({
   levelId,
   nodes,
   position,
+  providedWallHit,
   rotation,
   wallId,
   width,
@@ -148,11 +256,13 @@ export function resolveCabinetPlacementDimensions({
   levelId: AnyNodeId
   nodes: Readonly<Record<AnyNodeId, AnyNode>>
   position: readonly [number, number, number]
+  providedWallHit?: CabinetPlacementWallHit
   rotation: number
   wallId?: AnyNodeId
   width: number
 }): CabinetPlacementDimension[] {
-  const wallHit = findPlacementWallHit({ levelId, nodes, position, rotation, wallId })
+  const wallHit =
+    providedWallHit ?? findPlacementWallHit({ levelId, nodes, position, rotation, wallId })
   if (!wallHit) return []
 
   const minLocalX = wallHit.localX - width / 2

@@ -2,6 +2,7 @@
 
 import {
   type AnyNodeId,
+  isDevelopmentBuild,
   nodeRegistry,
   RoofElevationSystem,
   type SitePresentation,
@@ -31,6 +32,7 @@ import { choosePointerEvents, type ViewerBreadcrumbHandler } from '../../lib/poi
 import { initializeGpuRenderer, type RendererPowerPreference } from '../../lib/renderer-capability'
 import { getSceneTheme } from '../../lib/scene-themes'
 import { installTextureNodeNullGuard } from '../../lib/texture-node-guard'
+import { viewerPreferenceStorage } from '../../lib/viewer-preference-storage'
 import useViewer, { type RenderContext, type RenderQuality } from '../../store/use-viewer'
 import { FloorElevationSystem } from '../../systems/floor-elevation/floor-elevation-system'
 import { GeometrySystem } from '../../systems/geometry/geometry-system'
@@ -102,7 +104,7 @@ const DIRTY_BUILD_KINDS = new Set([
   'window',
 ])
 
-const warnedEmptyDraw = process.env.NODE_ENV === 'production' ? null : new WeakSet<object>()
+const warnedEmptyDraw = isDevelopmentBuild() ? new WeakSet<object>() : null
 
 /**
  * Renderer-level safety net against the empty-vertex-buffer crash.
@@ -633,7 +635,7 @@ const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer(
     if (!hasDefaultRender || typeof window === 'undefined') return
 
     let persistedState: Record<string, unknown> = {}
-    const rawPreferences = window.localStorage.getItem('viewer-preferences')
+    const rawPreferences = viewerPreferenceStorage.getItem('viewer-preferences')
     if (rawPreferences) {
       try {
         const parsed = JSON.parse(rawPreferences)
@@ -692,9 +694,11 @@ const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer(
         ref={subscribeWallBuildInteractions}
         key={immersiveActive ? 'webgl-xr' : 'webgpu'}
         camera={{ position: [50, 50, 50], fov: 50 }}
-        className={`transition-colors duration-700 ${
-          transparentBackground ? 'bg-transparent' : isDark ? 'bg-[#1f2433]' : 'bg-[#fafafa]'
-        }`}
+        style={{
+          backgroundColor: transparentBackground ? 'transparent' : isDark ? '#1f2433' : '#fafafa',
+          transition:
+            'background-color 700ms cubic-bezier(0.4, 0, 0.2, 1), color 700ms cubic-bezier(0.4, 0, 0.2, 1)',
+        }}
         dpr={[1, maxDpr]}
         events={pointerEvents}
         frameloop="never"

@@ -1,7 +1,8 @@
 'use client'
 
 import { type OpenWallEnd, sceneRegistry } from '@pascal-app/core'
-import { useViewer } from '@pascal-app/viewer'
+import { MEASUREMENT_DANGLING_COLOR, useViewer } from '@pascal-app/viewer'
+import { LocalizedHtml as Html } from '@pascal-app/viewer/ui'
 import { useFrame } from '@react-three/fiber'
 import { memo, useEffect, useMemo, useRef } from 'react'
 import { BoxGeometry, CircleGeometry, type Group, RingGeometry } from 'three'
@@ -13,12 +14,10 @@ import {
 } from '../../hooks/use-open-wall-ends'
 import { EDITOR_LAYER } from '../../lib/constants'
 import { openWallEndKey, openWallEndLabel } from '../../lib/floorplan/open-wall-ends'
-import { MEASUREMENT_DANGLING_COLOR } from '../../lib/measurements'
 import { cn } from '../../lib/utils'
 import useEditor from '../../store/use-editor'
 import { isViewVisible, VIEW_3D, visibleScene } from '../../store/view-layout'
 import { JoinWallsPill } from './join-walls-pill'
-import { Html } from './localized-html'
 import { OpenWallEndsHint } from './open-wall-ends-hint'
 
 /**

@@ -5,9 +5,10 @@ import {
   hasSegmentMaterialOverride,
   isIndependentRoofSegment,
   type RoofNode,
-  type RoofSegmentNode,
+  roofFaceOf,
   useLiveNodeOverrides,
   useRegistry,
+  useRegistryVersion,
   useScene,
 } from '@pascal-app/core'
 import {
@@ -78,12 +79,25 @@ export const RoofRenderer = ({ node: rawNode }: { node: RoofNode }) => {
     useShallow((state) => {
       const ids: AnyNodeId[] = []
       for (const segmentId of node.children ?? []) {
-        const seg = state.nodes[segmentId as AnyNodeId] as RoofSegmentNode | undefined
-        if (!seg) continue
+        const seg = state.nodes[segmentId as AnyNodeId]
+        if (seg?.type !== 'roof-segment') continue
         for (const childId of seg.children ?? []) ids.push(childId as AnyNodeId)
       }
       return ids
     }),
+  )
+
+  // Faces of other kinds (`capabilities.roofs`: a plugin's roof planes) render as their own kind,
+  // in the roof's frame, beside the shell its segments merge into. A plugin registers its kinds
+  // after the first mount: the version re-reads them.
+  useRegistryVersion()
+  const faceIds = useScene(
+    useShallow(
+      (state) =>
+        (node.children ?? []).filter((childId) =>
+          roofFaceOf(state.nodes[childId as AnyNodeId]),
+        ) as AnyNodeId[],
+    ),
   )
 
   // Segments that carry their own material/preset are rendered outside the
@@ -97,8 +111,8 @@ export const RoofRenderer = ({ node: rawNode }: { node: RoofNode }) => {
     useShallow((state) => {
       const ids: AnyNodeId[] = []
       for (const segmentId of node.children ?? []) {
-        const seg = state.nodes[segmentId as AnyNodeId] as RoofSegmentNode | undefined
-        if (!seg) continue
+        const seg = state.nodes[segmentId as AnyNodeId]
+        if (seg?.type !== 'roof-segment') continue
         if (hasSegmentMaterialOverride(seg) || isIndependentRoofSegment(seg))
           ids.push(segmentId as AnyNodeId)
       }
@@ -109,8 +123,8 @@ export const RoofRenderer = ({ node: rawNode }: { node: RoofNode }) => {
     useShallow((state) => {
       const ids: AnyNodeId[] = []
       for (const segmentId of node.children ?? []) {
-        const seg = state.nodes[segmentId as AnyNodeId] as RoofSegmentNode | undefined
-        if (!seg) continue
+        const seg = state.nodes[segmentId as AnyNodeId]
+        if (seg?.type !== 'roof-segment') continue
         if (!hasSegmentMaterialOverride(seg) && !isIndependentRoofSegment(seg))
           ids.push(segmentId as AnyNodeId)
       }
@@ -186,6 +200,11 @@ export const RoofRenderer = ({ node: rawNode }: { node: RoofNode }) => {
       </group>
       <group name="roof-elements">
         {roofElementIds.map((childId) => (
+          <NodeRenderer key={childId} nodeId={childId} />
+        ))}
+      </group>
+      <group name="roof-faces">
+        {faceIds.map((childId) => (
           <NodeRenderer key={childId} nodeId={childId} />
         ))}
       </group>

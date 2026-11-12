@@ -6,6 +6,7 @@ import {
   type BoxVentNode,
   type ChimneyNode,
   type DormerNode,
+  formatLinearMeasurement,
   type GutterNode,
   getRoofSegmentDeckReach,
   getSegmentSlopeFrame,
@@ -29,7 +30,6 @@ import {
   ActionButton,
   ActionGroup,
   duplicateNodeAndPickUp,
-  formatLinearMeasurement,
   localizedLevelName,
   nodeLabel,
   PanelSection,
@@ -44,6 +44,7 @@ import { useViewer } from '@pascal-app/viewer'
 import { Copy, Move, Plus, Trash2 } from 'lucide-react'
 import { useCallback, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
+import { RoofGeometryNotice } from '../roof/geometry-notice'
 import { RoofGlazingPanel } from '../roof/glazing-panel'
 import { commitSeatedRoofEdit } from './roof-level-target'
 
@@ -323,6 +324,7 @@ export default function RoofPanel() {
       title={node.name || i18n._({ id: 'node.roof.panel.roof', message: 'Roof' })}
       width={300}
     >
+      <RoofGeometryNotice ids={[node.id, ...segments.map((segment) => segment.id)]} />
       <RoofGlazingPanel segments={segments} />
       {levelMove && (
         <PanelSection title={i18n._({ id: 'node.roof.panel.level', message: 'Level' })}>

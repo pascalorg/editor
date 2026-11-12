@@ -44,7 +44,12 @@ const WHITE_BALANCE = 0.75
  */
 const LAMP_VIEW_COMP = 0.8
 /** Maximum metered exposure boost with the camera inside a room. */
-const INTERIOR_EV = 2
+const INTERIOR_EV = 2.4
+/**
+ * Indoors the eye opens up a little past the meter's partial adaptation (EV): rooms read airy
+ * rather than dim, by day and by lamplight alike.
+ */
+const INTERIOR_BIAS_EV = 0.35
 /** Sun shadow map per quality tier. */
 const SHADOW_MAP: Record<RenderQuality, number> = { high: 4096, medium: 2048, low: 1024 }
 /** EON rough diffuse per quality tier. */
@@ -127,7 +132,7 @@ export function DaylightAtmosphere() {
       skyRadiance: (dir) => sky.skyRadiance(dir),
       reflectionRadiance: (dir) => sky.skyRadiance(dir, { disc: false }).mul(ENV_INTENSITY),
       // Just above the horizon in the view's heading: what the ground fog and the backdrop meet at.
-      fogRadiance: (dir) => sky.skyRadiance(vec3(dir.x, 0.004, dir.z), { disc: false }),
+      fogRadiance: (dir) => sky.horizonRadiance(vec3(dir.x, 0.004, dir.z)),
       environmentNode: (environment.target
         ? pmremTexture(environment.target.texture).mul(ENV_INTENSITY)
         : vec3(0)) as any,
@@ -337,9 +342,10 @@ export function DaylightAtmosphere() {
           meter.current.outdoor,
           meter.current.skyLum,
         )
-    const meterEV = (E: number, max: number) =>
-      MathUtils.clamp(Math.log2(METER_REF / Math.max(E, 1e-4)) * 0.6, -0.5, max)
-    const target = meterEV(viewed.sceneE, inside ? INTERIOR_EV : 2.2)
+    const meterEV = (E: number, max: number, bias = 0) =>
+      MathUtils.clamp(Math.log2(METER_REF / Math.max(E, 1e-4)) * 0.6 + bias, -0.5, max)
+    const indoorEV = (E: number) => meterEV(E, INTERIOR_EV, INTERIOR_BIAS_EV)
+    const target = inside ? indoorEV(viewed.sceneE) : meterEV(viewed.sceneE, 2.2)
     meter.current.ev += (target - meter.current.ev) * Math.min(1, dt * 3)
     source.exposure = 2 ** meter.current.ev
     // Glows (window panes, lamp shades) stay out of the night exposure lift.
@@ -350,8 +356,7 @@ export function DaylightAtmosphere() {
     const lampView =
       inside || viewed.roomsE <= 0
         ? 1
-        : 2 **
-          (-LAMP_VIEW_COMP * Math.max(0, meter.current.ev - meterEV(viewed.roomsE, INTERIOR_EV)))
+        : 2 ** (-LAMP_VIEW_COMP * Math.max(0, meter.current.ev - indoorEV(viewed.roomsE)))
     const shown = daylightRooms.lampView.value as number
     daylightRooms.lampView.value = shown + (lampView - shown) * Math.min(1, dt * 3)
     // Eye-like chromatic adaptation (von Kries): divide out the illuminant where the camera is,

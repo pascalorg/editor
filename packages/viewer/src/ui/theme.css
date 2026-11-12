@@ -1,0 +1,339 @@
+/*
+ * @pascal-app/viewer/ui theme — the tokens and utilities its components use (Tailwind v4).
+ *
+ *   @import "tailwindcss";
+ *   @import "@pascal-app/viewer/ui/theme.css";
+ *   @source "../node_modules/@pascal-app/viewer/dist/ui";
+ *
+ * Defaults match Pascal's hosted viewer. Override any token after the import, e.g.
+ * `:root { --radius: 0.5rem; }`. The docks and menus scope themselves with a `dark`
+ * class, so the `.dark` values are what they show.
+ */
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --shadow-elevation-0: var(--shadow-elevation-0);
+  --shadow-elevation-1: var(--shadow-elevation-1);
+  --shadow-elevation-2: var(--shadow-elevation-2);
+  --shadow-elevation-3: var(--shadow-elevation-3);
+  --shadow-elevation-4: var(--shadow-elevation-4);
+  --shadow-elevation-5: var(--shadow-elevation-5);
+  --shadow-elevation-6: var(--shadow-elevation-6);
+}
+
+/* Light: an ambient ring plus diffusion layers doubling 1 → 3 → 6 → 12 → 24 → 48. */
+:root {
+  --radius: 0.625rem;
+  --background: #ffffff;
+  --foreground: #18181b;
+  --card: #ffffff;
+  --card-foreground: #18181b;
+  --popover: #ffffff;
+  --popover-foreground: #18181b;
+  --primary: #18181b;
+  --primary-foreground: #fafafa;
+  --secondary: #f4f4f5;
+  --secondary-foreground: #18181b;
+  --muted: #f4f4f5;
+  --muted-foreground: #6b6b77;
+  --accent: #f4f4f5;
+  --accent-foreground: #18181b;
+  --destructive: oklch(0.577 0.245 27.325);
+  --border: #e4e4e7;
+  --input: #e4e4e7;
+  --ring: #9f9faa;
+
+  --shadow-color: rgb(0 0 0 / 0.06);
+  --shadow-elevation-0: 0 0 0 1px var(--shadow-color);
+  --shadow-elevation-1: 0 0 0 1px var(--shadow-color), 0 1px 1px -0.5px var(--shadow-color);
+  --shadow-elevation-2:
+    0 0 0 1px var(--shadow-color), 0 1px 1px -0.5px var(--shadow-color),
+    0 3px 3px -1.5px var(--shadow-color);
+  --shadow-elevation-3:
+    0 0 0 1px var(--shadow-color), 0 1px 1px -0.5px var(--shadow-color),
+    0 3px 3px -1.5px var(--shadow-color), 0 6px 6px -3px var(--shadow-color);
+  --shadow-elevation-4:
+    0 0 0 1px var(--shadow-color), 0 1px 1px -0.5px var(--shadow-color),
+    0 3px 3px -1.5px var(--shadow-color), 0 6px 6px -3px var(--shadow-color),
+    0 12px 12px -6px var(--shadow-color);
+  --shadow-elevation-5:
+    0 0 0 1px var(--shadow-color), 0 1px 1px -0.5px var(--shadow-color),
+    0 3px 3px -1.5px var(--shadow-color), 0 6px 6px -3px var(--shadow-color),
+    0 12px 12px -6px var(--shadow-color), 0 24px 24px -12px var(--shadow-color);
+  --shadow-elevation-6:
+    0 0 0 1px var(--shadow-color), 0 1px 1px -0.5px var(--shadow-color),
+    0 3px 3px -1.5px var(--shadow-color), 0 6px 6px -3px var(--shadow-color),
+    0 12px 12px -6px var(--shadow-color), 0 24px 24px -12px var(--shadow-color),
+    0 48px 48px -24px var(--shadow-color);
+}
+
+/* Dark: raised surfaces catch light on their top edge and rim, over a grounding drop stack. */
+.dark {
+  --background: #0d0d0f;
+  --foreground: #fafafa;
+  --card: #18181b;
+  --card-foreground: #fafafa;
+  --popover: #18181b;
+  --popover-foreground: #e4e4e7;
+  --primary: #e4e4e7;
+  --primary-foreground: #0d0d0f;
+  --secondary: #27272a;
+  --secondary-foreground: #e4e4e7;
+  --muted: #27272a;
+  --muted-foreground: #9f9faa;
+  --accent: #27272a;
+  --accent-foreground: #e4e4e7;
+  --destructive: oklch(0.704 0.191 22.216);
+  --border: #27272a;
+  --input: #27272a;
+  --ring: #52525e;
+
+  --shadow-color: rgba(0, 0, 0, 0.18);
+  --dm-hi-base: rgba(255, 255, 255, 0.02);
+  --dm-hi-mid: rgba(255, 255, 255, 0.05);
+  --dm-hi-high: rgba(255, 255, 255, 0.08);
+  --dm-hi-peak: rgba(255, 255, 255, 0.11);
+  --dm-ring-base: rgba(255, 255, 255, 0.02);
+  --dm-ring-mid: rgba(255, 255, 255, 0.04);
+  --dm-ring-high: rgba(255, 255, 255, 0.06);
+  --shadow-elevation-0: inset 0 0 0 1px var(--dm-ring-base);
+  --shadow-elevation-1:
+    inset 0 1px 0 0 var(--dm-hi-base), inset 0 0 0 1px var(--dm-ring-base),
+    0 1px 1px -0.5px var(--shadow-color);
+  --shadow-elevation-2:
+    inset 0 1px 0 0 var(--dm-hi-mid), inset 0 0 0 1px var(--dm-ring-base),
+    0 0 0 1px rgba(0, 0, 0, 0.12), 0 1px 1px -0.5px var(--shadow-color),
+    0 3px 3px -1.5px var(--shadow-color);
+  --shadow-elevation-3:
+    inset 0 1px 0 0 var(--dm-hi-mid), inset 0 0 0 1px var(--dm-ring-mid),
+    0 0 0 1px rgba(0, 0, 0, 0.14), 0 1px 1px -0.5px var(--shadow-color),
+    0 3px 3px -1.5px var(--shadow-color), 0 6px 6px -3px var(--shadow-color);
+  --shadow-elevation-4:
+    inset 0 1px 0 0 var(--dm-hi-high), inset 0 0 0 1px var(--dm-ring-mid),
+    0 0 0 1px rgba(0, 0, 0, 0.16), 0 1px 1px -0.5px var(--shadow-color),
+    0 3px 3px -1.5px var(--shadow-color), 0 6px 6px -3px var(--shadow-color),
+    0 12px 12px -6px var(--shadow-color);
+  --shadow-elevation-5:
+    inset 0 1px 0 0 var(--dm-hi-high), inset 0 0 0 1px var(--dm-ring-high),
+    0 0 0 1px rgba(0, 0, 0, 0.18), 0 1px 1px -0.5px var(--shadow-color),
+    0 3px 3px -1.5px var(--shadow-color), 0 6px 6px -3px var(--shadow-color),
+    0 12px 12px -6px var(--shadow-color), 0 24px 24px -12px var(--shadow-color);
+  --shadow-elevation-6:
+    inset 0 1px 0 0 var(--dm-hi-peak), inset 0 0 0 1px var(--dm-ring-high),
+    0 0 0 1px rgba(0, 0, 0, 0.2), 0 1px 1px -0.5px var(--shadow-color),
+    0 3px 3px -1.5px var(--shadow-color), 0 6px 6px -3px var(--shadow-color),
+    0 12px 12px -6px var(--shadow-color), 0 24px 24px -12px var(--shadow-color),
+    0 48px 48px -24px var(--shadow-color);
+}
+
+/* Progressive enhancement: pair with any rounded-* class. */
+@utility corner-smooth {
+  corner-shape: squircle;
+}
+
+/* SceneLoader picks one of these at random. */
+.pascal-loader-1,
+.pascal-loader-4,
+.pascal-loader-5 {
+  width: 45px;
+  aspect-ratio: 1;
+  --c: no-repeat linear-gradient(currentColor 0 0);
+  background: var(--c), var(--c), var(--c);
+}
+.pascal-loader-2,
+.pascal-loader-3 {
+  width: 45px;
+  aspect-ratio: 0.75;
+  --c: no-repeat linear-gradient(currentColor 0 0);
+}
+.pascal-loader-1 {
+  animation:
+    pascal-l1-1 1s infinite,
+    pascal-l1-2 1s infinite;
+}
+@keyframes pascal-l1-1 {
+  0%,
+  100% {
+    background-size: 20% 100%;
+  }
+  33%,
+  66% {
+    background-size: 20% 20%;
+  }
+}
+@keyframes pascal-l1-2 {
+  0%,
+  33% {
+    background-position:
+      0 0,
+      50% 50%,
+      100% 100%;
+  }
+  66%,
+  100% {
+    background-position:
+      100% 0,
+      50% 50%,
+      0 100%;
+  }
+}
+.pascal-loader-2 {
+  background:
+    var(--c) 0% 50%,
+    var(--c) 50% 50%,
+    var(--c) 100% 50%;
+  background-size: 20% 50%;
+  animation: pascal-l2 1s infinite linear;
+}
+@keyframes pascal-l2 {
+  20% {
+    background-position:
+      0% 0%,
+      50% 50%,
+      100% 50%;
+  }
+  40% {
+    background-position:
+      0% 100%,
+      50% 0%,
+      100% 50%;
+  }
+  60% {
+    background-position:
+      0% 50%,
+      50% 100%,
+      100% 0%;
+  }
+  80% {
+    background-position:
+      0% 50%,
+      50% 50%,
+      100% 100%;
+  }
+}
+.pascal-loader-3 {
+  background:
+    var(--c) 0% 100%,
+    var(--c) 50% 100%,
+    var(--c) 100% 100%;
+  background-size: 20% 65%;
+  animation: pascal-l3 1s infinite linear;
+}
+@keyframes pascal-l3 {
+  16.67% {
+    background-position:
+      0% 0%,
+      50% 100%,
+      100% 100%;
+  }
+  33.33% {
+    background-position:
+      0% 0%,
+      50% 0%,
+      100% 100%;
+  }
+  50% {
+    background-position:
+      0% 0%,
+      50% 0%,
+      100% 0%;
+  }
+  66.67% {
+    background-position:
+      0% 100%,
+      50% 0%,
+      100% 0%;
+  }
+  83.33% {
+    background-position:
+      0% 100%,
+      50% 100%,
+      100% 0%;
+  }
+}
+.pascal-loader-4 {
+  animation:
+    pascal-l4-1 1s infinite,
+    pascal-l4-2 1s infinite;
+}
+@keyframes pascal-l4-1 {
+  0%,
+  100% {
+    background-size: 20% 100%;
+  }
+  33%,
+  66% {
+    background-size: 20% 40%;
+  }
+}
+@keyframes pascal-l4-2 {
+  0%,
+  33% {
+    background-position:
+      0 0,
+      50% 100%,
+      100% 100%;
+  }
+  66%,
+  100% {
+    background-position:
+      100% 0,
+      0 100%,
+      50% 100%;
+  }
+}
+.pascal-loader-5 {
+  animation:
+    pascal-l5-1 1s infinite,
+    pascal-l5-2 1s infinite;
+}
+@keyframes pascal-l5-1 {
+  0%,
+  100% {
+    background-size: 20% 100%;
+  }
+  33%,
+  66% {
+    background-size: 20% 40%;
+  }
+}
+@keyframes pascal-l5-2 {
+  0%,
+  33% {
+    background-position:
+      0 0,
+      50% 100%,
+      100% 0;
+  }
+  66%,
+  100% {
+    background-position:
+      0 100%,
+      50% 0,
+      100% 100%;
+  }
+}

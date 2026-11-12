@@ -1,13 +1,13 @@
 'use client'
 
-import { nodeRegistry, type WallNode } from '@pascal-app/core'
+import { nodeRegistry, WALL_PULL_GRIP_TITLE, type WallNode, wallPullSeed } from '@pascal-app/core'
 import { type ThreeEvent, useThree } from '@react-three/fiber'
 import { useEffect, useMemo, useState } from 'react'
 import { Color, DoubleSide, ExtrudeGeometry, OrthographicCamera, Shape } from 'three'
 import { MeshBasicNodeMaterial } from 'three/webgpu'
 import { EDITOR_LAYER } from '../../lib/constants'
 import { sfxEmitter } from '../../lib/sfx-bus'
-import { startWallPull, WALL_PULL_GRIP_TITLE, wallPullSeed } from '../../lib/wall-pull'
+import { startWallPull } from '../../lib/wall-pull'
 import { suppressBoxSelectForPointer } from '../tools/select/box-select-state'
 import {
   createEndpointHitAreaGeometry,

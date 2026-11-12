@@ -1,6 +1,10 @@
 import { afterEach, expect, test } from 'bun:test'
-import { useInteractive, useScene, WindowNode } from '@pascal-app/core'
-import { getDisplayedWindowShutterValue } from '@pascal-app/editor'
+import {
+  getDisplayedWindowShutterValue,
+  useInteractive,
+  useScene,
+  WindowNode,
+} from '@pascal-app/core'
 import { windowMechanism } from './mechanism'
 
 const originalScene = useScene.getState()

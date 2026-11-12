@@ -1,0 +1,374 @@
+import { spawn } from 'node:child_process'
+import { existsSync } from 'node:fs'
+import { cp, mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises'
+import { dirname, join, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
+import { chromium } from 'playwright-core'
+
+const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
+const started = performance.now()
+const elapsed = () => `${((performance.now() - started) / 1000).toFixed(1)}s`
+const temp = await mkdtemp(join('/tmp', 'pascal-viewer-live-'))
+console.log(`Isolated viewer fixture: ${temp}`)
+
+async function run(command: string[], cwd: string) {
+  const result = await Bun.$`${command}`
+    .cwd(cwd)
+    .env({
+      ...process.env,
+      npm_config_cache: process.env.npm_config_cache ?? join(temp, 'npm-cache'),
+    })
+    .quiet()
+    .nothrow()
+  if (result.exitCode !== 0)
+    throw new Error(`${command.join(' ')} failed:\n${result.stdout}\n${result.stderr}`)
+  return result.stdout.toString()
+}
+
+// Built from the escape character so the regex literal holds no control character.
+const TRANSPARENT_PNG = Buffer.from(
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=',
+  'base64',
+)
+const ANSI_ESCAPES = new RegExp(`${String.fromCharCode(27)}\\[[0-9;]*m`, 'g')
+
+async function withServer(command: string[], cwd: string, check: (url: string) => Promise<void>) {
+  // CI forces colour, and Vite then splits the printed URL with escape codes.
+  const server = spawn(command[0]!, command.slice(1), {
+    cwd,
+    stdio: ['ignore', 'pipe', 'pipe'],
+    env: { ...process.env, NO_COLOR: '1', FORCE_COLOR: '0' },
+    // Its own process group, so stopping it also stops the Vite and esbuild children
+    // `npm run` starts; on Linux they otherwise outlive npm and keep this script alive.
+    detached: true,
+  })
+  const stop = () => {
+    try {
+      process.kill(-server.pid!, 'SIGTERM')
+    } catch {
+      // Already gone.
+    }
+  }
+  let output = ''
+  let exitCode: number | null = null
+  server.stdout.on('data', (chunk) => {
+    output += chunk
+  })
+  server.stderr.on('data', (chunk) => {
+    output += chunk
+  })
+  server.on('exit', (code) => {
+    exitCode = code ?? 1
+  })
+  const origin = await new Promise<string>((accept, reject) => {
+    const deadline = setTimeout(() => {
+      clearInterval(poll)
+      reject(new Error(output))
+    }, 30_000)
+    const poll = setInterval(() => {
+      const match = output.replace(ANSI_ESCAPES, '').match(/http:\/\/127\.0\.0\.1:\d+/)
+      if (match || exitCode !== null) {
+        clearTimeout(deadline)
+        clearInterval(poll)
+        if (match) accept(match[0])
+        else reject(new Error(output))
+      }
+    }, 50)
+  }).catch((error) => {
+    stop()
+    throw error
+  })
+  try {
+    await check(origin)
+  } finally {
+    stop()
+    await new Promise<void>((accept) => {
+      if (server.exitCode !== null || server.signalCode !== null) accept()
+      else server.once('exit', () => accept())
+    })
+  }
+}
+
+// Fixture nodes whose plan geometry includes filled outlines.
+const PLAN_NODE_IDS = [
+  'wall_south',
+  'wall_east',
+  'wall_north',
+  'wall_west',
+  'door_fixture',
+  'window_fixture',
+  'roof_fixture',
+  'ceiling_fixture',
+  'zone_fixture',
+  'item_fixture',
+]
+
+let failed = false
+try {
+  await run(
+    [
+      'bunx',
+      'turbo',
+      'build',
+      '--filter=@pascal-app/core',
+      '--filter=@pascal-app/viewer',
+      '--filter=@pascal-app/nodes',
+    ],
+    process.env.PASCAL_VIEWER_BUILD_ROOT ?? root,
+  )
+  console.log(`Packages built (${elapsed()})`)
+  const app = join(temp, 'app')
+  await cp(join(root, 'fixtures/viewer-live'), app, { recursive: true })
+  const manifest = JSON.parse(await readFile(join(app, 'package.json'), 'utf8'))
+  for (const name of ['core', 'viewer', 'nodes']) {
+    const packed = JSON.parse(
+      await run(
+        ['npm', 'pack', '--ignore-scripts', '--json', '--pack-destination', temp],
+        join(root, 'packages', name),
+      ),
+    )
+    manifest.dependencies[`@pascal-app/${name}`] = `file:${join(temp, packed[0].filename)}`
+  }
+  await writeFile(join(app, 'package.json'), `${JSON.stringify(manifest, null, 2)}\n`)
+  await run(['npm', 'install', '--no-audit', '--no-fund'], app)
+  // Inspect what npm actually installed: `npm ls` also lists the unmet optional editor
+  // peer of @pascal-app/nodes, which is exactly the state this proof wants.
+  const installed = (await readdir(join(app, 'node_modules'), { recursive: true })).filter((path) =>
+    /(?:^|\/)(?:next|@pascal-app\/editor)\/package\.json$/.test(path.replaceAll('\\', '/')),
+  )
+  if (installed.length)
+    throw new Error(`Editor or Next installed in the isolated tree: ${installed.join(', ')}`)
+  console.log(`Packed install and dependency isolation passed (${elapsed()})`)
+  console.log(await run(['npm', 'run', 'build'], app))
+  console.log(`Vite production build passed (${elapsed()})`)
+
+  const systemChrome =
+    process.platform === 'darwin'
+      ? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'
+      : '/usr/bin/google-chrome'
+  const browser = await chromium.launch({
+    executablePath:
+      process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE ??
+      (existsSync(systemChrome) ? systemChrome : undefined),
+    args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--no-sandbox'],
+  })
+  try {
+    for (const mode of ['dev', 'preview'] as const) {
+      await withServer(['npm', 'run', mode, '--', '--port', '0'], app, async (url) => {
+        for (const deniedStorage of [false, true]) {
+          const page = await browser.newPage({ viewport: { width: 960, height: 640 } })
+          const errors: string[] = []
+          page.on('pageerror', (error) => errors.push(error.message))
+          page.on('console', (message) => {
+            if (message.type() === 'error') errors.push(message.text())
+          })
+          if (deniedStorage)
+            await page.addInitScript(() => {
+              Object.defineProperty(window, 'localStorage', {
+                get() {
+                  throw new DOMException('Storage denied', 'SecurityError')
+                },
+              })
+            })
+          const soundRequests: string[] = []
+          await page.route('**/fixture-sfx/*.mp3', (route) => {
+            soundRequests.push(new URL(route.request().url()).pathname)
+            return route.fulfill({ status: 200, contentType: 'audio/mpeg', body: Buffer.alloc(0) })
+          })
+          const iconRequests: string[] = []
+          await page.route('**/icons/*.webp', (route) => {
+            iconRequests.push(new URL(route.request().url()).pathname)
+            return route.fulfill({ status: 200, contentType: 'image/png', body: TRANSPARENT_PNG })
+          })
+          try {
+            await page.goto(url)
+            await page.waitForFunction(
+              () => {
+                const probe = (window as any).viewerFixture
+                return (
+                  document.querySelector('[data-scene-ready="true"]') &&
+                  probe?.pending === 0 &&
+                  probe.drawCalls > 0 &&
+                  [
+                    'wall_south',
+                    'wall_east',
+                    'wall_north',
+                    'wall_west',
+                    'door_fixture',
+                    'window_fixture',
+                    'roof_fixture',
+                    'ceiling_fixture',
+                    'procedural-item_fixture',
+                    'zone_fixture',
+                    'measurement_fixture',
+                    'separator_fixture',
+                    'item_fixture',
+                  ].every((id) => probe.geometry[id] > 0)
+                )
+              },
+              undefined,
+              { timeout: 60_000 },
+            )
+            const probe = await page.evaluate(() => (window as any).viewerFixture)
+            if (Object.keys(probe.itemFailures ?? {}).length) throw new Error(JSON.stringify(probe))
+            if (errors.length) throw new Error(errors.join('\n'))
+            if ((await page.evaluate(() => typeof (globalThis as any).process)) !== 'undefined')
+              throw new Error('Fixture must run without a process polyfill')
+            if (!iconRequests.includes('/icons/topview.webp'))
+              throw new Error(
+                `Viewer UI icons did not load from iconsBaseUrl: ${iconRequests.join(', ')}`,
+              )
+            // The packed rooms layer: the level's pill, then the room it selects, highlighted
+            // on the overlay layer with its callout.
+            await page.evaluate(() => (window as any).showFixtureRooms())
+            const pill = '[data-room-label="zone_fixture"]'
+            await page.waitForSelector(pill, { state: 'attached', timeout: 10_000 })
+            // Measurements and guides share the overlay layer: the highlight adds to them.
+            const overlayBefore: number = await page.evaluate(
+              () => (window as any).viewerFixture.overlay,
+            )
+            await page.evaluate((selector) => {
+              document.querySelector<HTMLButtonElement>(selector)!.click()
+            }, pill)
+            await page.waitForFunction(
+              (before) =>
+                (window as any).viewerFixture?.overlay > before &&
+                document.querySelector('.pascal-callout strong')?.textContent === 'Live room',
+              overlayBefore,
+              { timeout: 10_000 },
+            )
+            const documentBefore = await page.evaluate(() => (window as any).viewerFixture.document)
+            await page.click('[data-enter-walkthrough]')
+            await page.waitForFunction(() => {
+              const probe = (window as any).viewerFixture
+              return (
+                probe?.walking &&
+                probe.camera[1] > 1 &&
+                probe.camera[1] < 2 &&
+                document.pointerLockElement === document.querySelector('canvas')
+              )
+            })
+            await page.waitForSelector('[data-walkthrough-hud]', { state: 'visible' })
+            await page.waitForSelector('[data-walkthrough-crosshair]', { state: 'visible' })
+            // Wait for the initial capsule/eye placement before measuring keyboard movement.
+            const start: number[] = await page.evaluate(() => (window as any).viewerFixture.camera)
+            await page.keyboard.down('w')
+            try {
+              await page.waitForFunction(
+                (position) => {
+                  const camera = (window as any).viewerFixture.camera
+                  return Math.hypot(camera[0] - position[0], camera[2] - position[2]) > 0.3
+                },
+                start,
+                { timeout: 10_000 },
+              )
+            } finally {
+              await page.keyboard.up('w')
+            }
+            // The placed spawn faces the fixture's south-wall door. This must be the controller's
+            // own centre-ray target and E handler, not a synthetic sound request from the host.
+            await page.waitForFunction(() =>
+              document.querySelector('[data-walkthrough-hud]')?.textContent?.includes('open door'),
+            )
+            await page.keyboard.press('e')
+            await page.waitForFunction(() =>
+              (window as any).viewerFixture.interactionSounds.includes('door-open'),
+            )
+            for (let i = 0; i < 50 && !soundRequests.includes('/fixture-sfx/door_open.mp3'); i++)
+              await page.waitForTimeout(100)
+            if (!soundRequests.includes('/fixture-sfx/door_open.mp3'))
+              throw new Error(
+                `Door sound did not load from sfxBaseUrl: ${soundRequests.join(', ')}`,
+              )
+            const documentAfter = await page.evaluate(() => (window as any).viewerFixture.document)
+            if (documentBefore !== documentAfter)
+              throw new Error(
+                'Walkthrough movement/door interaction changed the read-only document',
+              )
+            await page.keyboard.press('Escape')
+            await page.waitForFunction(() => !(window as any).viewerFixture.walking)
+            await page.waitForSelector('[data-walkthrough-hud]', { state: 'detached' })
+            // The packed stage: its switcher shows the read-only plan, drawn by renderPlugin's
+            // floor-plan builders alone, then the plan beside the 3D view.
+            const planShapes: Record<string, number> = {}
+            for (const [label, stage] of [
+              ['2D', '2d'],
+              ['Split', 'split'],
+            ] as const) {
+              await page
+                .locator('[data-pascal-viewer-stage] [role="group"] button', { hasText: label })
+                .click({ timeout: 10_000 })
+              await page.waitForSelector(`[data-pascal-viewer-stage="${stage}"]`, {
+                timeout: 10_000,
+              })
+              await page.waitForFunction(
+                (ids) =>
+                  ids.every(
+                    (id) =>
+                      document.querySelectorAll(
+                        `[data-floorplan-preview] [data-floorplan-node-id="${id}"] :is(path, polygon)`,
+                      ).length > 0,
+                  ),
+                PLAN_NODE_IDS,
+                { timeout: 10_000 },
+              )
+              Object.assign(
+                planShapes,
+                await page.evaluate(
+                  (ids) =>
+                    Object.fromEntries(
+                      ids.map((id) => [
+                        id,
+                        document.querySelectorAll(
+                          `[data-floorplan-preview] [data-floorplan-node-id="${id}"] :is(path, polygon)`,
+                        ).length,
+                      ]),
+                    ),
+                  PLAN_NODE_IDS,
+                ),
+              )
+            }
+            const panes = await page.evaluate(() =>
+              ['[data-pascal-viewer-3d]', '[data-floorplan-preview]'].map(
+                (selector) => document.querySelector(selector)?.getBoundingClientRect().width ?? 0,
+              ),
+            )
+            if (!panes.every((width) => width > 100 && width < 960))
+              throw new Error(`Split must show the 3D view and the plan side by side: ${panes}`)
+            if (errors.length) throw new Error(errors.join('\n'))
+            console.log(
+              `${mode}, storage ${deniedStorage ? 'denied' : 'available'}: scene ready, ` +
+                `non-empty node geometry, ${probe.drawCalls} draw calls, room pill, highlight ` +
+                `and callout, live walkthrough movement, HUD, door sound, unchanged document, ` +
+                `2D and split plan (${JSON.stringify(planShapes)}), no errors (${elapsed()})`,
+            )
+          } catch (error) {
+            console.error(
+              await page.evaluate(() => ({
+                probe: (window as any).viewerFixture,
+                body: document.body.textContent,
+              })),
+            )
+            throw new Error(
+              `${mode}, storage denied=${deniedStorage}: ${error}\n${errors.join('\n')}`,
+            )
+          } finally {
+            await page.close()
+          }
+        }
+      })
+    }
+  } finally {
+    await browser.close()
+  }
+  console.log(`Viewer live fixture passed (${elapsed()})`)
+} catch (error) {
+  console.error(error)
+  failed = true
+} finally {
+  console.log(`Viewer fixture elapsed: ${elapsed()}`)
+  if (process.env.KEEP_VIEWER_LIVE_FIXTURE) console.log(`Kept ${temp}`)
+  else await rm(temp, { recursive: true, force: true })
+}
+// Nothing this script started may keep CI waiting once the verdict is printed, pass or fail.
+process.exit(failed ? 1 : 0)

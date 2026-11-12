@@ -2,6 +2,7 @@ import type { FURNISHED_ROOM_TYPES } from '../agent-tools/furnish-room'
 import { refuse } from '../agent-tools/refusal'
 import { OTHER_SOURCES } from '../agent-tools/sources'
 import { type AssetInput, ItemNode, type WallNode } from '../schema'
+import { catalogItemFields } from './catalog-asset'
 import { edgeProjection } from './create-room'
 import {
   collectDoorKeepouts,
@@ -375,7 +376,7 @@ export const furnishRoom: AgentOperation<FurnishRoomInput> = (nodes, input, cont
         parentId: levelId,
         position: [candidate.x, 0, candidate.z],
         rotation: [0, rotation, 0],
-        asset,
+        ...catalogItemFields(asset),
       }),
     )
   }

@@ -50,6 +50,12 @@ export const searchAssets: AgentOperation<SearchAssetsInput> = (_nodes, input, c
       category: item.category,
       dimensions: item.dimensions ?? [1, 1, 1],
       attachTo: item.attachTo ?? null,
+      ...(item.script && {
+        params: item.script.manifest.params.map((spec) => ({
+          ...spec,
+          value: item.script!.params[spec.id] ?? spec.default,
+        })),
+      }),
     }))
     return { query: query.text, total: found.total, truncated, results }
   })

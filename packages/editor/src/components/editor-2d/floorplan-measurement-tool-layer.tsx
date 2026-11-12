@@ -3,11 +3,17 @@
 import {
   type AnyNode,
   type AnyNodeId,
+  buildMeasurementAngleArcPoints,
   closestMeasurementFeatureBinding,
   collectAlignmentAnchors,
   emitter,
+  formatAngleRadians,
+  formatAreaLabel,
+  formatLinearMeasurement,
   formatNumber,
+  formatVolumeLabel,
   type GeometryContext,
+  getLinearUnitLabel,
   type MeasurementFeatureAnchor,
   type MeasurementSnapKind,
   measurementAngle,
@@ -16,23 +22,19 @@ import {
   measurementFeatureLength,
   measurementPerimeter,
   measurementPrismVolume,
+  metersToLinearUnit,
   nodeRegistry,
+  parseLinearMeasurementInput,
   useLocale,
   useScene,
 } from '@pascal-app/core'
-import { useViewer } from '@pascal-app/viewer'
-import { useEffect, useMemo, useRef, useState } from 'react'
-import { measurementPolygonLabelAnchor } from '../../lib/measurement-label'
 import {
-  buildMeasurementAngleArcPoints,
-  formatAreaLabel,
-  formatLinearMeasurement,
-  formatVolumeLabel,
-  getLinearUnitLabel,
   MEASUREMENT_ACTIVE_COLOR,
-  metersToLinearUnit,
-  parseLinearMeasurementInput,
-} from '../../lib/measurements'
+  measurementPolygonLabelAnchor,
+  useViewer,
+} from '@pascal-app/viewer'
+import { resolveFloorplanLabelAngle } from '@pascal-app/viewer/ui'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   clearSurfacePlanSnapFeedback,
   resolveSurfacePlanPointSnap,
@@ -45,10 +47,8 @@ import {
   measurementPolygonMidpoints,
   useMeasurementDraft,
 } from '../../store/use-measurement-draft'
-import { formatAngleRadians } from '../tools/shared/segment-angle'
 import { FloorplanQuickMeasureLayer } from './floorplan-quick-measure-layer'
 import { useFloorplanRender } from './floorplan-render-context'
-import { resolveFloorplanLabelAngle } from './renderers/floorplan-label-angle'
 
 const DRAFT_COLOR = MEASUREMENT_ACTIVE_COLOR
 const X_AXIS_COLOR = '#ef4444'

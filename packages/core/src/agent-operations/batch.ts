@@ -5,7 +5,7 @@ import type { SceneMaterialId } from '../schema/scene-material'
 import { applySceneChanges, mergeSceneChanges } from './apply-changes'
 import { requireFurnishing } from './design-brief'
 import { referencedSceneMaterialIds } from './scene-materials'
-import type { AgentOperation, SceneChanges } from './types'
+import type { AgentOperation, AgentOperationSteps, SceneChanges } from './types'
 
 type BatchInput = {
   calls: { tool: string; input?: Record<string, unknown> }[]
@@ -46,12 +46,15 @@ function prepareCall(
  * merged into one set — one undo step, one write on either surface. The user: the model spent a
  * round trip per step on what could be serialised (deleting balcony walls one by one, the same
  * build on every floor). Pre-check and operation refusals follow the same per-call policy.
+ * It stops after each call, and where a call that runs in steps (`stepped`) does, so a host that
+ * can let other work run meanwhile does (`AGENT_OPERATIONS.run_batch` runs it through in one go).
  */
-export function createBatchOperation(
+export function createBatchSteps(
   operations: Readonly<Record<string, AgentOperation<never>>>,
   contracts: readonly Contract[],
-): AgentOperation<BatchInput> {
-  return (nodes, { calls, onRefusal = 'stop' }, context) => {
+  stepped: Readonly<Record<string, AgentOperationSteps<never>>> = {},
+): AgentOperationSteps<BatchInput> {
+  return function* (nodes, { calls, onRefusal = 'stop' }, context) {
     let working = nodes
     let workingContext = context
     let kept: RefusalKeep['readings'] | undefined
@@ -64,10 +67,10 @@ export function createBatchOperation(
           catalog: workingContext.catalog,
         })
         const { operation, input } = prepareCall(call, index, operations, contracts)
-        const { result, changes } = operation(working, input as never, {
-          ...workingContext,
-          batchCall: index,
-        })
+        const callContext = { ...workingContext, batchCall: index }
+        const { result, changes } = Object.hasOwn(stepped, call.tool)
+          ? yield* stepped[call.tool]!(working, input as never, callContext)
+          : operation(working, input as never, callContext)
         if (changes) {
           sets.push(changes)
           working = applySceneChanges(working, changes)
@@ -109,6 +112,7 @@ export function createBatchOperation(
           error: error.message,
         })
       }
+      yield
     }
     const applied = reports.filter((report) => report.status === 'ok').length
     const merged = mergeSceneChanges(sets)

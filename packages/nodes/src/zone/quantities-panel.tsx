@@ -3,6 +3,9 @@
 import {
   type AnyNodeId,
   deriveZoneQuantityReport,
+  formatAreaLabel,
+  formatLinearMeasurement,
+  formatVolumeLabel,
   type UnitNode,
   useLiveNodeOverrides,
   usePascalI18n,
@@ -10,13 +13,7 @@ import {
   type ZoneNode,
   type ZoneQuantityValue,
 } from '@pascal-app/core'
-import {
-  displayRoomName,
-  formatAreaLabel,
-  formatLinearMeasurement,
-  formatVolumeLabel,
-  PanelSection,
-} from '@pascal-app/editor'
+import { displayRoomName, PanelSection } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { useMemo } from 'react'
 import { useShallow } from 'zustand/react/shallow'

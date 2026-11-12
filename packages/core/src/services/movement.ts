@@ -97,3 +97,16 @@ export function isMovable(node: AnyNode): boolean {
   const config = resolveMovable(node)
   return config != null && config.axes.length > 0
 }
+
+/**
+ * True when the node's `movable.override` locks this particular node (a lean-to
+ * post, a cabinet run behind its selection proxy). The lock outranks the kind's
+ * other movers — `floorplanMoveTarget`, `affordanceTools.move`, group pick-up —
+ * which only know the kind, not the node.
+ */
+export function isMoveLocked(node: AnyNode): boolean {
+  const base = nodeRegistry.get(node.type)?.capabilities.movable
+  if (!base?.override) return false
+  const config = resolveMovable(node)
+  return config !== base && config !== null && config.axes.length === 0
+}

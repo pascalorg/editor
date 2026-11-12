@@ -19,13 +19,13 @@
 
 import {
   type AnyNodeId,
-  getWallCurveFrameAt,
   getWallThickness,
   useScene,
   WALL_CONSTRUCTION_FIELDS,
   type WallNode,
   type WallPlanPoint,
   wallFollowsStorey,
+  wallPullSeed,
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { create } from 'zustand'
@@ -33,15 +33,6 @@ import useEditor from '../store/use-editor'
 import type { ContinuationMode } from './continuation'
 import { getWallDrawVariant, selectWallDrawVariant } from './wall-draw-variant'
 import { publishWallRunFeedback } from './wall-run-snap'
-
-/** The floor plan's affordance id for a wall end's pull grip (a `move-arrow`, variant `pull`). */
-export const WALL_PULL_AFFORDANCE = 'wall-pull'
-
-/** What a pull grip carries: the wall, and which of its ends it pulls from. */
-export type WallPullGripPayload = { wallId: string; endpoint: 'start' | 'end' }
-
-/** The grip's tooltip, in both views. */
-export const WALL_PULL_GRIP_TITLE = 'Drag to draw the next wall'
 
 export type WallPullRun = {
   /** Bumped per pull, so each view seeds its draft from it once. */
@@ -91,23 +82,6 @@ export function wallPullTypePatch(wall: WallNode, storeyHeight: number | null): 
   patch.thickness = getWallThickness(wall)
   if (!wallFollowsStorey(wall, storeyHeight)) patch.height = wall.height
   return patch as Partial<WallNode>
-}
-
-/**
- * The pulled end of `wall` and the direction out of it: along the wall for a
- * straight one, along its tangent for a curved one.
- */
-export function wallPullSeed(
-  wall: Pick<WallNode, 'start' | 'end' | 'curveOffset'>,
-  endpoint: 'start' | 'end',
-): { start: WallPlanPoint; reference: WallPlanPoint } | null {
-  const start: WallPlanPoint =
-    endpoint === 'start' ? [wall.start[0], wall.start[1]] : [wall.end[0], wall.end[1]]
-  const tangent = getWallCurveFrameAt(wall as WallNode, endpoint === 'start' ? 0 : 1).tangent
-  const sign = endpoint === 'start' ? -1 : 1
-  const length = Math.hypot(tangent.x, tangent.y)
-  if (!(length > 1e-9)) return null
-  return { start, reference: [(tangent.x / length) * sign, (tangent.y / length) * sign] }
 }
 
 // What the pull changed for its run, put back when it ends.

@@ -1,7 +1,7 @@
 'use client'
 
+import { useIsMobile } from '@pascal-app/viewer/ui'
 import { type ReactNode, useCallback, useEffect, useRef } from 'react'
-import { useIsMobile } from '../../hooks/use-mobile'
 import {
   openSidebarPanel,
   SIDEBAR_MIN_WIDTH,

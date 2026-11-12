@@ -16,7 +16,7 @@ import {
 import { useViewer } from '@pascal-app/viewer'
 import { useCallback } from 'react'
 import { useShallow } from 'zustand/react/shallow'
-import { formatLinearMeasurement } from '../../../lib/measurements'
+import { formatLinearMeasurement } from '@pascal-app/core'
 import { SegmentedControl } from '../controls/segmented-control'
 import { SliderControl } from '../controls/slider-control'
 import {
@@ -42,7 +42,7 @@ function wallFollowsLevelPatch(wall: WallNode, nodes: Record<string, AnyNode>): 
 }
 
 function effectiveHeight(node: AnyNode, nodes: Record<string, AnyNode>): number {
-  if (node.type === 'wall') return getWallEffectiveHeightForNodes(node, nodes)
+  if (node.type === 'wall') return getWallEffectiveHeightForNodes(node, nodes, 0)
   if (node.type === 'ceiling') return resolveCeilingHeight(node, nodes)
   const height = (node as { height?: number }).height
   return typeof height === 'number' ? height : 0
@@ -72,7 +72,7 @@ export function applyMultiHeightMode(
         if (isCustom) return {}
         if (node.type === 'ceiling') return { height: ceilingCustomHeight(node, nodes) }
         if (node.type === 'wall') {
-          return { height: Math.max(0.1, getWallEffectiveHeightForNodes(node, nodes)) }
+          return { height: Math.max(0.1, getWallEffectiveHeightForNodes(node, nodes, 0)) }
         }
         return {}
       }

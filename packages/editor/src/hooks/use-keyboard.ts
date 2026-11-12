@@ -9,7 +9,7 @@ import {
   toggleNodeMechanism,
   useScene,
 } from '@pascal-app/core'
-import { cancelPerfAction, markPerfAction, useViewer } from '@pascal-app/viewer'
+import { cancelPerfAction, isTypingTarget, markPerfAction, useViewer } from '@pascal-app/viewer'
 import { useEffect } from 'react'
 import {
   cutSelectionToEditorClipboard,
@@ -40,7 +40,6 @@ import { sfxEmitter } from '../lib/sfx-bus'
 import { openSidebarPanel } from '../lib/sidebar-panel'
 import { activeSiteNode, clampBrushRadius } from '../lib/terrain-sculpt'
 import { armToolShortcut, toolShortcutForKey } from '../lib/tool-shortcuts'
-import { isTypingTarget } from '../lib/typing-target'
 import { leaveUnitFocus } from '../lib/units'
 import { subscribeWallKindReset } from '../lib/wall-draw-variant'
 import { isWallNudgeKey, nudgeSelectedWall } from '../lib/wall-nudge'

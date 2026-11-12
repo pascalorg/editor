@@ -17,8 +17,15 @@ import {
   environmentPresentation,
 } from '@pascal-app/plugin-environment'
 import { treesHostPanel, treesPlugin } from '@pascal-app/plugin-trees'
-import { registerViewerPresentation } from '@pascal-app/viewer'
+import { configureViewer, registerViewerPresentation } from '@pascal-app/viewer'
 import { webXRHostPanel, webXRPlugin } from '@webxr/plugin'
+
+configureViewer({
+  sfxBaseUrl: '/audios/sfx',
+  iconsBaseUrl: '/icons',
+  assetsBaseUrl: process.env.NEXT_PUBLIC_ASSETS_CDN_URL,
+  storageUrl: process.env.NEXT_PUBLIC_SUPABASE_URL,
+})
 
 // Usage checks (passages, turning circles, flow widths) are off unless the build says so; Next
 // inlines the NEXT_PUBLIC_ mirror of the server's PASCAL_SDF_CHECKS.

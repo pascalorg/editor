@@ -3,6 +3,7 @@ import {
   type ThresholdSource,
   USAGE_INDICATORS,
 } from '../../building/code-profile'
+import { inOneGo, type Steps } from '../../lib/steps'
 import type { AnyNode, DoorNode, ItemNode } from '../../schema'
 import { bedIssues } from './beds'
 import { blockedOpeningIssues } from './blocked'
@@ -13,12 +14,12 @@ import { fixtureClearanceIssues } from './fixtures'
 import { m, nameOf, quote, unique } from './labels'
 import {
   type MeasureOptions,
-  measureUsage,
+  measureUsageSteps,
   type ObstacleRef,
   type Passage,
   type RoomMeasure,
 } from './measure'
-import { usageShapes } from './shapes'
+import { type UsageShapes, usageShapes } from './shapes'
 import { doorSwingIssues } from './swings'
 import type { Nodes } from './walls'
 
@@ -297,16 +298,13 @@ function pocketIssue(nodes: Nodes, room: RoomMeasure, from: string): UsageIssue 
   }
 }
 
-/**
- * The usage findings of a scene: narrow passages (measured from the chosen entrance, one for each
- * place that is narrow with the rooms it leads to, and the best other door as a fact), missing turning circles, floor a 0.60 m unit cannot get out of, wall
- * objects that stand out into circulation, pieces inside something solid, what stands in front of a
- * window or a door, a bed's room, a room's headroom and its ceiling. Every threshold is an indicator,
- * not a compliance check.
- */
-export function usageIssues(nodes: Nodes, options: MeasureOptions = {}): UsageIssue[] {
-  const shapes = usageShapes(nodes)
-  const measure = measureUsage(nodes, shapes, options)
+/** The passages, turning circles and pockets of every group of rooms, measured on one clearance field. */
+function* circulationIssues(
+  nodes: Nodes,
+  shapes: UsageShapes,
+  options: MeasureOptions,
+): Steps<UsageIssue[]> {
+  const measure = yield* measureUsageSteps(nodes, shapes, options)
   const issues: UsageIssue[] = []
   for (const group of measure.groups) {
     const from = group.source.kind === 'door' ? 'the entrance' : 'the stair arrival'
@@ -343,14 +341,73 @@ export function usageIssues(nodes: Nodes, options: MeasureOptions = {}): UsageIs
       }
     }
   }
-  issues.push(
-    ...clashIssues(nodes, shapes),
-    ...blockedOpeningIssues(nodes, shapes),
-    ...doorSwingIssues(nodes, shapes),
-    ...entryIssues(nodes, shapes),
-    ...doorOverStairIssues(nodes, shapes),
-    ...fixtureClearanceIssues(nodes, shapes),
-    ...bedIssues(nodes, shapes),
-  )
+  return issues
+}
+
+/**
+ * Each measurement with the finding types it gives, in the order their findings are listed. On a
+ * building of a few hundred rooms the circulation measurement takes seconds and the others a
+ * fraction of one, so a question about some types takes the measurements that give them alone,
+ * and the circulation measurement is taken in steps.
+ */
+const MEASUREMENTS: {
+  types: readonly UsageIssue['type'][]
+  run: (
+    nodes: Nodes,
+    shapes: UsageShapes,
+    options: MeasureOptions,
+  ) => UsageIssue[] | Steps<UsageIssue[]>
+}[] = [
+  {
+    types: ['usage_pocket', 'usage_passage_narrow', 'usage_turning_narrow'],
+    run: circulationIssues,
+  },
+  { types: ['usage_clash'], run: clashIssues },
+  {
+    types: ['usage_opening_blocked'],
+    run: (nodes, shapes) => blockedOpeningIssues(nodes, shapes),
+  },
+  { types: ['usage_door_swing'], run: doorSwingIssues },
+  { types: ['usage_entry_narrow'], run: entryIssues },
+  { types: ['usage_door_over_stair'], run: doorOverStairIssues },
+  { types: ['usage_fixture_clearance'], run: fixtureClearanceIssues },
+  { types: ['usage_bed_clearance'], run: bedIssues },
+]
+
+/** Every finding type a measurement gives. */
+export const USAGE_TYPES: ReadonlySet<string> = new Set(
+  MEASUREMENTS.flatMap((measurement) => measurement.types),
+)
+
+export type UsageOptions = MeasureOptions & {
+  /** The finding types asked for; left out, every type. A measurement's findings come whole. */
+  types?: ReadonlySet<string>
+}
+
+/**
+ * The usage findings of a scene: narrow passages (measured from the chosen entrance, one for each
+ * place that is narrow with the rooms it leads to, and the best other door as a fact), missing turning circles, floor a 0.60 m unit cannot get out of, wall
+ * objects that stand out into circulation, pieces inside something solid, what stands in front of a
+ * window or a door, a bed's room, a room's headroom and its ceiling. Every threshold is an indicator,
+ * not a compliance check.
+ */
+export function usageIssues(nodes: Nodes, options: UsageOptions = {}): UsageIssue[] {
+  return inOneGo(usageIssueSteps(nodes, options))
+}
+
+/** `usageIssues`, a step for each measurement and for each floor of the circulation one. */
+export function* usageIssueSteps(nodes: Nodes, options: UsageOptions = {}): Steps<UsageIssue[]> {
+  const { types, ...measure } = options
+  const asked = types
+    ? MEASUREMENTS.filter((measurement) => measurement.types.some((type) => types.has(type)))
+    : MEASUREMENTS
+  if (asked.length === 0) return []
+  const shapes = usageShapes(nodes)
+  const issues: UsageIssue[] = []
+  for (const measurement of asked) {
+    const found = measurement.run(nodes, shapes, measure)
+    issues.push(...(Array.isArray(found) ? found : yield* found))
+    yield
+  }
   return issues
 }

@@ -11,7 +11,7 @@ import {
   useFloorEditSession,
 } from '../../../lib/floor-edit-session'
 import { type OpeningSurface, startOpeningDraft } from '../../../lib/floor-opening-draft'
-import { formatAreaLabel } from '../../../lib/measurements'
+import { formatAreaLabel } from '@pascal-app/core'
 import { pill } from './room-construction-rows'
 import { ShapeChoice } from './shape-choice'
 

@@ -34,8 +34,7 @@ import { applyWalkthroughCameraClipping } from './viewer-camera'
 // walkthrough controllers read this and restore the orbit FOV on exit.
 export const WALKTHROUGH_FOV = 60
 
-// Eye/capsule geometry mirrors the editor's first-person controller so the
-// baked walkthrough feels identical. The capsule centre sits below the eye; the
+// Shared with the live walkthrough so baked and parametric scenes feel identical. The capsule centre sits below the eye; the
 // camera rides the capsule with a small offset and the controller floats it to
 // the ground.
 const CAMERA_EYE_OFFSET = 0.45
@@ -145,7 +144,7 @@ function boxFloorGeometry(
 // Fallback ground so the player never falls into the void: a single large
 // ground plane at the lowest level (level 0). Upper levels rely on their own
 // baked slabs — a slab-less upper floor lets you fall down to the ground, which
-// the ground plane catches. (Mirrors the editor walkthrough's site ground.)
+// the ground plane catches. (Mirrors the live walkthrough's site ground.)
 function addFallbackFloors(scene: Object3D, geometries: BufferGeometry[]) {
   const sceneBounds = new Box3()
   for (const geometry of geometries) {
@@ -257,7 +256,7 @@ function resolveGlbSpawn(
 }
 
 /**
- * First-person walkthrough controller for the baked GLB. Reuses the editor's
+ * First-person walkthrough controller for the baked GLB. Uses the shared
  * `BVHEcctrl` capsule character controller (gravity, jump, sprint, ground-float,
  * mesh collision) fed a collider built from the artifact's own geometry — so the
  * baked viewer walks the building with the same physics as the editor, without

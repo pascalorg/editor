@@ -10,7 +10,7 @@ import {
 import { Mountain, Pipette } from 'lucide-react'
 import { brushRadiusRange, flattenSite, resetSiteTerrain } from '../../../lib/terrain-sculpt'
 import useEditor from '../../../store/use-editor'
-import { Button } from '../primitives/button'
+import { Button } from '@pascal-app/viewer/ui'
 import { SegmentedControl } from './segmented-control'
 import { SliderControl } from './slider-control'
 

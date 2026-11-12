@@ -1,17 +1,19 @@
 import {
+  type AnyNodeId,
   type FloorplanGeometry,
   type FloorplanPoint,
+  floorplanGeometryMetadata,
   type GeometryContext,
   getGlazedRoofPlanLines,
   getRoofSegmentVisibleTopBounds,
   getSegmentSlopeFrame,
   type RoofNode,
   type RoofSegmentNode,
+  readFloorplanContext,
   roofPlanOverlapEntryOwns,
   subtractPolygonsFromPolygon,
   unionPolygons,
 } from '@pascal-app/core'
-import { floorplanGeometryMetadata, readFloorplanContext } from '@pascal-app/editor'
 import { getConicalRoofPlanFootprint, getRoofSegmentPlanLinework } from '../roof-segment/floorplan'
 import { getRoofSurfaceCreases, type RoofCreaseSurface, type RoofPlane } from './roof-plan-creases'
 
@@ -335,7 +337,7 @@ export function buildRoofFloorplan(node: RoofNode, ctx: GeometryContext): Floorp
   for (const sibling of ctx.siblings) {
     if (sibling.type !== 'roof') continue
     for (const childId of sibling.children ?? []) {
-      const segment = ctx.resolve<RoofSegmentNode>(childId)
+      const segment = ctx.resolve<RoofSegmentNode>(childId as AnyNodeId)
       if (segment?.type !== 'roof-segment') continue
       entries.push({ roof: sibling, segment, plan: buildSegPlan(sibling, segment, drafting) })
     }

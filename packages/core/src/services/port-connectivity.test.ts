@@ -309,7 +309,7 @@ describe('port connectivity — joint follow (stretch vs translate)', () => {
     expectPointClose(path[1]!, [3, 0, 1.200025])
   })
 
-  test('a fitting reached from incompatible collars merges constraints deterministically', () => {
+  test('a fitting its own collars pull apart cannot follow', () => {
     const moved = makeNode('duct-segment', {
       path: [
         [-0.2, 0, 0],
@@ -328,12 +328,7 @@ describe('port connectivity — joint follow (stretch vs translate)', () => {
       ],
     } as AnyNode
 
-    const updates = resolveConnectivityUpdates(connectivity, preview)
-
-    expectPointClose(
-      (updates.find((u) => u.id === fitting.id)!.data as { position: Point }).position,
-      [0, 0, 0],
-    )
+    expect(resolveConnectivityUpdates(connectivity, preview)).toBeNull()
   })
 
   test('an unrelated run not on the fitting is left alone', () => {
@@ -348,6 +343,281 @@ describe('port connectivity — joint follow (stretch vs translate)', () => {
     const nodes = sceneOf(fitting, ductA, ductB, distant)
     const connectivity = analyzePortConnectivity(ductA, nodes)
     expect(connectivity.connections.find((c) => c.nodeId === distant.id)).toBeUndefined()
+  })
+})
+
+// A corner elbow whose collars sit at the node's own offsets from its position.
+stubDef('test:corner-elbow', 'fitting', (node) => {
+  const { position, collars, system } = node as unknown as {
+    position: Point
+    collars: Point[]
+    system: string
+  }
+  return collars.map((offset, index) => ({
+    id: index === 0 ? 'inlet' : 'outlet',
+    position: [position[0] + offset[0], position[1] + offset[1], position[2] + offset[2]],
+    direction: offset,
+    diameter: 6,
+    system,
+  }))
+})
+
+describe('port connectivity — closed loops', () => {
+  // A square loop of four legs and four corner elbows. The west and north legs
+  // fall `drop` metres toward the north-west corner; the south leg is moved.
+  function loop(drop: number) {
+    const low = 1 - drop
+    const corner = (position: Point, collars: Point[]) =>
+      makeNode('test:corner-elbow', { position, collars, system: 'supply' })
+    const leg = (path: Point[]) => makeNode('duct-segment', { path, system: 'supply' })
+    const south = leg([
+      [0.2, 1, 0],
+      [3.8, 1, 0],
+    ])
+    const others = [
+      corner(
+        [4, 1, 0],
+        [
+          [-0.2, 0, 0],
+          [0, 0, 0.2],
+        ],
+      ),
+      leg([
+        [4, 1, 0.2],
+        [4, 1, 3.8],
+      ]),
+      corner(
+        [4, 1, 4],
+        [
+          [0, 0, -0.2],
+          [-0.2, 0, 0],
+        ],
+      ),
+      leg([
+        [0.2, low, 4],
+        [3.8, 1, 4],
+      ]),
+      corner(
+        [0, low, 4],
+        [
+          [0.2, 0, 0],
+          [0, 0, -0.2],
+        ],
+      ),
+      leg([
+        [0, 1, 0.2],
+        [0, low, 3.8],
+      ]),
+      corner(
+        [0, 1, 0],
+        [
+          [0.2, 0, 0],
+          [0, 0, 0.2],
+        ],
+      ),
+    ]
+    return { south, nodes: sceneOf(south, ...others) }
+  }
+
+  function moveSouth(drop: number, delta: Point) {
+    const { south, nodes } = loop(drop)
+    const preview = {
+      ...(south as Record<string, unknown>),
+      path: (south as unknown as { path: Point[] }).path.map((p) => [
+        p[0] + delta[0],
+        p[1] + delta[1],
+        p[2] + delta[2],
+      ]),
+    } as AnyNode
+    const updates = resolveConnectivityUpdates(analyzePortConnectivity(south, nodes), preview)
+    const after: Record<string, AnyNode> = { ...nodes, [south.id]: preview }
+    for (const update of updates) after[update.id] = { ...after[update.id]!, ...update.data }
+    return { nodes, updates, after }
+  }
+
+  test('a leg moved along its own axis carries a loop with a sloped leg rigidly', () => {
+    const delta: Point = [0.5, 0, 0]
+    const { nodes, updates } = moveSouth(0.08, delta)
+
+    expect(updates).toHaveLength(7)
+    for (const { id, data } of updates) {
+      const before = nodes[id] as unknown as { position?: Point; path?: Point[] }
+      const next = data as { position?: Point; path?: Point[] }
+      if (before.position) {
+        expectPointClose(next.position!, [
+          before.position[0] + delta[0],
+          before.position[1],
+          before.position[2],
+        ])
+      }
+      before.path?.forEach((point, index) => {
+        expectPointClose(next.path![index]!, [point[0] + delta[0], point[1], point[2]])
+      })
+    }
+  })
+
+  test.each([
+    ['a level loop moved obliquely', 0, [0.3, -0.1, 0.4]],
+    ['a sloped loop raised', 0.08, [0, 0.2, 0]],
+    ['a sloped loop moved diagonally in plan', 0.08, [-0.4, 0, 0.6]],
+  ] as Array<[string, number, Point]>)('%s settles with every joint welded', (_, drop, delta) => {
+    const { after } = moveSouth(drop, delta)
+
+    const runEnds = Object.values(after)
+      .filter((node) => node.type === 'duct-segment')
+      .flatMap((node) => nodeRegistry.get('duct-segment')!.ports!(node as never))
+    const collars = Object.values(after)
+      .filter((node) => node.type === 'test:corner-elbow')
+      .flatMap((node) => nodeRegistry.get('test:corner-elbow')!.ports!(node as never))
+    expect(collars).toHaveLength(8)
+    for (const collar of collars) {
+      const gap = Math.min(
+        ...runEnds.map((end) =>
+          Math.hypot(
+            end.position[0] - collar.position[0],
+            end.position[1] - collar.position[1],
+            end.position[2] - collar.position[2],
+          ),
+        ),
+      )
+      expect(gap).toBeLessThan(1e-6)
+    }
+  })
+})
+
+/** Largest distance from any port of `after` to its nearest mate, for the
+ *  joints that coincided in `before`. */
+function widestJointGap(before: Record<string, AnyNode>, after: Record<string, AnyNode>): number {
+  const portsOf = (node: AnyNode) =>
+    nodeRegistry.get(node.type)!.ports!(node as never) as Array<{ id: string; position: Point }>
+  const distance = (a: Point, b: Point) => Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2])
+  let widest = 0
+  for (const a of Object.values(before)) {
+    for (const b of Object.values(before)) {
+      if (a.id >= b.id) continue
+      for (const pa of portsOf(a)) {
+        for (const pb of portsOf(b)) {
+          if (distance(pa.position, pb.position) > 1e-6) continue
+          const na = portsOf(after[a.id]!).find((p) => p.id === pa.id)!
+          const nb = portsOf(after[b.id]!).find((p) => p.id === pb.id)!
+          widest = Math.max(widest, distance(na.position, nb.position))
+        }
+      }
+    }
+  }
+  return widest
+}
+
+describe('port connectivity — polyline runs between fittings', () => {
+  const corner = (position: Point) =>
+    makeNode('test:corner-elbow', {
+      position,
+      collars: [
+        [-0.07, 0, 0],
+        [0, 0, 0.07],
+      ],
+      system: 'supply',
+    })
+  const run = (path: Point[]) => makeNode('duct-segment', { path, system: 'supply' })
+
+  // A straight run, a corner, an L-shaped polyline run, a corner and a tail:
+  // the far corner only ever follows the L, so it echoes the L's own move.
+  function chain() {
+    const south = run([
+      [0.07, 1, 0],
+      [3.93, 1, 0],
+    ])
+    const l = run([
+      [4, 1, 0.07],
+      [4, 1, 2],
+      [6.93, 1, 2],
+    ])
+    const nodes = sceneOf(
+      south,
+      corner([4, 1, 0]),
+      l,
+      corner([7, 1, 2]),
+      run([
+        [7, 1, 2.07],
+        [7, 1, 5],
+      ]),
+    )
+    return { south, l, nodes }
+  }
+
+  function moved(node: AnyNode, path: Point[]): AnyNode {
+    return { ...(node as Record<string, unknown>), path } as AnyNode
+  }
+
+  function applied(
+    nodes: Record<string, AnyNode>,
+    preview: AnyNode,
+    updates: { id: AnyNodeId; data: Partial<AnyNode> }[],
+  ): Record<string, AnyNode> {
+    const after: Record<string, AnyNode> = { ...nodes, [preview.id]: preview }
+    for (const update of updates) after[update.id] = { ...after[update.id]!, ...update.data }
+    return after
+  }
+
+  test.each([
+    [0.3, 0, 0.4],
+    [0.05, 0, 0.05],
+    [0.3, 0.2, 0.4],
+  ] as Point[])('a diagonal move (%p, %p, %p) carries the L without stretching it', (...delta) => {
+    const { south, l, nodes } = chain()
+    const preview = moved(
+      south,
+      (south as unknown as { path: Point[] }).path.map(
+        (p) => [p[0] + delta[0], p[1] + delta[1], p[2] + delta[2]] as Point,
+      ),
+    )
+
+    const updates = resolveConnectivityUpdates(analyzePortConnectivity(south, nodes), preview)
+
+    expect(updates).not.toBeNull()
+    const after = applied(nodes, preview, updates!)
+    expect(widestJointGap(nodes, after)).toBeLessThan(1e-6)
+    const lPath = (after[l.id] as unknown as { path: Point[] }).path
+    expect(Math.hypot(lPath[2]![0] - lPath[1]![0], lPath[2]![2] - lPath[1]![2])).toBeCloseTo(
+      2.93,
+      6,
+    )
+  })
+
+  test('a loop back to the moved run refuses a drag that would pull its start corner off', () => {
+    // The run's end corner leads around a U-shaped run back to its start corner.
+    const looped = run([
+      [0.07, 1, 0],
+      [3.93, 1, 0],
+    ])
+    const nodes = sceneOf(
+      makeNode('test:corner-elbow', {
+        position: [0, 1, 0],
+        collars: [
+          [0.07, 0, 0],
+          [0, 0, 0.07],
+        ],
+        system: 'supply',
+      }),
+      looped,
+      corner([4, 1, 0]),
+      run([
+        [4, 1, 0.07],
+        [4, 1, 2],
+        [0, 1, 2],
+        [0, 1, 0.07],
+      ]),
+    )
+    const connectivity = analyzePortConnectivity(looped, nodes)
+    const endAt = (end: Point) => moved(looped, [[0.07, 1, 0], end])
+
+    // Across the run, the end corner slides the U's first leg; nothing else moves.
+    const across = resolveConnectivityUpdates(connectivity, endAt([3.93, 1, 0.3]))
+    expect(across).not.toBeNull()
+    expect(widestJointGap(nodes, applied(nodes, endAt([3.93, 1, 0.3]), across!))).toBeLessThan(1e-6)
+    // Along the run, the U translates whole and would carry the start corner
+    // off the run's fixed start.
+    expect(resolveConnectivityUpdates(connectivity, endAt([4.43, 1, 0]))).toBeNull()
   })
 })
 

@@ -2,6 +2,7 @@ import { useFrame, useThree } from '@react-three/fiber'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   ACESFilmicToneMapping,
+  type Camera,
   Color,
   Layers,
   Matrix4,
@@ -17,11 +18,9 @@ import { ao as gtao } from 'three/addons/tsl/display/GTAONode.js'
 import { traa } from 'three/addons/tsl/display/TRAANode.js'
 import {
   add,
-  builtinAOContext,
   diffuseColor,
   ivec2,
   mix,
-  mrt,
   normalView,
   normalWorldGeometry,
   oscSine,
@@ -62,6 +61,7 @@ import { isLiveFrameHeld } from '../../lib/live-frame-hold'
 import { mergedOutline } from '../../lib/merged-outline-node'
 import { recordPerfSample, timeSpan } from '../../lib/perf-tracks'
 import { PostProcessingResources } from '../../lib/post-processing-resources'
+import { renderWithSceneMatrices } from '../../lib/scene-matrices'
 import { sceneLightingMask, scenePassMrt } from '../../lib/scene-pass-mrt'
 import { packNormalToRGB, unpackRGBToNormal } from '../../lib/tsl-compat'
 import {
@@ -79,8 +79,8 @@ import {
 import useViewer from '../../store/use-viewer'
 import { useSceneAtmosphere } from './scene-atmosphere'
 
-/** Medium tier: ½-res GTAO over the whole image (enhanced viewer: strength 0.6 × 0.8). */
-const MEDIUM_AO_BLEND = 0.48
+/** GTAO over the whole image (enhanced viewer's `gtao-whole`: strength 0.6 × 0.8). */
+const AO_BLEND = 0.48
 const NEIGHBOURS_3X3 = [
   [-1, -1],
   [0, -1],
@@ -449,8 +449,11 @@ const PostProcessingPasses = ({
       return
     }
     // Quality tiers (both appearances; the enhanced-viewer reference):
-    //  high   — depth/normal/velocity pre-pass → GTAO on indirect light only, TRAA, bloom (daylight)
+    //  high   — full-res GTAO from the scene pass, soft whole-image blend, TRAA, bloom (daylight)
     //  medium — ½-res GTAO from the scene pass, soft whole-image blend, TRAA
+    // (The reference's high tier fed GTAO from a depth/normal pre-pass, darkening indirect light
+    // only; a pre-pass draws the whole scene twice, which an editor scene of thousands of meshes
+    // can't afford.)
     //  low    — no AO, FXAA
     // The colored appearance adds the daylight look: Neutral tone mapping, white balance, grade
     // and a display-space vignette. Ink edges belong to the monochrome appearance only.
@@ -463,7 +466,7 @@ const PostProcessingPasses = ({
     const bloomEnabled = daylight && !transparentBackground && renderQuality === 'high'
     const outlineEnabled = !perfDisable.outline
     const inkEnabled = !daylight && edges !== 'off'
-    const needsNormalMRT = inkEnabled || aoTier === 'medium' || (temporalAA && aoTier !== 'high')
+    const needsNormalMRT = inkEnabled || aoTier !== null || temporalAA
     // Ink: thin (1px sample radius) and faint (50% opacity).
     const inkRadius = 1
     const inkOpacity = inkOpacityOverride ?? 0.5
@@ -514,7 +517,7 @@ const PostProcessingPasses = ({
       resources.layerIndex = layerIndex
       // Temporal AA / FXAA replace MSAA, and the ½-res GTAO gathers from this depth (no multisampled
       // `textureGather`): both want a single-sampled scene pass.
-      const singleSampled = temporalAA || fxaaEnabled || aoTier === 'medium'
+      const singleSampled = temporalAA || fxaaEnabled || aoTier !== null
       const scenePass = pass(scene, camera, singleSampled ? { samples: 0 } : undefined)
       resources.passes.push(scenePass)
       scenePass.setLayers(sceneOnlyLayers)
@@ -539,7 +542,7 @@ const PostProcessingPasses = ({
       const contentAlpha = hasGeometry.max(zonePass.a)
 
       // Composite the zone-pass tint into the base scene so rooms show whether or
-      // not AO is enabled. The medium-tier AO branch below rebuilds this
+      // not AO is enabled. The AO branch below rebuilds this
       // composite with the zone tint kept out of the AO (no double-add).
       const zoneRgb = daylight ? zonePass.rgb.mul(exposureInverse) : zonePass.rgb
       let sceneColor = vec4(
@@ -559,7 +562,7 @@ const PostProcessingPasses = ({
             diffuseColor,
             normal: packNormalToRGB(normalView),
             lighting: sceneLightingMask(),
-            ...(temporalAA && aoTier !== 'high' ? { velocity } : {}),
+            ...(temporalAA ? { velocity } : {}),
           }),
         )
         scenePassNormal = scenePass.getTextureNode('normal')
@@ -575,49 +578,23 @@ const PostProcessingPasses = ({
         ? sample((uv) => unpackRGBToNormal(normalNode.sample(uv)))
         : null
 
-      // AO + temporal AA. High: a depth/normal/velocity pre-pass feeds GTAO, injected into the
-      // scene pass's lighting (darkens indirect light only — no grime on sunlit walls). Medium: no
-      // pre-pass; ½-res GTAO from the scene pass, blended softly over the whole image.
+      // AO: GTAO from the scene pass's depth and normals, blended softly over the whole image
+      // (full resolution on high, ½ on medium).
       let temporalDepth: any = null
       let temporalVelocity: any = null
-      if (aoTier === 'high') {
-        // Single-sampled: GTAO gathers from the depth texture (no multisampled `textureGather`).
-        const prePass = pass(scene, camera, { samples: 0 })
-        resources.passes.push(prePass)
-        prePass.setLayers(sceneOnlyLayers)
-        prePass.transparent = false
-        prePass.setMRT(mrt({ output: normalView, velocity }))
-        const preDepth = prePass.getTextureNode('depth')
-        const aoNode = gtao(preDepth, prePass.getTextureNode('output'), camera) as any
-        aoNode.radius.value = 0.6
-        aoNode.thickness.value = 1
-        aoNode.distanceExponent.value = 1.6
-        aoNode.samples.value = 16
-        aoNode.useTemporalFiltering = temporalAA
-        resources.effects.push(aoNode)
-        const screenAO = aoNode.getTextureNode().sample(screenUV).r
-        scenePass.contextNode = daylight
-          ? daylightRoomContext(screenAO)
-          : builtinAOContext(screenAO)
-        temporalDepth = preDepth
-        temporalVelocity = prePass.getTextureNode('velocity')
-      } else if (aoTier === 'medium' && sceneNormal && scenePassDepth) {
+      if (aoTier && sceneNormal && scenePassDepth) {
         const aoNode = gtao(scenePassDepth, sceneNormal, camera) as any
         aoNode.radius.value = 0.6
         aoNode.thickness.value = 1.2
         aoNode.distanceExponent.value = 1.4
         aoNode.samples.value = 16
-        aoNode.resolutionScale = 0.5
+        aoNode.resolutionScale = aoTier === 'high' ? 1 : 0.5
         resources.effects.push(aoNode)
-        const aoBlend = mix(
-          tslFloat(1),
-          aoNode.getTextureNode().sample(screenUV).r,
-          MEDIUM_AO_BLEND,
-        )
+        const aoBlend = mix(tslFloat(1), aoNode.getTextureNode().sample(screenUV).r, AO_BLEND)
         sceneColor = vec4(add(scenePassColor.rgb.mul(aoBlend), zoneRgb), contentAlpha)
       }
-      // The daylight look's room light (windows, lamps, bounce, night spill) on the other tiers.
-      if (daylight && aoTier !== 'high') scenePass.contextNode = daylightRoomContext(null)
+      // The daylight look's room light (windows, lamps, bounce, night spill).
+      if (daylight) scenePass.contextNode = daylightRoomContext()
       if (temporalAA && !temporalVelocity && scenePassNormal) {
         temporalDepth = scenePassDepth
         temporalVelocity = scenePass.getTextureNode('velocity')
@@ -642,8 +619,10 @@ const PostProcessingPasses = ({
 
       // Bloom on the HDR image; the threshold follows exposure so only display-white blooms.
       if (bloomEnabled) {
+        // Editor highlights stay out of it (`markHighlight`): they must not haze over the object.
+        const bloomWeight = scenePassNormal ? scenePass.getTextureNode('lighting').g : tslFloat(1)
         const glow = bloom(
-          sceneColor,
+          vec4(sceneColor.rgb.mul(bloomWeight), sceneColor.a),
           DAYLIGHT_BLOOM.strength,
           DAYLIGHT_BLOOM.radius,
           exposureInverse,
@@ -975,7 +954,7 @@ const PostProcessingPasses = ({
         }
         const submittedAt = PERF_OVERLAY_ENABLED ? performance.now() : 0
         timeSpan('render-encode', () => {
-          ;(renderer as any).render(scene, camera)
+          renderWithSceneMatrices(scene, () => renderDirect(renderer, scene, camera))
         })
         if (PERF_OVERLAY_ENABLED) recordFrameGpuTiming(renderer, submittedAt)
       } catch (fallbackError) {
@@ -994,7 +973,7 @@ const PostProcessingPasses = ({
       ;(renderer as any).setClearAlpha(0)
       const submittedAt = PERF_OVERLAY_ENABLED ? performance.now() : 0
       timeSpan('render-encode', () => {
-        pipeline.render()
+        renderWithSceneMatrices(scene, () => pipeline.render())
       })
       if (PERF_OVERLAY_ENABLED) recordFrameGpuTiming(renderer, submittedAt)
     } catch (error) {
@@ -1029,3 +1008,24 @@ const PostProcessingPasses = ({
 }
 
 export default PostProcessingPasses
+
+/**
+ * Without the pipeline there is no overlay composite: the scene draws without the overlay layer,
+ * then overlays (selection highlights, room assemblies) draw over it with no scene-depth test,
+ * like the composite, whether or not the camera already enables that layer.
+ */
+function renderDirect(renderer: any, scene: Scene, camera: Camera) {
+  const mask = camera.layers.mask
+  const autoClear = renderer.autoClear
+  try {
+    camera.layers.disable(OVERLAY_LAYER)
+    renderer.render(scene, camera)
+    camera.layers.set(OVERLAY_LAYER)
+    renderer.autoClear = false
+    renderer.clearDepth()
+    renderer.render(scene, camera)
+  } finally {
+    camera.layers.mask = mask
+    renderer.autoClear = autoClear
+  }
+}

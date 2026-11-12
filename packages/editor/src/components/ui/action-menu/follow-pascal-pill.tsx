@@ -3,7 +3,7 @@
 import { usePascalI18n } from '@pascal-app/core'
 import { AnimatePresence, motion } from 'motion/react'
 import { useReducedMotion } from '../../../hooks/use-reduced-motion'
-import useFollowPascal from '../../../store/use-follow-pascal'
+import { useFollowPascal } from '@pascal-app/viewer/ui'
 
 /**
  * Offered while a build plays and the person has the camera: one press and the camera goes back to

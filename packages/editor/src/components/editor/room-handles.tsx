@@ -3,13 +3,16 @@
 import {
   type AnyNodeId,
   clampRoomFloorHandle,
+  formatLinearMeasurement,
   type Point,
   roomDrawnFloor,
+  roomFloorElevation,
   sceneRegistry,
   usePascalI18n,
   useScene,
 } from '@pascal-app/core'
-import { useViewer } from '@pascal-app/viewer'
+import { MEASUREMENT_ACTIVE_COLOR, useViewer } from '@pascal-app/viewer'
+import { LocalizedHtml as Html, type RoomSelectionRecord } from '@pascal-app/viewer/ui'
 import { type ThreeEvent, useFrame, useThree } from '@react-three/fiber'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
@@ -35,7 +38,6 @@ import {
   resolveStructuralElevationSnap,
 } from '../../lib/elevation-guides'
 import { parseDimensionInput } from '../../lib/floorplan/dimension-drive'
-import { formatLinearMeasurement, MEASUREMENT_ACTIVE_COLOR } from '../../lib/measurements'
 import { commitRoomFloorElevation, roomFloorBase } from '../../lib/room-construction-commands'
 import {
   type MezzanineEdgeHandle,
@@ -44,14 +46,12 @@ import {
   ownFloorElevationBounds,
   ROOM_ELEVATION_DRAG_LABEL,
   type RoomHandleDrag,
-  roomFloorElevation,
   roomPushHandles,
   runMezzanineEdgeDrag,
   runRoomHandleDrag,
   useRoomHandleDrag,
 } from '../../lib/room-handle-drag'
 import type { RoomDimension } from '../../lib/room-push-dimensions'
-import type { RoomSelectionRecord } from '../../lib/room-selection'
 import useEditor, { isGridSnapActive, isMagneticSnapActive } from '../../store/use-editor'
 import {
   commitDimensionValue,
@@ -60,7 +60,6 @@ import {
 import { suppressBoxSelectForPointer } from '../tools/select/box-select-state'
 import { ARROW_COLOR, ARROW_SCALE, HandleArrow } from './handles/handle-arrow'
 import { resolveResizeSnapValue } from './handles/resize-snap'
-import { Html } from './localized-html'
 import { formatMeasurement } from './measurement-pill'
 import { useSelectedWallDimensions } from './room-handles-2d'
 import { WallPushArrow } from './wall-push-arrow'

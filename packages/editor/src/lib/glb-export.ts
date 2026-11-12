@@ -32,6 +32,7 @@ import {
   type ViewerPresentationContribution,
   viewerPresentationRegistry,
 } from '@pascal-app/viewer'
+import { nodeDisplayLabel } from '@pascal-app/viewer/ui'
 import type { Object3D } from 'three'
 import * as THREE from 'three'
 import {
@@ -42,7 +43,6 @@ import {
 import { createExportTextureUtils, type ExportTextureUtils } from './export-texture-utils'
 import { cloneExportUserData } from './export-user-data'
 import { isIfcRolePart } from './ifc-parts'
-import { nodeDisplayLabel } from './node-display-label'
 import {
   type CompressedTextureDecompressor,
   decompressCanonicalNormalMaps,

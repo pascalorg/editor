@@ -5,11 +5,15 @@ import { type AgentRefusal, isAgentRefusal } from '../agent-tools/refusal'
 import { BuildingNode, SlabNode, WallNode } from '../index'
 import { reconcileSceneStructure } from '../lib/structure-reconcile'
 import { nodeRegistry, registerNode } from '../registry'
+import { registerRoofPlanes, roofPlane } from '../registry/__fixtures__/roof-planes'
 import {
   type AnyNode,
   BaseNode,
   generateId,
   LevelNode,
+  RoofNode,
+  RoofSegmentNode,
+  SiteNode,
   StairNode,
   StairSegmentNode,
 } from '../schema'
@@ -316,5 +320,47 @@ test('scene verification validates registered plugin kinds, rejects malformed no
     })
   } finally {
     restore()
+  }
+})
+
+test("the level summary counts a roof's segments and its faces of other kinds apart", () => {
+  registerRoofPlanes()
+  const segment = RoofSegmentNode.parse({ id: 'rseg_porch', parentId: 'roof_main' })
+  const plane = roofPlane('roofplane_south', [0, 0, 8, 3], 2.9, { parentId: 'roof_main' })
+  const roof = RoofNode.parse({
+    id: 'roof_main',
+    parentId: 'level_roof',
+    children: [segment.id, plane.id],
+  })
+  const level = LevelNode.parse({ id: 'level_roof', children: [roof.id] })
+  const { result } = AGENT_OPERATIONS.get_level_summary(
+    { [level.id]: level, [roof.id]: roof, [segment.id]: segment, [plane.id]: plane } as Record<
+      string,
+      AnyNode
+    >,
+    { levelId: level.id },
+    { activeLevelId: null },
+  )
+  expect(result.roofs).toMatchObject([{ id: roof.id, segmentCount: 1, faceCount: 1 }])
+})
+
+test('scene verification lists each node on a parent cycle by its parentId', () => {
+  const siteA = SiteNode.parse({ id: 'site_a', parentId: 'site_b', children: ['site_b'] })
+  const siteB = SiteNode.parse({ id: 'site_b', parentId: 'site_a', children: ['site_a'] })
+  const { result } = AGENT_OPERATIONS.verify_scene(
+    { [siteA.id]: siteA, [siteB.id]: siteB } as Record<string, AnyNode>,
+    {},
+    { activeLevelId: null },
+  )
+  expect(result.valid).toBe(false)
+  for (const nodeId of [siteA.id, siteB.id]) {
+    expect(result.issues).toContainEqual(
+      expect.objectContaining({
+        type: 'schema_invalid',
+        nodeId,
+        path: 'parentId',
+        message: expect.stringContaining('hierarchy cycle detected: site_a -> site_b -> site_a'),
+      }),
+    )
   }
 })

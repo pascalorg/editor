@@ -61,14 +61,14 @@ import {
   useLocale,
   usePascalI18n,
 } from '@pascal-app/core'
-import { authoredLevelName, localizedLevelName } from '../../i18n/level-name'
+import { authoredLevelName, localizedLevelName } from '@pascal-app/viewer/ui'
 import { messageWithSlot } from '../../i18n/message-slot'
 import { addStoreyBelow, addStoreyOnTop, setGroundFloor } from '../../lib/add-storey'
 import { deleteLevelWithFallbackSelection } from '../../lib/level-selection'
 import { unitMemberLevels, leaveUnitFocus } from '../../lib/units'
 import { useLinearDisplay } from '../../lib/use-linear-display'
 import { cn } from '../../lib/utils'
-import { useIsMobile } from '../../hooks/use-mobile'
+import { useIsMobile } from '@pascal-app/viewer/ui'
 import { ActionButton } from './controls/action-button'
 import { SliderControl } from './controls/slider-control'
 import { LevelDuplicateDialog } from './level-duplicate-dialog'
@@ -81,7 +81,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from './primitives/dialog'
-import { Popover, PopoverContent, PopoverTrigger } from './primitives/popover'
+import { Popover, PopoverContent, PopoverTrigger } from '@pascal-app/viewer/ui'
 
 // ── Inline rename input for a level row ─────────────────────────────────────
 

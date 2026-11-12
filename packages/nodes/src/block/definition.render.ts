@@ -1,0 +1,134 @@
+import {
+  type BlockNode as BlockNodeType,
+  blockSlots,
+  createBoxBlockTopology,
+} from '@pascal-app/core'
+import type { NodeRenderDefinition } from '../definition-contributions'
+import { perNodeGeometryBatchable } from '../shared/node-batch/batchable'
+import { blockFaceHost } from './face-host'
+import { buildBlockFloorplan } from './floorplan'
+import { buildBlockGeometry } from './geometry'
+import { BlockNode } from './schema'
+import { blockSurfaceProvider } from './surface'
+
+/** Bottom within this of the floor (and top above it): the block stands on the floor. */
+const BLOCK_ON_FLOOR_MAX_BOTTOM = 0.1
+
+const BLOCK_ON_FLOOR_MIN_TOP = 0.01
+
+/**
+ * Floor collision is for blocks standing on the floor. Soffits, vaults,
+ * gutters and mantels hang above floor placements, and foundation pads sit
+ * under the floor, so neither blocks furniture nor gets refused when moved.
+ */
+function blockRestsOnFloor(node: BlockNodeType): boolean {
+  const { size, center } = blockBounds(node)
+  const bottom = node.position[1] + center[1] - size[1] / 2
+  const top = node.position[1] + center[1] + size[1] / 2
+  return bottom <= BLOCK_ON_FLOOR_MAX_BOTTOM && top > BLOCK_ON_FLOOR_MIN_TOP
+}
+
+export function blockBounds(node: BlockNodeType) {
+  const xs = node.topology.vertices.map((vertex) => vertex.position[0])
+  const ys = node.topology.vertices.map((vertex) => vertex.position[1])
+  const zs = node.topology.vertices.map((vertex) => vertex.position[2])
+  if (xs.length === 0) {
+    return {
+      size: [0, 0, 0] as [number, number, number],
+      center: [0, 0, 0] as [number, number, number],
+    }
+  }
+  const minX = Math.min(...xs)
+  const maxX = Math.max(...xs)
+  const minY = Math.min(...ys)
+  const maxY = Math.max(...ys)
+  const minZ = Math.min(...zs)
+  const maxZ = Math.max(...zs)
+  return {
+    size: [maxX - minX, maxY - minY, maxZ - minZ] as [number, number, number],
+    center: [(minX + maxX) / 2, (minY + maxY) / 2, (minZ + maxZ) / 2] as [number, number, number],
+  }
+}
+
+function footprintPosition(node: BlockNodeType, center: [number, number, number]) {
+  const cos = Math.cos(node.rotation)
+  const sin = Math.sin(node.rotation)
+  return [
+    node.position[0] + center[0] * cos + center[2] * sin,
+    node.position[1],
+    node.position[2] - center[0] * sin + center[2] * cos,
+  ] as [number, number, number]
+}
+
+export const blockRenderDefinition: NodeRenderDefinition<typeof BlockNode> & { kind: 'block' } = {
+  kind: 'block',
+  schemaVersion: 5,
+  schema: BlockNode,
+  category: 'structure',
+  surfaceRole: 'wall',
+  defaults: () => ({
+    object: 'node',
+    parentId: null,
+    visible: true,
+    metadata: {},
+    children: [],
+    position: [0, 0, 0],
+    rotation: 0,
+    topology: createBoxBlockTopology(),
+    slots: {},
+    slotNames: { body: 'Body' },
+  }),
+  capabilities: {
+    batchable: perNodeGeometryBatchable,
+    selectable: { hitVolume: 'bbox' },
+    surfaces: {
+      hosting: blockSurfaceProvider,
+      top: {
+        height: (rawNode) => {
+          const node = rawNode as BlockNodeType
+          const { size, center } = blockBounds(node)
+          return center[1] + size[1] / 2
+        },
+      },
+      sides: { faces: 'all' },
+    },
+    movable: { axes: ['x', 'z'], gridSnap: true },
+    duplicable: { subtree: true },
+    deletable: true,
+    dragBounds: (rawNode) => blockBounds(rawNode as BlockNodeType),
+    floorPlaced: {
+      footprint: (rawNode) => {
+        const node = rawNode as BlockNodeType
+        const { size, center } = blockBounds(node)
+        return {
+          dimensions: size,
+          position: footprintPosition(node, center),
+          rotation: [0, node.rotation, 0] as [number, number, number],
+        }
+      },
+      collides: (rawNode) => blockRestsOnFloor(rawNode as BlockNodeType),
+    },
+    slots: (rawNode) => blockSlots(rawNode as BlockNodeType),
+    faceHost: blockFaceHost,
+  },
+  relations: {
+    hosts: ['item'],
+    cascadeDelete: 'descendants',
+  },
+  geometry: buildBlockGeometry,
+  geometryChildTypes: [],
+  geometryKey: (node) => JSON.stringify([node.topology, node.slots]),
+  floorplan: buildBlockFloorplan,
+  presentation: {
+    label: 'Block',
+    description: 'A topology-backed solid edited directly in the canvas.',
+    icon: { kind: 'url', src: '/icons/cube.webp' },
+    paletteSection: 'structure',
+    paletteOrder: 75,
+    actionMenu: false,
+  },
+  mcp: {
+    description:
+      'An editable block solid with persistent vertex, edge, and face topology. Positions are level-local meters.',
+  },
+}

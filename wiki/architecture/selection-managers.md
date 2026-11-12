@@ -2,12 +2,12 @@
 
 *Selection architecture: the editor's manager, one model for every viewer surface, and the bare viewer default.*
 
-Applies to: `packages/editor/src/components/editor/selection-manager.tsx`, `packages/editor/src/lib/viewer-selection.ts` (+ `components/viewer/viewer-selection-manager.tsx`, `packages/viewer/src/components/viewer/glb-scene.tsx`), `packages/viewer/src/components/viewer/selection-manager.tsx`.
+Applies to: `packages/editor/src/components/editor/selection-manager.tsx`, `packages/viewer/src/ui/lib/viewer-selection.ts` (+ `ui/components/viewer-selection-manager.tsx`, `packages/viewer/src/components/viewer/glb-scene.tsx`), `packages/viewer/src/components/viewer/selection-manager.tsx`.
 
 | Component | Location | Used by |
 |---|---|---|
 | `SelectionManager` (editor) | `packages/editor/src/components/editor/selection-manager.tsx` | The editor canvas: phase, mode, tool state |
-| Viewer selection (`lib/viewer-selection.ts`) | `packages/editor` | Every viewer surface: the published viewer (baked GLB and parametric), its `?embed=1`, the editor's Preview |
+| Viewer selection (`ui/lib/viewer-selection.ts`) | `@pascal-app/viewer/ui` | Every viewer surface: the published viewer (baked GLB and parametric), its `?embed=1`, the editor's Preview |
 | `SelectionManager` (viewer default) | `packages/viewer/src/components/viewer/selection-manager.tsx` | Bare `<Viewer>` mounts with no navigation (bake page, IFC preview, lab) |
 
 A host replaces the default with `<Viewer selectionManager="custom">` and mounts its own as a child, via the viewer-isolation pattern.
@@ -76,8 +76,9 @@ instead of gliding under reduced motion. The plan follows the framed camera; wit
 screen it answers the request itself, once the selection that came with it has rendered (so a node
 on another floor or building is placed with that building's transform), fitting the node's box to
 the pane at the current turn and aspect, or centring a saved view's target at the current zoom.
-`ViewerRooms` draws the editor's room pills (same visibility rule, same declutter) and the editor's
-room highlight for the selected or hovered room and a focused unit's rooms. `useViewerFloorDisplay`
+`ViewerRooms` (`@pascal-app/viewer/ui`) draws the room pills (the editor's selection rule and
+declutter, from the same module) and the room highlight for the selected or hovered room and a
+focused unit's rooms, with the selected room's callout. `useViewerFloorDisplay`
 hides the levels above the current floor outside the walkthrough.
 
 Preview borrows the shared store: `setPreviewMode(true)` saves the editor's `selection` and
@@ -141,7 +142,7 @@ Persisted `structure` / `furnish` values from before the merge read back as `bui
 
 Building selection first resolves a wall face or floor/ceiling hit to a detected room.
 The editor keeps its transient `{ levelId, roomId }` in `useEditor.room`; `roomKey`
-in `lib/room-selection.ts` derives identity from the sorted unique boundary ID/face pairs in `spans`, excluding
+in `packages/viewer/src/ui/lib/room-selection.ts` derives identity from the sorted unique boundary ID/face pairs in `spans`, excluding
 coordinates and interval extents so moving a boundary preserves selection. This adapter
 is the migration point for future persistent zone IDs.
 `useSelectedRoom()` exposes the clear footprint, boundary spans and matching surfaces.
@@ -236,8 +237,8 @@ opts out. See [selection-groups](selection-groups.md).
 
 - **Never add selection logic to renderers.** Renderers spread `useNodeEvents` events and stop there. All selection decisions live in the selection manager.
 - **Never add editor phase logic to the viewer's SelectionManager.** Phase, mode, and tool awareness belong exclusively in the editor's selection manager.
-- **`useViewer.selection` is the selection of whichever surface is on screen.** The editor and its Preview take turns on it: Preview saves the editor's selection on entry and restores it on exit. Every manager writes through `setSelection` / `resetSelection` (the viewer surfaces through `lib/viewer-selection.ts`); nothing mutates `selection` directly.
-- **Viewer surfaces decide in `lib/viewer-selection.ts`, never in a renderer.** A new hit source turns its hit into a `ViewerPick` and calls `applyViewerClick` / `applyViewerHover`.
+- **`useViewer.selection` is the selection of whichever surface is on screen.** The editor and its Preview take turns on it: Preview saves the editor's selection on entry and restores it on exit. Every manager writes through `setSelection` / `resetSelection` (the viewer surfaces through `ui/lib/viewer-selection.ts`); nothing mutates `selection` directly.
+- **Viewer surfaces decide in `ui/lib/viewer-selection.ts`, never in a renderer.** A new hit source turns its hit into a `ViewerPick` and calls `applyViewerClick` / `applyViewerHover`.
 - **Outliner arrays are mutated in-place** (not replaced) for performance. Don't assign new arrays to `outliner.selectedObjects` or `outliner.hoveredObjects`.
 - **Hover is a separate scalar** (`hoveredId: string | null`), not part of `selectedIds`. Update it via `setHoveredId`.
 

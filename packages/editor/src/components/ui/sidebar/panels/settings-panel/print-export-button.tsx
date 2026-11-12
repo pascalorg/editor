@@ -2,7 +2,7 @@ import { getProjectFileSink } from '@pascal-app/core'
 import { downloadProjectFile } from '../../../../../lib/download-project-file'
 import { AlertTriangle, Printer } from 'lucide-react'
 import { useState } from 'react'
-import { Button } from '../../../../../components/ui/primitives/button'
+import { Button } from '@pascal-app/viewer/ui'
 import {
   isPrintLevelBundleReport,
   type PrintLevelBundleReport,

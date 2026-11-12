@@ -1,4 +1,8 @@
-import type { ElevatorNode, ParametricDescriptor } from '@pascal-app/core'
+import {
+  type ElevatorNode,
+  normalizeElevatorDimensions,
+  type ParametricDescriptor,
+} from '@pascal-app/core'
 
 export const elevatorParametrics: ParametricDescriptor<ElevatorNode> = {
   groups: [
@@ -19,9 +23,9 @@ export const elevatorParametrics: ParametricDescriptor<ElevatorNode> = {
     {
       label: 'Cab',
       fields: [
-        { key: 'width', kind: 'number', unit: 'm', min: 0.8, max: 1000, step: 0.05 },
-        { key: 'depth', kind: 'number', unit: 'm', min: 0.8, max: 1000, step: 0.05 },
-        { key: 'cabHeight', kind: 'number', unit: 'm', min: 1.8, max: 1000, step: 0.05 },
+        { key: 'width', kind: 'number', unit: 'm', min: 0.8, step: 0.05 },
+        { key: 'depth', kind: 'number', unit: 'm', min: 0.8, step: 0.05 },
+        { key: 'cabHeight', kind: 'number', unit: 'm', min: 1.8, step: 0.05 },
       ],
     },
     {
@@ -33,7 +37,6 @@ export const elevatorParametrics: ParametricDescriptor<ElevatorNode> = {
           label: 'Wall thickness',
           unit: 'm',
           min: 0.04,
-          max: 1000,
           step: 0.01,
         },
         {
@@ -47,8 +50,8 @@ export const elevatorParametrics: ParametricDescriptor<ElevatorNode> = {
     {
       label: 'Doors',
       fields: [
-        { key: 'doorWidth', kind: 'number', unit: 'm', min: 0.45, max: 1000, step: 0.05 },
-        { key: 'doorHeight', kind: 'number', unit: 'm', min: 1.2, max: 1000, step: 0.05 },
+        { key: 'doorWidth', kind: 'number', unit: 'm', min: 0.45, step: 0.05 },
+        { key: 'doorHeight', kind: 'number', unit: 'm', min: 1.2, step: 0.05 },
         {
           key: 'doorStyle',
           kind: 'enum',
@@ -95,9 +98,6 @@ export const elevatorParametrics: ParametricDescriptor<ElevatorNode> = {
       ],
     },
   ],
-  derive: (next) => ({
-    doorHeight: Math.min(next.doorHeight, Math.max(1.2, next.cabHeight - 0.1)),
-    doorWidth: Math.min(next.doorWidth, Math.max(0.45, next.width - 0.1)),
-  }),
+  derive: (next) => normalizeElevatorDimensions(next),
   customPanel: () => import('./panel'),
 }

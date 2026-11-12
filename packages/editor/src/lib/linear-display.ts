@@ -4,7 +4,7 @@ import {
   linearUnitToMeters,
   type MetricNotation,
   metersToLinearUnit,
-} from './measurements'
+} from '@pascal-app/core'
 
 export function getLinearDisplay(
   unit: string,

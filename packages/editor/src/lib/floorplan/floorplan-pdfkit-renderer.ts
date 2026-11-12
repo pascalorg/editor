@@ -1,16 +1,18 @@
-import { type FloorplanGeometry, type FloorplanPoint, loadAssetUrl } from '@pascal-app/core'
+import {
+  type FloorplanGeometry,
+  type FloorplanPoint,
+  loadAssetUrl,
+  readFloorplanGeometryMetadata,
+} from '@pascal-app/core'
 import {
   type ArchitecturalDimensionLayout,
   computeArchitecturalDimensionLayout,
-} from '../../components/editor-2d/renderers/floorplan-dimension-renderer'
-import {
   documentCircleGeometryAttrs,
   documentRectGeometryAttrs,
   resolveDocumentAnnotationGroupChildren,
-} from '../../components/editor-2d/renderers/floorplan-geometry-renderer'
-import { resolveFloorplanLabelAngle } from '../../components/editor-2d/renderers/floorplan-label-angle'
+  resolveFloorplanLabelAngle,
+} from '@pascal-app/viewer/ui'
 import type { FloorplanExportBounds } from './floorplan-export'
-import { readFloorplanGeometryMetadata } from './floorplan-extension'
 import type { FloorplanPdfBaseline, FloorplanPdfDocument } from './floorplan-pdfkit-document'
 
 const DIMENSION_LINE_WIDTH_PT = 0.5

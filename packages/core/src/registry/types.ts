@@ -426,6 +426,8 @@ export type ToolOption = {
   /** Row label. Sentence case, e.g. 'Create from'. */
   label: string
   choices: readonly ToolOptionChoice[]
+  /** Optional exact numeric entry instead of choice buttons. */
+  input?: { min?: number; max?: number; step?: number; unit?: string }
   /** Subscribe to live value changes (Zustand-store-like); returns unsubscribe. */
   subscribe: (onChange: () => void) => () => void
   /** Current value token. */
@@ -1312,6 +1314,12 @@ export type NodeDefinition<S extends ZodObject<any>> = {
    */
   floorplanScope?: FloorplanScope
   /**
+   * Levels other than its own whose plans also draw this node: a stair that
+   * climbs to an upper floor shows on that floor's plan too. The plan builds
+   * it with `ctx.parent` set to the drawn level.
+   */
+  floorplanLinkedLevelIds?: (node: z.infer<S>) => readonly AnyNodeId[]
+  /**
    * 2D drag affordances keyed by the string identifier emitted on
    * `endpoint-handle` (and similar interactive floor-plan primitives) via
    * the `affordance` field. The floor-plan registry layer calls
@@ -1657,9 +1665,17 @@ export type RendererSource<N> =
  * A collective renderer for the baked `/viewer` (see `NodeDefinition.bakeReplaceRenderer`):
  * a lazy module whose default export takes all of one level's `replace` nodes and
  * is portaled into that baked level. Three-free indirection, same as `system`.
+ *
+ * `resolve` looks up any node of the scene graph the artifact was baked from.
+ * The baked viewer never loads that graph into `useScene`, so a renderer that
+ * builds from other nodes (its parent site, its siblings) reads them here.
+ * `GlbScene` builds it from its `sceneNodes` prop and leaves it undefined when
+ * the host omits `sceneNodes`.
  */
 export type BakeReplaceRenderer<N> = {
-  module: () => Promise<{ default: ComponentType<{ nodes: N[] }> }>
+  module: () => Promise<{
+    default: ComponentType<{ nodes: N[]; resolve?: GeometryContext['resolve'] }>
+  }>
 }
 
 export type BakeGeometryBuilder<N> = (node: N, ctx: GeometryContext) => Object3D
@@ -1698,6 +1714,8 @@ export type DuplicableConfig = {
   /** 'with-children' preserves the root-only draft lifecycle for childless nodes. */
   subtree?: boolean | 'with-children'
   prepareSubtreeClone?: (args: DuplicateSubtreeCloneArgs) => DuplicateSubtreeCloneResult
+  /** Per-node opt-out, e.g. a post its lean-to generates and counts itself. */
+  allow?: (args: { node: AnyNode }) => boolean
 }
 
 // ─── Capabilities ────────────────────────────────────────────────────
@@ -1803,6 +1821,15 @@ export type Capabilities = {
     nodes?: Readonly<Record<string, AnyNode>>,
   ) => { size: [number, number, number]; center?: [number, number, number]; centerY?: number }
   roofAccessory?: RoofAccessoryConfig
+  /**
+   * The kind roofs: a node of it is one face of the roof that holds it (a plugin's solved roof
+   * plane), as a segment is one of the roof's masses. A roof lists it in `children` beside its
+   * segments and renders it through the kind's own renderer under the roof's transform, so hiding,
+   * selecting or deleting the roof takes its faces with it; the readers of a roof's extent and
+   * heights (the storey it covers, the walls it stands on, a view's frame) count it through
+   * `outline` and `heightAt`. See `RoofsCapability`.
+   */
+  roofs?: RoofsCapability
   /**
    * Kind cuts a hole in the ceiling surface it is attached to (e.g. recessed
    * downlights). The viewer's `CeilingSystem` calls this for each child of a
@@ -2224,6 +2251,22 @@ export type RoofAccessoryConfig = {
 }
 
 /**
+ * One face of the roof holding the node, in that roof's frame: metres, `[x, z]` in its plan and
+ * heights up from its origin. A roof standing unturned at its level's origin holds its faces in
+ * the level's frame.
+ */
+export type RoofsCapability = {
+  /** The face's outline in its roof's plan, corners in order. */
+  outline: (node: AnyNode) => readonly (readonly [x: number, z: number])[]
+  /**
+   * The height of the face's top surface over its roof's origin at a point of its outline. Readers
+   * take a face's lowest and highest points at the outline's corners, so a curved face gives an
+   * outline dense enough to hold them.
+   */
+  heightAt: (node: AnyNode, x: number, z: number) => number
+}
+
+/**
  * Capability for kinds that cut a hole in their host ceiling when the node is
  * attached to a ceiling surface (e.g. recessed downlights). The viewer's
  * `CeilingSystem` queries children of a ceiling for this capability and merges
@@ -2275,6 +2318,12 @@ export type CapabilityCtx = { node: AnyNode }
 export type CutsContext = { nodes: Readonly<Record<AnyNodeId, AnyNode>> }
 
 export type MovableConfig = {
+  /** Resolve the stored pose after snapping, during preview and again on commit. */
+  resolvePosition?: (args: {
+    node: AnyNode
+    position: [number, number, number]
+    nodes: Readonly<Record<string, AnyNode>>
+  }) => [number, number, number]
   axes: ReadonlyArray<'x' | 'y' | 'z'>
   gridSnap?: boolean
   /** Keep an existing floor-placed node on its current level and visual elevation while dragging. */
@@ -2620,11 +2669,11 @@ export type FloorPlacedConfig = {
  */
 export type BatchableConfig = {
   /**
-   * Where the node's batches live. `'level'`: the node is a direct child of a
-   * level; hosted or mounted nodes draw themselves, because their host moves
-   * them without a signal the batch sees. `'wall'`: the node is hosted by a
-   * visible wall that is a level child; the wall's edits, tint and gestures
-   * release it.
+   * Where the node's batches live. `'level'`: the node sits under a level,
+   * directly or through visible host nodes (a cabinet module in its run, a
+   * plate on a table, a lamp on a ceiling); a host's edits, tint and gestures
+   * release it. `'wall'`: the node is hosted by a visible wall that is a level
+   * child, released the same way by the wall.
    */
   scope: 'level' | 'wall'
   /** Transient states in which the node draws its own meshes, such as a running animation. */

@@ -1,6 +1,7 @@
 import type { McpServer } from '@modelcontextprotocol/server'
 import {
   type AddObjectInput,
+  AGENT_OPERATION_STEPS,
   AGENT_OPERATIONS,
   type AgentContext,
   type AgentHostRuntime,
@@ -15,6 +16,7 @@ import {
   furnishingRefusal,
   readCatalog,
   type SceneChanges,
+  type Steps,
   startOfSession,
   writeCollections,
 } from '@pascal-app/core/agent-operations'
@@ -66,6 +68,7 @@ import {
   setGroundLevelTool,
   setUnitMembersTool,
   setWallTypeTool,
+  surfaceDescription,
   validateDesignTool,
   verifySceneModelResult,
   verifySceneTool,
@@ -118,6 +121,14 @@ export type PlanReadingHosts = {
   assetViews?: AssetViewLoader
   /** Compiles one add_object module for a batch before the synchronous operations run. */
   buildObject?: (input: Omit<AddObjectInput, 'compiled'>) => Promise<CompiledGeometryScript>
+  /**
+   * Awaited between the steps of a call that takes seconds on a large building (after each call of
+   * a run_batch, after each check of a verify_scene, author_scene's closing one included), so the
+   * host's timers and I/O run meanwhile. Only for a host whose scene no other call can reach then
+   * (a bridge of its own for each request): a batch is planned on the scene as its first call
+   * found it and applied after its last. Without it these calls run uninterrupted.
+   */
+  betweenSteps?: () => Promise<void>
 }
 
 const defaultAssetViews = createAssetViewLoader(createFetchAssetViewIO())
@@ -665,11 +676,18 @@ function writesScene(changes: SceneChanges | undefined): boolean {
   )
 }
 
-type FoundAsset = { id: string; name: string; dimensions: unknown; attachTo: string | null }
+type FoundAsset = {
+  id: string
+  name: string
+  dimensions: unknown
+  attachTo: string | null
+  params?: unknown[]
+}
 
 /**
- * search_assets as the model reads it: each item's id, name and placement facts; the category
- * and the floor's null attachTo stay in the structured result.
+ * search_assets as the model reads it: each item's id, name and placement facts, and the params
+ * of one built from a script (add_object changes them once placed); the category and the floor's
+ * null attachTo stay in the structured result.
  */
 function searchAssetsModelResult(output: Record<string, unknown>) {
   const groups = output.groups as { results: FoundAsset[] }[]
@@ -677,11 +695,12 @@ function searchAssetsModelResult(output: Record<string, unknown>) {
     ...output,
     groups: groups.map((group) => ({
       ...group,
-      results: group.results.map(({ id, name, dimensions, attachTo }) => ({
+      results: group.results.map(({ id, name, dimensions, attachTo, params }) => ({
         id,
         name,
         dimensions,
         ...(attachTo && { attachTo }),
+        ...(params && { params }),
       })),
     })),
   }
@@ -700,6 +719,20 @@ function modelResult(
   if (name === verifySceneTool.name) return verifySceneModelResult(output, input)
   if (name === searchAssetsTool.name) return searchAssetsModelResult(output)
   return output
+}
+
+/** Work one step at a time, the host's pause after each; `scope` is where each step runs. */
+export async function pausedBetweenSteps<Result>(
+  steps: Steps<Result>,
+  pause: () => Promise<void>,
+  scope: (step: () => IteratorResult<void, Result>) => IteratorResult<void, Result> = (step) =>
+    step(),
+): Promise<Result> {
+  for (;;) {
+    const step = scope(() => steps.next())
+    if (step.done) return step.value
+    await pause()
+  }
 }
 
 export function registerSharedTools(
@@ -727,7 +760,7 @@ export function registerOperationTool(
     tool.contract.name,
     {
       title: tool.contract.title,
-      description: tool.contract.description,
+      description: surfaceDescription(tool.contract, 'mcp'),
       inputSchema: z.object(tool.contract.input),
       // Loose: a client that listed the tools rejects any field the schema leaves out, and the
       // operations in core grow fields (verify_scene's guesses) that this list would miss.
@@ -797,7 +830,18 @@ export function registerOperationTool(
           pictures: needs.pictures,
         })
       try {
-        outcome = inScene(bridge, () => tool.operation(nodes, input as never, context))
+        const steps =
+          hosts.betweenSteps && Object.hasOwn(AGENT_OPERATION_STEPS, tool.contract.name)
+            ? AGENT_OPERATION_STEPS[tool.contract.name]
+            : undefined
+        outcome =
+          steps && hosts.betweenSteps
+            ? await pausedBetweenSteps(
+                steps(nodes, input as never, context),
+                hosts.betweenSteps,
+                (step) => inScene(bridge, step),
+              )
+            : inScene(bridge, () => tool.operation(nodes, input as never, context))
       } catch (error) {
         // A refusal can ask the session to remember what it refused (a catalog piece under an open source).
         if (isAgentRefusal(error) && error.keep) bridge.agentSession?.keep(error.keep)

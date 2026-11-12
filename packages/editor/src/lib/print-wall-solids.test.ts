@@ -155,6 +155,11 @@ describe('buildPrintableWallSolids', () => {
       { effectiveHeight: 2.5 },
       { [shaped.id]: shaped },
     )
+    const sloped = buildPrintableWallSolids(
+      { ...wall, endHeightOffset: 1.0 },
+      { effectiveHeight: 2.5 },
+      { [shaped.id]: shaped },
+    )
     const terrain = buildPrintableWallSolids(
       { ...wall, children: [], fillToTerrain: true },
       { effectiveHeight: 2.5 },
@@ -170,6 +175,12 @@ describe('buildPrintableWallSolids', () => {
       expect.objectContaining({
         status: 'blocked',
         diagnostics: [expect.objectContaining({ code: 'unsupported_wall_print_curve' })],
+      }),
+    )
+    expect(sloped).toEqual(
+      expect.objectContaining({
+        status: 'blocked',
+        diagnostics: [expect.objectContaining({ code: 'unsupported_wall_print_slope' })],
       }),
     )
     expect(terrain).toEqual(

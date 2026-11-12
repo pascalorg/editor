@@ -38,6 +38,7 @@ export {
   hasRegistry3DMoveTool,
   isDrawnViaTool,
   isDrawnViaToolKind,
+  isNodeDuplicable,
   isNodeKindEnabled,
   isPresettable,
   isPresettableKind,
@@ -61,6 +62,7 @@ export {
   collectDescendants,
   type SpatialQuery,
 } from './relations-resolver'
+export { type RoofFaceShape, roofFaceOf, roofFaceShapes, validateRoofRelations } from './roofs'
 export { createSceneApi, type SceneStoreLike, type SceneToolHost } from './scene-api'
 export {
   type CloneNodesIntoOptions,
@@ -187,6 +189,7 @@ export type {
   RevealPlanPoint,
   RevealStyle,
   RoofAccessoryConfig,
+  RoofsCapability,
   RotatableConfig,
   ScalableConfig,
   SceneActionCapability,

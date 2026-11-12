@@ -9,6 +9,8 @@ import {
   ItemNode,
   LevelNode,
   type NodeEvent,
+  RoofNode,
+  RoofSegmentNode,
   SlabNode,
   sceneRegistry,
   UnitNode,
@@ -18,25 +20,25 @@ import {
 } from '@pascal-app/core'
 import { migrateRoomZones } from '@pascal-app/core/scene-migrations'
 import { resolveGlbPick, useViewer } from '@pascal-app/viewer'
-import { CameraControlsImpl } from '@react-three/drei'
-import { createElement } from 'react'
-import * as THREE from 'three'
-import { Group, Vector3 } from 'three'
-import { viewerHoverLabel } from '../components/viewer/viewer-hover-label'
-import { ViewerSelectionManager } from '../components/viewer/viewer-selection-manager'
-import { publishCameraPose } from '../store/camera-pose-store'
-import useEditor, { takePreviewCameraRestore } from '../store/use-editor'
-import { withSelectionHarness } from '../test-utils/selection-harness'
 import {
   frameViewerCamera,
+  publishCameraPose,
   resolveViewerClick,
   resolveViewerHover,
   selectViewerRoom,
   type ViewerSelection,
+  ViewerSelectionManager,
   viewerBreadcrumb,
+  viewerHoverLabel,
   viewerPickFromNodeEvent,
   viewerSidebarSections,
-} from './viewer-selection'
+} from '@pascal-app/viewer/ui'
+import { CameraControlsImpl } from '@react-three/drei'
+import { createElement } from 'react'
+import * as THREE from 'three'
+import { Group, Vector3 } from 'three'
+import useEditor, { takePreviewCameraRestore } from '../store/use-editor'
+import { withSelectionHarness } from '../test-utils/selection-harness'
 
 const english = {
   _: (descriptor: { id: string; message?: string }) => descriptor.message ?? descriptor.id,
@@ -162,6 +164,32 @@ describe('viewer selection rules', () => {
         selectedIds: [sofa.id],
       })
     }
+  })
+
+  test("a roof's segment or its face of another kind selects the whole roof", () => {
+    const segment = RoofSegmentNode.parse({ id: 'rseg_main', parentId: 'roof_main' })
+    // A plugin's roof plane (`capabilities.roofs`): the click picks its roof as a segment's does.
+    const plane = {
+      object: 'node',
+      id: 'roofplane_south',
+      type: 'test:roof-plane',
+      parentId: 'roof_main',
+      visible: true,
+      metadata: {},
+    } as unknown as AnyNode
+    const roof = RoofNode.parse({
+      id: 'roof_main',
+      parentId: levelId,
+      children: [segment.id, plane.id],
+    })
+    const { nodes } = scene([roof])
+    nodes[segment.id] = segment
+    nodes[plane.id] = plane
+    for (const nodeId of [segment.id, plane.id])
+      expect(resolveViewerClick(nothing, { nodeId, point: [2, 2] }, nodes)).toMatchObject({
+        levelId,
+        selectedIds: [roof.id],
+      })
   })
 
   test('empty space clears the room and the element and keeps the floor', () => {

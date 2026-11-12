@@ -983,6 +983,16 @@ msgstr "Type de toit"
 msgid "app.lib.buildPanelModel.toolCount"
 msgstr "{count, plural, one {# outil} many {# outils} other {# outils}}"
 
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 344fe9d407a233a9
+# Review: required
+# English: "Barrel"
+#: apps/editor/lib/build-tab-state.ts
+#, fuzzy
+msgid "app.lib.buildTabState.barrel"
+msgstr "Berceau"
+
 # Source-Hash: 3241ecabee8221a1
 # Review: required
 # AI-Provider: claude-code
@@ -2049,28 +2059,28 @@ msgstr "Murs : {label}"
 # Source-Hash: 8caa959c0ae800c3
 # Review: human
 # English: "Basement"
-#: packages/editor/src/i18n/level-name.ts
+#: packages/viewer/src/ui/lib/level-name.ts
 msgid "core.level.basement"
 msgstr "Sous-sol"
 
 # Source-Hash: 14927085ee91ba05
 # Review: human
 # English: "Basement {number}"
-#: packages/editor/src/i18n/level-name.ts
+#: packages/viewer/src/ui/lib/level-name.ts
 msgid "core.level.basementNumber"
 msgstr "Sous-sol {number}"
 
 # Source-Hash: e59074a7b9b3f56e
 # Review: human
 # English: "Floor {number}"
-#: packages/editor/src/i18n/level-name.ts
+#: packages/viewer/src/ui/lib/level-name.ts
 msgid "core.level.floorNumber"
 msgstr "Étage {number}"
 
 # Source-Hash: cde3efc9b7ddfa41
 # Review: human
 # English: "Ground floor"
-#: packages/editor/src/i18n/level-name.ts
+#: packages/viewer/src/ui/lib/level-name.ts
 msgid "core.level.groundFloor"
 msgstr "Rez-de-chaussée"
 
@@ -2139,7 +2149,7 @@ msgstr "Reprendre le suivi"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Follow Pascal: Off"
-#: packages/editor/src/components/ui/action-menu/follow-pascal-toggle.tsx
+#: packages/viewer/src/ui/components/follow-pascal-toggle.tsx
 #, fuzzy
 msgid "editor.actionMenu.followPascalToggle.off"
 msgstr "Suivre Pascal : désactivé"
@@ -2149,7 +2159,7 @@ msgstr "Suivre Pascal : désactivé"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Follow Pascal: On"
-#: packages/editor/src/components/ui/action-menu/follow-pascal-toggle.tsx
+#: packages/viewer/src/ui/components/follow-pascal-toggle.tsx
 #, fuzzy
 msgid "editor.actionMenu.followPascalToggle.on"
 msgstr "Suivre Pascal : activé"
@@ -3794,6 +3804,26 @@ msgstr "{label} : {finish}"
 msgid "editor.controls.finishSwatch.default"
 msgstr "Par défaut"
 
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 6774854416d6dfdf
+# Review: required
+# English: "Edit {label}"
+#: packages/editor/src/components/ui/controls/slider-control.tsx
+#, fuzzy
+msgid "editor.controls.sliderControl.editLabel"
+msgstr "Modifier {label}"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 37d9f63758abdb67
+# Review: required
+# English: "Mixed"
+#: packages/editor/src/components/ui/controls/slider-control.tsx
+#, fuzzy
+msgid "editor.controls.sliderControl.mixed"
+msgstr "Mixte"
+
 # Source-Hash: a2bd204e93e90598
 # Review: required
 # AI-Provider: claude-code
@@ -4594,6 +4624,16 @@ msgstr "Annuler la sélection"
 #, fuzzy
 msgid "editor.helpers.helperManager.cancelStroke"
 msgstr "Annuler le tracé"
+
+# Source-Hash: 7aaeeaeb3e2f247a
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Detach the joint"
+#: packages/editor/src/components/ui/helpers/helper-manager.tsx
+#, fuzzy
+msgid "editor.helpers.helperManager.detachTheJoint"
+msgstr "Détacher la jonction"
 
 # Source-Hash: 16552c2580bbe8b8
 # Review: required
@@ -13592,6 +13632,46 @@ msgstr "Supprimer la zone"
 msgid "editor.panels.wallRegionList.paintRegions"
 msgstr "Zones de peinture"
 
+# Source-Hash: c69865ec5d9d1ac9
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Angle"
+#: packages/editor/src/store/use-placement-typing.ts
+#, fuzzy
+msgid "editor.placementTyping.angle"
+msgstr "Angle"
+
+# Source-Hash: fe7ddb094aa8ff4d
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Distance"
+#: packages/editor/src/store/use-placement-typing.ts
+#, fuzzy
+msgid "editor.placementTyping.distance"
+msgstr "Distance"
+
+# Source-Hash: 643687bc3adaac76
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Length"
+#: packages/editor/src/store/use-placement-typing.ts
+#, fuzzy
+msgid "editor.placementTyping.length"
+msgstr "Longueur"
+
+# Source-Hash: 0f0e13abf9b2bb67
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Offset"
+#: packages/editor/src/store/use-placement-typing.ts
+#, fuzzy
+msgid "editor.placementTyping.offset"
+msgstr "Décalage"
+
 # Source-Hash: 89ee318aad485f83
 # Review: required
 # AI-Provider: claude-code
@@ -13878,8 +13958,7 @@ msgstr "Saisissez une cote pour déplacer le mur"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Room"
-#: packages/editor/src/components/editor/room-labels.tsx
-#: packages/editor/src/lib/viewer-selection.ts
+#: packages/viewer/src/ui/lib/viewer-selection.ts
 #, fuzzy
 msgid "editor.roomLabel.room"
 msgstr "Pièce"
@@ -13889,8 +13968,7 @@ msgstr "Pièce"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Zone"
-#: packages/editor/src/components/editor/room-labels.tsx
-#: packages/editor/src/lib/viewer-selection.ts
+#: packages/viewer/src/ui/lib/viewer-selection.ts
 #, fuzzy
 msgid "editor.roomLabel.zone"
 msgstr "Zone"
@@ -13900,7 +13978,7 @@ msgstr "Zone"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Attic"
-#: packages/editor/src/lib/room-name-messages.ts
+#: packages/viewer/src/ui/lib/room-name-messages.ts
 #, fuzzy
 msgid "editor.roomName.attic"
 msgstr "Combles"
@@ -13910,7 +13988,7 @@ msgstr "Combles"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Balcony"
-#: packages/editor/src/lib/room-name-messages.ts
+#: packages/viewer/src/ui/lib/room-name-messages.ts
 #, fuzzy
 msgid "editor.roomName.balcony"
 msgstr "Balcon"
@@ -13920,7 +13998,7 @@ msgstr "Balcon"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Basement"
-#: packages/editor/src/lib/room-name-messages.ts
+#: packages/viewer/src/ui/lib/room-name-messages.ts
 #, fuzzy
 msgid "editor.roomName.basement"
 msgstr "Sous-sol"
@@ -13930,7 +14008,7 @@ msgstr "Sous-sol"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Bathroom"
-#: packages/editor/src/lib/room-name-messages.ts
+#: packages/viewer/src/ui/lib/room-name-messages.ts
 #, fuzzy
 msgid "editor.roomName.bathroom"
 msgstr "Salle de bain"
@@ -13940,7 +14018,7 @@ msgstr "Salle de bain"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Bedroom"
-#: packages/editor/src/lib/room-name-messages.ts
+#: packages/viewer/src/ui/lib/room-name-messages.ts
 #, fuzzy
 msgid "editor.roomName.bedroom"
 msgstr "Chambre"
@@ -13950,7 +14028,7 @@ msgstr "Chambre"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Boiler room"
-#: packages/editor/src/lib/room-name-messages.ts
+#: packages/viewer/src/ui/lib/room-name-messages.ts
 #, fuzzy
 msgid "editor.roomName.boilerRoom"
 msgstr "Chaufferie"
@@ -13960,7 +14038,7 @@ msgstr "Chaufferie"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Carport"
-#: packages/editor/src/lib/room-name-messages.ts
+#: packages/viewer/src/ui/lib/room-name-messages.ts
 #, fuzzy
 msgid "editor.roomName.carport"
 msgstr "Abri de voiture"
@@ -13970,7 +14048,7 @@ msgstr "Abri de voiture"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Cellar"
-#: packages/editor/src/lib/room-name-messages.ts
+#: packages/viewer/src/ui/lib/room-name-messages.ts
 #, fuzzy
 msgid "editor.roomName.cellar"
 msgstr "Cave"
@@ -13980,7 +14058,7 @@ msgstr "Cave"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Closet"
-#: packages/editor/src/lib/room-name-messages.ts
+#: packages/viewer/src/ui/lib/room-name-messages.ts
 #, fuzzy
 msgid "editor.roomName.closet"
 msgstr "Placard"
@@ -13990,7 +14068,7 @@ msgstr "Placard"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Corridor"
-#: packages/editor/src/lib/room-name-messages.ts
+#: packages/viewer/src/ui/lib/room-name-messages.ts
 #, fuzzy
 msgid "editor.roomName.corridor"
 msgstr "Couloir"
@@ -14000,7 +14078,7 @@ msgstr "Couloir"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Courtyard"
-#: packages/editor/src/lib/room-name-messages.ts
+#: packages/viewer/src/ui/lib/room-name-messages.ts
 #, fuzzy
 msgid "editor.roomName.courtyard"
 msgstr "Cour"
@@ -14010,7 +14088,7 @@ msgstr "Cour"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Deck"
-#: packages/editor/src/lib/room-name-messages.ts
+#: packages/viewer/src/ui/lib/room-name-messages.ts
 #, fuzzy
 msgid "editor.roomName.deck"
 msgstr "Terrasse"
@@ -14020,7 +14098,7 @@ msgstr "Terrasse"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Den"
-#: packages/editor/src/lib/room-name-messages.ts
+#: packages/viewer/src/ui/lib/room-name-messages.ts
 #, fuzzy
 msgid "editor.roomName.den"
 msgstr "Petit salon"
@@ -14030,7 +14108,7 @@ msgstr "Petit salon"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Dining room"
-#: packages/editor/src/lib/room-name-messages.ts
+#: packages/viewer/src/ui/lib/room-name-messages.ts
 #, fuzzy
 msgid "editor.roomName.diningRoom"
 msgstr "Salle à manger"
@@ -14040,7 +14118,7 @@ msgstr "Salle à manger"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Dressing room"
-#: packages/editor/src/lib/room-name-messages.ts
+#: packages/viewer/src/ui/lib/room-name-messages.ts
 #, fuzzy
 msgid "editor.roomName.dressingRoom"
 msgstr "Dressing"
@@ -14050,7 +14128,7 @@ msgstr "Dressing"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "En-suite"
-#: packages/editor/src/lib/room-name-messages.ts
+#: packages/viewer/src/ui/lib/room-name-messages.ts
 #, fuzzy
 msgid "editor.roomName.enSuite"
 msgstr "Salle d’eau attenante"
@@ -14060,7 +14138,7 @@ msgstr "Salle d’eau attenante"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Entrance"
-#: packages/editor/src/lib/room-name-messages.ts
+#: packages/viewer/src/ui/lib/room-name-messages.ts
 #, fuzzy
 msgid "editor.roomName.entrance"
 msgstr "Entrée"
@@ -14070,7 +14148,7 @@ msgstr "Entrée"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Family room"
-#: packages/editor/src/lib/room-name-messages.ts
+#: packages/viewer/src/ui/lib/room-name-messages.ts
 #, fuzzy
 msgid "editor.roomName.familyRoom"
 msgstr "Salle familiale"
@@ -14080,7 +14158,7 @@ msgstr "Salle familiale"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Gallery"
-#: packages/editor/src/lib/room-name-messages.ts
+#: packages/viewer/src/ui/lib/room-name-messages.ts
 #, fuzzy
 msgid "editor.roomName.gallery"
 msgstr "Galerie"
@@ -14090,7 +14168,7 @@ msgstr "Galerie"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Games room"
-#: packages/editor/src/lib/room-name-messages.ts
+#: packages/viewer/src/ui/lib/room-name-messages.ts
 #, fuzzy
 msgid "editor.roomName.gamesRoom"
 msgstr "Salle de jeux"
@@ -14100,7 +14178,7 @@ msgstr "Salle de jeux"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Garage"
-#: packages/editor/src/lib/room-name-messages.ts
+#: packages/viewer/src/ui/lib/room-name-messages.ts
 #, fuzzy
 msgid "editor.roomName.garage"
 msgstr "Garage"
@@ -14110,7 +14188,7 @@ msgstr "Garage"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Garden"
-#: packages/editor/src/lib/room-name-messages.ts
+#: packages/viewer/src/ui/lib/room-name-messages.ts
 #, fuzzy
 msgid "editor.roomName.garden"
 msgstr "Jardin"
@@ -14120,7 +14198,7 @@ msgstr "Jardin"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Garden shed"
-#: packages/editor/src/lib/room-name-messages.ts
+#: packages/viewer/src/ui/lib/room-name-messages.ts
 #, fuzzy
 msgid "editor.roomName.gardenShed"
 msgstr "Abri de jardin"
@@ -14130,7 +14208,7 @@ msgstr "Abri de jardin"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Guest room"
-#: packages/editor/src/lib/room-name-messages.ts
+#: packages/viewer/src/ui/lib/room-name-messages.ts
 #, fuzzy
 msgid "editor.roomName.guestRoom"
 msgstr "Chambre d’amis"
@@ -14140,7 +14218,7 @@ msgstr "Chambre d’amis"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Gym"
-#: packages/editor/src/lib/room-name-messages.ts
+#: packages/viewer/src/ui/lib/room-name-messages.ts
 #, fuzzy
 msgid "editor.roomName.gym"
 msgstr "Salle de sport"
@@ -14150,7 +14228,7 @@ msgstr "Salle de sport"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Hallway"
-#: packages/editor/src/lib/room-name-messages.ts
+#: packages/viewer/src/ui/lib/room-name-messages.ts
 #, fuzzy
 msgid "editor.roomName.hallway"
 msgstr "Couloir"
@@ -14160,7 +14238,7 @@ msgstr "Couloir"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Home cinema"
-#: packages/editor/src/lib/room-name-messages.ts
+#: packages/viewer/src/ui/lib/room-name-messages.ts
 #, fuzzy
 msgid "editor.roomName.homeCinema"
 msgstr "Home cinéma"
@@ -14170,7 +14248,7 @@ msgstr "Home cinéma"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Kids' room"
-#: packages/editor/src/lib/room-name-messages.ts
+#: packages/viewer/src/ui/lib/room-name-messages.ts
 #, fuzzy
 msgid "editor.roomName.kidsRoom"
 msgstr "Chambre d’enfant"
@@ -14180,7 +14258,7 @@ msgstr "Chambre d’enfant"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Kitchen"
-#: packages/editor/src/lib/room-name-messages.ts
+#: packages/viewer/src/ui/lib/room-name-messages.ts
 #, fuzzy
 msgid "editor.roomName.kitchen"
 msgstr "Cuisine"
@@ -14190,7 +14268,7 @@ msgstr "Cuisine"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Kitchenette"
-#: packages/editor/src/lib/room-name-messages.ts
+#: packages/viewer/src/ui/lib/room-name-messages.ts
 #, fuzzy
 msgid "editor.roomName.kitchenette"
 msgstr "Kitchenette"
@@ -14200,7 +14278,7 @@ msgstr "Kitchenette"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Landing"
-#: packages/editor/src/lib/room-name-messages.ts
+#: packages/viewer/src/ui/lib/room-name-messages.ts
 #, fuzzy
 msgid "editor.roomName.landing"
 msgstr "Palier"
@@ -14210,7 +14288,7 @@ msgstr "Palier"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Laundry"
-#: packages/editor/src/lib/room-name-messages.ts
+#: packages/viewer/src/ui/lib/room-name-messages.ts
 #, fuzzy
 msgid "editor.roomName.laundry"
 msgstr "Buanderie"
@@ -14220,7 +14298,7 @@ msgstr "Buanderie"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Library"
-#: packages/editor/src/lib/room-name-messages.ts
+#: packages/viewer/src/ui/lib/room-name-messages.ts
 #, fuzzy
 msgid "editor.roomName.library"
 msgstr "Bibliothèque"
@@ -14230,7 +14308,7 @@ msgstr "Bibliothèque"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Living room"
-#: packages/editor/src/lib/room-name-messages.ts
+#: packages/viewer/src/ui/lib/room-name-messages.ts
 #, fuzzy
 msgid "editor.roomName.livingRoom"
 msgstr "Salon"
@@ -14240,7 +14318,7 @@ msgstr "Salon"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Loft"
-#: packages/editor/src/lib/room-name-messages.ts
+#: packages/viewer/src/ui/lib/room-name-messages.ts
 #, fuzzy
 msgid "editor.roomName.loft"
 msgstr "Loft"
@@ -14250,7 +14328,7 @@ msgstr "Loft"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Lounge"
-#: packages/editor/src/lib/room-name-messages.ts
+#: packages/viewer/src/ui/lib/room-name-messages.ts
 #, fuzzy
 msgid "editor.roomName.lounge"
 msgstr "Salon"
@@ -14260,7 +14338,7 @@ msgstr "Salon"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Mezzanine"
-#: packages/editor/src/lib/room-name-messages.ts
+#: packages/viewer/src/ui/lib/room-name-messages.ts
 #, fuzzy
 msgid "editor.roomName.mezzanine"
 msgstr "Mezzanine"
@@ -14270,7 +14348,7 @@ msgstr "Mezzanine"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Mudroom"
-#: packages/editor/src/lib/room-name-messages.ts
+#: packages/viewer/src/ui/lib/room-name-messages.ts
 #, fuzzy
 msgid "editor.roomName.mudroom"
 msgstr "Vestiaire d’entrée"
@@ -14280,7 +14358,7 @@ msgstr "Vestiaire d’entrée"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Nursery"
-#: packages/editor/src/lib/room-name-messages.ts
+#: packages/viewer/src/ui/lib/room-name-messages.ts
 #, fuzzy
 msgid "editor.roomName.nursery"
 msgstr "Chambre de bébé"
@@ -14290,7 +14368,7 @@ msgstr "Chambre de bébé"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Office"
-#: packages/editor/src/lib/room-name-messages.ts
+#: packages/viewer/src/ui/lib/room-name-messages.ts
 #, fuzzy
 msgid "editor.roomName.office"
 msgstr "Bureau"
@@ -14300,7 +14378,7 @@ msgstr "Bureau"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Pantry"
-#: packages/editor/src/lib/room-name-messages.ts
+#: packages/viewer/src/ui/lib/room-name-messages.ts
 #, fuzzy
 msgid "editor.roomName.pantry"
 msgstr "Garde-manger"
@@ -14310,7 +14388,7 @@ msgstr "Garde-manger"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Patio"
-#: packages/editor/src/lib/room-name-messages.ts
+#: packages/viewer/src/ui/lib/room-name-messages.ts
 #, fuzzy
 msgid "editor.roomName.patio"
 msgstr "Patio"
@@ -14320,7 +14398,7 @@ msgstr "Patio"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Playroom"
-#: packages/editor/src/lib/room-name-messages.ts
+#: packages/viewer/src/ui/lib/room-name-messages.ts
 #, fuzzy
 msgid "editor.roomName.playroom"
 msgstr "Salle de jeux"
@@ -14330,7 +14408,7 @@ msgstr "Salle de jeux"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Pool area"
-#: packages/editor/src/lib/room-name-messages.ts
+#: packages/viewer/src/ui/lib/room-name-messages.ts
 #, fuzzy
 msgid "editor.roomName.poolArea"
 msgstr "Espace piscine"
@@ -14340,7 +14418,7 @@ msgstr "Espace piscine"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Porch"
-#: packages/editor/src/lib/room-name-messages.ts
+#: packages/viewer/src/ui/lib/room-name-messages.ts
 #, fuzzy
 msgid "editor.roomName.porch"
 msgstr "Porche"
@@ -14350,7 +14428,7 @@ msgstr "Porche"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Powder room"
-#: packages/editor/src/lib/room-name-messages.ts
+#: packages/viewer/src/ui/lib/room-name-messages.ts
 #, fuzzy
 msgid "editor.roomName.powderRoom"
 msgstr "Toilettes invités"
@@ -14360,7 +14438,7 @@ msgstr "Toilettes invités"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Primary bedroom"
-#: packages/editor/src/lib/room-name-messages.ts
+#: packages/viewer/src/ui/lib/room-name-messages.ts
 #, fuzzy
 msgid "editor.roomName.primaryBedroom"
 msgstr "Chambre principale"
@@ -14370,7 +14448,7 @@ msgstr "Chambre principale"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Reading nook"
-#: packages/editor/src/lib/room-name-messages.ts
+#: packages/viewer/src/ui/lib/room-name-messages.ts
 #, fuzzy
 msgid "editor.roomName.readingNook"
 msgstr "Coin lecture"
@@ -14460,7 +14538,7 @@ msgstr "Travail et loisirs"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Shower room"
-#: packages/editor/src/lib/room-name-messages.ts
+#: packages/viewer/src/ui/lib/room-name-messages.ts
 #, fuzzy
 msgid "editor.roomName.showerRoom"
 msgstr "Salle de douche"
@@ -14470,7 +14548,7 @@ msgstr "Salle de douche"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Stairwell"
-#: packages/editor/src/lib/room-name-messages.ts
+#: packages/viewer/src/ui/lib/room-name-messages.ts
 #, fuzzy
 msgid "editor.roomName.stairwell"
 msgstr "Cage d’escalier"
@@ -14480,7 +14558,7 @@ msgstr "Cage d’escalier"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Storage"
-#: packages/editor/src/lib/room-name-messages.ts
+#: packages/viewer/src/ui/lib/room-name-messages.ts
 #, fuzzy
 msgid "editor.roomName.storage"
 msgstr "Rangement"
@@ -14490,7 +14568,7 @@ msgstr "Rangement"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Studio"
-#: packages/editor/src/lib/room-name-messages.ts
+#: packages/viewer/src/ui/lib/room-name-messages.ts
 #, fuzzy
 msgid "editor.roomName.studio"
 msgstr "Studio"
@@ -14500,7 +14578,7 @@ msgstr "Studio"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Study"
-#: packages/editor/src/lib/room-name-messages.ts
+#: packages/viewer/src/ui/lib/room-name-messages.ts
 #, fuzzy
 msgid "editor.roomName.study"
 msgstr "Bureau"
@@ -14510,7 +14588,7 @@ msgstr "Bureau"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Sunroom"
-#: packages/editor/src/lib/room-name-messages.ts
+#: packages/viewer/src/ui/lib/room-name-messages.ts
 #, fuzzy
 msgid "editor.roomName.sunroom"
 msgstr "Véranda"
@@ -14520,7 +14598,7 @@ msgstr "Véranda"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Terrace"
-#: packages/editor/src/lib/room-name-messages.ts
+#: packages/viewer/src/ui/lib/room-name-messages.ts
 #, fuzzy
 msgid "editor.roomName.terrace"
 msgstr "Terrasse"
@@ -14530,7 +14608,7 @@ msgstr "Terrasse"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Toilet"
-#: packages/editor/src/lib/room-name-messages.ts
+#: packages/viewer/src/ui/lib/room-name-messages.ts
 #, fuzzy
 msgid "editor.roomName.toilet"
 msgstr "WC"
@@ -14540,7 +14618,7 @@ msgstr "WC"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Utility room"
-#: packages/editor/src/lib/room-name-messages.ts
+#: packages/viewer/src/ui/lib/room-name-messages.ts
 #, fuzzy
 msgid "editor.roomName.utilityRoom"
 msgstr "Cellier"
@@ -14550,7 +14628,7 @@ msgstr "Cellier"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Veranda"
-#: packages/editor/src/lib/room-name-messages.ts
+#: packages/viewer/src/ui/lib/room-name-messages.ts
 #, fuzzy
 msgid "editor.roomName.veranda"
 msgstr "Véranda"
@@ -14560,7 +14638,7 @@ msgstr "Véranda"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Walk-in closet"
-#: packages/editor/src/lib/room-name-messages.ts
+#: packages/viewer/src/ui/lib/room-name-messages.ts
 #, fuzzy
 msgid "editor.roomName.walkInCloset"
 msgstr "Dressing"
@@ -14570,7 +14648,7 @@ msgstr "Dressing"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Workshop"
-#: packages/editor/src/lib/room-name-messages.ts
+#: packages/viewer/src/ui/lib/room-name-messages.ts
 #, fuzzy
 msgid "editor.roomName.workshop"
 msgstr "Atelier"
@@ -17495,6 +17573,16 @@ msgstr "Longueur : {field} m"
 msgid "editor.tools.distribution.distributionRunTool.tabDirection"
 msgstr "Tab : direction"
 
+# Source-Hash: adbe2d112b739871
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+# English: "Target elevation: {elevation} m · click or Enter to place"
+#: packages/editor/src/components/tools/distribution/distribution-run-tool.tsx
+#, fuzzy
+msgid "editor.tools.distribution.distributionRunTool.targetElevation"
+msgstr "Altitude cible : {elevation} m · cliquez ou appuyez sur Entrée pour placer"
+
 # Source-Hash: abb1d8c8bfb41acf
 # Review: required
 # AI-Provider: claude-code
@@ -17734,6 +17822,56 @@ msgstr "Voiler le sol au-dessus d’un niveau sous le terrain"
 #, fuzzy
 msgid "editor.views.viewBar.views"
 msgstr "Vues"
+
+# Source-Hash: e33e472c5ffcf14d
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "boost"
+#: packages/viewer/src/ui/components/walkthrough-hud.tsx
+#, fuzzy
+msgid "editor.walkthroughHud.drone.boost"
+msgstr "accélérer"
+
+# Source-Hash: de3ab95e50ad3796
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "down"
+#: packages/viewer/src/ui/components/walkthrough-hud.tsx
+#, fuzzy
+msgid "editor.walkthroughHud.drone.down"
+msgstr "descendre"
+
+# Source-Hash: c1becffaa3515c69
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "move"
+#: packages/viewer/src/ui/components/walkthrough-hud.tsx
+#, fuzzy
+msgid "editor.walkthroughHud.drone.move"
+msgstr "se déplacer"
+
+# Source-Hash: fb18aad9822de902
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "slow"
+#: packages/viewer/src/ui/components/walkthrough-hud.tsx
+#, fuzzy
+msgid "editor.walkthroughHud.drone.slow"
+msgstr "ralentir"
+
+# Source-Hash: 5cc8d1cb43ae1748
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "up"
+#: packages/viewer/src/ui/components/walkthrough-hud.tsx
+#, fuzzy
+msgid "editor.walkthroughHud.drone.up"
+msgstr "monter"
 
 # Source-Hash: 57c1428fe2d28745
 # Review: required
@@ -21645,25 +21783,15 @@ msgstr "Poteau"
 msgid "node.column.panel.actions"
 msgstr "Actions"
 
-# Source-Hash: 14b21685d375581a
-# Review: required
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "A-Frame"
-#: packages/nodes/src/column/panel.tsx
-#, fuzzy
-msgid "node.column.panel.aFrame"
-msgstr "Cadre en A"
-
-# Source-Hash: 4007d88108e25c2b
+# Source-Hash: 663175a9c461a96d
 # Review: required
-# AI-Provider: claude-code
-# AI-Model: claude-opus-5-5
-# English: "Apply preset..."
+# English: "All"
 #: packages/nodes/src/column/panel.tsx
 #, fuzzy
-msgid "node.column.panel.applyPreset"
-msgstr "Appliquer un préréglage…"
+msgid "node.column.panel.all"
+msgstr "Tout"
 
 # Source-Hash: dbfe7c561383c964
 # Review: required
@@ -21675,25 +21803,95 @@ msgstr "Appliquer un préréglage…"
 msgid "node.column.panel.applyProportion"
 msgstr "Appliquer une proportion…"
 
-# Source-Hash: 1f3fd938f0b26c9f
-# Review: required
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Bottom Depth"
+# Source-Hash: 63cbda7b09662368
+# Review: required
+# English: "Arched"
 #: packages/nodes/src/column/panel.tsx
 #, fuzzy
-msgid "node.column.panel.bottomDepth"
-msgstr "Profondeur du bas"
+msgid "node.column.panel.arched"
+msgstr "Cintré"
 
-# Source-Hash: 85576e19cd3da914
-# Review: required
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Bottom Height"
+# Source-Hash: d11dffc2c5b0f50a
+# Review: required
+# English: "Baluster"
 #: packages/nodes/src/column/panel.tsx
 #, fuzzy
-msgid "node.column.panel.bottomHeight"
-msgstr "Hauteur du bas"
+msgid "node.column.panel.baluster"
+msgstr "Balustre"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: a8fdf969f566a554
+# Review: required
+# English: "Band Scale"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.bandScale"
+msgstr "Échelle du bandeau"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: fadada809e27477c
+# Review: required
+# English: "Base"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.base"
+msgstr "Base"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: fca555ac84223bd4
+# Review: required
+# English: "Base Carving"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.baseCarvingLevel"
+msgstr "Sculpture de la base"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: fa9118f6f4f020d7
+# Review: required
+# English: "Base Height"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.baseHeight"
+msgstr "Hauteur de la base"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: efb74250b7929566
+# Review: required
+# English: "Base Ribs"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.baseRibCount"
+msgstr "Nervures de la base"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 1cc2da12e8463e85
+# Review: required
+# English: "Base style"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.baseStyle"
+msgstr "Style de base"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 971207d7a9e0d8a9
+# Review: required
+# English: "Bottom Scale"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.bottomScale"
+msgstr "Échelle inférieure"
 
 # Source-Hash: 4df0bbb04744a810
 # Review: required
@@ -21705,75 +21903,25 @@ msgstr "Hauteur du bas"
 msgid "node.column.panel.bottomSpread"
 msgstr "Écartement en bas"
 
-# Source-Hash: 67479fecb980a441
-# Review: required
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Bottom Step Spread"
+# Source-Hash: 35b35cd49111ba44
+# Review: required
+# English: "Bracket Depth"
 #: packages/nodes/src/column/panel.tsx
 #, fuzzy
-msgid "node.column.panel.bottomStepSpread"
-msgstr "Écart des gradins du bas"
+msgid "node.column.panel.bracketDepth"
+msgstr "Profondeur du corbeau"
 
-# Source-Hash: 6ea977c42202ca24
-# Review: required
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Bottom Tiers"
-#: packages/nodes/src/column/panel.tsx
-#, fuzzy
-msgid "node.column.panel.bottomTiers"
-msgstr "Gradins du bas"
-
-# Source-Hash: 709ca788827f8a94
+# Source-Hash: 06e2dd9a165502bd
 # Review: required
-# AI-Provider: claude-code
-# AI-Model: claude-opus-5-5
-# English: "Bottom Width"
+# English: "Bracket Tiers"
 #: packages/nodes/src/column/panel.tsx
 #, fuzzy
-msgid "node.column.panel.bottomWidth"
-msgstr "Largeur du bas"
-
-# Source-Hash: 39d33008c81fc075
-# Review: required
-# AI-Provider: claude-code
-# AI-Model: claude-opus-5-5
-# English: "Box Frame"
-#: packages/nodes/src/column/panel.tsx
-#, fuzzy
-msgid "node.column.panel.boxFrame"
-msgstr "Cadre caisson"
-
-# Source-Hash: 381b1f481f747677
-# Review: required
-# AI-Provider: claude-code
-# AI-Model: claude-opus-5-5
-# English: "Brace Depth"
-#: packages/nodes/src/column/panel.tsx
-#, fuzzy
-msgid "node.column.panel.braceDepth"
-msgstr "Profondeur du contreventement"
-
-# Source-Hash: 8509b09b4ecdd6b6
-# Review: required
-# AI-Provider: claude-code
-# AI-Model: claude-opus-5-5
-# English: "Brace Width"
-#: packages/nodes/src/column/panel.tsx
-#, fuzzy
-msgid "node.column.panel.braceWidth"
-msgstr "Largeur du contreventement"
-
-# Source-Hash: 08558dd786f45281
-# Review: required
-# AI-Provider: claude-code
-# AI-Model: claude-opus-5-5
-# English: "Bulge"
-#: packages/nodes/src/column/panel.tsx
-#, fuzzy
-msgid "node.column.panel.bulge"
-msgstr "Renflement"
+msgid "node.column.panel.bracketTierCount"
+msgstr "Niveaux de corbeaux"
 
 # Source-Hash: 663b9a9e6a469b02
 # Review: required
@@ -21785,6 +21933,86 @@ msgstr "Renflement"
 msgid "node.column.panel.bulged"
 msgstr "Renflée"
 
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 83ac65ddce825df7
+# Review: required
+# English: "Bulge Ratio"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.bulgeRatio"
+msgstr "Rapport de galbe"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 4c56ade213b88ed0
+# Review: required
+# English: "Capital"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.capital"
+msgstr "Chapiteau"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 3b969fb1765c3f6c
+# Review: required
+# English: "Capital Carving"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.capitalCarvingLevel"
+msgstr "Sculpture du chapiteau"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 8ae9489f57d43033
+# Review: required
+# English: "Capital Height"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.capitalHeight"
+msgstr "Hauteur du chapiteau"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: f286eccc906eb8aa
+# Review: required
+# English: "Capital style"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.capitalStyle"
+msgstr "Style de chapiteau"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 7886120117de9a5e
+# Review: required
+# English: "Carving placement"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.carvingPlacement"
+msgstr "Emplacement de la sculpture"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 37ec08bc0ec0c613
+# Review: required
+# English: "Choose a material, then click the surface to paint."
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.chooseAMaterialThenClickThe"
+msgstr "Choisissez un matériau, puis cliquez sur la surface à peindre."
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: a5fe146d6adf0818
+# Review: required
+# English: "Cluster"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.cluster"
+msgstr "Faisceau"
+
 # Source-Hash: 3530ac1f4046cd22
 # Review: required
 # AI-Provider: claude-code
@@ -21795,6 +22023,26 @@ msgstr "Renflée"
 msgid "node.column.panel.column"
 msgstr "Poteau"
 
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 5a4d3e868b707a7f
+# Review: required
+# English: "Column proportions"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.columnProportions"
+msgstr "Proportions du poteau"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 99e7e0e07220b6f0
+# Review: required
+# English: "Column style"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.columnStyle"
+msgstr "Style de poteau"
+
 # Source-Hash: ca0a856f04460bd5
 # Review: required
 # AI-Provider: claude-code
@@ -21804,6 +22052,26 @@ msgstr "Poteau"
 #, fuzzy
 msgid "node.column.panel.connectorPlates"
 msgstr "Plaques d'assemblage"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 054e9bc6519e4829
+# Review: required
+# English: "Corinthian Leaf"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.corinthianLeaf"
+msgstr "Feuille corinthienne"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 03ade8d3de1369be
+# Review: required
+# English: "Cross section"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.crossSection"
+msgstr "Section"
 
 # Source-Hash: b26de372b4b0eaac
 # Review: required
@@ -21825,15 +22093,65 @@ msgstr "Supprimer"
 msgid "node.column.panel.depth"
 msgstr "Profondeur"
 
-# Source-Hash: 12df69f42beb0643
-# Review: required
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Dimensions"
+# Source-Hash: c7c1212a7d3fb04c
+# Review: required
+# English: "Depth Scale"
 #: packages/nodes/src/column/panel.tsx
 #, fuzzy
-msgid "node.column.panel.dimensions"
-msgstr "Dimensions"
+msgid "node.column.panel.depthScale"
+msgstr "Échelle de profondeur"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 9cf14a577e74ed47
+# Review: required
+# English: "Depth Span"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.depthSpan"
+msgstr "Portée en profondeur"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 016d8e70618916d4
+# Review: required
+# English: "Diameter"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.diameter"
+msgstr "Diamètre"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 78e3b83eb527f5b6
+# Review: required
+# English: "Diamond"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.diamond"
+msgstr "Losange"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: e1ed2f159b6d34f2
+# Review: required
+# English: "Doric"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.doric"
+msgstr "Dorique"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 4b84f09fc9e79572
+# Review: required
+# English: "Dravidian Carved"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.dravidianCarved"
+msgstr "Sculpté dravidien"
 
 # Source-Hash: b963a08f0d540014
 # Review: required
@@ -21845,25 +22163,75 @@ msgstr "Dimensions"
 msgid "node.column.panel.edgeSoftness"
 msgstr "Adoucissement des arêtes"
 
-# Source-Hash: 82b3db356639ef92
-# Review: required
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Ends"
+# Source-Hash: 50d76d0bfa5828f5
+# Review: required
+# English: "End Scale"
 #: packages/nodes/src/column/panel.tsx
 #, fuzzy
-msgid "node.column.panel.ends"
-msgstr "Extrémités"
+msgid "node.column.panel.endScale"
+msgstr "Échelle d’extrémité"
 
-# Source-Hash: 646c3cd99df3e285
-# Review: required
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "End Width"
+# Source-Hash: e0898026fa3ef7ef
+# Review: required
+# English: "Entire Object"
 #: packages/nodes/src/column/panel.tsx
 #, fuzzy
-msgid "node.column.panel.endWidth"
-msgstr "Largeur d'extrémité"
+msgid "node.column.panel.entireObject"
+msgstr "Objet entier"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: c63bf1154bb7909f
+# Review: required
+# English: "Faceted"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.faceted"
+msgstr "À facettes"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 7e84091e8efd4274
+# Review: required
+# English: "Flute Count"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.fluteCount"
+msgstr "Nombre de cannelures"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: b2166db6249b9ef0
+# Review: required
+# English: "Fluted"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.fluted"
+msgstr "Cannelé"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: ba3d227ad13eb300
+# Review: required
+# English: "Flute Depth"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.fluteDepth"
+msgstr "Profondeur des cannelures"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 5530e4916f99d59e
+# Review: required
+# English: "Flute Width"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.fluteWidth"
+msgstr "Largeur des cannelures"
 
 # Source-Hash: 02e229bca2a2b5f1
 # Review: required
@@ -21874,6 +22242,16 @@ msgstr "Largeur d'extrémité"
 #, fuzzy
 msgid "node.column.panel.forkSpread"
 msgstr "Écartement de la fourche"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: ce3a6c03765dbbd8
+# Review: required
+# English: "Frame"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.frame"
+msgstr "Cadre"
 
 # Source-Hash: fdebfac05413abcf
 # Review: required
@@ -21915,15 +22293,105 @@ msgstr "La hauteur et l'emprise sont pilotées par l'appentis. Faites pivoter ou
 msgid "node.column.panel.hourglass"
 msgstr "Sablier"
 
-# Source-Hash: 9cc75129edee59ad
-# Review: required
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "K Brace"
+# Source-Hash: 2f3ee076ecdccfe2
+# Review: required
+# English: "Ionic Volute"
 #: packages/nodes/src/column/panel.tsx
 #, fuzzy
-msgid "node.column.panel.kBrace"
-msgstr "Contreventement en K"
+msgid "node.column.panel.ionicVolute"
+msgstr "Volute ionique"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 2499bbb980a232cf
+# Review: required
+# English: "Lathe Rings"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.latheRingCount"
+msgstr "Anneaux tournés"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 73a16ff19b6f7fdc
+# Review: required
+# English: "Lathe Turned"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.latheTurned"
+msgstr "Tourné"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: f2ccd152aa17feab
+# Review: required
+# English: "Leaf Carved"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.leafCarved"
+msgstr "Feuilles sculptées"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: c390ba248e629b9e
+# Review: required
+# English: "Leaves"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.leafCount"
+msgstr "Feuilles"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: a76263da42bc17b0
+# Review: required
+# English: "Leaf Rows"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.leafRows"
+msgstr "Rangées de feuilles"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 00b838b1271dcc00
+# Review: required
+# English: "Lotus"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.lotus"
+msgstr "Lotus"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 4d0d49127f197e7f
+# Review: required
+# English: "Materials"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.materials"
+msgstr "Matériaux"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: b9b11a8228f9d9c3
+# Review: required
+# English: "Member Depth"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.memberDepth"
+msgstr "Profondeur de l’élément"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 3e0ddf162579af15
+# Review: required
+# English: "Member Width"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.memberWidth"
+msgstr "Largeur de l’élément"
 
 # Source-Hash: bd02c614454fbd2b
 # Review: required
@@ -21935,65 +22403,145 @@ msgstr "Contreventement en K"
 msgid "node.column.panel.move"
 msgstr "Déplacer"
 
-# Source-Hash: 6dc190abd3f22787
-# Review: required
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Neck Width"
+# Source-Hash: 78c5ca001ea8241d
+# Review: required
+# English: "Neck Scale"
 #: packages/nodes/src/column/panel.tsx
 #, fuzzy
-msgid "node.column.panel.neckWidth"
-msgstr "Largeur du col"
+msgid "node.column.panel.neckScale"
+msgstr "Échelle du gorgerin"
 
-# Source-Hash: 7dba7ed55eeba18f
-# Review: required
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "No Bottom"
+# Source-Hash: f2953d2931e36d0c
+# Review: required
+# English: "None"
 #: packages/nodes/src/column/panel.tsx
 #, fuzzy
-msgid "node.column.panel.noBottom"
-msgstr "Sans base"
+msgid "node.column.panel.none"
+msgstr "Aucun"
 
-# Source-Hash: 682d71815bb20e94
-# Review: required
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "No Top"
+# Source-Hash: 698f9ebcd3ab81c6
+# Review: required
+# English: "Octagonal"
 #: packages/nodes/src/column/panel.tsx
 #, fuzzy
-msgid "node.column.panel.noTop"
-msgstr "Sans chapiteau"
+msgid "node.column.panel.octagonal"
+msgstr "Octogonal"
 
-# Source-Hash: 4da8688437f64db8
-# Review: required
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Plinth Thickness"
+# Source-Hash: 8680135de608a900
+# Review: required
+# English: "Paint Materials"
 #: packages/nodes/src/column/panel.tsx
 #, fuzzy
-msgid "node.column.panel.plinthThickness"
-msgstr "Épaisseur de la plinthe"
+msgid "node.column.panel.paintMaterials"
+msgstr "Peindre les matériaux"
 
-# Source-Hash: 0bf453b4882c663c
-# Review: required
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Portal Frame"
+# Source-Hash: 2d1f1576d0878e2d
+# Review: required
+# English: "Carved Panels"
 #: packages/nodes/src/column/panel.tsx
 #, fuzzy
-msgid "node.column.panel.portalFrame"
-msgstr "Portique"
+msgid "node.column.panel.panelCount"
+msgstr "Panneaux sculptés"
 
-# Source-Hash: 441f7f652ea6a0d8
-# Review: required
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Preset"
+# Source-Hash: 6b503ed1b7d1569b
+# Review: required
+# English: "Panel Relief"
 #: packages/nodes/src/column/panel.tsx
 #, fuzzy
-msgid "node.column.panel.preset"
-msgstr "Préréglage"
+msgid "node.column.panel.panelInsetDepth"
+msgstr "Relief des panneaux"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 3332ef0ae3f455b0
+# Review: required
+# English: "Panelled"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.panelled"
+msgstr "À panneaux"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 734c75436555233f
+# Review: required
+# English: "Panelled Pedestal"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.panelledPedestal"
+msgstr "Piédestal à panneaux"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: efe3a9af7ede09f5
+# Review: required
+# English: "Panel shape"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.panelShape"
+msgstr "Forme des panneaux"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 1742cce555f51b78
+# Review: required
+# English: "Pendants"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.pendantCount"
+msgstr "Pendentifs"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 9f0680b4bd973026
+# Review: required
+# English: "Plain"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.plain"
+msgstr "Lisse"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 642987dea5693bb0
+# Review: required
+# English: "Plinth Height Fraction"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.plinthHeightFraction"
+msgstr "Part de hauteur de la plinthe"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 96ad4bd0f7baa40e
+# Review: required
+# English: "Profile"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.profile"
+msgstr "Profil"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 2c2c20272b0370cc
+# Review: required
+# English: "Rectangle"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.rectangle"
+msgstr "Rectangle"
 
 # Source-Hash: f29fef1beeb25f22
 # Review: required
@@ -22005,6 +22553,96 @@ msgstr "Préréglage"
 msgid "node.column.panel.rectangular"
 msgstr "Rectangulaire"
 
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 07096122904e293c
+# Review: required
+# English: "Reset base"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.resetBase"
+msgstr "Réinitialiser la base"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 06c87de417e85470
+# Review: required
+# English: "Reset capital"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.resetCapital"
+msgstr "Réinitialiser le chapiteau"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 3636d202511854e5
+# Review: required
+# English: "Reset materials"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.resetMaterials"
+msgstr "Réinitialiser les matériaux"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 94b0d78e787246d7
+# Review: required
+# English: "Reset profile"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.resetProfile"
+msgstr "Réinitialiser le profil"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: b3316cff09204a85
+# Review: required
+# English: "Reset shape"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.resetShape"
+msgstr "Réinitialiser la forme"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 82af49f4195cd4ac
+# Review: required
+# English: "Reset size"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.resetSize"
+msgstr "Réinitialiser la taille"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: d0618e3f3e654397
+# Review: required
+# English: "Reset surface details"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.resetSurfaceDetails"
+msgstr "Réinitialiser les détails de surface"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 75750b2b96267be1
+# Review: required
+# English: "Reset transform"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.resetTransform"
+msgstr "Réinitialiser la transformation"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 0a98ea93d3b14774
+# Review: required
+# English: "Ribbed Lotus"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.ribbedLotus"
+msgstr "Lotus nervuré"
+
 # Source-Hash: 23b9d290b165cd49
 # Review: required
 # AI-Provider: claude-code
@@ -22015,15 +22653,15 @@ msgstr "Rectangulaire"
 msgid "node.column.panel.ringPairs"
 msgstr "Paires d'anneaux"
 
-# Source-Hash: 8db82d731a19651e
-# Review: required
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Ring Spread"
+# Source-Hash: cf364ce8e1154b23
+# Review: required
+# English: "Ring Spread Ratio"
 #: packages/nodes/src/column/panel.tsx
 #, fuzzy
-msgid "node.column.panel.ringSpread"
-msgstr "Écart des anneaux"
+msgid "node.column.panel.ringSpreadRatio"
+msgstr "Rapport d’espacement des anneaux"
 
 # Source-Hash: bdb524a15d9e1509
 # Review: required
@@ -22035,6 +22673,16 @@ msgstr "Écart des anneaux"
 msgid "node.column.panel.ringThickness"
 msgstr "Épaisseur des anneaux"
 
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 01989595ee7c1dc0
+# Review: required
+# English: "Rotation"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.rotation"
+msgstr "Rotation"
+
 # Source-Hash: ad0457800a1f0eb4
 # Review: required
 # AI-Provider: claude-code
@@ -22045,45 +22693,35 @@ msgstr "Épaisseur des anneaux"
 msgid "node.column.panel.round"
 msgstr "Rond"
 
-# Source-Hash: baa84a2d17095dcf
-# Review: required
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Round Band Width"
+# Source-Hash: fc826da6c99303e6
+# Review: required
+# English: "Rounded"
 #: packages/nodes/src/column/panel.tsx
 #, fuzzy
-msgid "node.column.panel.roundBandWidth"
-msgstr "Largeur de la bague ronde"
+msgid "node.column.panel.rounded"
+msgstr "Arrondi"
 
-# Source-Hash: 5f1f67fb0ca59a6d
-# Review: required
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Rounded Bottom"
+# Source-Hash: 04945d148ddddfce
+# Review: required
+# English: "Round Rings"
 #: packages/nodes/src/column/panel.tsx
 #, fuzzy
-msgid "node.column.panel.roundedBottom"
-msgstr "Base arrondie"
+msgid "node.column.panel.roundRings"
+msgstr "Anneaux ronds"
 
-# Source-Hash: 446816980ed0da27
-# Review: required
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Rounded Top"
-#: packages/nodes/src/column/panel.tsx
-#, fuzzy
-msgid "node.column.panel.roundedTop"
-msgstr "Chapiteau arrondi"
-
-# Source-Hash: 9e554c26be80f0d0
+# Source-Hash: e08860e0c3f2e081
 # Review: required
-# AI-Provider: claude-code
-# AI-Model: claude-opus-5-5
-# English: "Segment Twist"
+# English: "Scales multiply the dimensions in Size. A ratio of 0.2 means 20%."
 #: packages/nodes/src/column/panel.tsx
 #, fuzzy
-msgid "node.column.panel.segmentTwist"
-msgstr "Torsion des segments"
+msgid "node.column.panel.scalesMultiplyTheDimensionsInSize"
+msgstr "Les échelles multiplient les dimensions de Taille. Un rapport de 0,2 correspond à 20 %."
 
 # Source-Hash: 4fc63ad21de30103
 # Review: required
@@ -22105,15 +22743,35 @@ msgstr "Gaine"
 msgid "node.column.panel.shaftCornerRadius"
 msgstr "Rayon d'angle du fût"
 
-# Source-Hash: 3dab61aeb47e504d
-# Review: required
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Shaft Width"
+# Source-Hash: 5a135f294b02a092
+# Review: required
+# English: "Shaft detail"
 #: packages/nodes/src/column/panel.tsx
 #, fuzzy
-msgid "node.column.panel.shaftWidth"
-msgstr "Largeur du fût"
+msgid "node.column.panel.shaftDetail"
+msgstr "Détail du fût"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 7b983a1ad9667719
+# Review: required
+# English: "Shaft profile"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.shaftProfile"
+msgstr "Profil du fût"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: f23c2ea65fb94e30
+# Review: required
+# English: "Shaft Scale"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.shaftScale"
+msgstr "Échelle du fût"
 
 # Source-Hash: 85ea1d3c8b749680
 # Review: required
@@ -22135,35 +22793,55 @@ msgstr "Forme"
 msgid "node.column.panel.shortStout"
 msgstr "Courte / Trapue"
 
-# Source-Hash: 4637a9a61638cc66
-# Review: required
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Simple Block Bottom"
+# Source-Hash: a05a390ae205fdd8
+# Review: required
+# English: "Simple"
 #: packages/nodes/src/column/panel.tsx
 #, fuzzy
-msgid "node.column.panel.simpleBlockBottom"
-msgstr "Base en bloc simple"
+msgid "node.column.panel.simple"
+msgstr "Simple"
 
-# Source-Hash: 9278f9b4a48208b0
-# Review: required
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Simple Top"
+# Source-Hash: e6d1bf2e70e5d5c2
+# Review: required
+# English: "Simple Slab"
 #: packages/nodes/src/column/panel.tsx
 #, fuzzy
-msgid "node.column.panel.simpleTop"
-msgstr "Chapiteau simple"
+msgid "node.column.panel.simpleSlab"
+msgstr "Dalle simple"
 
-# Source-Hash: 9099890734ae1238
-# Review: required
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Single Strut"
+# Source-Hash: b287189cec36ae84
+# Review: required
+# English: "Simple Square"
 #: packages/nodes/src/column/panel.tsx
 #, fuzzy
-msgid "node.column.panel.singleStrut"
-msgstr "Jambe de force unique"
+msgid "node.column.panel.simpleSquare"
+msgstr "Carré simple"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 7dd0384e4fdd974a
+# Review: required
+# English: "Sixteen Sided"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.sixteenSided"
+msgstr "Seize côtés"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 60bb3338e0ad558c
+# Review: required
+# English: "Size"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.size"
+msgstr "Taille"
 
 # Source-Hash: d87ce271009ce063
 # Review: required
@@ -22175,6 +22853,46 @@ msgstr "Jambe de force unique"
 msgid "node.column.panel.slender"
 msgstr "Élancée"
 
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 8560a17c90378be7
+# Review: required
+# English: "South Indian Bracket"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.southIndianBracket"
+msgstr "Corbeau d’Inde du Sud"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: f9a4a870cb3d3c41
+# Review: required
+# English: "Spiral"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.spiral"
+msgstr "Spirale"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 3bc28afe08c59aa1
+# Review: required
+# English: "Spiral Ribs"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.spiralRibCount"
+msgstr "Nervures en spirale"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 5ed49f8a45407932
+# Review: required
+# English: "Spiral Turns"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.spiralTwist"
+msgstr "Tours de spirale"
+
 # Source-Hash: 39287346366fc206
 # Review: required
 # AI-Provider: claude-code
@@ -22185,15 +22903,15 @@ msgstr "Élancée"
 msgid "node.column.panel.square"
 msgstr "Carré"
 
-# Source-Hash: 2dc84759d8df709d
-# Review: required
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Square Plinth Bottom"
+# Source-Hash: 3b857b27d5a49b0c
+# Review: required
+# English: "Square Plinth"
 #: packages/nodes/src/column/panel.tsx
 #, fuzzy
-msgid "node.column.panel.squarePlinthBottom"
-msgstr "Base à plinthe carrée"
+msgid "node.column.panel.squarePlinth"
+msgstr "Plinthe carrée"
 
 # Source-Hash: d998c212030bc7c2
 # Review: required
@@ -22205,25 +22923,35 @@ msgstr "Base à plinthe carrée"
 msgid "node.column.panel.standard"
 msgstr "Standard"
 
-# Source-Hash: 01a6393135e0fb10
-# Review: required
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Stepped Bottom"
+# Source-Hash: 2c6b1cf17a973d67
+# Review: required
+# English: "Stepped"
 #: packages/nodes/src/column/panel.tsx
 #, fuzzy
-msgid "node.column.panel.steppedBottom"
-msgstr "Base à gradins"
+msgid "node.column.panel.stepped"
+msgstr "À gradins"
 
-# Source-Hash: 3d7e443797d4146e
-# Review: required
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Stepped Top"
+# Source-Hash: cbaa245faee497e0
+# Review: required
+# English: "Stepped Square"
 #: packages/nodes/src/column/panel.tsx
 #, fuzzy
-msgid "node.column.panel.steppedTop"
-msgstr "Chapiteau à gradins"
+msgid "node.column.panel.steppedSquare"
+msgstr "Carré à gradins"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: a795c69630b88d66
+# Review: required
+# English: "Step Scale Reduction"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.stepScaleReduction"
+msgstr "Réduction d’échelle par gradin"
 
 # Source-Hash: 4ee35f740730ae87
 # Review: required
@@ -22235,15 +22963,25 @@ msgstr "Chapiteau à gradins"
 msgid "node.column.panel.straight"
 msgstr "Droit"
 
-# Source-Hash: 6063ae2877faa35d
-# Review: required
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Taper"
+# Source-Hash: 1a79a485d91f3f28
+# Review: required
+# English: "Style"
 #: packages/nodes/src/column/panel.tsx
 #, fuzzy
-msgid "node.column.panel.taper"
-msgstr "Fuselage"
+msgid "node.column.panel.style"
+msgstr "Style"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: f6794564a5cb6eaa
+# Review: required
+# English: "Surface Details"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.surfaceDetails"
+msgstr "Détails de surface"
 
 # Source-Hash: f86f1f22230596b7
 # Review: required
@@ -22255,25 +22993,35 @@ msgstr "Fuselage"
 msgid "node.column.panel.tapered"
 msgstr "Effilé"
 
-# Source-Hash: 3e7ec47626ee3f22
-# Review: required
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Top Depth"
+# Source-Hash: f7b112a6556f22a5
+# Review: required
+# English: "Taper Ratio"
 #: packages/nodes/src/column/panel.tsx
 #, fuzzy
-msgid "node.column.panel.topDepth"
-msgstr "Profondeur du haut"
+msgid "node.column.panel.taperRatio"
+msgstr "Rapport de fuselage"
 
-# Source-Hash: 0ca9047731784f56
-# Review: required
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Top Height"
+# Source-Hash: 21aa2897242f6529
+# Review: required
+# English: "Tier Count"
 #: packages/nodes/src/column/panel.tsx
 #, fuzzy
-msgid "node.column.panel.topHeight"
-msgstr "Hauteur du haut"
+msgid "node.column.panel.tierCount"
+msgstr "Nombre de niveaux"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 75991d106eb93dae
+# Review: required
+# English: "Top Scale"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.topScale"
+msgstr "Échelle supérieure"
 
 # Source-Hash: 3d8a2be83b5b536a
 # Review: required
@@ -22285,36 +23033,6 @@ msgstr "Hauteur du haut"
 msgid "node.column.panel.topSpread"
 msgstr "Écartement en haut"
 
-# Source-Hash: f4ae0dc639dbc220
-# Review: required
-# AI-Provider: claude-code
-# AI-Model: claude-opus-5-5
-# English: "Top Step Spread"
-#: packages/nodes/src/column/panel.tsx
-#, fuzzy
-msgid "node.column.panel.topStepSpread"
-msgstr "Écart des gradins du haut"
-
-# Source-Hash: 8acc4e843934b086
-# Review: required
-# AI-Provider: claude-code
-# AI-Model: claude-opus-5-5
-# English: "Top Tiers"
-#: packages/nodes/src/column/panel.tsx
-#, fuzzy
-msgid "node.column.panel.topTiers"
-msgstr "Gradins du haut"
-
-# Source-Hash: a50eb6400611a57c
-# Review: required
-# AI-Provider: claude-code
-# AI-Model: claude-opus-5-5
-# English: "Top Width"
-#: packages/nodes/src/column/panel.tsx
-#, fuzzy
-msgid "node.column.panel.topWidth"
-msgstr "Largeur du haut"
-
 # Source-Hash: f425799b82e085ed
 # Review: required
 # AI-Provider: claude-code
@@ -22325,25 +23043,15 @@ msgstr "Largeur du haut"
 msgid "node.column.panel.transform"
 msgstr "Transformation"
 
-# Source-Hash: 952fd1ef187c6646
-# Review: required
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Trestle"
-#: packages/nodes/src/column/panel.tsx
-#, fuzzy
-msgid "node.column.panel.trestle"
-msgstr "Tréteau"
-
-# Source-Hash: 7430dad59aaf98f4
+# Source-Hash: b99175b7ac8aa206
 # Review: required
-# AI-Provider: claude-code
-# AI-Model: claude-opus-5-5
-# English: "Tripod"
+# English: "Twist per Segment"
 #: packages/nodes/src/column/panel.tsx
 #, fuzzy
-msgid "node.column.panel.tripod"
-msgstr "Trépied"
+msgid "node.column.panel.twistPerSegment"
+msgstr "Torsion par segment"
 
 # Source-Hash: 0db559f22647ec73
 # Review: required
@@ -22355,35 +23063,45 @@ msgstr "Trépied"
 msgid "node.column.panel.twistSegments"
 msgstr "Segments de torsion"
 
-# Source-Hash: 8038a34ffebf4932
-# Review: required
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Vertical"
+# Source-Hash: 4d8bfac0809e9f7c
+# Review: required
+# English: "Volute"
 #: packages/nodes/src/column/panel.tsx
 #, fuzzy
-msgid "node.column.panel.vertical"
-msgstr "Vertical"
+msgid "node.column.panel.volute"
+msgstr "Volute"
 
-# Source-Hash: f24cc343d79acc10
-# Review: required
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "V Support"
+# Source-Hash: 7c352c005719e3a2
+# Review: required
+# English: "Volutes"
 #: packages/nodes/src/column/panel.tsx
 #, fuzzy
-msgid "node.column.panel.vSupport"
-msgstr "Support en V"
+msgid "node.column.panel.voluteCount"
+msgstr "Volutes"
 
-# Source-Hash: 44dda7136b93c8ee
-# Review: required
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Waist"
+# Source-Hash: 536aa9f690cfb81d
+# Review: required
+# English: "Volute Size"
 #: packages/nodes/src/column/panel.tsx
 #, fuzzy
-msgid "node.column.panel.waist"
-msgstr "Paillasse"
+msgid "node.column.panel.voluteSize"
+msgstr "Taille des volutes"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: fdce60f01800860f
+# Review: required
+# English: "Waist Reduction Ratio"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.waistReductionRatio"
+msgstr "Rapport de rétrécissement"
 
 # Source-Hash: 3a0ccd6c46877a87
 # Review: required
@@ -22395,35 +23113,55 @@ msgstr "Paillasse"
 msgid "node.column.panel.width"
 msgstr "Largeur"
 
-# Source-Hash: 4e6640dfff42cea4
-# Review: required
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "X Brace"
+# Source-Hash: 4f4e9f2d97ef01f5
+# Review: required
+# English: "Width and depth scales multiply the dimensions in Size."
 #: packages/nodes/src/column/panel.tsx
 #, fuzzy
-msgid "node.column.panel.xBrace"
-msgstr "Croisillon en X"
+msgid "node.column.panel.widthAndDepthScalesMultiplyThe"
+msgstr "Les échelles de largeur et de profondeur multiplient les dimensions de Taille."
 
-# Source-Hash: fefc9b1cfb26b5a8
-# Review: required
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Yaw"
+# Source-Hash: eb0267f511beda4a
+# Review: required
+# English: "Width and depth scales use Size. Band and neck scales use the base footprint."
 #: packages/nodes/src/column/panel.tsx
 #, fuzzy
-msgid "node.column.panel.yaw"
-msgstr "Lacet"
+msgid "node.column.panel.widthAndDepthScalesUseSize"
+msgstr "Les échelles de largeur et de profondeur utilisent Taille. Les échelles du bandeau et du gorgerin utilisent l’emprise de la base."
 
-# Source-Hash: 86259690e332b66d
-# Review: required
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Y Support"
+# Source-Hash: cdb1d1dacff8560e
+# Review: required
+# English: "Width Scale"
 #: packages/nodes/src/column/panel.tsx
 #, fuzzy
-msgid "node.column.panel.ySupport"
-msgstr "Support en Y"
+msgid "node.column.panel.widthScale"
+msgstr "Échelle de largeur"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: d5bc7038c31682a9
+# Review: required
+# English: "Width Span"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.widthSpan"
+msgstr "Portée en largeur"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: bc0503ea7ab743ed
+# Review: required
+# English: "Wood Bracket"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.woodBracket"
+msgstr "Corbeau en bois"
 
 # Source-Hash: 4d3a89de7073d38d
 # Review: required
@@ -22530,7 +23268,7 @@ msgstr "Non traité"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "A-Frame Support"
-#: packages/nodes/src/column/panel.tsx
+#: packages/nodes/src/column/preset-gallery.tsx
 #, fuzzy
 msgid "node.column.preset.aFrameSupport"
 msgstr "Support en A"
@@ -22540,7 +23278,7 @@ msgstr "Support en A"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Straight Round"
-#: packages/nodes/src/column/panel.tsx
+#: packages/nodes/src/column/preset-gallery.tsx
 #, fuzzy
 msgid "node.column.preset.basicPillar"
 msgstr "Ronde droite"
@@ -22550,7 +23288,7 @@ msgstr "Ronde droite"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Box Frame"
-#: packages/nodes/src/column/panel.tsx
+#: packages/nodes/src/column/preset-gallery.tsx
 #, fuzzy
 msgid "node.column.preset.boxFrameSupport"
 msgstr "Cadre caisson"
@@ -22560,7 +23298,7 @@ msgstr "Cadre caisson"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Soft Bulged"
-#: packages/nodes/src/column/panel.tsx
+#: packages/nodes/src/column/preset-gallery.tsx
 #, fuzzy
 msgid "node.column.preset.bulgedPillar"
 msgstr "Légèrement renflée"
@@ -22570,7 +23308,7 @@ msgstr "Légèrement renflée"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Hourglass"
-#: packages/nodes/src/column/panel.tsx
+#: packages/nodes/src/column/preset-gallery.tsx
 #, fuzzy
 msgid "node.column.preset.hourglassPillar"
 msgstr "Sablier"
@@ -22580,7 +23318,7 @@ msgstr "Sablier"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "K Brace"
-#: packages/nodes/src/column/panel.tsx
+#: packages/nodes/src/column/preset-gallery.tsx
 #, fuzzy
 msgid "node.column.preset.kBraceSupport"
 msgstr "Contreventement en K"
@@ -22590,7 +23328,7 @@ msgstr "Contreventement en K"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Portal Frame"
-#: packages/nodes/src/column/panel.tsx
+#: packages/nodes/src/column/preset-gallery.tsx
 #, fuzzy
 msgid "node.column.preset.portalFrameSupport"
 msgstr "Portique"
@@ -22600,7 +23338,7 @@ msgstr "Portique"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Single Strut"
-#: packages/nodes/src/column/panel.tsx
+#: packages/nodes/src/column/preset-gallery.tsx
 #, fuzzy
 msgid "node.column.preset.singleStrutSupport"
 msgstr "Jambe de force unique"
@@ -22610,7 +23348,7 @@ msgstr "Jambe de force unique"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Square Block"
-#: packages/nodes/src/column/panel.tsx
+#: packages/nodes/src/column/preset-gallery.tsx
 #, fuzzy
 msgid "node.column.preset.squarePillar"
 msgstr "Bloc carré"
@@ -22620,7 +23358,7 @@ msgstr "Bloc carré"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Tapered Round"
-#: packages/nodes/src/column/panel.tsx
+#: packages/nodes/src/column/preset-gallery.tsx
 #, fuzzy
 msgid "node.column.preset.taperedPillar"
 msgstr "Ronde fuselée"
@@ -22630,7 +23368,7 @@ msgstr "Ronde fuselée"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Trestle Frame"
-#: packages/nodes/src/column/panel.tsx
+#: packages/nodes/src/column/preset-gallery.tsx
 #, fuzzy
 msgid "node.column.preset.trestleSupport"
 msgstr "Cadre à tréteau"
@@ -22640,7 +23378,7 @@ msgstr "Cadre à tréteau"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Tripod Support"
-#: packages/nodes/src/column/panel.tsx
+#: packages/nodes/src/column/preset-gallery.tsx
 #, fuzzy
 msgid "node.column.preset.tripodSupport"
 msgstr "Support trépied"
@@ -22650,7 +23388,7 @@ msgstr "Support trépied"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "V Support"
-#: packages/nodes/src/column/panel.tsx
+#: packages/nodes/src/column/preset-gallery.tsx
 #, fuzzy
 msgid "node.column.preset.vFrameSupport"
 msgstr "Support en V"
@@ -22660,7 +23398,7 @@ msgstr "Support en V"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "X Brace"
-#: packages/nodes/src/column/panel.tsx
+#: packages/nodes/src/column/preset-gallery.tsx
 #, fuzzy
 msgid "node.column.preset.xBraceSupport"
 msgstr "Croisillon en X"
@@ -22670,10 +23408,50 @@ msgstr "Croisillon en X"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Y Support"
-#: packages/nodes/src/column/panel.tsx
+#: packages/nodes/src/column/preset-gallery.tsx
 #, fuzzy
 msgid "node.column.preset.yFrameSupport"
 msgstr "Support en Y"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: c9bf954389349540
+# Review: required
+# English: "Apply {label} shape"
+#: packages/nodes/src/column/preset-gallery.tsx
+#, fuzzy
+msgid "node.column.presetGallery.applyLabelShape"
+msgstr "Appliquer la forme {label}"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: d98edff9428038de
+# Review: required
+# English: "Choose a shape"
+#: packages/nodes/src/column/preset-gallery.tsx
+#, fuzzy
+msgid "node.column.presetGallery.chooseAShape"
+msgstr "Choisir une forme"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 13bd6d71e7e6e345
+# Review: required
+# English: "Hover or focus to preview; click to apply. Materials are kept. Escape cancels the preview."
+#: packages/nodes/src/column/preset-gallery.tsx
+#, fuzzy
+msgid "node.column.presetGallery.hoverOrFocusToPreviewClick"
+msgstr "Survolez ou sélectionnez pour prévisualiser ; cliquez pour appliquer. Les matériaux sont conservés. Échap annule l’aperçu."
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 367dcd06db200682
+# Review: required
+# English: "Shape presets"
+#: packages/nodes/src/column/preset-gallery.tsx
+#, fuzzy
+msgid "node.column.presetGallery.shapePresets"
+msgstr "Préréglages de forme"
 
 # Source-Hash: 895766ad1b766c2e
 # Review: required
@@ -24539,6 +25317,336 @@ msgstr "R/T pivoter"
 msgid "node.ductSegment.description"
 msgstr "Réseau de gaines CVC — polyligne de sections rondes, rectangulaires ou oblongues."
 
+# Source-Hash: c63202c40d7fbac5
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+# English: "Apply offset"
+#: packages/nodes/src/duct-segment/edit-inspector.tsx
+#, fuzzy
+msgid "node.ductSegment.editInspector.applyOffset"
+msgstr "Appliquer le décalage"
+
+# Source-Hash: 79cd694c04938730
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+# English: "Apply resize"
+#: packages/nodes/src/duct-segment/edit-inspector.tsx
+#, fuzzy
+msgid "node.ductSegment.editInspector.applyResize"
+msgstr "Appliquer le redimensionnement"
+
+# Source-Hash: f97058f9f79a49f7
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+# English: "Branch stops at junctions, size changes and equipment. Boundary collars stay fixed."
+#: packages/nodes/src/duct-segment/edit-inspector.tsx
+#, fuzzy
+msgid "node.ductSegment.editInspector.branchStopsAtJunctionsSizeChanges"
+msgstr "La branche s’arrête aux jonctions, aux changements de section et aux équipements. Les colliers en limite restent fixes."
+
+# Source-Hash: e5f62ba5c4a2e770
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+# English: "Connected same-size branch"
+#: packages/nodes/src/duct-segment/edit-inspector.tsx
+#, fuzzy
+msgid "node.ductSegment.editInspector.connectedSameSizeBranch"
+msgstr "Branche raccordée de même section"
+
+# Source-Hash: e704515c0fe2a6ca
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+# English: "Diameter (in)"
+#: packages/nodes/src/duct-segment/edit-inspector.tsx
+#, fuzzy
+msgid "node.ductSegment.editInspector.diameter"
+msgstr "Diamètre (in)"
+
+# Source-Hash: 3fba7da8f5ce8470
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+# English: "Duct edit"
+#: packages/nodes/src/duct-segment/edit-inspector.tsx
+#, fuzzy
+msgid "node.ductSegment.editInspector.ductEdit"
+msgstr "Modification de gaine"
+
+# Source-Hash: 4c189ffbaf391531
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+# English: "Duct shape"
+#: packages/nodes/src/duct-segment/edit-inspector.tsx
+#, fuzzy
+msgid "node.ductSegment.editInspector.ductShape"
+msgstr "Forme de la gaine"
+
+# Source-Hash: 4196e9dba5038422
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+# English: "Edit duct route"
+#: packages/nodes/src/duct-segment/edit-inspector.tsx
+#, fuzzy
+msgid "node.ductSegment.editInspector.editDuctRoute"
+msgstr "Modifier le tracé de la gaine"
+
+# Source-Hash: e6ad8e30edf8b8dc
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+# English: "Face alignment applies to free straight runs. Left and right follow the run’s section axes."
+#: packages/nodes/src/duct-segment/edit-inspector.tsx
+#, fuzzy
+msgid "node.ductSegment.editInspector.faceAlignmentAppliesToFreeStraight"
+msgstr "L’alignement sur une face s’applique aux tronçons droits libres. Gauche et droite suivent les axes de section du tronçon."
+
+# Source-Hash: 98b9dbf56de61e41
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+# English: "First bend from start (m)"
+#: packages/nodes/src/duct-segment/edit-inspector.tsx
+#, fuzzy
+msgid "node.ductSegment.editInspector.firstBend"
+msgstr "Premier coude depuis le début (m)"
+
+# Source-Hash: 46dd5dd1bd2712fd
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+# English: "Height (in)"
+#: packages/nodes/src/duct-segment/edit-inspector.tsx
+#, fuzzy
+msgid "node.ductSegment.editInspector.height"
+msgstr "Hauteur (in)"
+
+# Source-Hash: 13b1dec096cefeda
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+# English: "Keep bottom face"
+#: packages/nodes/src/duct-segment/edit-inspector.tsx
+#, fuzzy
+msgid "node.ductSegment.editInspector.keepBottomFace"
+msgstr "Conserver la face inférieure"
+
+# Source-Hash: 4d1bae9a034eef7b
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+# English: "Keep centerline"
+#: packages/nodes/src/duct-segment/edit-inspector.tsx
+#, fuzzy
+msgid "node.ductSegment.editInspector.keepCenterline"
+msgstr "Conserver l’axe"
+
+# Source-Hash: 66a2843e7ee53206
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+# English: "Keep left face"
+#: packages/nodes/src/duct-segment/edit-inspector.tsx
+#, fuzzy
+msgid "node.ductSegment.editInspector.keepLeftFace"
+msgstr "Conserver la face gauche"
+
+# Source-Hash: 422d33d91000c6d5
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+# English: "Keep right face"
+#: packages/nodes/src/duct-segment/edit-inspector.tsx
+#, fuzzy
+msgid "node.ductSegment.editInspector.keepRightFace"
+msgstr "Conserver la face droite"
+
+# Source-Hash: d68b946185860736
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+# English: "Keep top face"
+#: packages/nodes/src/duct-segment/edit-inspector.tsx
+#, fuzzy
+msgid "node.ductSegment.editInspector.keepTopFace"
+msgstr "Conserver la face supérieure"
+
+# Source-Hash: 5faa81fe58b2e707
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+# English: "Last bend from start (m)"
+#: packages/nodes/src/duct-segment/edit-inspector.tsx
+#, fuzzy
+msgid "node.ductSegment.editInspector.lastBend"
+msgstr "Dernier coude depuis le début (m)"
+
+# Source-Hash: aac8ab5c8fe8dc80
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+# English: "Offset around obstacle"
+#: packages/nodes/src/duct-segment/edit-inspector.tsx
+#, fuzzy
+msgid "node.ductSegment.editInspector.offsetAroundObstacle"
+msgstr "Contourner un obstacle"
+
+# Source-Hash: 57fd5f8ee7415f5c
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+# English: "Offset side elevation preview"
+#: packages/nodes/src/duct-segment/edit-inspector.tsx
+#, fuzzy
+msgid "node.ductSegment.editInspector.offsetSideElevationPreview"
+msgstr "Aperçu du décalage en élévation latérale"
+
+# Source-Hash: ed6d7b3dd9d5fc69
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+# English: "Oval"
+#: packages/nodes/src/duct-segment/edit-inspector.tsx
+#, fuzzy
+msgid "node.ductSegment.editInspector.oval"
+msgstr "Ovale"
+
+# Source-Hash: 4196843b0dd8f46c
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+# English: "{affected, plural, one {# existing part affected} other {# existing parts affected}} · {created, plural, one {# new part} other {# new parts}}"
+#: packages/nodes/src/duct-segment/edit-inspector.tsx
+#, fuzzy
+msgid "node.ductSegment.editInspector.partsSummary"
+msgstr "{affected, plural, one {# élément existant concerné} many {# éléments existants concernés} other {# éléments existants concernés}} · {created, plural, one {# nouvel élément} many {# nouveaux éléments} other {# nouveaux éléments}}"
+
+# Source-Hash: d548731cb7cf5d27
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+# English: "Positive moves up; negative moves down. Four elbows preserve both endpoints. Check the obstacle’s clearance; this does not detect collisions."
+#: packages/nodes/src/duct-segment/edit-inspector.tsx
+#, fuzzy
+msgid "node.ductSegment.editInspector.positiveMovesUpNegativeMovesDown"
+msgstr "Une valeur positive monte ; une valeur négative descend. Quatre coudes conservent les deux extrémités. Vérifiez le dégagement autour de l’obstacle ; les collisions ne sont pas détectées."
+
+# Source-Hash: 3a046d5727f10a80
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+# English: "Preserve duct alignment"
+#: packages/nodes/src/duct-segment/edit-inspector.tsx
+#, fuzzy
+msgid "node.ductSegment.editInspector.preserveDuctAlignment"
+msgstr "Alignement de gaine à conserver"
+
+# Source-Hash: f29fef1beeb25f22
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+# English: "Rectangular"
+#: packages/nodes/src/duct-segment/edit-inspector.tsx
+#, fuzzy
+msgid "node.ductSegment.editInspector.rectangular"
+msgstr "Rectangulaire"
+
+# Source-Hash: e8be4487b05f939d
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+# English: "Resize scope"
+#: packages/nodes/src/duct-segment/edit-inspector.tsx
+#, fuzzy
+msgid "node.ductSegment.editInspector.resizeScope"
+msgstr "Portée du redimensionnement"
+
+# Source-Hash: c4b16733095ad12f
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+# English: "Resize with connections"
+#: packages/nodes/src/duct-segment/edit-inspector.tsx
+#, fuzzy
+msgid "node.ductSegment.editInspector.resizeWithConnections"
+msgstr "Redimensionner avec les raccordements"
+
+# Source-Hash: ad0457800a1f0eb4
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+# English: "Round"
+#: packages/nodes/src/duct-segment/edit-inspector.tsx
+#, fuzzy
+msgid "node.ductSegment.editInspector.round"
+msgstr "Rond"
+
+# Source-Hash: bf79b8c8e7a3ba17
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+# English: "Side elevation · dashed line is the original route"
+#: packages/nodes/src/duct-segment/edit-inspector.tsx
+#, fuzzy
+msgid "node.ductSegment.editInspector.sideElevationDashedLineIsThe"
+msgstr "Élévation latérale · la ligne pointillée montre le tracé d’origine"
+
+# Source-Hash: d271518d800f3e1c
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+# English: "This segment"
+#: packages/nodes/src/duct-segment/edit-inspector.tsx
+#, fuzzy
+msgid "node.ductSegment.editInspector.thisSegment"
+msgstr "Ce tronçon"
+
+# Source-Hash: 1bbbb491639e18e1
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+# English: "Unable to apply edit."
+#: packages/nodes/src/duct-segment/edit-inspector.tsx
+#, fuzzy
+msgid "node.ductSegment.editInspector.unableToApplyEdit"
+msgstr "Impossible d’appliquer la modification."
+
+# Source-Hash: 0283a6615312b133
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+# English: "Unable to plan this edit."
+#: packages/nodes/src/duct-segment/edit-inspector.tsx
+#, fuzzy
+msgid "node.ductSegment.editInspector.unableToPlanEdit"
+msgstr "Impossible de préparer cette modification."
+
+# Source-Hash: 2dad926bc0e26f4a
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+# English: "Vertical offset (m)"
+#: packages/nodes/src/duct-segment/edit-inspector.tsx
+#, fuzzy
+msgid "node.ductSegment.editInspector.verticalOffset"
+msgstr "Décalage vertical (m)"
+
+# Source-Hash: 087cae2b0e372680
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+# English: "Width (in)"
+#: packages/nodes/src/duct-segment/edit-inspector.tsx
+#, fuzzy
+msgid "node.ductSegment.editInspector.width"
+msgstr "Largeur (in)"
+
 # Source-Hash: e971d82044e2f48e
 # Review: required
 # AI-Provider: claude-code
@@ -24670,6 +25778,16 @@ msgstr "Cabine"
 msgid "node.elevator.panel.cabHeight"
 msgstr "Hauteur de cabine"
 
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 4068260bb7e3d54b
+# Review: required
+# English: "Clear cab interior: {width} × {depth} × {height} m. Door opening: {doorWidth} × {doorHeight} m."
+#: packages/nodes/src/elevator/panel.tsx
+#, fuzzy
+msgid "node.elevator.panel.cabInteriorAndDoorOpening"
+msgstr "Intérieur libre de la cabine : {width} × {depth} × {height} m. Ouverture de porte : {doorWidth} × {doorHeight} m."
+
 # Source-Hash: 65f410261609060b
 # Review: required
 # AI-Provider: claude-code
@@ -24680,6 +25798,16 @@ msgstr "Hauteur de cabine"
 msgid "node.elevator.panel.centerOpening"
 msgstr "Ouverture centrale"
 
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 1ad164e4dd09e856
+# Review: required
+# English: "Cutaway shaft"
+#: packages/nodes/src/elevator/panel.tsx
+#, fuzzy
+msgid "node.elevator.panel.cutawayShaft"
+msgstr "Gaine en écorché"
+
 # Source-Hash: c5433f4d3ea8a8a7
 # Review: required
 # AI-Provider: claude-code
@@ -24688,6 +25816,16 @@ msgstr "Ouverture centrale"
 #: packages/nodes/src/elevator/panel.tsx
 #, fuzzy
 msgid "node.elevator.panel.defaultFloor"
+msgstr "Niveau par défaut"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 948544e79db10407
+# Review: required
+# English: "Default floor"
+#: packages/nodes/src/elevator/panel.tsx
+#, fuzzy
+msgid "node.elevator.panel.defaultFloor2"
 msgstr "Niveau par défaut"
 
 # Source-Hash: b26de372b4b0eaac
@@ -24730,6 +25868,16 @@ msgstr "Destination"
 msgid "node.elevator.panel.disabled"
 msgstr "Désactivé"
 
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 42d26aa25a7b3dc5
+# Review: required
+# English: "Disable {level}"
+#: packages/nodes/src/elevator/panel.tsx
+#, fuzzy
+msgid "node.elevator.panel.disableLevel"
+msgstr "Désactiver {level}"
+
 # Source-Hash: d8baf402fa9c52f0
 # Review: required
 # AI-Provider: claude-code
@@ -24739,6 +25887,26 @@ msgstr "Désactivé"
 #, fuzzy
 msgid "node.elevator.panel.doorHeight"
 msgstr "Hauteur de porte"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: c694cae2f5a8d286
+# Review: required
+# English: "Door opening style"
+#: packages/nodes/src/elevator/panel.tsx
+#, fuzzy
+msgid "node.elevator.panel.doorOpeningStyle"
+msgstr "Type d’ouverture de porte"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 990ae81752236e3a
+# Review: required
+# English: "Door panel style"
+#: packages/nodes/src/elevator/panel.tsx
+#, fuzzy
+msgid "node.elevator.panel.doorPanelStyle"
+msgstr "Style de vantail"
 
 # Source-Hash: 20f60b98de67849b
 # Review: required
@@ -24820,6 +25988,16 @@ msgstr "Ascenseur"
 msgid "node.elevator.panel.from"
 msgstr "Depuis"
 
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 4a7d8aa4abd3f13c
+# Review: required
+# English: "From level"
+#: packages/nodes/src/elevator/panel.tsx
+#, fuzzy
+msgid "node.elevator.panel.fromLevel"
+msgstr "Depuis le niveau"
+
 # Source-Hash: 8ab91094cf650204
 # Review: required
 # AI-Provider: claude-code
@@ -24839,6 +26017,16 @@ msgstr "Vitrage"
 #, fuzzy
 msgid "node.elevator.panel.glassFrame"
 msgstr "Cadre vitré"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 612cfaf47ccef086
+# Review: required
+# English: "Hover or focus a section to highlight its parts. Cutaway affects this inspection only."
+#: packages/nodes/src/elevator/panel.tsx
+#, fuzzy
+msgid "node.elevator.panel.hoverOrFocusASectionTo"
+msgstr "Survolez ou sélectionnez une section pour mettre ses éléments en évidence. L’écorché n’affecte que cette inspection."
 
 # Source-Hash: c0ff16d77ebc9593
 # Review: required
@@ -24880,6 +26068,26 @@ msgstr "Type d'ouverture"
 msgid "node.elevator.panel.position"
 msgstr "Position"
 
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 62e42f479e013bd9
+# Review: required
+# English: "Presets and inspection"
+#: packages/nodes/src/elevator/panel.tsx
+#, fuzzy
+msgid "node.elevator.panel.presetsAndInspection"
+msgstr "Préréglages et inspection"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 8e7f6a377134951b
+# Review: required
+# English: "Reset {section}"
+#: packages/nodes/src/elevator/panel.tsx
+#, fuzzy
+msgid "node.elevator.panel.resetSection"
+msgstr "Réinitialiser {section}"
+
 # Source-Hash: 01989595ee7c1dc0
 # Review: required
 # AI-Provider: claude-code
@@ -24910,6 +26118,16 @@ msgstr "Panneau segmenté"
 msgid "node.elevator.panel.service"
 msgstr "Desserte"
 
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 74ce52847ea1b4e0
+# Review: required
+# English: "Service-only access for {level}"
+#: packages/nodes/src/elevator/panel.tsx
+#, fuzzy
+msgid "node.elevator.panel.serviceOnlyAccessForLevel"
+msgstr "Accès de service uniquement pour {level}"
+
 # Source-Hash: 4fc63ad21de30103
 # Review: required
 # AI-Provider: claude-code
@@ -24938,6 +26156,16 @@ msgstr "Profondeur de gaine"
 #: packages/nodes/src/elevator/panel.tsx
 #, fuzzy
 msgid "node.elevator.panel.shaftStyle"
+msgstr "Style de gaine"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: a7794a81141b4de4
+# Review: required
+# English: "Shaft style"
+#: packages/nodes/src/elevator/panel.tsx
+#, fuzzy
+msgid "node.elevator.panel.shaftStyle2"
 msgstr "Style de gaine"
 
 # Source-Hash: 3dab61aeb47e504d
@@ -25010,6 +26238,16 @@ msgstr "Vitesse"
 msgid "node.elevator.panel.stopStoporder"
 msgstr "Arrêt {stopOrder}"
 
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 31eedbbae787f6e7
+# Review: required
+# English: "The cab needs more headroom than one or more served floors provide. Check the floor heights."
+#: packages/nodes/src/elevator/panel.tsx
+#, fuzzy
+msgid "node.elevator.panel.theCabNeedsMoreHeadroomThan"
+msgstr "La cabine nécessite plus de hauteur libre qu’un ou plusieurs niveaux desservis n’en offrent. Vérifiez la hauteur des niveaux."
+
 # Source-Hash: b3214a20e45a7aed
 # Review: required
 # AI-Provider: claude-code
@@ -25019,6 +26257,16 @@ msgstr "Arrêt {stopOrder}"
 #, fuzzy
 msgid "node.elevator.panel.to"
 msgstr "Vers"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: c14c46fb8719cb48
+# Review: required
+# English: "To level"
+#: packages/nodes/src/elevator/panel.tsx
+#, fuzzy
+msgid "node.elevator.panel.toLevel"
+msgstr "Jusqu’au niveau"
 
 # Source-Hash: 1a5ccd607c400d76
 # Review: required
@@ -25049,6 +26297,36 @@ msgstr "Largeur"
 #, fuzzy
 msgid "node.elevator.panel.yaw"
 msgstr "Lacet"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 8ab91094cf650204
+# Review: required
+# English: "Glass"
+#: packages/nodes/src/elevator/presets.ts
+#, fuzzy
+msgid "node.elevator.preset.glass"
+msgstr "Vitré"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 6f3a0cb35f471f06
+# Review: required
+# English: "Passenger"
+#: packages/nodes/src/elevator/presets.ts
+#, fuzzy
+msgid "node.elevator.preset.passenger"
+msgstr "Passagers"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: aa7b49b13f96057f
+# Review: required
+# English: "Service"
+#: packages/nodes/src/elevator/presets.ts
+#, fuzzy
+msgid "node.elevator.preset.service"
+msgstr "Service"
 
 # Source-Hash: 7b22c91cf520e161
 # Review: required
@@ -26567,15 +27845,245 @@ msgstr "⌥ axe"
 msgid "node.pipeFitting.tool.rTRotate"
 msgstr "R/T pivoter"
 
-# Source-Hash: a0bb4762aa66fa3e
+# Source-Hash: a2d9b4f249d256a2
 # Review: required
-# AI-Provider: claude-code
+# AI-Provider: cursor-agent
 # AI-Model: claude-opus-5-5
-# English: "Drain / waste / vent pipe run — draw level or toggle a ¼″ per foot fall with S."
+# English: "Drain / waste / vent pipe run — draw level or choose grade and downhill direction."
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
 msgid "node.pipeSegment.description"
-msgstr "Canalisation d’évacuation et de ventilation — tracez à plat ou basculez une pente de ¼″ par pied avec S."
+msgstr "Canalisation d’évacuation et de ventilation — tracez à plat ou choisissez la pente et le sens d’écoulement."
+
+# Source-Hash: 1e023cceafd26c49
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+# English: "Choose an endpoint"
+#: packages/nodes/src/pipe-segment/grade-label.ts
+#, fuzzy
+msgid "node.pipeSegment.grade.chooseEndpoint"
+msgstr "Choisissez une extrémité"
+
+# Source-Hash: 1d12cd840d742517
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+# English: "Level · no gravity fall"
+#: packages/nodes/src/pipe-segment/grade-label.ts
+#, fuzzy
+msgid "node.pipeSegment.grade.level"
+msgstr "À plat · pas d’écoulement gravitaire"
+
+# Source-Hash: 9ded568026ac7088
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+# English: "{percent}%"
+#: packages/nodes/src/pipe-segment/grade-label.ts
+#, fuzzy
+msgid "node.pipeSegment.grade.percent"
+msgstr "{percent} %"
+
+# Source-Hash: adba843f6e1128f2
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+# English: "{percent} · 1:{ratio} · {direction, select, forward {start → end} other {end → start}} (down)"
+#: packages/nodes/src/pipe-segment/grade-label.ts
+#, fuzzy
+msgid "node.pipeSegment.grade.sloped"
+msgstr "{percent} · 1:{ratio} · {direction, select, forward {début → fin} other {fin → début}} (descendant)"
+
+# Source-Hash: b25fe0ebcdadc1a1
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+# English: "Vertical · {direction, select, forward {start → end} other {end → start}} (down)"
+#: packages/nodes/src/pipe-segment/grade-label.ts
+#, fuzzy
+msgid "node.pipeSegment.grade.vertical"
+msgstr "Vertical · {direction, select, forward {début → fin} other {fin → début}} (descendant)"
+
+# Source-Hash: 1107996c9987dc5a
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+# English: "Apply grade to horizontal legs"
+#: packages/nodes/src/pipe-segment/grade-inspector.tsx
+#, fuzzy
+msgid "node.pipeSegment.gradeInspector.applyGradeToHorizontalLegs"
+msgstr "Appliquer la pente aux tronçons horizontaux"
+
+# Source-Hash: 6348d1ecbab8e926
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+# English: "Arrows show downhill direction. Level runs have no gravity fall. Editing a path point preserves each leg’s grade."
+#: packages/nodes/src/pipe-segment/grade-inspector.tsx
+#, fuzzy
+msgid "node.pipeSegment.gradeInspector.arrowsShowDownhillDirectionLevelRuns"
+msgstr "Les flèches indiquent le sens de la pente. Les tronçons à plat n’ont pas d’écoulement gravitaire. Modifier un point du tracé conserve la pente de chaque tronçon."
+
+# Source-Hash: 3c2d7360f5b0ec0f
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+# English: "Centerline elevations above level: start {start} m · end {end} m"
+#: packages/nodes/src/pipe-segment/grade-inspector.tsx
+#, fuzzy
+msgid "node.pipeSegment.gradeInspector.centerlineElevations"
+msgstr "Altitudes de l’axe au-dessus du niveau : début {start} m · fin {end} m"
+
+# Source-Hash: 13a82ce00378a76a
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+# English: "End elevation (m)"
+#: packages/nodes/src/pipe-segment/grade-inspector.tsx
+#, fuzzy
+msgid "node.pipeSegment.gradeInspector.endElevation"
+msgstr "Altitude de fin (m)"
+
+# Source-Hash: b9958602c0675e93
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+# English: "End → start"
+#: packages/nodes/src/pipe-segment/grade-inspector.tsx
+#, fuzzy
+msgid "node.pipeSegment.gradeInspector.endStart"
+msgstr "Fin → début"
+
+# Source-Hash: eac5f522f23d244b
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+# English: "Fixed pipe endpoint"
+#: packages/nodes/src/pipe-segment/grade-inspector.tsx
+#, fuzzy
+msgid "node.pipeSegment.gradeInspector.fixedPipeEndpoint"
+msgstr "Extrémité fixe du tuyau"
+
+# Source-Hash: f3d8fa71962558e5
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+# English: "Grade (%)"
+#: packages/nodes/src/pipe-segment/grade-inspector.tsx
+#, fuzzy
+msgid "node.pipeSegment.gradeInspector.grade"
+msgstr "Pente (%)"
+
+# Source-Hash: bf34bb5add643aeb
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+# English: "Grade and flow"
+#: packages/nodes/src/pipe-segment/grade-inspector.tsx
+#, fuzzy
+msgid "node.pipeSegment.gradeInspector.gradeAndFlow"
+msgstr "Pente et écoulement"
+
+# Source-Hash: ce41df161aeed7a6
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+# English: "Keep end elevation"
+#: packages/nodes/src/pipe-segment/grade-inspector.tsx
+#, fuzzy
+msgid "node.pipeSegment.gradeInspector.keepEndElevation"
+msgstr "Conserver l’altitude de fin"
+
+# Source-Hash: a73da2d9b324635d
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+# English: "Keep start elevation"
+#: packages/nodes/src/pipe-segment/grade-inspector.tsx
+#, fuzzy
+msgid "node.pipeSegment.gradeInspector.keepStartElevation"
+msgstr "Conserver l’altitude de début"
+
+# Source-Hash: 95b18c4f1c132276
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+# English: "Leg {number}: {grade}"
+#: packages/nodes/src/pipe-segment/grade-inspector.tsx
+#, fuzzy
+msgid "node.pipeSegment.gradeInspector.leg"
+msgstr "Tronçon {number} : {grade}"
+
+# Source-Hash: af7138d6a8a07914
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+# English: "Move elevation, keep grades"
+#: packages/nodes/src/pipe-segment/grade-inspector.tsx
+#, fuzzy
+msgid "node.pipeSegment.gradeInspector.moveElevationKeepGrades"
+msgstr "Déplacer en altitude, conserver les pentes"
+
+# Source-Hash: a61f74b4b445e76c
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+# English: "Pipe anchor elevation"
+#: packages/nodes/src/pipe-segment/grade-inspector.tsx
+#, fuzzy
+msgid "node.pipeSegment.gradeInspector.pipeAnchorElevation"
+msgstr "Altitude d’ancrage du tuyau"
+
+# Source-Hash: a3628871eae01da3
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+# English: "Pipe downhill flow"
+#: packages/nodes/src/pipe-segment/grade-inspector.tsx
+#, fuzzy
+msgid "node.pipeSegment.gradeInspector.pipeDownhillFlow"
+msgstr "Sens d’écoulement du tuyau"
+
+# Source-Hash: 10c942b544edcbd4
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+# English: "Pipe grade percent"
+#: packages/nodes/src/pipe-segment/grade-inspector.tsx
+#, fuzzy
+msgid "node.pipeSegment.gradeInspector.pipeGradePercent"
+msgstr "Pente du tuyau en pourcentage"
+
+# Source-Hash: acb2a9b9e601c85b
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+# English: "Start elevation (m)"
+#: packages/nodes/src/pipe-segment/grade-inspector.tsx
+#, fuzzy
+msgid "node.pipeSegment.gradeInspector.startElevation"
+msgstr "Altitude de début (m)"
+
+# Source-Hash: c742d28f93020b10
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+# English: "Start → end"
+#: packages/nodes/src/pipe-segment/grade-inspector.tsx
+#, fuzzy
+msgid "node.pipeSegment.gradeInspector.startEnd"
+msgstr "Début → fin"
+
+# Source-Hash: 42b6489db22b36a3
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+# English: "This edit cannot preserve the pipe grade and connected collars. Adjust the fitting or use Grade and flow."
+#: packages/nodes/src/pipe-segment/grade-affordance.ts
+#, fuzzy
+msgid "node.pipeSegment.gradeNotice.blocked"
+msgstr "Cette modification ne peut pas conserver la pente du tuyau ni les colliers raccordés. Ajustez le raccord ou utilisez Pente et écoulement."
 
 # Source-Hash: 457155657704f7cc
 # Review: required
@@ -26586,6 +28094,286 @@ msgstr "Canalisation d’évacuation et de ventilation — tracez à plat ou bas
 #, fuzzy
 msgid "node.pipeSegment.label"
 msgstr "Tuyau d’évacuation"
+
+# Source-Hash: 58c093b768f21b93
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+# English: "This move would change a connected pipe’s grade. Choose another position or press Esc to cancel."
+#: packages/nodes/src/pipe-segment/move-tool.tsx
+#, fuzzy
+msgid "node.pipeSegment.moveTool.connectedGradeBlocked"
+msgstr "Ce déplacement modifierait la pente d’un tuyau raccordé. Choisissez une autre position ou appuyez sur Échap pour annuler."
+
+# Source-Hash: 012c10b3fb071052
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+# English: "Apply pipe offset"
+#: packages/nodes/src/pipe-segment/offset-inspector.tsx
+#, fuzzy
+msgid "node.pipeSegment.offsetInspector.applyPipeOffset"
+msgstr "Appliquer le décalage du tuyau"
+
+# Source-Hash: 6abc3bcf60f7aed7
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+# English: "Check obstacle clearance. The preview does not detect collisions."
+#: packages/nodes/src/pipe-segment/offset-inspector.tsx
+#, fuzzy
+msgid "node.pipeSegment.offsetInspector.checkObstacleClearanceThePreviewDoes"
+msgstr "Vérifiez le dégagement autour de l’obstacle. L’aperçu ne détecte pas les collisions."
+
+# Source-Hash: b23728d37200c667
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+# English: "Choose the first and last bend by horizontal distance from the start. Positive offset goes up; negative goes down. Each connector uses the offset height in horizontal travel."
+#: packages/nodes/src/pipe-segment/offset-inspector.tsx
+#, fuzzy
+msgid "node.pipeSegment.offsetInspector.chooseTheFirstAndLastBend"
+msgstr "Choisissez le premier et le dernier coude par leur distance horizontale depuis le début. Un décalage positif monte ; un décalage négatif descend. Chaque raccord parcourt horizontalement une distance égale à la hauteur du décalage."
+
+# Source-Hash: 03528ff54200e797
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+# English: "First bend (m)"
+#: packages/nodes/src/pipe-segment/offset-inspector.tsx
+#, fuzzy
+msgid "node.pipeSegment.offsetInspector.firstBend"
+msgstr "Premier coude (m)"
+
+# Source-Hash: 4e6b6ed646a449cc
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+# English: "Last bend (m)"
+#: packages/nodes/src/pipe-segment/offset-inspector.tsx
+#, fuzzy
+msgid "node.pipeSegment.offsetInspector.lastBend"
+msgstr "Dernier coude (m)"
+
+# Source-Hash: 102ac6742f497c2e
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+# English: "Offset applied in one undo step. End connections stayed fixed."
+#: packages/nodes/src/pipe-segment/offset-inspector.tsx
+#, fuzzy
+msgid "node.pipeSegment.offsetInspector.offsetAppliedInOneUndoStep"
+msgstr "Décalage appliqué en une seule étape d’annulation. Les raccordements d’extrémité sont restés fixes."
+
+# Source-Hash: aac8ab5c8fe8dc80
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+# English: "Offset around obstacle"
+#: packages/nodes/src/pipe-segment/offset-inspector.tsx
+#, fuzzy
+msgid "node.pipeSegment.offsetInspector.offsetAroundObstacle"
+msgstr "Contourner un obstacle"
+
+# Source-Hash: d6638d559a15dc79
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+# English: "Pipe offset side profile preview"
+#: packages/nodes/src/pipe-segment/offset-inspector.tsx
+#, fuzzy
+msgid "node.pipeSegment.offsetInspector.pipeOffsetSideProfilePreview"
+msgstr "Aperçu du profil latéral du décalage de tuyau"
+
+# Source-Hash: 93186c7801fe54b1
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+# English: "Side profile (schematic). Four bends · five pipe sections. Parallel sections keep the original grade; both end connections stay fixed."
+#: packages/nodes/src/pipe-segment/offset-inspector.tsx
+#, fuzzy
+msgid "node.pipeSegment.offsetInspector.sideProfileSchematicFourBendsFive"
+msgstr "Profil latéral (schématique). Quatre coudes · cinq tronçons de tuyau. Les tronçons parallèles conservent la pente d’origine ; les deux raccordements d’extrémité restent fixes."
+
+# Source-Hash: ab6a00ca812999d5
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+# English: "This offset includes an uphill waste section. It does not provide continuous downhill drainage."
+#: packages/nodes/src/pipe-segment/offset-inspector.tsx
+#, fuzzy
+msgid "node.pipeSegment.offsetInspector.thisOffsetIncludesAnUphillWaste"
+msgstr "Ce décalage comprend un tronçon d’évacuation en contre-pente. Il n’assure pas un écoulement continu vers le bas."
+
+# Source-Hash: 9da65d7ebc4d4ba1
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+# English: "Unable to apply offset."
+#: packages/nodes/src/pipe-segment/offset-inspector.tsx
+#, fuzzy
+msgid "node.pipeSegment.offsetInspector.unableToApplyOffset"
+msgstr "Impossible d’appliquer le décalage."
+
+# Source-Hash: b9d942406a6029e3
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+# English: "Unable to plan offset."
+#: packages/nodes/src/pipe-segment/offset-inspector.tsx
+#, fuzzy
+msgid "node.pipeSegment.offsetInspector.unableToPlanOffset"
+msgstr "Impossible de préparer le décalage."
+
+# Source-Hash: 2dad926bc0e26f4a
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+# English: "Vertical offset (m)"
+#: packages/nodes/src/pipe-segment/offset-inspector.tsx
+#, fuzzy
+msgid "node.pipeSegment.offsetInspector.verticalOffset"
+msgstr "Décalage vertical (m)"
+
+# Source-Hash: ab7feb5e8b9ef232
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+# English: "Apply pipe size"
+#: packages/nodes/src/pipe-segment/resize-inspector.tsx
+#, fuzzy
+msgid "node.pipeSegment.resizeInspector.applyPipeSize"
+msgstr "Appliquer le diamètre"
+
+# Source-Hash: 5a82f77707e6c422
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+# English: "Branches stop at junctions, size or material changes, and fixture connections. Reducers keep boundary collars fixed."
+#: packages/nodes/src/pipe-segment/resize-inspector.tsx
+#, fuzzy
+msgid "node.pipeSegment.resizeInspector.branchesStopAtJunctionsSizeOr"
+msgstr "Les branches s’arrêtent aux jonctions, aux changements de diamètre ou de matériau et aux raccordements d’appareils. Les réductions maintiennent fixes les colliers en limite."
+
+# Source-Hash: 3406d3fb87431e87
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+# English: "Check resize"
+#: packages/nodes/src/pipe-segment/resize-inspector.tsx
+#, fuzzy
+msgid "node.pipeSegment.resizeInspector.checkResize"
+msgstr "Vérifier le redimensionnement"
+
+# Source-Hash: 68e3596ff2fd6e60
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+# English: "Connected branch"
+#: packages/nodes/src/pipe-segment/resize-inspector.tsx
+#, fuzzy
+msgid "node.pipeSegment.resizeInspector.connectedBranch"
+msgstr "Branche raccordée"
+
+# Source-Hash: c40570d3f7df8ad2
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+# English: "Current diameter: {diameter} in"
+#: packages/nodes/src/pipe-segment/resize-inspector.tsx
+#, fuzzy
+msgid "node.pipeSegment.resizeInspector.currentDiameter"
+msgstr "Diamètre actuel : {diameter} in"
+
+# Source-Hash: e704515c0fe2a6ca
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+# English: "Diameter (in)"
+#: packages/nodes/src/pipe-segment/resize-inspector.tsx
+#, fuzzy
+msgid "node.pipeSegment.resizeInspector.diameterIn"
+msgstr "Diamètre (in)"
+
+# Source-Hash: bf4fd51ca4d3d6c6
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+# English: "Pipe resize diameter"
+#: packages/nodes/src/pipe-segment/resize-inspector.tsx
+#, fuzzy
+msgid "node.pipeSegment.resizeInspector.pipeResizeDiameter"
+msgstr "Nouveau diamètre du tuyau"
+
+# Source-Hash: e31a6978e4744398
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+# English: "Pipe resize scope"
+#: packages/nodes/src/pipe-segment/resize-inspector.tsx
+#, fuzzy
+msgid "node.pipeSegment.resizeInspector.pipeResizeScope"
+msgstr "Portée du redimensionnement du tuyau"
+
+# Source-Hash: 8b5479cd8378bf76
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+# English: "Pipe size"
+#: packages/nodes/src/pipe-segment/resize-inspector.tsx
+#, fuzzy
+msgid "node.pipeSegment.resizeInspector.pipeSize"
+msgstr "Diamètre du tuyau"
+
+# Source-Hash: ad7c5e79e9f545f2
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+# English: "Resized in one undo step. Grades and boundary connections preserved."
+#: packages/nodes/src/pipe-segment/resize-inspector.tsx
+#, fuzzy
+msgid "node.pipeSegment.resizeInspector.resized"
+msgstr "Redimensionné en une seule étape d’annulation. Pentes et raccordements en limite conservés."
+
+# Source-Hash: 2681a615278ea7de
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+# English: "{runs, plural, one {# run} other {# runs}}, {fittings, plural, one {# fitting} other {# fittings}}, {reducers, plural, one {# new reducer} other {# new reducers}}. Grades stay unchanged."
+#: packages/nodes/src/pipe-segment/resize-inspector.tsx
+#, fuzzy
+msgid "node.pipeSegment.resizeInspector.resizeSummary"
+msgstr "{runs, plural, one {# tronçon} many {# tronçons} other {# tronçons}}, {fittings, plural, one {# raccord} many {# raccords} other {# raccords}}, {reducers, plural, one {# nouvelle réduction} many {# nouvelles réductions} other {# nouvelles réductions}}. Les pentes restent inchangées."
+
+# Source-Hash: d271518d800f3e1c
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+# English: "This segment"
+#: packages/nodes/src/pipe-segment/resize-inspector.tsx
+#, fuzzy
+msgid "node.pipeSegment.resizeInspector.thisSegment"
+msgstr "Ce tronçon"
+
+# Source-Hash: 0518760b3747bae1
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+# English: "Unable to resize pipe."
+#: packages/nodes/src/pipe-segment/resize-inspector.tsx
+#, fuzzy
+msgid "node.pipeSegment.resizeInspector.unableToResize"
+msgstr "Impossible de redimensionner le tuyau."
+
+# Source-Hash: 4019007983696a57
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+# English: "{grade} · Start {start} m · End {end} m above level"
+#: packages/nodes/src/pipe-segment/tool.tsx
+#, fuzzy
+msgid "node.pipeSegment.tool.gradeDetail"
+msgstr "{grade} · Début {start} m · Fin {end} m au-dessus du niveau"
 
 # Source-Hash: 6d0cdd14d0675e05
 # Review: required
@@ -26886,6 +28674,36 @@ msgstr "Hauteur"
 #, fuzzy
 msgid "node.roof.description"
 msgstr "Toit en pente, en croupe ou à deux pans composé d’un ou plusieurs pans."
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: ca5fae8856e13ced
+# Review: required
+# English: "Retry roof geometry"
+#: packages/nodes/src/roof/geometry-notice.tsx
+#, fuzzy
+msgid "node.roof.geometryNotice.retryRoofGeometry"
+msgstr "Réessayer la géométrie du toit"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 50b682dbab6737df
+# Review: required
+# English: "Roof geometry could not be rebuilt. The previous shape is still shown. Adjust the dimensions or intersections and retry."
+#: packages/nodes/src/roof/geometry-notice.tsx
+#, fuzzy
+msgid "node.roof.geometryNotice.roofGeometryCouldNotBeRebuilt"
+msgstr "Impossible de reconstruire la géométrie du toit. La forme précédente reste affichée. Ajustez les dimensions ou les intersections, puis réessayez."
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 65436922f0b53083
+# Review: required
+# English: "Roof geometry is invalid. The previous shape is still shown. Adjust the dimensions or intersections and retry."
+#: packages/nodes/src/roof/geometry-notice.tsx
+#, fuzzy
+msgid "node.roof.geometryNotice.roofGeometryIsInvalidThePrevious"
+msgstr "La géométrie du toit n’est pas valide. La forme précédente reste affichée. Ajustez les dimensions ou les intersections, puis réessayez."
 
 # Source-Hash: b5be04471fd3fb7a
 # Review: required
@@ -29000,6 +30818,36 @@ msgstr "{spacing} d’entraxe"
 msgid "node.shared.buildUpControls.woodPlank"
 msgstr "Lambris"
 
+# Source-Hash: 0fe1b70953df9304
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+# English: "Route preview"
+#: packages/nodes/src/shared/connection-feedback.tsx
+#, fuzzy
+msgid "node.shared.connectionFeedback.routePreview"
+msgstr "Aperçu du tracé"
+
+# Source-Hash: d4da45e25561382c
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+# English: "{system, select, return {Return} other {Supply}} · {size} in · {state, select, connected {Connected} other {Draw from collar}}"
+#: packages/nodes/src/shared/duct-collar-inspector.tsx
+#, fuzzy
+msgid "node.shared.ductCollarInspector.collarButton"
+msgstr "{system, select, return {Reprise} other {Soufflage}} · {size} in · {state, select, connected {Raccordé} other {Tracer depuis le collier}}"
+
+# Source-Hash: 8ef43378888dba30
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+# English: "Connect duct"
+#: packages/nodes/src/shared/duct-collar-inspector.tsx
+#, fuzzy
+msgid "node.shared.ductCollarInspector.connectDuct"
+msgstr "Raccorder une gaine"
+
 # Source-Hash: e7512c891d8da7d8
 # Review: required
 # AI-Provider: claude-code
@@ -29049,6 +30897,26 @@ msgstr "Largeur"
 #, fuzzy
 msgid "node.shared.openingDepthPosition.depthPosition"
 msgstr "Position en profondeur"
+
+# Source-Hash: dde1a07755fd0e6e
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+# English: "{port, select, inlet {Inlet} outlet {Outlet} branch {Branch} branch2 {Second branch} other {Collar {number}}} · {diameter} in · {elevation} m · {state, select, connected {Connected} other {Draw from collar}}"
+#: packages/nodes/src/shared/pipe-collar-inspector.tsx
+#, fuzzy
+msgid "node.shared.pipeCollarInspector.collarButton"
+msgstr "{port, select, inlet {Entrée} outlet {Sortie} branch {Piquage} branch2 {Second piquage} other {Collier {number}}} · {diameter} in · {elevation} m · {state, select, connected {Raccordé} other {Tracer depuis le collier}}"
+
+# Source-Hash: 88a982140de95dcc
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+# English: "Connect pipe"
+#: packages/nodes/src/shared/pipe-collar-inspector.tsx
+#, fuzzy
+msgid "node.shared.pipeCollarInspector.connectPipe"
+msgstr "Raccorder un tuyau"
 
 # Source-Hash: ee1c8bc3e27fb550
 # Review: required
@@ -34361,6 +36229,16 @@ msgstr "Dimensions"
 msgid "node.wall.panel.drywall"
 msgstr "Plaque de plâtre"
 
+# Source-Hash: 99ae1e9f13fca0ad
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "End height offset"
+#: packages/nodes/src/wall/panel.tsx
+#, fuzzy
+msgid "node.wall.panel.endHeightOffset"
+msgstr "Décalage de hauteur à l’extrémité"
+
 # Source-Hash: d6ba089e1ca40cdf
 # Review: required
 # AI-Provider: claude-code
@@ -36361,40 +38239,320 @@ msgstr "Limite de zone indisponible"
 msgid "node.zone.quantitiesPanel.zoneQuantities"
 msgstr "Quantités de la zone"
 
+# Source-Hash: d7fd9acca338cd6a
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "{action, select, open {Open {name}} close {Close {name}} on {Turn on {name}} other {Turn off {name}}}"
+#: packages/viewer/src/components/viewer/selection-callout.tsx
+#, fuzzy
+msgid "viewer.callout.action"
+msgstr "{action, select, open {Ouvrir {name}} close {Fermer {name}} on {Allumer {name}} other {Éteindre {name}}}"
+
+# Source-Hash: 5abe4ec7ade26a12
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Deselect"
+#: packages/viewer/src/components/viewer/selection-callout.tsx
+#, fuzzy
+msgid "viewer.callout.deselect"
+msgstr "Désélectionner"
+
+# Source-Hash: 787e10f5db16904e
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Door"
+#: packages/viewer/src/systems/interactive/callout-actions.ts
+#, fuzzy
+msgid "viewer.callout.door"
+msgstr "Porte"
+
+# Source-Hash: db337a42db3a6c57
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Barn door"
+#: packages/viewer/src/systems/interactive/callout-actions.ts
+#, fuzzy
+msgid "viewer.callout.door.barn"
+msgstr "Porte de grange"
+
+# Source-Hash: ddf96dbbf4fe7676
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Double door"
+#: packages/viewer/src/systems/interactive/callout-actions.ts
+#, fuzzy
+msgid "viewer.callout.door.double"
+msgstr "Porte double"
+
+# Source-Hash: b44941a92287ab10
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Folding door"
+#: packages/viewer/src/systems/interactive/callout-actions.ts
+#, fuzzy
+msgid "viewer.callout.door.folding"
+msgstr "Porte pliante"
+
+# Source-Hash: 3f4764e840dac031
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "French door"
+#: packages/viewer/src/systems/interactive/callout-actions.ts
+#, fuzzy
+msgid "viewer.callout.door.french"
+msgstr "Porte-fenêtre"
+
+# Source-Hash: 31823c27167616e3
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Roll-up garage door"
+#: packages/viewer/src/systems/interactive/callout-actions.ts
+#, fuzzy
+msgid "viewer.callout.door.garageRollup"
+msgstr "Porte de garage enroulable"
+
+# Source-Hash: 24e8e9cd9e871a0a
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Sectional garage door"
+#: packages/viewer/src/systems/interactive/callout-actions.ts
+#, fuzzy
+msgid "viewer.callout.door.garageSectional"
+msgstr "Porte de garage sectionnelle"
+
+# Source-Hash: 98363ee2b9b11dda
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Tilt-up garage door"
+#: packages/viewer/src/systems/interactive/callout-actions.ts
+#, fuzzy
+msgid "viewer.callout.door.garageTiltup"
+msgstr "Porte de garage basculante"
+
+# Source-Hash: 329252b3466b76a4
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Hinged door"
+#: packages/viewer/src/systems/interactive/callout-actions.ts
+#, fuzzy
+msgid "viewer.callout.door.hinged"
+msgstr "Porte battante"
+
+# Source-Hash: 039a3d3de4c98783
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Pocket door"
+#: packages/viewer/src/systems/interactive/callout-actions.ts
+#, fuzzy
+msgid "viewer.callout.door.pocket"
+msgstr "Porte à galandage"
+
+# Source-Hash: f530856f6f28a285
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Sliding door"
+#: packages/viewer/src/systems/interactive/callout-actions.ts
+#, fuzzy
+msgid "viewer.callout.door.sliding"
+msgstr "Porte coulissante"
+
+# Source-Hash: e04298381837252f
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Opening"
+#: packages/viewer/src/systems/interactive/callout-actions.ts
+#, fuzzy
+msgid "viewer.callout.opening"
+msgstr "Ouverture"
+
+# Source-Hash: fe1fc3c56075fce9
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "{action, select, close {Close the shutters of {name}} other {Open the shutters of {name}}}"
+#: packages/viewer/src/components/viewer/selection-callout.tsx
+#, fuzzy
+msgid "viewer.callout.shuttersAction"
+msgstr "{action, select, close {Fermer les volets de {name}} other {Ouvrir les volets de {name}}}"
+
+# Source-Hash: 1548587f53543270
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "{state, select, open {Open} closed {Closed} on {On} other {Off}}"
+#: packages/viewer/src/components/viewer/selection-callout.tsx
+#, fuzzy
+msgid "viewer.callout.state"
+msgstr "{state, select, open {Ouvert} closed {Fermé} on {Allumé} other {Éteint}}"
+
+# Source-Hash: aa3c35ed33e181e5
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Window"
+#: packages/viewer/src/systems/interactive/callout-actions.ts
+#, fuzzy
+msgid "viewer.callout.window"
+msgstr "Fenêtre"
+
+# Source-Hash: b15485fd33092d23
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Awning window"
+#: packages/viewer/src/systems/interactive/callout-actions.ts
+#, fuzzy
+msgid "viewer.callout.window.awning"
+msgstr "Fenêtre à projection"
+
+# Source-Hash: 03532a03a66cf1e0
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Bay window"
+#: packages/viewer/src/systems/interactive/callout-actions.ts
+#, fuzzy
+msgid "viewer.callout.window.bay"
+msgstr "Fenêtre en baie"
+
+# Source-Hash: f60c4e3b39f72154
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Bow window"
+#: packages/viewer/src/systems/interactive/callout-actions.ts
+#, fuzzy
+msgid "viewer.callout.window.bow"
+msgstr "Fenêtre en arc"
+
+# Source-Hash: af3f32206d00774b
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Casement window"
+#: packages/viewer/src/systems/interactive/callout-actions.ts
+#, fuzzy
+msgid "viewer.callout.window.casement"
+msgstr "Fenêtre à battant"
+
+# Source-Hash: 65e81e2862cac8d5
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Double-hung window"
+#: packages/viewer/src/systems/interactive/callout-actions.ts
+#, fuzzy
+msgid "viewer.callout.window.doubleHung"
+msgstr "Fenêtre à guillotine double"
+
+# Source-Hash: f5d602303a06631d
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Fixed window"
+#: packages/viewer/src/systems/interactive/callout-actions.ts
+#, fuzzy
+msgid "viewer.callout.window.fixed"
+msgstr "Fenêtre fixe"
+
+# Source-Hash: 857acf0532fba09f
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Hopper window"
+#: packages/viewer/src/systems/interactive/callout-actions.ts
+#, fuzzy
+msgid "viewer.callout.window.hopper"
+msgstr "Fenêtre à soufflet"
+
+# Source-Hash: 7e9cc44d46e0a73e
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Louvered window"
+#: packages/viewer/src/systems/interactive/callout-actions.ts
+#, fuzzy
+msgid "viewer.callout.window.louvered"
+msgstr "Fenêtre à lames"
+
+# Source-Hash: 952ef425d1aeb6f0
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Single-hung window"
+#: packages/viewer/src/systems/interactive/callout-actions.ts
+#, fuzzy
+msgid "viewer.callout.window.singleHung"
+msgstr "Fenêtre à guillotine simple"
+
+# Source-Hash: 1b3bf9d422f1a474
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Sliding window"
+#: packages/viewer/src/systems/interactive/callout-actions.ts
+#, fuzzy
+msgid "viewer.callout.window.sliding"
+msgstr "Fenêtre coulissante"
+
+# Source-Hash: 4cf588849369b27b
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Tilt-and-turn window"
+#: packages/viewer/src/systems/interactive/callout-actions.ts
+#, fuzzy
+msgid "viewer.callout.window.tiltTurn"
+msgstr "Fenêtre oscillo-battante"
+
 # Source-Hash: 8bf25afa3cb8baea
 # Review: human
 # English: "Orbit left"
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
+#: packages/viewer/src/ui/components/viewer-controls-bar.tsx
 msgid "viewer.camera.orbitLeft"
 msgstr "Pivoter à gauche"
 
 # Source-Hash: b9cc64c1d1bb0d46
 # Review: human
 # English: "Orbit right"
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
+#: packages/viewer/src/ui/components/viewer-controls-bar.tsx
 msgid "viewer.camera.orbitRight"
 msgstr "Pivoter à droite"
 
 # Source-Hash: 1ab1eb3a14f4b0e0
 # Review: human
 # English: "Top view"
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
+#: packages/viewer/src/ui/components/viewer-controls-bar.tsx
 msgid "viewer.camera.topView"
 msgstr "Vue de dessus"
 
 # Source-Hash: 50accd740fa2e736
 # Review: human
 # English: "Off"
-#: packages/editor/src/components/viewer/render-settings-menu.tsx
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
+#: packages/viewer/src/ui/components/render-settings-menu.tsx
+#: packages/viewer/src/ui/components/viewer-controls-bar.tsx
 msgid "viewer.common.off"
 msgstr "Désactivé"
 
 # Source-Hash: 9cc01faad79c28da
 # Review: human
 # English: "On"
-#: packages/editor/src/components/viewer/render-settings-menu.tsx
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
+#: packages/viewer/src/ui/components/render-settings-menu.tsx
+#: packages/viewer/src/ui/components/viewer-controls-bar.tsx
 msgid "viewer.common.on"
 msgstr "Activé"
 
@@ -36403,7 +38561,7 @@ msgstr "Activé"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Sun position is approximate"
-#: packages/editor/src/components/viewer/render-settings-menu.tsx
+#: packages/viewer/src/ui/components/render-settings-menu.tsx
 #, fuzzy
 msgid "viewer.daylight.location.approximate"
 msgstr "Position du soleil approximative"
@@ -36413,7 +38571,7 @@ msgstr "Position du soleil approximative"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Sun follows your location"
-#: packages/editor/src/components/viewer/render-settings-menu.tsx
+#: packages/viewer/src/ui/components/render-settings-menu.tsx
 #, fuzzy
 msgid "viewer.daylight.location.device"
 msgstr "Le soleil suit votre position"
@@ -36423,8 +38581,8 @@ msgstr "Le soleil suit votre position"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Use my location"
-#: packages/editor/src/components/viewer/render-settings-menu.tsx
-#: packages/editor/src/components/viewer/sky-control.tsx
+#: packages/viewer/src/ui/components/render-settings-menu.tsx
+#: packages/viewer/src/ui/components/sky-control.tsx
 #, fuzzy
 msgid "viewer.daylight.location.use"
 msgstr "Utiliser ma position"
@@ -36434,7 +38592,7 @@ msgstr "Utiliser ma position"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Afternoon"
-#: packages/editor/src/components/viewer/sky-control.tsx
+#: packages/viewer/src/ui/components/sky-control.tsx
 #, fuzzy
 msgid "viewer.daylight.phase.afternoon"
 msgstr "Après-midi"
@@ -36444,7 +38602,7 @@ msgstr "Après-midi"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Morning"
-#: packages/editor/src/components/viewer/sky-control.tsx
+#: packages/viewer/src/ui/components/sky-control.tsx
 #, fuzzy
 msgid "viewer.daylight.phase.morning"
 msgstr "Matin"
@@ -36454,7 +38612,7 @@ msgstr "Matin"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Auto"
-#: packages/editor/src/components/viewer/render-settings-menu.tsx
+#: packages/viewer/src/ui/components/render-settings-menu.tsx
 #, fuzzy
 msgid "viewer.daylight.quality.auto"
 msgstr "Auto"
@@ -36464,7 +38622,7 @@ msgstr "Auto"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Picked for this device: {tier}"
-#: packages/editor/src/components/viewer/render-settings-menu.tsx
+#: packages/viewer/src/ui/components/render-settings-menu.tsx
 #, fuzzy
 msgid "viewer.daylight.quality.autoDetail"
 msgstr "Choisie pour cet appareil : {tier}"
@@ -36474,7 +38632,7 @@ msgstr "Choisie pour cet appareil : {tier}"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "High"
-#: packages/editor/src/components/viewer/render-settings-menu.tsx
+#: packages/viewer/src/ui/components/render-settings-menu.tsx
 #, fuzzy
 msgid "viewer.daylight.quality.high"
 msgstr "Haute"
@@ -36484,7 +38642,7 @@ msgstr "Haute"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Lighting-aware ambient occlusion and bloom"
-#: packages/editor/src/components/viewer/render-settings-menu.tsx
+#: packages/viewer/src/ui/components/render-settings-menu.tsx
 #, fuzzy
 msgid "viewer.daylight.quality.highDetail"
 msgstr "Occlusion ambiante liée à l'éclairage et bloom"
@@ -36494,7 +38652,7 @@ msgstr "Occlusion ambiante liée à l'éclairage et bloom"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Low"
-#: packages/editor/src/components/viewer/render-settings-menu.tsx
+#: packages/viewer/src/ui/components/render-settings-menu.tsx
 #, fuzzy
 msgid "viewer.daylight.quality.low"
 msgstr "Basse"
@@ -36504,7 +38662,7 @@ msgstr "Basse"
 # Source-Hash: 8b94a0f7e27f671d
 # Review: required
 # English: "Fastest — no ambient occlusion or bloom"
-#: packages/editor/src/components/viewer/render-settings-menu.tsx
+#: packages/viewer/src/ui/components/render-settings-menu.tsx
 #, fuzzy
 msgid "viewer.daylight.quality.lowDetail"
 msgstr "Le plus rapide — ni occlusion ambiante ni bloom"
@@ -36514,7 +38672,7 @@ msgstr "Le plus rapide — ni occlusion ambiante ni bloom"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Medium"
-#: packages/editor/src/components/viewer/render-settings-menu.tsx
+#: packages/viewer/src/ui/components/render-settings-menu.tsx
 #, fuzzy
 msgid "viewer.daylight.quality.medium"
 msgstr "Moyenne"
@@ -36524,7 +38682,7 @@ msgstr "Moyenne"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Half-resolution ambient occlusion"
-#: packages/editor/src/components/viewer/render-settings-menu.tsx
+#: packages/viewer/src/ui/components/render-settings-menu.tsx
 #, fuzzy
 msgid "viewer.daylight.quality.mediumDetail"
 msgstr "Occlusion ambiante en demi-résolution"
@@ -36534,7 +38692,7 @@ msgstr "Occlusion ambiante en demi-résolution"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Quality"
-#: packages/editor/src/components/viewer/render-settings-menu.tsx
+#: packages/viewer/src/ui/components/render-settings-menu.tsx
 #, fuzzy
 msgid "viewer.daylight.quality.title"
 msgstr "Qualité"
@@ -36544,7 +38702,7 @@ msgstr "Qualité"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Drag the sun to set the time"
-#: packages/editor/src/components/viewer/sky-control.tsx
+#: packages/viewer/src/ui/components/sky-control.tsx
 #, fuzzy
 msgid "viewer.daylight.sky.arc"
 msgstr "Faites glisser le soleil pour régler l'heure"
@@ -36554,7 +38712,7 @@ msgstr "Faites glisser le soleil pour régler l'heure"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Close"
-#: packages/editor/src/components/viewer/sky-control.tsx
+#: packages/viewer/src/ui/components/sky-control.tsx
 #, fuzzy
 msgid "viewer.daylight.sky.close"
 msgstr "Fermer"
@@ -36564,7 +38722,7 @@ msgstr "Fermer"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Cloud cover"
-#: packages/editor/src/components/viewer/sky-control.tsx
+#: packages/viewer/src/ui/components/sky-control.tsx
 #, fuzzy
 msgid "viewer.daylight.sky.cloudCover"
 msgstr "Couverture nuageuse"
@@ -36574,7 +38732,7 @@ msgstr "Couverture nuageuse"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Cloud cover: {current}. Change to {next}"
-#: packages/editor/src/components/viewer/sky-control.tsx
+#: packages/viewer/src/ui/components/sky-control.tsx
 #, fuzzy
 msgid "viewer.daylight.sky.cycleWeather"
 msgstr "Couverture nuageuse : {current}. Passer à {next}"
@@ -36584,7 +38742,7 @@ msgstr "Couverture nuageuse : {current}. Passer à {next}"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Cycle cloud cover"
-#: packages/editor/src/components/viewer/sky-control.tsx
+#: packages/viewer/src/ui/components/sky-control.tsx
 #, fuzzy
 msgid "viewer.daylight.sky.cycleWeatherTip"
 msgstr "Changer la couverture nuageuse"
@@ -36594,7 +38752,7 @@ msgstr "Changer la couverture nuageuse"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Follow the clock"
-#: packages/editor/src/components/viewer/sky-control.tsx
+#: packages/viewer/src/ui/components/sky-control.tsx
 #, fuzzy
 msgid "viewer.daylight.sky.followClock"
 msgstr "Suivre l'horloge"
@@ -36604,7 +38762,7 @@ msgstr "Suivre l'horloge"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "The sun moves with your local clock."
-#: packages/editor/src/components/viewer/sky-control.tsx
+#: packages/viewer/src/ui/components/sky-control.tsx
 #, fuzzy
 msgid "viewer.daylight.sky.followClockDetail"
 msgstr "Le soleil suit votre horloge locale."
@@ -36614,7 +38772,7 @@ msgstr "Le soleil suit votre horloge locale."
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "In viewport"
-#: packages/editor/src/components/viewer/render-settings-menu.tsx
+#: packages/viewer/src/ui/components/render-settings-menu.tsx
 #, fuzzy
 msgid "viewer.daylight.sky.inViewport"
 msgstr "Dans la vue"
@@ -36624,7 +38782,7 @@ msgstr "Dans la vue"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Follows your local clock. Sun position is approximate."
-#: packages/editor/src/components/viewer/sky-control.tsx
+#: packages/viewer/src/ui/components/sky-control.tsx
 #, fuzzy
 msgid "viewer.daylight.sky.liveDetail"
 msgstr "Suit votre horloge locale. La position du soleil est approximative."
@@ -36634,7 +38792,7 @@ msgstr "Suit votre horloge locale. La position du soleil est approximative."
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Time & weather"
-#: packages/editor/src/components/viewer/render-settings-menu.tsx
+#: packages/viewer/src/ui/components/render-settings-menu.tsx
 #, fuzzy
 msgid "viewer.daylight.sky.menuItem"
 msgstr "Heure et météo"
@@ -36644,7 +38802,7 @@ msgstr "Heure et météo"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Time and weather"
-#: packages/editor/src/components/viewer/sky-control.tsx
+#: packages/viewer/src/ui/components/sky-control.tsx
 #, fuzzy
 msgid "viewer.daylight.sky.open"
 msgstr "Heure et météo"
@@ -36654,7 +38812,7 @@ msgstr "Heure et météo"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Reset"
-#: packages/editor/src/components/viewer/sky-control.tsx
+#: packages/viewer/src/ui/components/sky-control.tsx
 #, fuzzy
 msgid "viewer.daylight.sky.reset"
 msgstr "Réinitialiser"
@@ -36664,7 +38822,7 @@ msgstr "Réinitialiser"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Light and weather for this view"
-#: packages/editor/src/components/viewer/sky-control.tsx
+#: packages/viewer/src/ui/components/sky-control.tsx
 #, fuzzy
 msgid "viewer.daylight.sky.subtitle"
 msgstr "Lumière et météo de cette vue"
@@ -36674,7 +38832,7 @@ msgstr "Lumière et météo de cette vue"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Sunrise"
-#: packages/editor/src/components/viewer/sky-control.tsx
+#: packages/viewer/src/ui/components/sky-control.tsx
 #, fuzzy
 msgid "viewer.daylight.sky.sunrise"
 msgstr "Lever"
@@ -36684,7 +38842,7 @@ msgstr "Lever"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Sunset"
-#: packages/editor/src/components/viewer/sky-control.tsx
+#: packages/viewer/src/ui/components/sky-control.tsx
 #, fuzzy
 msgid "viewer.daylight.sky.sunset"
 msgstr "Coucher"
@@ -36694,7 +38852,7 @@ msgstr "Coucher"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Sky"
-#: packages/editor/src/components/viewer/sky-control.tsx
+#: packages/viewer/src/ui/components/sky-control.tsx
 #, fuzzy
 msgid "viewer.daylight.sky.title"
 msgstr "Ciel"
@@ -36704,8 +38862,8 @@ msgstr "Ciel"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Blue hour"
-#: packages/editor/src/components/viewer/render-settings-menu.tsx
-#: packages/editor/src/components/viewer/sky-control.tsx
+#: packages/viewer/src/ui/components/render-settings-menu.tsx
+#: packages/viewer/src/ui/components/sky-control.tsx
 #, fuzzy
 msgid "viewer.daylight.time.blue"
 msgstr "Heure bleue"
@@ -36715,8 +38873,8 @@ msgstr "Heure bleue"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Golden hour"
-#: packages/editor/src/components/viewer/render-settings-menu.tsx
-#: packages/editor/src/components/viewer/sky-control.tsx
+#: packages/viewer/src/ui/components/render-settings-menu.tsx
+#: packages/viewer/src/ui/components/sky-control.tsx
 #, fuzzy
 msgid "viewer.daylight.time.golden"
 msgstr "Heure dorée"
@@ -36726,8 +38884,8 @@ msgstr "Heure dorée"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Midday"
-#: packages/editor/src/components/viewer/render-settings-menu.tsx
-#: packages/editor/src/components/viewer/sky-control.tsx
+#: packages/viewer/src/ui/components/render-settings-menu.tsx
+#: packages/viewer/src/ui/components/sky-control.tsx
 #, fuzzy
 msgid "viewer.daylight.time.midday"
 msgstr "Midi"
@@ -36737,8 +38895,8 @@ msgstr "Midi"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Night"
-#: packages/editor/src/components/viewer/render-settings-menu.tsx
-#: packages/editor/src/components/viewer/sky-control.tsx
+#: packages/viewer/src/ui/components/render-settings-menu.tsx
+#: packages/viewer/src/ui/components/sky-control.tsx
 #, fuzzy
 msgid "viewer.daylight.time.night"
 msgstr "Nuit"
@@ -36748,8 +38906,8 @@ msgstr "Nuit"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Time of day"
-#: packages/editor/src/components/viewer/render-settings-menu.tsx
-#: packages/editor/src/components/viewer/sky-control.tsx
+#: packages/viewer/src/ui/components/render-settings-menu.tsx
+#: packages/viewer/src/ui/components/sky-control.tsx
 #, fuzzy
 msgid "viewer.daylight.time.title"
 msgstr "Moment de la journée"
@@ -36759,8 +38917,8 @@ msgstr "Moment de la journée"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Clear"
-#: packages/editor/src/components/viewer/render-settings-menu.tsx
-#: packages/editor/src/components/viewer/sky-control.tsx
+#: packages/viewer/src/ui/components/render-settings-menu.tsx
+#: packages/viewer/src/ui/components/sky-control.tsx
 #, fuzzy
 msgid "viewer.daylight.weather.clear"
 msgstr "Dégagé"
@@ -36770,8 +38928,8 @@ msgstr "Dégagé"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Cloudy"
-#: packages/editor/src/components/viewer/render-settings-menu.tsx
-#: packages/editor/src/components/viewer/sky-control.tsx
+#: packages/viewer/src/ui/components/render-settings-menu.tsx
+#: packages/viewer/src/ui/components/sky-control.tsx
 #, fuzzy
 msgid "viewer.daylight.weather.cloudy"
 msgstr "Nuageux"
@@ -36781,8 +38939,8 @@ msgstr "Nuageux"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Fair"
-#: packages/editor/src/components/viewer/render-settings-menu.tsx
-#: packages/editor/src/components/viewer/sky-control.tsx
+#: packages/viewer/src/ui/components/render-settings-menu.tsx
+#: packages/viewer/src/ui/components/sky-control.tsx
 #, fuzzy
 msgid "viewer.daylight.weather.fair"
 msgstr "Beau temps"
@@ -36792,8 +38950,8 @@ msgstr "Beau temps"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Overcast"
-#: packages/editor/src/components/viewer/render-settings-menu.tsx
-#: packages/editor/src/components/viewer/sky-control.tsx
+#: packages/viewer/src/ui/components/render-settings-menu.tsx
+#: packages/viewer/src/ui/components/sky-control.tsx
 #, fuzzy
 msgid "viewer.daylight.weather.overcast"
 msgstr "Couvert"
@@ -36803,7 +38961,7 @@ msgstr "Couvert"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Weather"
-#: packages/editor/src/components/viewer/render-settings-menu.tsx
+#: packages/viewer/src/ui/components/render-settings-menu.tsx
 #, fuzzy
 msgid "viewer.daylight.weather.title"
 msgstr "Météo"
@@ -36811,315 +38969,325 @@ msgstr "Météo"
 # Source-Hash: 14622745dbf93f4c
 # Review: human
 # English: "Camera"
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
+#: packages/viewer/src/ui/components/viewer-controls-bar.tsx
 msgid "viewer.display.camera"
 msgstr "Caméra"
 
 # Source-Hash: d3d478fa6c6d7ddc
 # Review: human
 # English: "Colored"
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
+#: packages/viewer/src/ui/components/viewer-controls-bar.tsx
 msgid "viewer.display.colored"
 msgstr "En couleur"
 
 # Source-Hash: 82b74c4f5ef43336
 # Review: human
 # English: "Colors"
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
+#: packages/viewer/src/ui/components/viewer-controls-bar.tsx
 msgid "viewer.display.colors"
 msgstr "Couleurs"
 
 # Source-Hash: 027bbc8b7287c06a
 # Review: human
 # English: "Edges"
-#: packages/editor/src/components/viewer/render-settings-menu.tsx
+#: packages/viewer/src/ui/components/render-settings-menu.tsx
 msgid "viewer.display.edges.title"
 msgstr "Arêtes"
 
 # Source-Hash: ecde2f7c26914be3
 # Review: human
 # English: "Monochrome"
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
+#: packages/viewer/src/ui/components/viewer-controls-bar.tsx
 msgid "viewer.display.monochrome"
 msgstr "Monochrome"
 
 # Source-Hash: ed59dd8ce7797a66
 # Review: human
 # English: "Orthographic"
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
+#: packages/viewer/src/ui/components/viewer-controls-bar.tsx
 msgid "viewer.display.orthographic"
 msgstr "Orthographique"
 
 # Source-Hash: 316e25993ff72b88
 # Review: human
 # English: "Perspective"
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
+#: packages/viewer/src/ui/components/viewer-controls-bar.tsx
 msgid "viewer.display.perspective"
 msgstr "Perspective"
 
 # Source-Hash: 4c6bcb30b40047fc
 # Review: human
 # English: "Shadows"
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
+#: packages/viewer/src/ui/components/viewer-controls-bar.tsx
 msgid "viewer.display.shadows"
 msgstr "Ombres"
 
 # Source-Hash: d0db46f206a88e2e
 # Review: human
 # English: "Display settings"
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
+#: packages/viewer/src/ui/components/viewer-controls-bar.tsx
 msgid "viewer.display.title"
 msgstr "Paramètres d’affichage"
+
+# Source-Hash: 793135ea48128fa7
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Drone: {state}"
+#: packages/viewer/src/ui/components/viewer-controls-bar.tsx
+#, fuzzy
+msgid "viewer.drone.label"
+msgstr "Drone : {state}"
 
 # Source-Hash: 2bdf83801d4a40af
 # Review: human
 # English: "Align view to north"
-#: packages/editor/src/components/viewer/floorplan-compass-button.tsx
+#: packages/viewer/src/ui/components/floorplan-compass-button.tsx
 msgid "viewer.floorplan.alignNorth"
 msgstr "Orienter la vue vers le nord"
 
 # Source-Hash: 286a757d8b52bb02
 # Review: human
 # English: "No floor plans are available for this scene."
-#: packages/editor/src/components/viewer/floorplan-preview.tsx
+#: packages/viewer/src/ui/floorplan/floorplan-preview.tsx
 msgid "viewer.floorplan.empty"
 msgstr "Aucun plan d’étage n’est disponible pour cette scène."
 
 # Source-Hash: bf63c679ab94dbcd
 # Review: human
 # English: "Fit floor plan"
-#: packages/editor/src/components/viewer/floorplan-preview.tsx
+#: packages/viewer/src/ui/floorplan/floorplan-preview.tsx
 msgid "viewer.floorplan.fit"
 msgstr "Ajuster le plan"
 
 # Source-Hash: d7148fa065bc709b
 # Review: human
 # English: "Floor"
-#: packages/editor/src/components/viewer/floorplan-preview.tsx
+#: packages/viewer/src/ui/floorplan/floorplan-preview.tsx
 msgid "viewer.floorplan.floor"
 msgstr "Niveau"
 
 # Source-Hash: fee6203bb9046929
 # Review: human
 # English: "Floor plan"
-#: packages/editor/src/components/viewer/floorplan-preview.tsx
+#: packages/viewer/src/ui/floorplan/floorplan-preview.tsx
 msgid "viewer.floorplan.floorPlan"
 msgstr "Plan d’étage"
 
 # Source-Hash: 28b255b7bf5f1084
 # Review: human
 # English: "{floor} 2D view"
-#: packages/editor/src/components/viewer/floorplan-preview.tsx
+#: packages/viewer/src/ui/floorplan/floorplan-preview.tsx
 msgid "viewer.floorplan.viewLabel"
 msgstr "Vue 2D — {floor}"
 
 # Source-Hash: d17804412f8dd081
 # Review: human
 # English: "Zoom in"
-#: packages/editor/src/components/viewer/floorplan-preview.tsx
+#: packages/viewer/src/ui/floorplan/floorplan-preview.tsx
 msgid "viewer.floorplan.zoomIn"
 msgstr "Zoom avant"
 
 # Source-Hash: 23b012a283b2c14a
 # Review: human
 # English: "Zoom out"
-#: packages/editor/src/components/viewer/floorplan-preview.tsx
+#: packages/viewer/src/ui/floorplan/floorplan-preview.tsx
 msgid "viewer.floorplan.zoomOut"
 msgstr "Zoom arrière"
 
 # Source-Hash: 7ceade8f25b58fe9
 # Review: human
 # English: "Back"
-#: packages/editor/src/components/viewer/viewer-scene-header.tsx
+#: packages/viewer/src/ui/components/viewer-scene-header.tsx
 msgid "viewer.header.back"
 msgstr "Retour"
 
 # Source-Hash: cc3d601d59e2e26c
 # Review: human
 # English: "Levels"
-#: packages/editor/src/components/viewer/viewer-scene-header.tsx
+#: packages/viewer/src/ui/components/viewer-scene-header.tsx
 msgid "viewer.header.levels"
 msgstr "Niveaux"
 
 # Source-Hash: 3e7408ed44676176
 # Review: human
 # English: "Rooms"
-#: packages/editor/src/components/viewer/viewer-scene-header.tsx
+#: packages/viewer/src/ui/components/viewer-scene-header.tsx
 msgid "viewer.header.rooms"
 msgstr "Pièces"
 
 # Source-Hash: 170b2049ef0f9131
 # Review: human
 # English: "Selection"
-#: packages/editor/src/components/viewer/viewer-scene-header.tsx
+#: packages/viewer/src/ui/components/viewer-scene-header.tsx
 msgid "viewer.header.selection"
 msgstr "Sélection"
 
 # Source-Hash: b404dded35241274
 # Review: human
 # English: "Units"
-#: packages/editor/src/components/viewer/viewer-scene-header.tsx
+#: packages/viewer/src/ui/components/viewer-scene-header.tsx
 msgid "viewer.header.units"
 msgstr "Unités"
 
 # Source-Hash: 6547a4c0c368042a
 # Review: human
 # English: "Untitled"
-#: packages/editor/src/components/viewer/viewer-scene-header.tsx
+#: packages/viewer/src/ui/components/viewer-scene-header.tsx
 msgid "viewer.header.untitled"
 msgstr "Sans titre"
 
 # Source-Hash: 665db49a26f81425
 # Review: human
 # English: "Zones"
-#: packages/editor/src/components/viewer/viewer-scene-header.tsx
+#: packages/viewer/src/ui/components/viewer-scene-header.tsx
 msgid "viewer.header.zones"
 msgstr "Zones"
 
 # Source-Hash: be12f8788f1f0a05
 # Review: human
 # English: "Exploded"
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
+#: packages/viewer/src/ui/components/viewer-controls-bar.tsx
 msgid "viewer.levels.exploded"
 msgstr "Éclatés"
 
 # Source-Hash: 4bf4a6861d7d633e
 # Review: human
 # English: "Levels: {mode}"
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
+#: packages/viewer/src/ui/components/viewer-controls-bar.tsx
 msgid "viewer.levels.label"
 msgstr "Niveaux : {mode}"
 
 # Source-Hash: 387082cd5f118bed
 # Review: human
 # English: "Manual"
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
+#: packages/viewer/src/ui/components/viewer-controls-bar.tsx
 msgid "viewer.levels.manual"
 msgstr "Manuel"
 
 # Source-Hash: e9f59b513f2f45ac
 # Review: human
 # English: "Solo"
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
+#: packages/viewer/src/ui/components/viewer-controls-bar.tsx
 msgid "viewer.levels.solo"
 msgstr "Isolé"
 
 # Source-Hash: c203c84eee18c0f6
 # Review: human
 # English: "Stacked"
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
+#: packages/viewer/src/ui/components/viewer-controls-bar.tsx
 msgid "viewer.levels.stacked"
 msgstr "Superposés"
 
 # Source-Hash: 9dd21ca47cffa3b8
 # Review: human
 # English: "Viewer layout"
-#: packages/editor/src/components/viewer/viewer-stage-switcher.tsx
+#: packages/viewer/src/ui/components/viewer-stage-switcher.tsx
 msgid "viewer.stage.layout"
 msgstr "Disposition des vues"
 
 # Source-Hash: e4cd64b1680ac0d2
 # Review: human
 # English: "Split"
-#: packages/editor/src/components/viewer/viewer-stage-switcher.tsx
+#: packages/viewer/src/ui/components/viewer-stage-switcher.tsx
 msgid "viewer.stage.split"
 msgstr "Partagé"
 
 # Source-Hash: f14b89d713d2528a
 # Review: human
 # English: "Blueprint"
-#: packages/editor/src/i18n/scene-theme-name.ts
+#: packages/viewer/src/ui/lib/scene-theme-name.ts
 msgid "viewer.theme.blueprint"
 msgstr "Plan"
 
 # Source-Hash: 142bcb2841f423c5
 # Review: human
 # English: "Mediterranean"
-#: packages/editor/src/i18n/scene-theme-name.ts
+#: packages/viewer/src/ui/lib/scene-theme-name.ts
 msgid "viewer.theme.mediterranean"
 msgstr "Méditerranéen"
 
 # Source-Hash: b399942ec5d7e1ba
 # Review: human
 # English: "Night"
-#: packages/editor/src/i18n/scene-theme-name.ts
+#: packages/viewer/src/ui/lib/scene-theme-name.ts
 msgid "viewer.theme.night"
 msgstr "Nuit"
 
 # Source-Hash: f512d1b947b8ae5a
 # Review: human
 # English: "Overcast"
-#: packages/editor/src/i18n/scene-theme-name.ts
+#: packages/viewer/src/ui/lib/scene-theme-name.ts
 msgid "viewer.theme.overcast"
 msgstr "Ciel couvert"
 
 # Source-Hash: 583542b3bc837192
 # Review: human
 # English: "Paper"
-#: packages/editor/src/i18n/scene-theme-name.ts
+#: packages/viewer/src/ui/lib/scene-theme-name.ts
 msgid "viewer.theme.paper"
 msgstr "Papier"
 
 # Source-Hash: 7abc2dc6e39b1747
 # Review: human
 # English: "Studio"
-#: packages/editor/src/i18n/scene-theme-name.ts
+#: packages/viewer/src/ui/lib/scene-theme-name.ts
 msgid "viewer.theme.studio"
 msgstr "Studio"
 
 # Source-Hash: efe94d3ec8d8c44e
 # Review: human
 # English: "Sunset"
-#: packages/editor/src/i18n/scene-theme-name.ts
+#: packages/viewer/src/ui/lib/scene-theme-name.ts
 msgid "viewer.theme.sunset"
 msgstr "Coucher de soleil"
 
 # Source-Hash: 82720864e5034398
 # Review: human
 # English: "Scene theme"
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
+#: packages/viewer/src/ui/components/viewer-controls-bar.tsx
 msgid "viewer.theme.title"
 msgstr "Ambiance"
 
 # Source-Hash: 4c10ea0aa0e2ea41
 # Review: human
 # English: "Twilight"
-#: packages/editor/src/i18n/scene-theme-name.ts
+#: packages/viewer/src/ui/lib/scene-theme-name.ts
 msgid "viewer.theme.twilight"
 msgstr "Crépuscule"
 
 # Source-Hash: f9592fb0672740c0
 # Review: human
 # English: "Verdant"
-#: packages/editor/src/i18n/scene-theme-name.ts
+#: packages/viewer/src/ui/lib/scene-theme-name.ts
 msgid "viewer.theme.verdant"
 msgstr "Verdoyant"
 
 # Source-Hash: 892d5dd34372028b
 # Review: human
 # English: "Guides"
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
+#: packages/viewer/src/ui/components/viewer-controls-bar.tsx
 msgid "viewer.visibility.guides"
 msgstr "Repères"
 
 # Source-Hash: 3260bfa69cca50e5
 # Review: human
 # English: "Scans"
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
+#: packages/viewer/src/ui/components/viewer-controls-bar.tsx
 msgid "viewer.visibility.scans"
 msgstr "Relevés 3D"
 
 # Source-Hash: 2cefbb554eadbb6e
 # Review: human
 # English: "Visibility"
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
+#: packages/viewer/src/ui/components/viewer-controls-bar.tsx
 msgid "viewer.visibility.title"
 msgstr "Visibilité"
 
 # Source-Hash: 31afd9dee47ba943
 # Review: human
 # English: "Walkthrough: {state}"
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
+#: packages/viewer/src/ui/components/viewer-controls-bar.tsx
 msgid "viewer.walkthrough.label"
 msgstr "Visite : {state}"
 
@@ -37127,6 +39295,7 @@ msgstr "Visite : {state}"
 # Review: required
 # English: "Shutters"
 #: packages/viewer/src/components/viewer/glb-scene.tsx
+#: packages/viewer/src/systems/interactive/callout-actions.ts
 #, fuzzy
 msgid "viewer.walkthrough.shutters"
 msgstr "Volets"
@@ -37134,27 +39303,27 @@ msgstr "Volets"
 # Source-Hash: 4da8b3678ed77b45
 # Review: human
 # English: "Cutaway"
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
+#: packages/viewer/src/ui/components/viewer-controls-bar.tsx
 msgid "viewer.walls.cutaway"
 msgstr "Vue en coupe"
 
 # Source-Hash: 131bac2467f4fdf6
 # Review: human
 # English: "Full height"
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
+#: packages/viewer/src/ui/components/viewer-controls-bar.tsx
 msgid "viewer.walls.fullHeight"
 msgstr "Pleine hauteur"
 
 # Source-Hash: 32f3d058cf2526d2
 # Review: human
 # English: "Walls: {mode}"
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
+#: packages/viewer/src/ui/components/viewer-controls-bar.tsx
 msgid "viewer.walls.label"
 msgstr "Murs : {mode}"
 
 # Source-Hash: 803532407fb5962b
 # Review: human
 # English: "Low"
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
+#: packages/viewer/src/ui/components/viewer-controls-bar.tsx
 msgid "viewer.walls.low"
 msgstr "Bas"

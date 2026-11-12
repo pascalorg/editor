@@ -99,6 +99,7 @@ update should include this size report so media growth is visible in review.
 
 Every command that starts the editor (`editor`, `start`, `open`, `resume`, `projects`,
 `project open`, `update`) resolves that runtime in this order:
+
 1. `PASCAL_BUNDLED_RUNTIME_DIR`, an already-extracted runtime directory.
 2. `--runtime <directory-or-archive>`, which every one of those commands accepts.
 3. The runtime already installed in `~/.pascal/runtime/<version>` for this CLI version.

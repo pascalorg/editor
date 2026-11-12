@@ -193,4 +193,31 @@ describe('delete heal', () => {
       { wallId: kept.id, face: keptFace, finish: 'library:accent' },
     ])
   })
+
+  test('rejoins a split sloped wall into one slope, and leaves a kinked pair split', () => {
+    const heal = (second: WallNode) => {
+      const first = wall([0, 0], [5, 0], { endHeightOffset: 0.5 })
+      const stub = wall([5, 0], [5, -1])
+      const nodes = map([first, second, stub])
+      nodes[level.id] = {
+        ...level,
+        height: 3,
+        children: [first.id, second.id, stub.id],
+      } as AnyNode
+      useScene.setState({ nodes, rootNodeIds: [level.id], dirtyNodes: new Set() } as never)
+      useScene.getState().deleteNode(stub.id as AnyNodeId)
+      return Object.values(useScene.getState().nodes).filter(
+        (n): n is WallNode => n.type === 'wall',
+      )
+    }
+    const [healed, ...rest] = heal(wall([5, 0], [10, 0], { height: 3.5, endHeightOffset: 0.5 }))
+    expect(rest).toHaveLength(0)
+    expect([healed!.start, healed!.end]).toEqual([
+      [0, 0],
+      [10, 0],
+    ])
+    expect(healed!.height).toBeUndefined()
+    expect(healed!.endHeightOffset).toBeCloseTo(1)
+    expect(heal(wall([5, 0], [10, 0], { height: 3.5, endHeightOffset: 0.3 }))).toHaveLength(2)
+  })
 })

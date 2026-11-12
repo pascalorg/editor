@@ -13,7 +13,10 @@ import {
 import {
   consumePlacementDragRelease,
   EDITOR_LAYER,
+  isGridSnapActive,
+  isMagneticSnapActive,
   markToolCancelConsumed,
+  stripPlacementMetadataFlags,
   triggerSFX,
   useEditor,
 } from '@pascal-app/editor'
@@ -117,9 +120,9 @@ export default function MoveSolarPanelTool({ node }: { node: SolarPanelNode }) {
       const rawTarget = roofDrag.resolve(event)
       if (!rawTarget) return null
       return snapRoofSurfaceNodeTarget({
-        target: snapRelativeRoofDragTarget(rawTarget, event.nativeEvent?.shiftKey === true),
+        target: snapRelativeRoofDragTarget(rawTarget, event.nativeEvent?.altKey === true),
         node,
-        bypass: event.nativeEvent?.shiftKey === true,
+        bypass: !isMagneticSnapActive() || event.nativeEvent?.altKey === true,
       })
     }
 
@@ -133,7 +136,11 @@ export default function MoveSolarPanelTool({ node }: { node: SolarPanelNode }) {
 
       const sx = Math.round(target.localX * 20) / 20
       const sz = Math.round(target.localZ * 20) / 20
-      if (event.nativeEvent?.shiftKey !== true && (sx !== lastSnapX || sz !== lastSnapZ)) {
+      if (
+        isGridSnapActive() &&
+        event.nativeEvent?.altKey !== true &&
+        (sx !== lastSnapX || sz !== lastSnapZ)
+      ) {
         triggerSFX('sfx:grid-snap')
         lastSnapX = sx
         lastSnapZ = sz
@@ -198,7 +205,7 @@ export default function MoveSolarPanelTool({ node }: { node: SolarPanelNode }) {
         // semantics so the renderer's surfaceQuat is in the correct frame.
         surfaceNormal: [segLocalNormal.x, segLocalNormal.y, segLocalNormal.z],
         visible: true,
-        metadata: {},
+        metadata: stripPlacementMetadataFlags(original.metadata),
       })
 
       if (original.roofSegmentId && original.roofSegmentId !== (targetSegmentId as string)) {

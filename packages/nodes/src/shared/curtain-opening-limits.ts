@@ -8,8 +8,7 @@ import {
   openingHostFacing,
   type WindowNode,
 } from '@pascal-app/core'
-import { clampDoorToWall } from '@pascal-app/core/building'
-import { resolveWallOpeningCeiling } from './wall-opening-ceiling'
+import { clampDoorToWall, wallOpeningCeilingOver } from '@pascal-app/core/building'
 
 type Opening = DoorNode | WindowNode
 
@@ -52,7 +51,8 @@ export function curtainOpeningLimits(
   const centerX = opening.position[0] - size.leafOffsetX * openingHostFacing(opening)
   const margin = getCurtainWallConfig(wall).perimeterWidth
   const length = getWallCurveLength(wall)
-  const top = resolveWallOpeningCeiling(wall, nodes) - margin
+  const top =
+    wallOpeningCeilingOver(wall, nodes, centerX - size.width / 2, centerX + size.width / 2) - margin
   const bottom = opening.type === 'door' ? 0 : margin
   return {
     margin,

@@ -1,5 +1,10 @@
-import { isOperationDoorType, type MechanismCapability } from '@pascal-app/core'
-import { closeDoorOpenState, getDisplayedDoorValue, openDoorOpenState } from '@pascal-app/editor'
+import {
+  closeDoorOpenState,
+  getDisplayedDoorValue,
+  isOperationDoorType,
+  type MechanismCapability,
+  openDoorOpenState,
+} from '@pascal-app/core'
 import { scriptedOpening } from '../shared/scripted-opening'
 
 /** A door's leaf: Play opens it and Stop closes it, without touching the saved open state. */

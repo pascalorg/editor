@@ -116,12 +116,29 @@ function readAllowedOrigins(): ReadonlySet<string> | undefined {
   return allowedOriginsFrom(g.process?.env?.[ALLOWED_ORIGINS_ENV])
 }
 
+/**
+ * Whether a browser would resolve `url` against another origin even though it
+ * has no scheme: `//host/x`, `/\host/x` or `\\host/x`. Browsers drop tab, LF and
+ * CR anywhere and strip leading C0 controls and spaces before parsing, and treat
+ * `\` as `/` in http(s) URLs, so this does the same. A single leading `\` is
+ * also flagged: it is never a form this codebase writes.
+ */
+export function isSchemeRelativeUrl(url: string): boolean {
+  const withoutTabsOrNewlines = url.replace(/[\t\n\r]/g, '')
+  let start = 0
+  while (start < withoutTabsOrNewlines.length && withoutTabsOrNewlines.charCodeAt(start) <= 0x20) {
+    start++
+  }
+  return /^(?:[\\/][\\/]|\\)/.test(withoutTabsOrNewlines.slice(start))
+}
+
 function isAllowedAssetUrl(url: string): boolean {
   if (typeof url !== 'string' || url.length === 0) return false
   if (url.startsWith('asset://')) return true // internal handle
   if (/^artifact:\/\/[0-9a-f]{64}$/.test(url)) return true // content-addressed artifact
   if (url.startsWith('blob:')) return true // in-memory reference
   if (url.startsWith('data:image/')) return true // inline image only (never data:text/html)
+  if (isSchemeRelativeUrl(url)) return false
   if (url.startsWith('/')) return true // app-relative path
   try {
     const parsed = new URL(url)

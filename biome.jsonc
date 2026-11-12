@@ -25,6 +25,11 @@
       "jsxQuoteStyle": "double"
     }
   },
+  "css": {
+    "parser": {
+      "tailwindDirectives": true
+    }
+  },
   "linter": {
     "rules": {
       "style": {
@@ -95,6 +100,7 @@
     "ignoreUnknown": true,
     "includes": [
       "scripts/**/*.ts",
+      "fixtures/viewer-live/**",
       "skills/**/*.json",
       ".agents/plugins/**/*.json",
       ".claude-plugin/**/*.json",
@@ -263,7 +269,8 @@
               "options": {
                 "paths": {
                   "@pascal-app/nodes": "The viewer must not import @pascal-app/nodes — consult nodeRegistry.get(kind) instead. See DECISIONS.md E-002.",
-                  "@pascal-app/editor": "The viewer ships standalone and knows no editor state; pass what it needs through viewer props or the registry. See DECISIONS.md E-001."
+                  "@pascal-app/editor": "The viewer ships standalone and knows no editor state; pass what it needs through viewer props or the registry. See DECISIONS.md E-001.",
+                  "next": "The viewer, its UI included, runs in any React host; take router pieces (links) as props. See DECISIONS.md E-001."
                 },
                 "patterns": [
                   {
@@ -275,6 +282,10 @@
                       "**/editor/src/**"
                     ],
                     "message": "The viewer ships standalone and knows no editor or nodes internals. See DECISIONS.md E-001."
+                  },
+                  {
+                    "group": ["next/**"],
+                    "message": "The viewer, its UI included, runs in any React host; take router pieces (links) as props. See DECISIONS.md E-001."
                   }
                 ]
               }
@@ -285,7 +296,16 @@
     },
     // E-018: shared operations select what they read, so a detached scene records a selection.
     {
-      "includes": ["packages/core/src/agent-operations/**/*.ts", "!**/*.test.ts"],
+      "includes": [
+        "packages/core/src/agent-operations/**/*.ts",
+        "packages/core/src/services/port-connectivity.ts",
+        "packages/nodes/src/duct-segment/*-operation.ts",
+        "packages/nodes/src/pipe-segment/*-operation.ts",
+        "packages/nodes/src/pipe-segment/collar-connection.ts",
+        "packages/nodes/src/shared/auto-offset-tag.ts",
+        "packages/nodes/src/shared/automatic-run-end-cap.ts",
+        "!**/*.test.ts"
+      ],
       "plugins": ["./scripts/biome/raw-scene-enumeration.grit"]
     },
     // T-001: tests go through package exports. `warn` while ~50 existing tests still reach into

@@ -121,9 +121,6 @@
     "packages/editor/src/components/editor-2d/renderers/floorplan-dimension-edit-overlay.tsx": [
       "Cannot read \"{?}\""
     ],
-    "packages/editor/src/components/editor-2d/renderers/floorplan-dimension-renderer.tsx": [
-      "override"
-    ],
     "packages/editor/src/components/editor/capture-level-picker.tsx": [
       "Levels in the shot",
       "Whole building"
@@ -152,13 +149,7 @@
       "{hosted} {?} on it. Keep {it} at {its} height, or delete {it} too."
     ],
     "packages/editor/src/components/editor/first-person-controls.tsx": [
-      "Lights",
-      "Place a spawn point from the Build tab to control where walkthrough starts.",
-      "door",
-      "door button",
-      "elevator button",
-      "item",
-      "window"
+      "Place a spawn point from the Build tab to control where walkthrough starts."
     ],
     "packages/editor/src/components/editor/floorplan-mode-coordinator.tsx": [
       "Dismiss",
@@ -416,9 +407,6 @@
       "part",
       "parts"
     ],
-    "packages/editor/src/components/ui/controls/slider-control.tsx": [
-      "Mixed"
-    ],
     "packages/editor/src/components/ui/controls/terrain-sculpt-panel.tsx": [
       "Clear terrain",
       "Click the ground to pick its height as the target.",
@@ -473,11 +461,6 @@
       "Toggle Sidebar",
       "Toggle Sidebar",
       "Toggle Sidebar"
-    ],
-    "packages/editor/src/components/ui/scene-loader.tsx": [
-      "Nothing was changed. Check your connection and try again.",
-      "This project couldn't be loaded",
-      "Try again"
     ],
     "packages/editor/src/components/ui/sidebar/panels/settings-panel/animation-speed-setting.tsx": [
       "Animation speed",
@@ -631,14 +614,6 @@
     "packages/editor/src/components/ui/slider-demo.tsx": [
       "Temperature",
       "Temperature"
-    ],
-    "packages/editor/src/components/walkthrough-hud.tsx": [
-      "Click",
-      "free cursor",
-      "or",
-      "or click to",
-      "to exit",
-      "to resume"
     ],
     "packages/editor/src/lib/floor-region-session.ts": [
       "Pick a material first",
@@ -802,9 +777,29 @@
       "3D viewer unavailable",
       "This browser or environment could not initialize WebGPU or WebGL, so Pascal cannot render the 3D scene here. Try opening the editor in a browser with hardware acceleration enabled."
     ],
-    "packages/viewer/src/systems/interactive/control-widget.tsx": [
-      "Off",
-      "On"
+    "packages/viewer/src/ui/components/scene-loader.tsx": [
+      "Nothing was changed. Check your connection and try again.",
+      "This project couldn't be loaded",
+      "Try again"
+    ],
+    "packages/viewer/src/ui/components/walkthrough-hud.tsx": [
+      "Click",
+      "free cursor",
+      "or",
+      "or click to",
+      "to exit",
+      "to resume"
+    ],
+    "packages/viewer/src/ui/floorplan/floorplan-dimension-renderer.tsx": [
+      "override"
+    ],
+    "packages/viewer/src/components/viewer/live-walkthrough-controller.tsx": [
+      "Lights",
+      "door",
+      "door button",
+      "elevator button",
+      "item",
+      "window"
     ]
   }
 }

@@ -125,6 +125,25 @@ therefore keeps one semantic Site child while the same representation appears
 from every level of every building on that Site. Scope discovery is
 registry-driven; editor code must not name plugin kinds.
 
+`def.floorplanLinkedLevelIds(node)` names other levels whose plans also draw
+the node (a stair climbing to an upper floor); the plan builds it there with
+`ctx.parent` set to that level.
+
+The read-only plan is part of a kind's render half. A built-in kind declares
+`floorplan`, `computeFloorplanLevelData`, `floorplanScope` and
+`floorplanLinkedLevelIds` in its `definition.render.ts`, and those builders
+import only `core` and `viewer` — never the editor — so
+`@pascal-app/nodes/render` draws the plan in a viewer without the editor (the
+render bundle gate holds this). The shared plan contract they use
+(`readFloorplanContext`, `floorplanGeometryMetadata`, the SVG path and plan
+math helpers, the wall grip affordance ids) lives in `core`. A builder may emit
+handles while `ctx.viewState.selected`; they are plain data, and a read-only
+host never selects. Plan editing stays in `definition.edit.ts`:
+`floorplanAffordances`, `floorplanMoveTarget`, `floorplanSiblingOverrides`,
+`floorplanAffectedIds`, `floorplanDependencies`, `floorplanDependsOnSiblings`
+and the editor's `pascal:editor/floorplan` extension (tools, contextual and
+selection dimensions, action menus, schedules).
+
 `FloorplanStyle.fillRule` is the winding rule for compound contours. Use
 `'evenodd'` when nested rings represent holes; both the interactive SVG
 renderer and PDFKit export preserve it. `FloorplanImage.url` may also be an
@@ -153,6 +172,15 @@ portaled into that level's `Object3D`, so it rides level stacking and can draw
 instanced meshes in level-local space — per-instance phase for animated
 content, and a few non-raycast meshes instead of one per node under the baked
 scene's pointer handlers.
+
+The baked viewer never loads the scene graph into `useScene`: the store is
+empty there. A `bakeReplaceRenderer` that builds from other nodes — a ground
+surface that needs its parent site's polygon and terrain, a water body that
+needs its siblings — reads them through its `resolve` prop, which looks up
+any node of the graph the artifact was baked from (same signature as
+`GeometryContext.resolve`). A renderer that reads `useScene` for that context
+draws nothing in the baked viewer. `GlbScene` builds `resolve` from its
+`sceneNodes` prop; a host that omits `sceneNodes` leaves `resolve` undefined.
 
 ## Export-only geometry
 
@@ -451,6 +479,35 @@ capabilities: {
 // box-vent — sits on top, no cut needed
 capabilities: {
   roofAccessory: {},
+},
+```
+
+---
+
+### `capabilities.roofs`
+
+A kind that roofs: a node of it is one face of the roof that holds it (a plugin's solved roof plane), as a segment is one of the roof's masses. A roof lists its faces in `children` beside its segments.
+
+- **Holding.** `RoofNode.children` keeps any id, a plugin's own prefix (`roofplane_…`) included. The roof's `validateRelations` refuses a child a write adds whose kind is registered and is neither a segment nor roofs; what a roof already held stays, so an old scene still edits, and so does a kind this runtime has not registered.
+- **Rendering.** The roof system merges only the segments into the shell. The roof's renderer mounts each face through the face's own renderer inside the roof's group, so the face stands in the roof's frame, and hiding, selecting, moving or deleting the roof carries it.
+- **Reading.** The roof's readers count a face through `outline` and `heightAt`, which `roofFaceShapes(roof, nodes)` turns into the frame of what holds the roof: the storey a roof covers (`roofsOver`), where it bears and the walls it follows, the height of a roof level a seat makes, a view's frame, a floor plate's support, the site plan's roof outline and the level summary. A face is not read for the seat that moves a roof off its storey's walls (`isRoofOnStoreyWalls`): an outline and heights cannot tell a porch on posts from a roof on walls, so the face's writer seats it by the roof-level rule.
+
+```ts
+type RoofsCapability = {
+  outline: (node: AnyNode) => readonly (readonly [x: number, z: number])[] // the roof's plan
+  heightAt: (node: AnyNode, x: number, z: number) => number // over the roof's origin
+}
+```
+
+The frame is the roof's. A roof standing unturned at its level's origin holds its faces in the level's metres, as a plugin's planes store them; a roof moved or turned takes them with it. A face carries its own heights, so a roof of faces stands where it is placed (`support: { kind: 'level' }`, the default). Readers take a face's lowest and highest points at its outline's corners. A face draws in the plan only if its kind declares `floorplan`, which reads the roof's transform from `ctx.parent`.
+
+```ts
+// a plugin's roof plane
+capabilities: {
+  roofs: {
+    outline: (node) => (node as RoofPlaneNode).polygon,
+    heightAt: (node, x, z) => roofPlaneHeightAt(node as RoofPlaneNode, x, z),
+  },
 },
 ```
 

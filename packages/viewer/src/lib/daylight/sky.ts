@@ -172,6 +172,26 @@ export function createDaylightSky() {
     return col.add(sun).add(vec3(stars(dir).mul(float(1).sub(cloudA))))
   }
 
+  /**
+   * The sky just above the horizon, where the fog and the backdrop meet: `skyRadiance` without
+   * its disc, minus the clouds, which fade out below 0.015 of elevation anyway. Every fogged
+   * material samples it, so leaving out the cloud noise saves two 5-octave fbm calls per fragment
+   * and keeps `cloudTime` (which moves every frame) out of every material's uniforms.
+   */
+  const horizonRadiance = (rawDir: any): any => {
+    const dir: any = normalize(rawDir)
+    const align = dot(dir, sunDir)
+    const aureole = exp(align.sub(1).mul(110))
+      .mul(0.2)
+      .add(exp(align.sub(1).mul(8)).mul(0.08))
+    const sun = sunColor
+      .mul(aureole)
+      .mul(sunVisible)
+      .mul(smoothstep(-0.01, 0.02, dir.y))
+      .mul(float(1).sub(cover.mul(0.6)))
+    return base(dir).add(sun)
+  }
+
   /** Lighting sky: clouds as their coverage-weighted average (smooth, cheap, sun-free). */
   const lightRadiance = (rawDir: any): any => {
     const dir: any = normalize(rawDir)
@@ -236,7 +256,18 @@ export function createDaylightSky() {
     cover.value = coverValue
   }
 
-  return { skyRadiance, lightRadiance, radianceCpu, update, cloudTime, cover, horizon, top, ground }
+  return {
+    skyRadiance,
+    horizonRadiance,
+    lightRadiance,
+    radianceCpu,
+    update,
+    cloudTime,
+    cover,
+    horizon,
+    top,
+    ground,
+  }
 }
 
 export type DaylightSky = ReturnType<typeof createDaylightSky>

@@ -1,6 +1,6 @@
 import { SEARCH_ASSETS_LIMIT } from '../agent-tools/assets'
-import type { AssetInput } from '../schema'
 import { roleLessPaints } from './asset-views'
+import type { CatalogAsset } from './catalog-asset'
 import { placedAssets } from './design-brief'
 import { FURNISH_ROOM_ASSETS } from './furnish-room'
 import type { AgentContext, SceneNodes } from './types'
@@ -10,7 +10,7 @@ export type AssetSearchQuery = { text?: string; category?: string; limit: number
 
 export type AssetSearchResult = {
   /** The best hits first, at most the query's limit. */
-  items: AssetInput[]
+  items: CatalogAsset[]
   /** Every item the query matches. */
   total: number
   /** The categories of every match, most first, where the host counts them: a cut search names them to narrow by. */
@@ -24,11 +24,16 @@ export type AssetSearchResult = {
  */
 export type AssetCatalogSource = {
   search(query: AssetSearchQuery): Promise<AssetSearchResult>
-  byId(ids: readonly string[]): Promise<AssetInput[]>
+  byId(ids: readonly string[]): Promise<CatalogAsset[]>
+  /**
+   * Makes the scripted items a call is about to place renderable in the scene's project (their
+   * GLB, script and images are the library's until copied there). Throws when they cannot be.
+   */
+  bring?(items: readonly CatalogAsset[]): Promise<void>
 }
 
 /** What a host's agent tools place from: every item (a built-in list), or a source it searches. */
-export type AssetCatalog = readonly AssetInput[] | AssetCatalogSource
+export type AssetCatalog = readonly CatalogAsset[] | AssetCatalogSource
 
 export const isAssetCatalogSource = (catalog: AssetCatalog): catalog is AssetCatalogSource =>
   !Array.isArray(catalog)
@@ -39,7 +44,7 @@ const wordsOf = (text: string) =>
     .split(/[^\p{L}\p{N}]+/u)
     .filter(Boolean)
 
-function matches(item: AssetInput, text: string, category: string | undefined) {
+function matches(item: CatalogAsset, text: string, category: string | undefined) {
   if (category && item.category !== category) return false
   const haystack = [
     item.id,
@@ -63,7 +68,7 @@ function matches(item: AssetInput, text: string, category: string | undefined) {
  * Table"), 3 starting a word of the category, 4 of a tag, 5 inside the name, 6 anywhere else. The
  * sum orders items whose weakest word ties.
  */
-function rank(item: AssetInput, query: string): [number, number] {
+function rank(item: CatalogAsset, query: string): [number, number] {
   const whole = query.trim().toLowerCase().replace(/\s+/g, ' ')
   if (
     whole === item.name.trim().toLowerCase().replace(/\s+/g, ' ') ||
@@ -91,14 +96,24 @@ function rank(item: AssetInput, query: string): [number, number] {
   return [Math.max(0, ...ranks), ranks.reduce((sum, value) => sum + value, 0)]
 }
 
+/** The weakest word rank that still says what the item is: its name's words, or its category's. */
+const NAMED = 3
+
 /**
- * Items in the order search_assets lists them for `text` (`rank`); items that rank alike keep the
- * order they came in. A host that finds hits its own way (a database's fusion) orders them so too.
+ * Items in the order search_assets lists them for `text` (`rank`): those the query names first (by
+ * name or category), and among them the scripted ones before plain GLBs, whatever their rank, as
+ * their params let the agent fit them to the room; then by rank. Items that rank alike keep the order they came in. A
+ * host that finds hits its own way (a database's fusion) orders them so too.
  */
-export function rankAssets(items: readonly AssetInput[], text: string): AssetInput[] {
+export function rankAssets<T extends CatalogAsset>(items: readonly T[], text: string): T[] {
+  const tier = (item: CatalogAsset, [weakest]: [number, number]) =>
+    weakest > NAMED ? 2 : item.script ? 0 : 1
   return items
-    .map((item) => ({ item, rank: rank(item, text) }))
-    .sort((a, b) => a.rank[0] - b.rank[0] || a.rank[1] - b.rank[1])
+    .map((item) => {
+      const itemRank = rank(item, text)
+      return { item, rank: itemRank, tier: tier(item, itemRank) }
+    })
+    .sort((a, b) => a.tier - b.tier || a.rank[0] - b.rank[0] || a.rank[1] - b.rank[1])
     .map(({ item }) => item)
 }
 
@@ -107,7 +122,7 @@ export function rankAssets(items: readonly AssetInput[], text: string): AssetInp
  * the query, best first (`rankAssets`, then by name), with the categories of all of them.
  */
 export function searchAssetList(
-  items: readonly AssetInput[],
+  items: readonly CatalogAsset[],
   { text = '', category, limit }: AssetSearchQuery,
 ): AssetSearchResult {
   const found = rankAssets(
@@ -129,7 +144,7 @@ export function searchAssetList(
 }
 
 /** A list served as a source: searched as `searchAssetList` does, items by id. */
-export function assetCatalogSource(items: readonly AssetInput[]): AssetCatalogSource {
+export function assetCatalogSource(items: readonly CatalogAsset[]): AssetCatalogSource {
   const byId = new Map(items.map((item) => [item.id, item]))
   return {
     search: async (query) => searchAssetList(items, query),
@@ -163,14 +178,16 @@ export function assetSearchesOf(input: unknown): AssetSearchQuery[] {
 /**
  * What a call reads of the library, alone or in a batch: the searches of `search_assets`, and the
  * ids the others look up — the items placed or viewed, furnish_room's set for its room type, the
- * catalog items a paint with no role finishes (their models list the surfaces).
+ * catalog items a paint with no role finishes (their models list the surfaces). `placing` is those
+ * of the ids the call may place.
  */
 export function catalogReads(
   nodes: SceneNodes,
   tool: string,
   input: unknown,
-): { ids: string[]; searches: AssetSearchQuery[] } {
+): { ids: string[]; placing: string[]; searches: AssetSearchQuery[] } {
   const ids = new Set<string>()
+  const placing = new Set<string>()
   const searches: AssetSearchQuery[] = []
   const visit = (name: unknown, args: Record<string, unknown>) => {
     switch (name) {
@@ -191,13 +208,18 @@ export function catalogReads(
         const roomType = String(args.roomType) as keyof typeof FURNISH_ROOM_ASSETS
         for (const id of Object.hasOwn(FURNISH_ROOM_ASSETS, roomType)
           ? FURNISH_ROOM_ASSETS[roomType]
-          : [])
+          : []) {
           ids.add(id)
+          placing.add(id)
+        }
         return
       }
     }
     if (typeof name !== 'string') return
-    for (const id of placedAssets(name, args)) ids.add(id)
+    for (const id of placedAssets(name, args)) {
+      ids.add(id)
+      placing.add(id)
+    }
     for (const { targets } of roleLessPaints(name, args))
       for (const target of targets) {
         const node = typeof target === 'string' ? nodes[target] : undefined
@@ -205,13 +227,14 @@ export function catalogReads(
       }
   }
   visit(tool, asRecord(input))
-  return { ids: [...ids], searches }
+  return { ids: [...ids], placing: [...placing], searches }
 }
 
 /**
  * What a call reads of the host's library, read before it as the operations are sync. A list is
  * handed over whole. A source answers the call's searches (`catalogSearches`) and gives the items
- * the call names (`catalog`), so a call that names none reads nothing.
+ * the call names (`catalog`), so a call that names none reads nothing; the scripted items it may
+ * place are brought into the scene's project first (`bring`).
  */
 export async function readCatalog(
   nodes: SceneNodes,
@@ -220,11 +243,13 @@ export async function readCatalog(
   catalog: AssetCatalog,
 ): Promise<Pick<AgentContext, 'catalog' | 'catalogSearches'>> {
   if (!isAssetCatalogSource(catalog)) return { catalog }
-  const { ids, searches } = catalogReads(nodes, tool, input)
+  const { ids, placing, searches } = catalogReads(nodes, tool, input)
   const [items, answers] = await Promise.all([
     ids.length ? catalog.byId(ids) : [],
     Promise.all(searches.map((query) => catalog.search(query))),
   ])
+  const scripted = items.filter((item) => item.script && placing.includes(item.id))
+  if (scripted.length && catalog.bring) await catalog.bring(scripted)
   return {
     catalog: items,
     ...(searches.length && {

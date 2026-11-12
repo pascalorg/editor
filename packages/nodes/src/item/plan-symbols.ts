@@ -1,5 +1,5 @@
 import type { FloorplanGeometry, FloorplanPoint } from '@pascal-app/core'
-import { floorplanGeometryMetadata } from '@pascal-app/editor'
+import { floorplanGeometryMetadata } from '@pascal-app/core'
 
 /**
  * PERMIT-SET PLAN SYMBOLS for items — what a sheet draws instead of the

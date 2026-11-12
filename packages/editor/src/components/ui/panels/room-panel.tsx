@@ -17,11 +17,11 @@ import { type KeyboardEvent, useEffect, useId, useMemo, useRef, useState } from 
 import { startCeilingEdit } from '../../../lib/ceiling-edit-session'
 import { resolveOverlayPolicy } from '../../../lib/interaction/overlay-policy'
 import { finishScriptCode } from '../../../lib/geometry-script/finish-scripts'
-import { formatAreaLabel, formatLinearMeasurement } from '../../../lib/measurements'
+import { formatAreaLabel, formatLinearMeasurement } from '@pascal-app/core'
 import { addMezzanineStairs } from '../../../lib/mezzanine-stairs'
 import { roomFloorBase, roomRelativeFloorHeight } from '../../../lib/room-construction-commands'
 import { mezzanineElevationBounds } from '../../../lib/room-handle-drag'
-import type { RoomSelectionRecord } from '../../../lib/room-selection'
+import type { RoomSelectionRecord } from '@pascal-app/viewer/ui'
 import {
   baseRoomName,
   type RoomNameSection,
@@ -39,9 +39,9 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from '../primitives/dropdown-menu'
+} from '@pascal-app/viewer/ui'
 import { ColorDot } from '../primitives/color-dot'
-import { Popover, PopoverAnchor, PopoverContent } from '../primitives/popover'
+import { Popover, PopoverAnchor, PopoverContent } from '@pascal-app/viewer/ui'
 import { ShortcutToken } from '../primitives/shortcut-token'
 import { PanelWrapper } from './panel-wrapper'
 import { RoomOpeningsField } from './room-openings-field'
@@ -59,12 +59,10 @@ import {
   type RoomNameOption,
   roomNameOptions,
 } from './room-name-options'
-import { localizedLevelName } from '../../../i18n/level-name'
+import { localizedLevelName } from '@pascal-app/viewer/ui'
 import { messageWithSlot } from '../../../i18n/message-slot'
-import {
-  displayRoomName,
-  localizedRoomNameSections,
-} from '../../../lib/room-name-messages'
+import { displayRoomName } from '@pascal-app/viewer/ui'
+import { localizedRoomNameSections } from '../../../lib/room-name-messages'
 
 /** "Room · Ground floor", "Mezzanine · in Kitchen", "Room · not enclosed". */
 export function roomKicker(

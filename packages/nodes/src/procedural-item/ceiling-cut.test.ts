@@ -15,6 +15,10 @@ import {
   shelfRecipe,
 } from '@pascal-app/core/procedural-items'
 import { usePlacementPreview } from '@pascal-app/editor'
+import { builtinPlugin } from '@pascal-app/nodes'
+import { renderPlugin } from '@pascal-app/nodes/render'
+import { create } from '@react-three/test-renderer'
+import { createElement } from 'react'
 import { proceduralItemDefinition } from './definition'
 
 // A 0.2 m square trim flush with the ceiling and a can recessed 0.1 m above it, inside the cut.
@@ -156,5 +160,92 @@ test('a design moved onto another ceiling cuts that ceiling, not its own', () =>
   } finally {
     usePlacementPreview.getState().clear()
     useScene.setState({ nodes: oldNodes })
+  }
+})
+
+test('render ceiling cuts follow effective nodes while editor previews remain an edit contribution', () => {
+  const render = renderPlugin.nodes!.find((definition) => definition.kind === 'procedural-item')!
+  const node = ProceduralItemNode.parse({ recipe: recessed, parentId: 'ceiling_render' })
+  const cut = render.capabilities.ceilingCut!
+  try {
+    useLiveNodeOverrides.getState().set(node.id, { position: [2, 0, 3] } as never)
+    const ring = cut.buildCeilingHole(node as unknown as AnyNode)!
+    expect(ring.reduce((sum, point) => sum + point[0] / ring.length, 0)).toBeCloseTo(2)
+    usePlacementPreview.getState().set({ ...node, position: [-1, 0, 0] } as unknown as AnyNode)
+    expect(cut.buildCeilingHole(node as unknown as AnyNode)).toEqual(ring)
+    expect(cut.holesFor).toBeUndefined()
+    useLiveNodeOverrides.getState().set(node.id, { visible: false } as never)
+    expect(cut.buildCeilingHole(node as unknown as AnyNode)).toBeNull()
+  } finally {
+    usePlacementPreview.getState().clear()
+    useLiveNodeOverrides.getState().clear(node.id)
+  }
+})
+
+test('the editor renderer recuts both ceilings on preview, cancel, commit and unmount', async () => {
+  const original = useScene.getState()
+  const from = CeilingNode.parse({
+    id: 'ceiling_recut-from',
+    polygon: [
+      [-2, -2],
+      [2, -2],
+      [2, 2],
+      [-2, 2],
+    ],
+  })
+  const to = CeilingNode.parse({
+    id: 'ceiling_recut-to',
+    polygon: [
+      [-2, -2],
+      [2, -2],
+      [2, 2],
+      [-2, 2],
+    ],
+  })
+  const node = ProceduralItemNode.parse({ recipe: recessed, parentId: from.id })
+  const nodes = { [from.id]: from, [to.id]: to, [node.id]: node }
+  useScene.setState({ nodes: nodes as Record<AnyNodeId, AnyNode> })
+  const source = builtinPlugin.nodes!.find((definition) => definition.kind === 'procedural-item')!
+    .renderer!
+  if (source.kind !== 'parametric') throw new Error('Expected parametric procedural renderer')
+  const { default: Renderer } = await source.module()
+  const renderer = await create(createElement(Renderer, { node: node as unknown as AnyNode }))
+  const clear = () => {
+    useScene.getState().clearDirty(from.id)
+    useScene.getState().clearDirty(to.id)
+  }
+  const bothDirty = () => {
+    expect(useScene.getState().dirtyNodes.has(from.id)).toBe(true)
+    expect(useScene.getState().dirtyNodes.has(to.id)).toBe(true)
+  }
+  const preview = { ...node, parentId: to.id, position: [1, 0, 1] } as unknown as AnyNode
+  try {
+    expect(useScene.getState().dirtyNodes.has(from.id)).toBe(true)
+    clear()
+    usePlacementPreview.getState().set(preview)
+    bothDirty()
+    clear()
+    usePlacementPreview.getState().clear()
+    bothDirty()
+    clear()
+    usePlacementPreview.getState().set(preview)
+    await renderer.unmount()
+    bothDirty()
+    usePlacementPreview.getState().clear()
+    const remounted = await create(createElement(Renderer, { node: node as unknown as AnyNode }))
+    try {
+      clear()
+      usePlacementPreview.getState().set(preview)
+      clear()
+      useScene.setState({ nodes: { ...nodes, [node.id]: preview } as Record<AnyNodeId, AnyNode> })
+      await remounted.update(createElement(Renderer, { node: preview }))
+      bothDirty()
+      usePlacementPreview.getState().clear()
+    } finally {
+      await remounted.unmount()
+    }
+  } finally {
+    usePlacementPreview.getState().clear()
+    useScene.setState(original)
   }
 })

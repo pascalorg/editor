@@ -1,7 +1,11 @@
 import type { AnyNode, AnyNodeId } from '../schema/types'
 import { nodeRegistry } from './registry'
 
-/** Validate the proposed graph before a mutation publishes it, including affected hosts. */
+/**
+ * Validate the proposed graph before a mutation publishes it, including affected hosts. A kind's
+ * `validateRelations` (its schema's meta) receives the node, the graph after and the graph before,
+ * so a host can refuse only what the mutation adds.
+ */
 export function validateNodeRelations(
   before: Record<AnyNodeId, AnyNode>,
   next: Record<AnyNodeId, AnyNode>,
@@ -19,6 +23,6 @@ export function validateNodeRelations(
     const node = next[id]
     if (!node) continue
     const validate = nodeRegistry.get(node.type)?.schema?.meta?.()?.validateRelations
-    if (typeof validate === 'function') validate(node, next)
+    if (typeof validate === 'function') validate(node, next, before)
   }
 }

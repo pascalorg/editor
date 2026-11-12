@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import {
   ColumnNode,
+  createFloorplanContextExtensions,
   DoorNode,
   type FloorplanGeometry,
   GeometryArtifactManifest,
@@ -9,7 +10,6 @@ import {
   LevelNode,
   WallNode,
 } from '@pascal-app/core'
-import { createFloorplanContextExtensions } from '@pascal-app/editor'
 import { buildColumnFloorplan } from '../column/floorplan'
 import { buildDoorFloorplan } from '../door/floorplan'
 import { buildItemFloorplan } from '../item/floorplan'

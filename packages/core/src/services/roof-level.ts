@@ -1,6 +1,6 @@
 import type { SceneNodes } from '../agent-operations/types'
 import { getDefaultLevelName, getLevelDisplayName } from '../lib/level-name'
-import { nodeRegistry } from '../registry'
+import { nodeRegistry, roofFaceShapes } from '../registry'
 import { queryNodes } from '../runtime/node-queries'
 import { type AnyNode, LevelNode, type RoofNode } from '../schema'
 import { getLevelElevations } from './storey'
@@ -256,6 +256,17 @@ export function storeyOf(nodes: Nodes, levelId: string): string {
 }
 
 /**
+ * How high a roof stands over the floor of the level holding it (m): where its container stands,
+ * its segments rising from there; a roof of faces (`capabilities.roofs`), which carry their own
+ * heights, stands at their lowest eave.
+ */
+function roofStandingHeight(nodes: Nodes, roof: RoofNode): number {
+  const eaves = roofFaceShapes(roof, nodes).map((face) => face.low)
+  const holdsSegment = (roof.children ?? []).some((id) => nodes[id]?.type === 'roof-segment')
+  return Math.min(...(holdsSegment || !eaves.length ? [roof.position[1]] : []), ...eaves)
+}
+
+/**
  * The storey a roof covers. On a roof level, the storey under it (`storeyUnder`). On a storey, the
  * storey below when the roof stands near its floor (a porch's or a lower wing's roof, seated on the
  * walls under it, as the rule places it); else the storey itself (a roof written on its own walls'
@@ -268,7 +279,7 @@ export function coveredStoreyId(nodes: Nodes, roof: RoofNode): string | null {
   const below = stackOf(nodes, level.id, 'below')
   if (!below.length) return level.id
   const height = elevationsOf(nodes).get(level.id)?.height ?? 0
-  return roof.position[1] < height / 2 ? below[0]!.id : level.id
+  return roofStandingHeight(nodes, roof) < height / 2 ? below[0]!.id : level.id
 }
 
 /** The roofs over a storey, wherever they stand (`coveredStoreyId`). */

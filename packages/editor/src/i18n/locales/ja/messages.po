@@ -983,6 +983,16 @@ msgstr "屋根の種類"
 msgid "app.lib.buildPanelModel.toolCount"
 msgstr "{count, plural, other {ツール # 個}}"
 
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 344fe9d407a233a9
+# Review: required
+# English: "Barrel"
+#: apps/editor/lib/build-tab-state.ts
+#, fuzzy
+msgid "app.lib.buildTabState.barrel"
+msgstr "ヴォールト"
+
 # Source-Hash: 3241ecabee8221a1
 # Review: required
 # AI-Provider: claude-code
@@ -2049,28 +2059,28 @@ msgstr "壁: {label}"
 # Source-Hash: 8caa959c0ae800c3
 # Review: human
 # English: "Basement"
-#: packages/editor/src/i18n/level-name.ts
+#: packages/viewer/src/ui/lib/level-name.ts
 msgid "core.level.basement"
 msgstr "地下1階"
 
 # Source-Hash: 14927085ee91ba05
 # Review: human
 # English: "Basement {number}"
-#: packages/editor/src/i18n/level-name.ts
+#: packages/viewer/src/ui/lib/level-name.ts
 msgid "core.level.basementNumber"
 msgstr "地下{number}階"
 
 # Source-Hash: e59074a7b9b3f56e
 # Review: human
 # English: "Floor {number}"
-#: packages/editor/src/i18n/level-name.ts
+#: packages/viewer/src/ui/lib/level-name.ts
 msgid "core.level.floorNumber"
 msgstr "{number}階"
 
 # Source-Hash: cde3efc9b7ddfa41
 # Review: human
 # English: "Ground floor"
-#: packages/editor/src/i18n/level-name.ts
+#: packages/viewer/src/ui/lib/level-name.ts
 msgid "core.level.groundFloor"
 msgstr "1階"
 
@@ -2139,7 +2149,7 @@ msgstr "追従を再開"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Follow Pascal: Off"
-#: packages/editor/src/components/ui/action-menu/follow-pascal-toggle.tsx
+#: packages/viewer/src/ui/components/follow-pascal-toggle.tsx
 #, fuzzy
 msgid "editor.actionMenu.followPascalToggle.off"
 msgstr "Pascal を追従: オフ"
@@ -2149,7 +2159,7 @@ msgstr "Pascal を追従: オフ"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Follow Pascal: On"
-#: packages/editor/src/components/ui/action-menu/follow-pascal-toggle.tsx
+#: packages/viewer/src/ui/components/follow-pascal-toggle.tsx
 #, fuzzy
 msgid "editor.actionMenu.followPascalToggle.on"
 msgstr "Pascal を追従: オン"
@@ -3794,6 +3804,26 @@ msgstr "{label}：{finish}"
 msgid "editor.controls.finishSwatch.default"
 msgstr "標準"
 
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 6774854416d6dfdf
+# Review: required
+# English: "Edit {label}"
+#: packages/editor/src/components/ui/controls/slider-control.tsx
+#, fuzzy
+msgid "editor.controls.sliderControl.editLabel"
+msgstr "{label}を編集"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 37d9f63758abdb67
+# Review: required
+# English: "Mixed"
+#: packages/editor/src/components/ui/controls/slider-control.tsx
+#, fuzzy
+msgid "editor.controls.sliderControl.mixed"
+msgstr "混在"
+
 # Source-Hash: a2bd204e93e90598
 # Review: required
 # AI-Provider: claude-code
@@ -4594,6 +4624,16 @@ msgstr "選択をキャンセル"
 #, fuzzy
 msgid "editor.helpers.helperManager.cancelStroke"
 msgstr "ストロークをキャンセル"
+
+# Source-Hash: 7aaeeaeb3e2f247a
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Detach the joint"
+#: packages/editor/src/components/ui/helpers/helper-manager.tsx
+#, fuzzy
+msgid "editor.helpers.helperManager.detachTheJoint"
+msgstr "接合を外す"
 
 # Source-Hash: 16552c2580bbe8b8
 # Review: required
@@ -13592,6 +13632,46 @@ msgstr "領域を削除"
 msgid "editor.panels.wallRegionList.paintRegions"
 msgstr "塗装領域"
 
+# Source-Hash: c69865ec5d9d1ac9
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Angle"
+#: packages/editor/src/store/use-placement-typing.ts
+#, fuzzy
+msgid "editor.placementTyping.angle"
+msgstr "角度"
+
+# Source-Hash: fe7ddb094aa8ff4d
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Distance"
+#: packages/editor/src/store/use-placement-typing.ts
+#, fuzzy
+msgid "editor.placementTyping.distance"
+msgstr "距離"
+
+# Source-Hash: 643687bc3adaac76
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Length"
+#: packages/editor/src/store/use-placement-typing.ts
+#, fuzzy
+msgid "editor.placementTyping.length"
+msgstr "長さ"
+
+# Source-Hash: 0f0e13abf9b2bb67
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Offset"
+#: packages/editor/src/store/use-placement-typing.ts
+#, fuzzy
+msgid "editor.placementTyping.offset"
+msgstr "オフセット"
+
 # Source-Hash: 89ee318aad485f83
 # Review: required
 # AI-Provider: claude-code
@@ -13878,8 +13958,7 @@ msgstr "寸法を入力して壁を移動"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Room"
-#: packages/editor/src/components/editor/room-labels.tsx
-#: packages/editor/src/lib/viewer-selection.ts
+#: packages/viewer/src/ui/lib/viewer-selection.ts
 #, fuzzy
 msgid "editor.roomLabel.room"
 msgstr "部屋"
@@ -13889,8 +13968,7 @@ msgstr "部屋"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Zone"
-#: packages/editor/src/components/editor/room-labels.tsx
-#: packages/editor/src/lib/viewer-selection.ts
+#: packages/viewer/src/ui/lib/viewer-selection.ts
 #, fuzzy
 msgid "editor.roomLabel.zone"
 msgstr "ゾーン"
@@ -13900,7 +13978,7 @@ msgstr "ゾーン"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Attic"
-#: packages/editor/src/lib/room-name-messages.ts
+#: packages/viewer/src/ui/lib/room-name-messages.ts
 #, fuzzy
 msgid "editor.roomName.attic"
 msgstr "屋根裏"
@@ -13910,7 +13988,7 @@ msgstr "屋根裏"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Balcony"
-#: packages/editor/src/lib/room-name-messages.ts
+#: packages/viewer/src/ui/lib/room-name-messages.ts
 #, fuzzy
 msgid "editor.roomName.balcony"
 msgstr "バルコニー"
@@ -13920,7 +13998,7 @@ msgstr "バルコニー"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Basement"
-#: packages/editor/src/lib/room-name-messages.ts
+#: packages/viewer/src/ui/lib/room-name-messages.ts
 #, fuzzy
 msgid "editor.roomName.basement"
 msgstr "地下1階"
@@ -13930,7 +14008,7 @@ msgstr "地下1階"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Bathroom"
-#: packages/editor/src/lib/room-name-messages.ts
+#: packages/viewer/src/ui/lib/room-name-messages.ts
 #, fuzzy
 msgid "editor.roomName.bathroom"
 msgstr "浴室"
@@ -13940,7 +14018,7 @@ msgstr "浴室"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Bedroom"
-#: packages/editor/src/lib/room-name-messages.ts
+#: packages/viewer/src/ui/lib/room-name-messages.ts
 #, fuzzy
 msgid "editor.roomName.bedroom"
 msgstr "寝室"
@@ -13950,7 +14028,7 @@ msgstr "寝室"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Boiler room"
-#: packages/editor/src/lib/room-name-messages.ts
+#: packages/viewer/src/ui/lib/room-name-messages.ts
 #, fuzzy
 msgid "editor.roomName.boilerRoom"
 msgstr "ボイラー室"
@@ -13960,7 +14038,7 @@ msgstr "ボイラー室"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Carport"
-#: packages/editor/src/lib/room-name-messages.ts
+#: packages/viewer/src/ui/lib/room-name-messages.ts
 #, fuzzy
 msgid "editor.roomName.carport"
 msgstr "カーポート"
@@ -13970,7 +14048,7 @@ msgstr "カーポート"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Cellar"
-#: packages/editor/src/lib/room-name-messages.ts
+#: packages/viewer/src/ui/lib/room-name-messages.ts
 #, fuzzy
 msgid "editor.roomName.cellar"
 msgstr "地下貯蔵庫"
@@ -13980,7 +14058,7 @@ msgstr "地下貯蔵庫"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Closet"
-#: packages/editor/src/lib/room-name-messages.ts
+#: packages/viewer/src/ui/lib/room-name-messages.ts
 #, fuzzy
 msgid "editor.roomName.closet"
 msgstr "クローゼット"
@@ -13990,7 +14068,7 @@ msgstr "クローゼット"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Corridor"
-#: packages/editor/src/lib/room-name-messages.ts
+#: packages/viewer/src/ui/lib/room-name-messages.ts
 #, fuzzy
 msgid "editor.roomName.corridor"
 msgstr "廊下"
@@ -14000,7 +14078,7 @@ msgstr "廊下"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Courtyard"
-#: packages/editor/src/lib/room-name-messages.ts
+#: packages/viewer/src/ui/lib/room-name-messages.ts
 #, fuzzy
 msgid "editor.roomName.courtyard"
 msgstr "中庭"
@@ -14010,7 +14088,7 @@ msgstr "中庭"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Deck"
-#: packages/editor/src/lib/room-name-messages.ts
+#: packages/viewer/src/ui/lib/room-name-messages.ts
 #, fuzzy
 msgid "editor.roomName.deck"
 msgstr "デッキ"
@@ -14020,7 +14098,7 @@ msgstr "デッキ"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Den"
-#: packages/editor/src/lib/room-name-messages.ts
+#: packages/viewer/src/ui/lib/room-name-messages.ts
 #, fuzzy
 msgid "editor.roomName.den"
 msgstr "書斎"
@@ -14030,7 +14108,7 @@ msgstr "書斎"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Dining room"
-#: packages/editor/src/lib/room-name-messages.ts
+#: packages/viewer/src/ui/lib/room-name-messages.ts
 #, fuzzy
 msgid "editor.roomName.diningRoom"
 msgstr "ダイニング"
@@ -14040,7 +14118,7 @@ msgstr "ダイニング"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Dressing room"
-#: packages/editor/src/lib/room-name-messages.ts
+#: packages/viewer/src/ui/lib/room-name-messages.ts
 #, fuzzy
 msgid "editor.roomName.dressingRoom"
 msgstr "ドレッシングルーム"
@@ -14050,7 +14128,7 @@ msgstr "ドレッシングルーム"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "En-suite"
-#: packages/editor/src/lib/room-name-messages.ts
+#: packages/viewer/src/ui/lib/room-name-messages.ts
 #, fuzzy
 msgid "editor.roomName.enSuite"
 msgstr "専用浴室"
@@ -14060,7 +14138,7 @@ msgstr "専用浴室"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Entrance"
-#: packages/editor/src/lib/room-name-messages.ts
+#: packages/viewer/src/ui/lib/room-name-messages.ts
 #, fuzzy
 msgid "editor.roomName.entrance"
 msgstr "玄関"
@@ -14070,7 +14148,7 @@ msgstr "玄関"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Family room"
-#: packages/editor/src/lib/room-name-messages.ts
+#: packages/viewer/src/ui/lib/room-name-messages.ts
 #, fuzzy
 msgid "editor.roomName.familyRoom"
 msgstr "ファミリールーム"
@@ -14080,7 +14158,7 @@ msgstr "ファミリールーム"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Gallery"
-#: packages/editor/src/lib/room-name-messages.ts
+#: packages/viewer/src/ui/lib/room-name-messages.ts
 #, fuzzy
 msgid "editor.roomName.gallery"
 msgstr "ギャラリー"
@@ -14090,7 +14168,7 @@ msgstr "ギャラリー"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Games room"
-#: packages/editor/src/lib/room-name-messages.ts
+#: packages/viewer/src/ui/lib/room-name-messages.ts
 #, fuzzy
 msgid "editor.roomName.gamesRoom"
 msgstr "ゲームルーム"
@@ -14100,7 +14178,7 @@ msgstr "ゲームルーム"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Garage"
-#: packages/editor/src/lib/room-name-messages.ts
+#: packages/viewer/src/ui/lib/room-name-messages.ts
 #, fuzzy
 msgid "editor.roomName.garage"
 msgstr "ガレージ"
@@ -14110,7 +14188,7 @@ msgstr "ガレージ"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Garden"
-#: packages/editor/src/lib/room-name-messages.ts
+#: packages/viewer/src/ui/lib/room-name-messages.ts
 #, fuzzy
 msgid "editor.roomName.garden"
 msgstr "庭"
@@ -14120,7 +14198,7 @@ msgstr "庭"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Garden shed"
-#: packages/editor/src/lib/room-name-messages.ts
+#: packages/viewer/src/ui/lib/room-name-messages.ts
 #, fuzzy
 msgid "editor.roomName.gardenShed"
 msgstr "物置小屋"
@@ -14130,7 +14208,7 @@ msgstr "物置小屋"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Guest room"
-#: packages/editor/src/lib/room-name-messages.ts
+#: packages/viewer/src/ui/lib/room-name-messages.ts
 #, fuzzy
 msgid "editor.roomName.guestRoom"
 msgstr "客室"
@@ -14140,7 +14218,7 @@ msgstr "客室"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Gym"
-#: packages/editor/src/lib/room-name-messages.ts
+#: packages/viewer/src/ui/lib/room-name-messages.ts
 #, fuzzy
 msgid "editor.roomName.gym"
 msgstr "ジム"
@@ -14150,7 +14228,7 @@ msgstr "ジム"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Hallway"
-#: packages/editor/src/lib/room-name-messages.ts
+#: packages/viewer/src/ui/lib/room-name-messages.ts
 #, fuzzy
 msgid "editor.roomName.hallway"
 msgstr "廊下"
@@ -14160,7 +14238,7 @@ msgstr "廊下"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Home cinema"
-#: packages/editor/src/lib/room-name-messages.ts
+#: packages/viewer/src/ui/lib/room-name-messages.ts
 #, fuzzy
 msgid "editor.roomName.homeCinema"
 msgstr "ホームシアター"
@@ -14170,7 +14248,7 @@ msgstr "ホームシアター"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Kids' room"
-#: packages/editor/src/lib/room-name-messages.ts
+#: packages/viewer/src/ui/lib/room-name-messages.ts
 #, fuzzy
 msgid "editor.roomName.kidsRoom"
 msgstr "子ども部屋"
@@ -14180,7 +14258,7 @@ msgstr "子ども部屋"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Kitchen"
-#: packages/editor/src/lib/room-name-messages.ts
+#: packages/viewer/src/ui/lib/room-name-messages.ts
 #, fuzzy
 msgid "editor.roomName.kitchen"
 msgstr "キッチン"
@@ -14190,7 +14268,7 @@ msgstr "キッチン"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Kitchenette"
-#: packages/editor/src/lib/room-name-messages.ts
+#: packages/viewer/src/ui/lib/room-name-messages.ts
 #, fuzzy
 msgid "editor.roomName.kitchenette"
 msgstr "簡易キッチン"
@@ -14200,7 +14278,7 @@ msgstr "簡易キッチン"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Landing"
-#: packages/editor/src/lib/room-name-messages.ts
+#: packages/viewer/src/ui/lib/room-name-messages.ts
 #, fuzzy
 msgid "editor.roomName.landing"
 msgstr "踊り場"
@@ -14210,7 +14288,7 @@ msgstr "踊り場"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Laundry"
-#: packages/editor/src/lib/room-name-messages.ts
+#: packages/viewer/src/ui/lib/room-name-messages.ts
 #, fuzzy
 msgid "editor.roomName.laundry"
 msgstr "ランドリー"
@@ -14220,7 +14298,7 @@ msgstr "ランドリー"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Library"
-#: packages/editor/src/lib/room-name-messages.ts
+#: packages/viewer/src/ui/lib/room-name-messages.ts
 #, fuzzy
 msgid "editor.roomName.library"
 msgstr "ライブラリ"
@@ -14230,7 +14308,7 @@ msgstr "ライブラリ"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Living room"
-#: packages/editor/src/lib/room-name-messages.ts
+#: packages/viewer/src/ui/lib/room-name-messages.ts
 #, fuzzy
 msgid "editor.roomName.livingRoom"
 msgstr "リビングルーム"
@@ -14240,7 +14318,7 @@ msgstr "リビングルーム"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Loft"
-#: packages/editor/src/lib/room-name-messages.ts
+#: packages/viewer/src/ui/lib/room-name-messages.ts
 #, fuzzy
 msgid "editor.roomName.loft"
 msgstr "ロフト"
@@ -14250,7 +14328,7 @@ msgstr "ロフト"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Lounge"
-#: packages/editor/src/lib/room-name-messages.ts
+#: packages/viewer/src/ui/lib/room-name-messages.ts
 #, fuzzy
 msgid "editor.roomName.lounge"
 msgstr "ラウンジ"
@@ -14260,7 +14338,7 @@ msgstr "ラウンジ"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Mezzanine"
-#: packages/editor/src/lib/room-name-messages.ts
+#: packages/viewer/src/ui/lib/room-name-messages.ts
 #, fuzzy
 msgid "editor.roomName.mezzanine"
 msgstr "中二階"
@@ -14270,7 +14348,7 @@ msgstr "中二階"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Mudroom"
-#: packages/editor/src/lib/room-name-messages.ts
+#: packages/viewer/src/ui/lib/room-name-messages.ts
 #, fuzzy
 msgid "editor.roomName.mudroom"
 msgstr "マッドルーム"
@@ -14280,7 +14358,7 @@ msgstr "マッドルーム"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Nursery"
-#: packages/editor/src/lib/room-name-messages.ts
+#: packages/viewer/src/ui/lib/room-name-messages.ts
 #, fuzzy
 msgid "editor.roomName.nursery"
 msgstr "子供部屋（乳児）"
@@ -14290,7 +14368,7 @@ msgstr "子供部屋（乳児）"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Office"
-#: packages/editor/src/lib/room-name-messages.ts
+#: packages/viewer/src/ui/lib/room-name-messages.ts
 #, fuzzy
 msgid "editor.roomName.office"
 msgstr "オフィス"
@@ -14300,7 +14378,7 @@ msgstr "オフィス"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Pantry"
-#: packages/editor/src/lib/room-name-messages.ts
+#: packages/viewer/src/ui/lib/room-name-messages.ts
 #, fuzzy
 msgid "editor.roomName.pantry"
 msgstr "パントリー"
@@ -14310,7 +14388,7 @@ msgstr "パントリー"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Patio"
-#: packages/editor/src/lib/room-name-messages.ts
+#: packages/viewer/src/ui/lib/room-name-messages.ts
 #, fuzzy
 msgid "editor.roomName.patio"
 msgstr "パティオ"
@@ -14320,7 +14398,7 @@ msgstr "パティオ"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Playroom"
-#: packages/editor/src/lib/room-name-messages.ts
+#: packages/viewer/src/ui/lib/room-name-messages.ts
 #, fuzzy
 msgid "editor.roomName.playroom"
 msgstr "プレイルーム"
@@ -14330,7 +14408,7 @@ msgstr "プレイルーム"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Pool area"
-#: packages/editor/src/lib/room-name-messages.ts
+#: packages/viewer/src/ui/lib/room-name-messages.ts
 #, fuzzy
 msgid "editor.roomName.poolArea"
 msgstr "プールエリア"
@@ -14340,7 +14418,7 @@ msgstr "プールエリア"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Porch"
-#: packages/editor/src/lib/room-name-messages.ts
+#: packages/viewer/src/ui/lib/room-name-messages.ts
 #, fuzzy
 msgid "editor.roomName.porch"
 msgstr "ポーチ"
@@ -14350,7 +14428,7 @@ msgstr "ポーチ"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Powder room"
-#: packages/editor/src/lib/room-name-messages.ts
+#: packages/viewer/src/ui/lib/room-name-messages.ts
 #, fuzzy
 msgid "editor.roomName.powderRoom"
 msgstr "パウダールーム"
@@ -14360,7 +14438,7 @@ msgstr "パウダールーム"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Primary bedroom"
-#: packages/editor/src/lib/room-name-messages.ts
+#: packages/viewer/src/ui/lib/room-name-messages.ts
 #, fuzzy
 msgid "editor.roomName.primaryBedroom"
 msgstr "主寝室"
@@ -14370,7 +14448,7 @@ msgstr "主寝室"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Reading nook"
-#: packages/editor/src/lib/room-name-messages.ts
+#: packages/viewer/src/ui/lib/room-name-messages.ts
 #, fuzzy
 msgid "editor.roomName.readingNook"
 msgstr "読書スペース"
@@ -14460,7 +14538,7 @@ msgstr "仕事と趣味"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Shower room"
-#: packages/editor/src/lib/room-name-messages.ts
+#: packages/viewer/src/ui/lib/room-name-messages.ts
 #, fuzzy
 msgid "editor.roomName.showerRoom"
 msgstr "シャワールーム"
@@ -14470,7 +14548,7 @@ msgstr "シャワールーム"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Stairwell"
-#: packages/editor/src/lib/room-name-messages.ts
+#: packages/viewer/src/ui/lib/room-name-messages.ts
 #, fuzzy
 msgid "editor.roomName.stairwell"
 msgstr "階段室"
@@ -14480,7 +14558,7 @@ msgstr "階段室"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Storage"
-#: packages/editor/src/lib/room-name-messages.ts
+#: packages/viewer/src/ui/lib/room-name-messages.ts
 #, fuzzy
 msgid "editor.roomName.storage"
 msgstr "収納"
@@ -14490,7 +14568,7 @@ msgstr "収納"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Studio"
-#: packages/editor/src/lib/room-name-messages.ts
+#: packages/viewer/src/ui/lib/room-name-messages.ts
 #, fuzzy
 msgid "editor.roomName.studio"
 msgstr "スタジオ"
@@ -14500,7 +14578,7 @@ msgstr "スタジオ"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Study"
-#: packages/editor/src/lib/room-name-messages.ts
+#: packages/viewer/src/ui/lib/room-name-messages.ts
 #, fuzzy
 msgid "editor.roomName.study"
 msgstr "書斎"
@@ -14510,7 +14588,7 @@ msgstr "書斎"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Sunroom"
-#: packages/editor/src/lib/room-name-messages.ts
+#: packages/viewer/src/ui/lib/room-name-messages.ts
 #, fuzzy
 msgid "editor.roomName.sunroom"
 msgstr "サンルーム"
@@ -14520,7 +14598,7 @@ msgstr "サンルーム"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Terrace"
-#: packages/editor/src/lib/room-name-messages.ts
+#: packages/viewer/src/ui/lib/room-name-messages.ts
 #, fuzzy
 msgid "editor.roomName.terrace"
 msgstr "テラス"
@@ -14530,7 +14608,7 @@ msgstr "テラス"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Toilet"
-#: packages/editor/src/lib/room-name-messages.ts
+#: packages/viewer/src/ui/lib/room-name-messages.ts
 #, fuzzy
 msgid "editor.roomName.toilet"
 msgstr "トイレ"
@@ -14540,7 +14618,7 @@ msgstr "トイレ"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Utility room"
-#: packages/editor/src/lib/room-name-messages.ts
+#: packages/viewer/src/ui/lib/room-name-messages.ts
 #, fuzzy
 msgid "editor.roomName.utilityRoom"
 msgstr "ユーティリティ"
@@ -14550,7 +14628,7 @@ msgstr "ユーティリティ"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Veranda"
-#: packages/editor/src/lib/room-name-messages.ts
+#: packages/viewer/src/ui/lib/room-name-messages.ts
 #, fuzzy
 msgid "editor.roomName.veranda"
 msgstr "ベランダ"
@@ -14560,7 +14638,7 @@ msgstr "ベランダ"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Walk-in closet"
-#: packages/editor/src/lib/room-name-messages.ts
+#: packages/viewer/src/ui/lib/room-name-messages.ts
 #, fuzzy
 msgid "editor.roomName.walkInCloset"
 msgstr "ウォークインクローゼット"
@@ -14570,7 +14648,7 @@ msgstr "ウォークインクローゼット"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Workshop"
-#: packages/editor/src/lib/room-name-messages.ts
+#: packages/viewer/src/ui/lib/room-name-messages.ts
 #, fuzzy
 msgid "editor.roomName.workshop"
 msgstr "作業場"
@@ -17495,6 +17573,16 @@ msgstr "長さ：{field} m"
 msgid "editor.tools.distribution.distributionRunTool.tabDirection"
 msgstr "Tab：方向"
 
+# Source-Hash: adbe2d112b739871
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+# English: "Target elevation: {elevation} m · click or Enter to place"
+#: packages/editor/src/components/tools/distribution/distribution-run-tool.tsx
+#, fuzzy
+msgid "editor.tools.distribution.distributionRunTool.targetElevation"
+msgstr "目標の高さ: {elevation} m · クリックまたは Enter で配置"
+
 # Source-Hash: abb1d8c8bfb41acf
 # Review: required
 # AI-Provider: claude-code
@@ -17734,6 +17822,56 @@ msgstr "地盤面下の階層の上で地面を透過"
 #, fuzzy
 msgid "editor.views.viewBar.views"
 msgstr "ビュー"
+
+# Source-Hash: e33e472c5ffcf14d
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "boost"
+#: packages/viewer/src/ui/components/walkthrough-hud.tsx
+#, fuzzy
+msgid "editor.walkthroughHud.drone.boost"
+msgstr "加速"
+
+# Source-Hash: de3ab95e50ad3796
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "down"
+#: packages/viewer/src/ui/components/walkthrough-hud.tsx
+#, fuzzy
+msgid "editor.walkthroughHud.drone.down"
+msgstr "下降"
+
+# Source-Hash: c1becffaa3515c69
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "move"
+#: packages/viewer/src/ui/components/walkthrough-hud.tsx
+#, fuzzy
+msgid "editor.walkthroughHud.drone.move"
+msgstr "移動"
+
+# Source-Hash: fb18aad9822de902
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "slow"
+#: packages/viewer/src/ui/components/walkthrough-hud.tsx
+#, fuzzy
+msgid "editor.walkthroughHud.drone.slow"
+msgstr "減速"
+
+# Source-Hash: 5cc8d1cb43ae1748
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "up"
+#: packages/viewer/src/ui/components/walkthrough-hud.tsx
+#, fuzzy
+msgid "editor.walkthroughHud.drone.up"
+msgstr "上昇"
 
 # Source-Hash: 57c1428fe2d28745
 # Review: required
@@ -21645,25 +21783,15 @@ msgstr "柱"
 msgid "node.column.panel.actions"
 msgstr "操作"
 
-# Source-Hash: 14b21685d375581a
-# Review: required
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "A-Frame"
-#: packages/nodes/src/column/panel.tsx
-#, fuzzy
-msgid "node.column.panel.aFrame"
-msgstr "A フレーム"
-
-# Source-Hash: 4007d88108e25c2b
+# Source-Hash: 663175a9c461a96d
 # Review: required
-# AI-Provider: claude-code
-# AI-Model: claude-opus-5-5
-# English: "Apply preset..."
+# English: "All"
 #: packages/nodes/src/column/panel.tsx
 #, fuzzy
-msgid "node.column.panel.applyPreset"
-msgstr "プリセットを適用…"
+msgid "node.column.panel.all"
+msgstr "すべて"
 
 # Source-Hash: dbfe7c561383c964
 # Review: required
@@ -21675,25 +21803,95 @@ msgstr "プリセットを適用…"
 msgid "node.column.panel.applyProportion"
 msgstr "比率を適用…"
 
-# Source-Hash: 1f3fd938f0b26c9f
-# Review: required
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Bottom Depth"
+# Source-Hash: 63cbda7b09662368
+# Review: required
+# English: "Arched"
 #: packages/nodes/src/column/panel.tsx
 #, fuzzy
-msgid "node.column.panel.bottomDepth"
-msgstr "下部の奥行き"
+msgid "node.column.panel.arched"
+msgstr "アーチ"
 
-# Source-Hash: 85576e19cd3da914
-# Review: required
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Bottom Height"
+# Source-Hash: d11dffc2c5b0f50a
+# Review: required
+# English: "Baluster"
 #: packages/nodes/src/column/panel.tsx
 #, fuzzy
-msgid "node.column.panel.bottomHeight"
-msgstr "下部の高さ"
+msgid "node.column.panel.baluster"
+msgstr "バラスター"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: a8fdf969f566a554
+# Review: required
+# English: "Band Scale"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.bandScale"
+msgstr "バンドの比率"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: fadada809e27477c
+# Review: required
+# English: "Base"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.base"
+msgstr "柱礎"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: fca555ac84223bd4
+# Review: required
+# English: "Base Carving"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.baseCarvingLevel"
+msgstr "柱礎の彫刻"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: fa9118f6f4f020d7
+# Review: required
+# English: "Base Height"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.baseHeight"
+msgstr "柱礎の高さ"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: efb74250b7929566
+# Review: required
+# English: "Base Ribs"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.baseRibCount"
+msgstr "柱礎のリブ数"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 1cc2da12e8463e85
+# Review: required
+# English: "Base style"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.baseStyle"
+msgstr "柱礎のスタイル"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 971207d7a9e0d8a9
+# Review: required
+# English: "Bottom Scale"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.bottomScale"
+msgstr "下部の比率"
 
 # Source-Hash: 4df0bbb04744a810
 # Review: required
@@ -21705,75 +21903,25 @@ msgstr "下部の高さ"
 msgid "node.column.panel.bottomSpread"
 msgstr "下部の開き"
 
-# Source-Hash: 67479fecb980a441
-# Review: required
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Bottom Step Spread"
+# Source-Hash: 35b35cd49111ba44
+# Review: required
+# English: "Bracket Depth"
 #: packages/nodes/src/column/panel.tsx
 #, fuzzy
-msgid "node.column.panel.bottomStepSpread"
-msgstr "下部段の広がり"
+msgid "node.column.panel.bracketDepth"
+msgstr "持送りの奥行き"
 
-# Source-Hash: 6ea977c42202ca24
-# Review: required
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Bottom Tiers"
-#: packages/nodes/src/column/panel.tsx
-#, fuzzy
-msgid "node.column.panel.bottomTiers"
-msgstr "下部の段数"
-
-# Source-Hash: 709ca788827f8a94
+# Source-Hash: 06e2dd9a165502bd
 # Review: required
-# AI-Provider: claude-code
-# AI-Model: claude-opus-5-5
-# English: "Bottom Width"
+# English: "Bracket Tiers"
 #: packages/nodes/src/column/panel.tsx
 #, fuzzy
-msgid "node.column.panel.bottomWidth"
-msgstr "下部の幅"
-
-# Source-Hash: 39d33008c81fc075
-# Review: required
-# AI-Provider: claude-code
-# AI-Model: claude-opus-5-5
-# English: "Box Frame"
-#: packages/nodes/src/column/panel.tsx
-#, fuzzy
-msgid "node.column.panel.boxFrame"
-msgstr "ボックスフレーム"
-
-# Source-Hash: 381b1f481f747677
-# Review: required
-# AI-Provider: claude-code
-# AI-Model: claude-opus-5-5
-# English: "Brace Depth"
-#: packages/nodes/src/column/panel.tsx
-#, fuzzy
-msgid "node.column.panel.braceDepth"
-msgstr "ブレースの奥行き"
-
-# Source-Hash: 8509b09b4ecdd6b6
-# Review: required
-# AI-Provider: claude-code
-# AI-Model: claude-opus-5-5
-# English: "Brace Width"
-#: packages/nodes/src/column/panel.tsx
-#, fuzzy
-msgid "node.column.panel.braceWidth"
-msgstr "ブレースの幅"
-
-# Source-Hash: 08558dd786f45281
-# Review: required
-# AI-Provider: claude-code
-# AI-Model: claude-opus-5-5
-# English: "Bulge"
-#: packages/nodes/src/column/panel.tsx
-#, fuzzy
-msgid "node.column.panel.bulge"
-msgstr "ふくらみ"
+msgid "node.column.panel.bracketTierCount"
+msgstr "持送りの段数"
 
 # Source-Hash: 663b9a9e6a469b02
 # Review: required
@@ -21785,6 +21933,86 @@ msgstr "ふくらみ"
 msgid "node.column.panel.bulged"
 msgstr "ふくらみ型"
 
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 83ac65ddce825df7
+# Review: required
+# English: "Bulge Ratio"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.bulgeRatio"
+msgstr "膨らみの比率"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 4c56ade213b88ed0
+# Review: required
+# English: "Capital"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.capital"
+msgstr "柱頭"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 3b969fb1765c3f6c
+# Review: required
+# English: "Capital Carving"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.capitalCarvingLevel"
+msgstr "柱頭の彫刻"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 8ae9489f57d43033
+# Review: required
+# English: "Capital Height"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.capitalHeight"
+msgstr "柱頭の高さ"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: f286eccc906eb8aa
+# Review: required
+# English: "Capital style"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.capitalStyle"
+msgstr "柱頭のスタイル"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 7886120117de9a5e
+# Review: required
+# English: "Carving placement"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.carvingPlacement"
+msgstr "彫刻の位置"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 37ec08bc0ec0c613
+# Review: required
+# English: "Choose a material, then click the surface to paint."
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.chooseAMaterialThenClickThe"
+msgstr "マテリアルを選んでから、塗る面をクリックします。"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: a5fe146d6adf0818
+# Review: required
+# English: "Cluster"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.cluster"
+msgstr "束ね柱"
+
 # Source-Hash: 3530ac1f4046cd22
 # Review: required
 # AI-Provider: claude-code
@@ -21795,6 +22023,26 @@ msgstr "ふくらみ型"
 msgid "node.column.panel.column"
 msgstr "柱"
 
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 5a4d3e868b707a7f
+# Review: required
+# English: "Column proportions"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.columnProportions"
+msgstr "柱のプロポーション"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 99e7e0e07220b6f0
+# Review: required
+# English: "Column style"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.columnStyle"
+msgstr "柱のスタイル"
+
 # Source-Hash: ca0a856f04460bd5
 # Review: required
 # AI-Provider: claude-code
@@ -21804,6 +22052,26 @@ msgstr "柱"
 #, fuzzy
 msgid "node.column.panel.connectorPlates"
 msgstr "接合プレート"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 054e9bc6519e4829
+# Review: required
+# English: "Corinthian Leaf"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.corinthianLeaf"
+msgstr "コリント式の葉飾り"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 03ade8d3de1369be
+# Review: required
+# English: "Cross section"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.crossSection"
+msgstr "断面"
 
 # Source-Hash: b26de372b4b0eaac
 # Review: required
@@ -21825,15 +22093,65 @@ msgstr "削除"
 msgid "node.column.panel.depth"
 msgstr "奥行き"
 
-# Source-Hash: 12df69f42beb0643
-# Review: required
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Dimensions"
+# Source-Hash: c7c1212a7d3fb04c
+# Review: required
+# English: "Depth Scale"
 #: packages/nodes/src/column/panel.tsx
 #, fuzzy
-msgid "node.column.panel.dimensions"
-msgstr "寸法"
+msgid "node.column.panel.depthScale"
+msgstr "奥行きの比率"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 9cf14a577e74ed47
+# Review: required
+# English: "Depth Span"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.depthSpan"
+msgstr "奥行きのスパン"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 016d8e70618916d4
+# Review: required
+# English: "Diameter"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.diameter"
+msgstr "直径"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 78e3b83eb527f5b6
+# Review: required
+# English: "Diamond"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.diamond"
+msgstr "菱形"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: e1ed2f159b6d34f2
+# Review: required
+# English: "Doric"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.doric"
+msgstr "ドリス式"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 4b84f09fc9e79572
+# Review: required
+# English: "Dravidian Carved"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.dravidianCarved"
+msgstr "ドラヴィダ様式の彫刻"
 
 # Source-Hash: b963a08f0d540014
 # Review: required
@@ -21845,25 +22163,75 @@ msgstr "寸法"
 msgid "node.column.panel.edgeSoftness"
 msgstr "角の丸み"
 
-# Source-Hash: 82b3db356639ef92
-# Review: required
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Ends"
+# Source-Hash: 50d76d0bfa5828f5
+# Review: required
+# English: "End Scale"
 #: packages/nodes/src/column/panel.tsx
 #, fuzzy
-msgid "node.column.panel.ends"
-msgstr "端部"
+msgid "node.column.panel.endScale"
+msgstr "端部の比率"
 
-# Source-Hash: 646c3cd99df3e285
-# Review: required
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "End Width"
+# Source-Hash: e0898026fa3ef7ef
+# Review: required
+# English: "Entire Object"
 #: packages/nodes/src/column/panel.tsx
 #, fuzzy
-msgid "node.column.panel.endWidth"
-msgstr "端部の幅"
+msgid "node.column.panel.entireObject"
+msgstr "オブジェクト全体"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: c63bf1154bb7909f
+# Review: required
+# English: "Faceted"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.faceted"
+msgstr "多面"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 7e84091e8efd4274
+# Review: required
+# English: "Flute Count"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.fluteCount"
+msgstr "溝の数"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: b2166db6249b9ef0
+# Review: required
+# English: "Fluted"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.fluted"
+msgstr "溝彫り"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: ba3d227ad13eb300
+# Review: required
+# English: "Flute Depth"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.fluteDepth"
+msgstr "溝の深さ"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 5530e4916f99d59e
+# Review: required
+# English: "Flute Width"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.fluteWidth"
+msgstr "溝の幅"
 
 # Source-Hash: 02e229bca2a2b5f1
 # Review: required
@@ -21874,6 +22242,16 @@ msgstr "端部の幅"
 #, fuzzy
 msgid "node.column.panel.forkSpread"
 msgstr "分岐の開き"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: ce3a6c03765dbbd8
+# Review: required
+# English: "Frame"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.frame"
+msgstr "フレーム"
 
 # Source-Hash: fdebfac05413abcf
 # Review: required
@@ -21915,15 +22293,105 @@ msgstr "高さと設置面積は片流れ増築で決まります。ここでは
 msgid "node.column.panel.hourglass"
 msgstr "砂時計型"
 
-# Source-Hash: 9cc75129edee59ad
-# Review: required
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "K Brace"
+# Source-Hash: 2f3ee076ecdccfe2
+# Review: required
+# English: "Ionic Volute"
 #: packages/nodes/src/column/panel.tsx
 #, fuzzy
-msgid "node.column.panel.kBrace"
-msgstr "K ブレース"
+msgid "node.column.panel.ionicVolute"
+msgstr "イオニア式の渦巻"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 2499bbb980a232cf
+# Review: required
+# English: "Lathe Rings"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.latheRingCount"
+msgstr "ろくろ挽きのリング数"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 73a16ff19b6f7fdc
+# Review: required
+# English: "Lathe Turned"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.latheTurned"
+msgstr "ろくろ挽き"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: f2ccd152aa17feab
+# Review: required
+# English: "Leaf Carved"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.leafCarved"
+msgstr "葉飾りの彫刻"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: c390ba248e629b9e
+# Review: required
+# English: "Leaves"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.leafCount"
+msgstr "葉の数"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: a76263da42bc17b0
+# Review: required
+# English: "Leaf Rows"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.leafRows"
+msgstr "葉の列数"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 00b838b1271dcc00
+# Review: required
+# English: "Lotus"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.lotus"
+msgstr "蓮"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 4d0d49127f197e7f
+# Review: required
+# English: "Materials"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.materials"
+msgstr "マテリアル"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: b9b11a8228f9d9c3
+# Review: required
+# English: "Member Depth"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.memberDepth"
+msgstr "部材の奥行き"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 3e0ddf162579af15
+# Review: required
+# English: "Member Width"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.memberWidth"
+msgstr "部材の幅"
 
 # Source-Hash: bd02c614454fbd2b
 # Review: required
@@ -21935,65 +22403,145 @@ msgstr "K ブレース"
 msgid "node.column.panel.move"
 msgstr "移動"
 
-# Source-Hash: 6dc190abd3f22787
-# Review: required
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Neck Width"
+# Source-Hash: 78c5ca001ea8241d
+# Review: required
+# English: "Neck Scale"
 #: packages/nodes/src/column/panel.tsx
 #, fuzzy
-msgid "node.column.panel.neckWidth"
-msgstr "くびれの幅"
+msgid "node.column.panel.neckScale"
+msgstr "柱頸の比率"
 
-# Source-Hash: 7dba7ed55eeba18f
-# Review: required
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "No Bottom"
+# Source-Hash: f2953d2931e36d0c
+# Review: required
+# English: "None"
 #: packages/nodes/src/column/panel.tsx
 #, fuzzy
-msgid "node.column.panel.noBottom"
-msgstr "下部なし"
+msgid "node.column.panel.none"
+msgstr "なし"
 
-# Source-Hash: 682d71815bb20e94
-# Review: required
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "No Top"
+# Source-Hash: 698f9ebcd3ab81c6
+# Review: required
+# English: "Octagonal"
 #: packages/nodes/src/column/panel.tsx
 #, fuzzy
-msgid "node.column.panel.noTop"
-msgstr "上部なし"
+msgid "node.column.panel.octagonal"
+msgstr "八角形"
 
-# Source-Hash: 4da8688437f64db8
-# Review: required
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Plinth Thickness"
+# Source-Hash: 8680135de608a900
+# Review: required
+# English: "Paint Materials"
 #: packages/nodes/src/column/panel.tsx
 #, fuzzy
-msgid "node.column.panel.plinthThickness"
-msgstr "台座の厚さ"
+msgid "node.column.panel.paintMaterials"
+msgstr "マテリアルを塗る"
 
-# Source-Hash: 0bf453b4882c663c
-# Review: required
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Portal Frame"
+# Source-Hash: 2d1f1576d0878e2d
+# Review: required
+# English: "Carved Panels"
 #: packages/nodes/src/column/panel.tsx
 #, fuzzy
-msgid "node.column.panel.portalFrame"
-msgstr "門型フレーム"
+msgid "node.column.panel.panelCount"
+msgstr "彫刻パネル"
 
-# Source-Hash: 441f7f652ea6a0d8
-# Review: required
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Preset"
+# Source-Hash: 6b503ed1b7d1569b
+# Review: required
+# English: "Panel Relief"
 #: packages/nodes/src/column/panel.tsx
 #, fuzzy
-msgid "node.column.panel.preset"
-msgstr "プリセット"
+msgid "node.column.panel.panelInsetDepth"
+msgstr "パネルのレリーフ"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 3332ef0ae3f455b0
+# Review: required
+# English: "Panelled"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.panelled"
+msgstr "パネル付き"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 734c75436555233f
+# Review: required
+# English: "Panelled Pedestal"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.panelledPedestal"
+msgstr "パネル付き台座"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: efe3a9af7ede09f5
+# Review: required
+# English: "Panel shape"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.panelShape"
+msgstr "パネルの形状"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 1742cce555f51b78
+# Review: required
+# English: "Pendants"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.pendantCount"
+msgstr "垂れ飾り"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 9f0680b4bd973026
+# Review: required
+# English: "Plain"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.plain"
+msgstr "無地"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 642987dea5693bb0
+# Review: required
+# English: "Plinth Height Fraction"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.plinthHeightFraction"
+msgstr "台石の高さの割合"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 96ad4bd0f7baa40e
+# Review: required
+# English: "Profile"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.profile"
+msgstr "プロファイル"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 2c2c20272b0370cc
+# Review: required
+# English: "Rectangle"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.rectangle"
+msgstr "長方形"
 
 # Source-Hash: f29fef1beeb25f22
 # Review: required
@@ -22005,6 +22553,96 @@ msgstr "プリセット"
 msgid "node.column.panel.rectangular"
 msgstr "長方形"
 
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 07096122904e293c
+# Review: required
+# English: "Reset base"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.resetBase"
+msgstr "柱礎をリセット"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 06c87de417e85470
+# Review: required
+# English: "Reset capital"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.resetCapital"
+msgstr "柱頭をリセット"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 3636d202511854e5
+# Review: required
+# English: "Reset materials"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.resetMaterials"
+msgstr "マテリアルをリセット"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 94b0d78e787246d7
+# Review: required
+# English: "Reset profile"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.resetProfile"
+msgstr "プロファイルをリセット"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: b3316cff09204a85
+# Review: required
+# English: "Reset shape"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.resetShape"
+msgstr "形状をリセット"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 82af49f4195cd4ac
+# Review: required
+# English: "Reset size"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.resetSize"
+msgstr "サイズをリセット"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: d0618e3f3e654397
+# Review: required
+# English: "Reset surface details"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.resetSurfaceDetails"
+msgstr "表面ディテールをリセット"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 75750b2b96267be1
+# Review: required
+# English: "Reset transform"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.resetTransform"
+msgstr "変形をリセット"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 0a98ea93d3b14774
+# Review: required
+# English: "Ribbed Lotus"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.ribbedLotus"
+msgstr "リブ付きの蓮"
+
 # Source-Hash: 23b9d290b165cd49
 # Review: required
 # AI-Provider: claude-code
@@ -22015,15 +22653,15 @@ msgstr "長方形"
 msgid "node.column.panel.ringPairs"
 msgstr "リングの対数"
 
-# Source-Hash: 8db82d731a19651e
-# Review: required
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Ring Spread"
+# Source-Hash: cf364ce8e1154b23
+# Review: required
+# English: "Ring Spread Ratio"
 #: packages/nodes/src/column/panel.tsx
 #, fuzzy
-msgid "node.column.panel.ringSpread"
-msgstr "リングの間隔"
+msgid "node.column.panel.ringSpreadRatio"
+msgstr "リング間隔の比率"
 
 # Source-Hash: bdb524a15d9e1509
 # Review: required
@@ -22035,6 +22673,16 @@ msgstr "リングの間隔"
 msgid "node.column.panel.ringThickness"
 msgstr "リングの厚さ"
 
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 01989595ee7c1dc0
+# Review: required
+# English: "Rotation"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.rotation"
+msgstr "回転"
+
 # Source-Hash: ad0457800a1f0eb4
 # Review: required
 # AI-Provider: claude-code
@@ -22045,45 +22693,35 @@ msgstr "リングの厚さ"
 msgid "node.column.panel.round"
 msgstr "丸"
 
-# Source-Hash: baa84a2d17095dcf
-# Review: required
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Round Band Width"
+# Source-Hash: fc826da6c99303e6
+# Review: required
+# English: "Rounded"
 #: packages/nodes/src/column/panel.tsx
 #, fuzzy
-msgid "node.column.panel.roundBandWidth"
-msgstr "丸帯の幅"
+msgid "node.column.panel.rounded"
+msgstr "角丸"
 
-# Source-Hash: 5f1f67fb0ca59a6d
-# Review: required
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Rounded Bottom"
+# Source-Hash: 04945d148ddddfce
+# Review: required
+# English: "Round Rings"
 #: packages/nodes/src/column/panel.tsx
 #, fuzzy
-msgid "node.column.panel.roundedBottom"
-msgstr "丸い下部"
+msgid "node.column.panel.roundRings"
+msgstr "丸いリング"
 
-# Source-Hash: 446816980ed0da27
-# Review: required
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Rounded Top"
-#: packages/nodes/src/column/panel.tsx
-#, fuzzy
-msgid "node.column.panel.roundedTop"
-msgstr "丸い上部"
-
-# Source-Hash: 9e554c26be80f0d0
+# Source-Hash: e08860e0c3f2e081
 # Review: required
-# AI-Provider: claude-code
-# AI-Model: claude-opus-5-5
-# English: "Segment Twist"
+# English: "Scales multiply the dimensions in Size. A ratio of 0.2 means 20%."
 #: packages/nodes/src/column/panel.tsx
 #, fuzzy
-msgid "node.column.panel.segmentTwist"
-msgstr "セグメントのねじれ"
+msgid "node.column.panel.scalesMultiplyTheDimensionsInSize"
+msgstr "比率は「サイズ」の寸法に掛け合わされます。0.2 は 20% を意味します。"
 
 # Source-Hash: 4fc63ad21de30103
 # Review: required
@@ -22105,15 +22743,35 @@ msgstr "シャフト"
 msgid "node.column.panel.shaftCornerRadius"
 msgstr "柱身の角半径"
 
-# Source-Hash: 3dab61aeb47e504d
-# Review: required
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Shaft Width"
+# Source-Hash: 5a135f294b02a092
+# Review: required
+# English: "Shaft detail"
 #: packages/nodes/src/column/panel.tsx
 #, fuzzy
-msgid "node.column.panel.shaftWidth"
-msgstr "柱身の幅"
+msgid "node.column.panel.shaftDetail"
+msgstr "柱身のディテール"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 7b983a1ad9667719
+# Review: required
+# English: "Shaft profile"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.shaftProfile"
+msgstr "柱身のプロファイル"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: f23c2ea65fb94e30
+# Review: required
+# English: "Shaft Scale"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.shaftScale"
+msgstr "柱身の比率"
 
 # Source-Hash: 85ea1d3c8b749680
 # Review: required
@@ -22135,35 +22793,55 @@ msgstr "形状"
 msgid "node.column.panel.shortStout"
 msgstr "短く太い"
 
-# Source-Hash: 4637a9a61638cc66
-# Review: required
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Simple Block Bottom"
+# Source-Hash: a05a390ae205fdd8
+# Review: required
+# English: "Simple"
 #: packages/nodes/src/column/panel.tsx
 #, fuzzy
-msgid "node.column.panel.simpleBlockBottom"
-msgstr "シンプルなブロック下部"
+msgid "node.column.panel.simple"
+msgstr "シンプル"
 
-# Source-Hash: 9278f9b4a48208b0
-# Review: required
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Simple Top"
+# Source-Hash: e6d1bf2e70e5d5c2
+# Review: required
+# English: "Simple Slab"
 #: packages/nodes/src/column/panel.tsx
 #, fuzzy
-msgid "node.column.panel.simpleTop"
-msgstr "シンプルな上部"
+msgid "node.column.panel.simpleSlab"
+msgstr "シンプルな板"
 
-# Source-Hash: 9099890734ae1238
-# Review: required
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Single Strut"
+# Source-Hash: b287189cec36ae84
+# Review: required
+# English: "Simple Square"
 #: packages/nodes/src/column/panel.tsx
 #, fuzzy
-msgid "node.column.panel.singleStrut"
-msgstr "単一支柱"
+msgid "node.column.panel.simpleSquare"
+msgstr "シンプルな正方形"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 7dd0384e4fdd974a
+# Review: required
+# English: "Sixteen Sided"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.sixteenSided"
+msgstr "十六角形"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 60bb3338e0ad558c
+# Review: required
+# English: "Size"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.size"
+msgstr "サイズ"
 
 # Source-Hash: d87ce271009ce063
 # Review: required
@@ -22175,6 +22853,46 @@ msgstr "単一支柱"
 msgid "node.column.panel.slender"
 msgstr "細身"
 
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 8560a17c90378be7
+# Review: required
+# English: "South Indian Bracket"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.southIndianBracket"
+msgstr "南インド様式の持送り"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: f9a4a870cb3d3c41
+# Review: required
+# English: "Spiral"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.spiral"
+msgstr "らせん"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 3bc28afe08c59aa1
+# Review: required
+# English: "Spiral Ribs"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.spiralRibCount"
+msgstr "らせんリブの数"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 5ed49f8a45407932
+# Review: required
+# English: "Spiral Turns"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.spiralTwist"
+msgstr "らせんの回転数"
+
 # Source-Hash: 39287346366fc206
 # Review: required
 # AI-Provider: claude-code
@@ -22185,15 +22903,15 @@ msgstr "細身"
 msgid "node.column.panel.square"
 msgstr "正方形"
 
-# Source-Hash: 2dc84759d8df709d
-# Review: required
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Square Plinth Bottom"
+# Source-Hash: 3b857b27d5a49b0c
+# Review: required
+# English: "Square Plinth"
 #: packages/nodes/src/column/panel.tsx
 #, fuzzy
-msgid "node.column.panel.squarePlinthBottom"
-msgstr "角台座の下部"
+msgid "node.column.panel.squarePlinth"
+msgstr "正方形の台石"
 
 # Source-Hash: d998c212030bc7c2
 # Review: required
@@ -22205,25 +22923,35 @@ msgstr "角台座の下部"
 msgid "node.column.panel.standard"
 msgstr "標準"
 
-# Source-Hash: 01a6393135e0fb10
-# Review: required
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Stepped Bottom"
+# Source-Hash: 2c6b1cf17a973d67
+# Review: required
+# English: "Stepped"
 #: packages/nodes/src/column/panel.tsx
 #, fuzzy
-msgid "node.column.panel.steppedBottom"
-msgstr "段付き下部"
+msgid "node.column.panel.stepped"
+msgstr "段状"
 
-# Source-Hash: 3d7e443797d4146e
-# Review: required
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Stepped Top"
+# Source-Hash: cbaa245faee497e0
+# Review: required
+# English: "Stepped Square"
 #: packages/nodes/src/column/panel.tsx
 #, fuzzy
-msgid "node.column.panel.steppedTop"
-msgstr "段付き上部"
+msgid "node.column.panel.steppedSquare"
+msgstr "段状の正方形"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: a795c69630b88d66
+# Review: required
+# English: "Step Scale Reduction"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.stepScaleReduction"
+msgstr "段ごとの縮小率"
 
 # Source-Hash: 4ee35f740730ae87
 # Review: required
@@ -22235,15 +22963,25 @@ msgstr "段付き上部"
 msgid "node.column.panel.straight"
 msgstr "直進"
 
-# Source-Hash: 6063ae2877faa35d
-# Review: required
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Taper"
+# Source-Hash: 1a79a485d91f3f28
+# Review: required
+# English: "Style"
 #: packages/nodes/src/column/panel.tsx
 #, fuzzy
-msgid "node.column.panel.taper"
-msgstr "テーパー"
+msgid "node.column.panel.style"
+msgstr "スタイル"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: f6794564a5cb6eaa
+# Review: required
+# English: "Surface Details"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.surfaceDetails"
+msgstr "表面ディテール"
 
 # Source-Hash: f86f1f22230596b7
 # Review: required
@@ -22255,25 +22993,35 @@ msgstr "テーパー"
 msgid "node.column.panel.tapered"
 msgstr "テーパー"
 
-# Source-Hash: 3e7ec47626ee3f22
-# Review: required
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Top Depth"
+# Source-Hash: f7b112a6556f22a5
+# Review: required
+# English: "Taper Ratio"
 #: packages/nodes/src/column/panel.tsx
 #, fuzzy
-msgid "node.column.panel.topDepth"
-msgstr "上部の奥行き"
+msgid "node.column.panel.taperRatio"
+msgstr "テーパー比率"
 
-# Source-Hash: 0ca9047731784f56
-# Review: required
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Top Height"
+# Source-Hash: 21aa2897242f6529
+# Review: required
+# English: "Tier Count"
 #: packages/nodes/src/column/panel.tsx
 #, fuzzy
-msgid "node.column.panel.topHeight"
-msgstr "上部の高さ"
+msgid "node.column.panel.tierCount"
+msgstr "段数"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 75991d106eb93dae
+# Review: required
+# English: "Top Scale"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.topScale"
+msgstr "上部の比率"
 
 # Source-Hash: 3d8a2be83b5b536a
 # Review: required
@@ -22285,36 +23033,6 @@ msgstr "上部の高さ"
 msgid "node.column.panel.topSpread"
 msgstr "上部の開き"
 
-# Source-Hash: f4ae0dc639dbc220
-# Review: required
-# AI-Provider: claude-code
-# AI-Model: claude-opus-5-5
-# English: "Top Step Spread"
-#: packages/nodes/src/column/panel.tsx
-#, fuzzy
-msgid "node.column.panel.topStepSpread"
-msgstr "上部段の広がり"
-
-# Source-Hash: 8acc4e843934b086
-# Review: required
-# AI-Provider: claude-code
-# AI-Model: claude-opus-5-5
-# English: "Top Tiers"
-#: packages/nodes/src/column/panel.tsx
-#, fuzzy
-msgid "node.column.panel.topTiers"
-msgstr "上部の段数"
-
-# Source-Hash: a50eb6400611a57c
-# Review: required
-# AI-Provider: claude-code
-# AI-Model: claude-opus-5-5
-# English: "Top Width"
-#: packages/nodes/src/column/panel.tsx
-#, fuzzy
-msgid "node.column.panel.topWidth"
-msgstr "上部の幅"
-
 # Source-Hash: f425799b82e085ed
 # Review: required
 # AI-Provider: claude-code
@@ -22325,25 +23043,15 @@ msgstr "上部の幅"
 msgid "node.column.panel.transform"
 msgstr "変形"
 
-# Source-Hash: 952fd1ef187c6646
-# Review: required
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Trestle"
-#: packages/nodes/src/column/panel.tsx
-#, fuzzy
-msgid "node.column.panel.trestle"
-msgstr "架台"
-
-# Source-Hash: 7430dad59aaf98f4
+# Source-Hash: b99175b7ac8aa206
 # Review: required
-# AI-Provider: claude-code
-# AI-Model: claude-opus-5-5
-# English: "Tripod"
+# English: "Twist per Segment"
 #: packages/nodes/src/column/panel.tsx
 #, fuzzy
-msgid "node.column.panel.tripod"
-msgstr "三脚"
+msgid "node.column.panel.twistPerSegment"
+msgstr "セグメントごとのねじれ"
 
 # Source-Hash: 0db559f22647ec73
 # Review: required
@@ -22355,35 +23063,45 @@ msgstr "三脚"
 msgid "node.column.panel.twistSegments"
 msgstr "ねじれのセグメント数"
 
-# Source-Hash: 8038a34ffebf4932
-# Review: required
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Vertical"
+# Source-Hash: 4d8bfac0809e9f7c
+# Review: required
+# English: "Volute"
 #: packages/nodes/src/column/panel.tsx
 #, fuzzy
-msgid "node.column.panel.vertical"
-msgstr "垂直"
+msgid "node.column.panel.volute"
+msgstr "渦巻"
 
-# Source-Hash: f24cc343d79acc10
-# Review: required
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "V Support"
+# Source-Hash: 7c352c005719e3a2
+# Review: required
+# English: "Volutes"
 #: packages/nodes/src/column/panel.tsx
 #, fuzzy
-msgid "node.column.panel.vSupport"
-msgstr "V 字支柱"
+msgid "node.column.panel.voluteCount"
+msgstr "渦巻の数"
 
-# Source-Hash: 44dda7136b93c8ee
-# Review: required
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Waist"
+# Source-Hash: 536aa9f690cfb81d
+# Review: required
+# English: "Volute Size"
 #: packages/nodes/src/column/panel.tsx
 #, fuzzy
-msgid "node.column.panel.waist"
-msgstr "スラブ式"
+msgid "node.column.panel.voluteSize"
+msgstr "渦巻のサイズ"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: fdce60f01800860f
+# Review: required
+# English: "Waist Reduction Ratio"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.waistReductionRatio"
+msgstr "くびれの比率"
 
 # Source-Hash: 3a0ccd6c46877a87
 # Review: required
@@ -22395,35 +23113,55 @@ msgstr "スラブ式"
 msgid "node.column.panel.width"
 msgstr "幅"
 
-# Source-Hash: 4e6640dfff42cea4
-# Review: required
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "X Brace"
+# Source-Hash: 4f4e9f2d97ef01f5
+# Review: required
+# English: "Width and depth scales multiply the dimensions in Size."
 #: packages/nodes/src/column/panel.tsx
 #, fuzzy
-msgid "node.column.panel.xBrace"
-msgstr "X ブレース"
+msgid "node.column.panel.widthAndDepthScalesMultiplyThe"
+msgstr "幅と奥行きの比率は「サイズ」の寸法に掛け合わされます。"
 
-# Source-Hash: fefc9b1cfb26b5a8
-# Review: required
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Yaw"
+# Source-Hash: eb0267f511beda4a
+# Review: required
+# English: "Width and depth scales use Size. Band and neck scales use the base footprint."
 #: packages/nodes/src/column/panel.tsx
 #, fuzzy
-msgid "node.column.panel.yaw"
-msgstr "ヨー"
+msgid "node.column.panel.widthAndDepthScalesUseSize"
+msgstr "幅と奥行きの比率は「サイズ」を基準にします。バンドと柱頸の比率は柱礎の設置面を基準にします。"
 
-# Source-Hash: 86259690e332b66d
-# Review: required
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Y Support"
+# Source-Hash: cdb1d1dacff8560e
+# Review: required
+# English: "Width Scale"
 #: packages/nodes/src/column/panel.tsx
 #, fuzzy
-msgid "node.column.panel.ySupport"
-msgstr "Y 字支柱"
+msgid "node.column.panel.widthScale"
+msgstr "幅の比率"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: d5bc7038c31682a9
+# Review: required
+# English: "Width Span"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.widthSpan"
+msgstr "幅のスパン"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: bc0503ea7ab743ed
+# Review: required
+# English: "Wood Bracket"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.woodBracket"
+msgstr "木製の持送り"
 
 # Source-Hash: 4d3a89de7073d38d
 # Review: required
@@ -22530,7 +23268,7 @@ msgstr "未処理"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "A-Frame Support"
-#: packages/nodes/src/column/panel.tsx
+#: packages/nodes/src/column/preset-gallery.tsx
 #, fuzzy
 msgid "node.column.preset.aFrameSupport"
 msgstr "A フレーム支柱"
@@ -22540,7 +23278,7 @@ msgstr "A フレーム支柱"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Straight Round"
-#: packages/nodes/src/column/panel.tsx
+#: packages/nodes/src/column/preset-gallery.tsx
 #, fuzzy
 msgid "node.column.preset.basicPillar"
 msgstr "円柱"
@@ -22550,7 +23288,7 @@ msgstr "円柱"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Box Frame"
-#: packages/nodes/src/column/panel.tsx
+#: packages/nodes/src/column/preset-gallery.tsx
 #, fuzzy
 msgid "node.column.preset.boxFrameSupport"
 msgstr "ボックスフレーム"
@@ -22560,7 +23298,7 @@ msgstr "ボックスフレーム"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Soft Bulged"
-#: packages/nodes/src/column/panel.tsx
+#: packages/nodes/src/column/preset-gallery.tsx
 #, fuzzy
 msgid "node.column.preset.bulgedPillar"
 msgstr "ゆるいふくらみ"
@@ -22570,7 +23308,7 @@ msgstr "ゆるいふくらみ"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Hourglass"
-#: packages/nodes/src/column/panel.tsx
+#: packages/nodes/src/column/preset-gallery.tsx
 #, fuzzy
 msgid "node.column.preset.hourglassPillar"
 msgstr "砂時計型"
@@ -22580,7 +23318,7 @@ msgstr "砂時計型"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "K Brace"
-#: packages/nodes/src/column/panel.tsx
+#: packages/nodes/src/column/preset-gallery.tsx
 #, fuzzy
 msgid "node.column.preset.kBraceSupport"
 msgstr "K ブレース"
@@ -22590,7 +23328,7 @@ msgstr "K ブレース"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Portal Frame"
-#: packages/nodes/src/column/panel.tsx
+#: packages/nodes/src/column/preset-gallery.tsx
 #, fuzzy
 msgid "node.column.preset.portalFrameSupport"
 msgstr "門型フレーム"
@@ -22600,7 +23338,7 @@ msgstr "門型フレーム"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Single Strut"
-#: packages/nodes/src/column/panel.tsx
+#: packages/nodes/src/column/preset-gallery.tsx
 #, fuzzy
 msgid "node.column.preset.singleStrutSupport"
 msgstr "単一支柱"
@@ -22610,7 +23348,7 @@ msgstr "単一支柱"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Square Block"
-#: packages/nodes/src/column/panel.tsx
+#: packages/nodes/src/column/preset-gallery.tsx
 #, fuzzy
 msgid "node.column.preset.squarePillar"
 msgstr "角柱"
@@ -22620,7 +23358,7 @@ msgstr "角柱"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Tapered Round"
-#: packages/nodes/src/column/panel.tsx
+#: packages/nodes/src/column/preset-gallery.tsx
 #, fuzzy
 msgid "node.column.preset.taperedPillar"
 msgstr "テーパー円柱"
@@ -22630,7 +23368,7 @@ msgstr "テーパー円柱"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Trestle Frame"
-#: packages/nodes/src/column/panel.tsx
+#: packages/nodes/src/column/preset-gallery.tsx
 #, fuzzy
 msgid "node.column.preset.trestleSupport"
 msgstr "架台フレーム"
@@ -22640,7 +23378,7 @@ msgstr "架台フレーム"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Tripod Support"
-#: packages/nodes/src/column/panel.tsx
+#: packages/nodes/src/column/preset-gallery.tsx
 #, fuzzy
 msgid "node.column.preset.tripodSupport"
 msgstr "三脚支柱"
@@ -22650,7 +23388,7 @@ msgstr "三脚支柱"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "V Support"
-#: packages/nodes/src/column/panel.tsx
+#: packages/nodes/src/column/preset-gallery.tsx
 #, fuzzy
 msgid "node.column.preset.vFrameSupport"
 msgstr "V 字支柱"
@@ -22660,7 +23398,7 @@ msgstr "V 字支柱"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "X Brace"
-#: packages/nodes/src/column/panel.tsx
+#: packages/nodes/src/column/preset-gallery.tsx
 #, fuzzy
 msgid "node.column.preset.xBraceSupport"
 msgstr "X ブレース"
@@ -22670,10 +23408,50 @@ msgstr "X ブレース"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Y Support"
-#: packages/nodes/src/column/panel.tsx
+#: packages/nodes/src/column/preset-gallery.tsx
 #, fuzzy
 msgid "node.column.preset.yFrameSupport"
 msgstr "Y 字支柱"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: c9bf954389349540
+# Review: required
+# English: "Apply {label} shape"
+#: packages/nodes/src/column/preset-gallery.tsx
+#, fuzzy
+msgid "node.column.presetGallery.applyLabelShape"
+msgstr "{label}の形状を適用"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: d98edff9428038de
+# Review: required
+# English: "Choose a shape"
+#: packages/nodes/src/column/preset-gallery.tsx
+#, fuzzy
+msgid "node.column.presetGallery.chooseAShape"
+msgstr "形状を選択"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 13bd6d71e7e6e345
+# Review: required
+# English: "Hover or focus to preview; click to apply. Materials are kept. Escape cancels the preview."
+#: packages/nodes/src/column/preset-gallery.tsx
+#, fuzzy
+msgid "node.column.presetGallery.hoverOrFocusToPreviewClick"
+msgstr "ホバーまたはフォーカスでプレビューし、クリックで適用します。マテリアルは保持されます。Esc でプレビューを取り消します。"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 367dcd06db200682
+# Review: required
+# English: "Shape presets"
+#: packages/nodes/src/column/preset-gallery.tsx
+#, fuzzy
+msgid "node.column.presetGallery.shapePresets"
+msgstr "形状プリセット"
 
 # Source-Hash: 895766ad1b766c2e
 # Review: required
@@ -24539,6 +25317,336 @@ msgstr "R/T で回転"
 msgid "node.ductSegment.description"
 msgstr "空調ダクト — 円形・矩形・扁平楕円断面のポリライン。"
 
+# Source-Hash: c63202c40d7fbac5
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+# English: "Apply offset"
+#: packages/nodes/src/duct-segment/edit-inspector.tsx
+#, fuzzy
+msgid "node.ductSegment.editInspector.applyOffset"
+msgstr "オフセットを適用"
+
+# Source-Hash: 79cd694c04938730
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+# English: "Apply resize"
+#: packages/nodes/src/duct-segment/edit-inspector.tsx
+#, fuzzy
+msgid "node.ductSegment.editInspector.applyResize"
+msgstr "サイズ変更を適用"
+
+# Source-Hash: f97058f9f79a49f7
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+# English: "Branch stops at junctions, size changes and equipment. Boundary collars stay fixed."
+#: packages/nodes/src/duct-segment/edit-inspector.tsx
+#, fuzzy
+msgid "node.ductSegment.editInspector.branchStopsAtJunctionsSizeChanges"
+msgstr "分岐は合流部、サイズ変更箇所、機器で止まります。境界のカラーは固定されたままです。"
+
+# Source-Hash: e5f62ba5c4a2e770
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+# English: "Connected same-size branch"
+#: packages/nodes/src/duct-segment/edit-inspector.tsx
+#, fuzzy
+msgid "node.ductSegment.editInspector.connectedSameSizeBranch"
+msgstr "接続された同サイズの分岐"
+
+# Source-Hash: e704515c0fe2a6ca
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+# English: "Diameter (in)"
+#: packages/nodes/src/duct-segment/edit-inspector.tsx
+#, fuzzy
+msgid "node.ductSegment.editInspector.diameter"
+msgstr "直径（in）"
+
+# Source-Hash: 3fba7da8f5ce8470
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+# English: "Duct edit"
+#: packages/nodes/src/duct-segment/edit-inspector.tsx
+#, fuzzy
+msgid "node.ductSegment.editInspector.ductEdit"
+msgstr "ダクトの編集"
+
+# Source-Hash: 4c189ffbaf391531
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+# English: "Duct shape"
+#: packages/nodes/src/duct-segment/edit-inspector.tsx
+#, fuzzy
+msgid "node.ductSegment.editInspector.ductShape"
+msgstr "ダクトの形状"
+
+# Source-Hash: 4196e9dba5038422
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+# English: "Edit duct route"
+#: packages/nodes/src/duct-segment/edit-inspector.tsx
+#, fuzzy
+msgid "node.ductSegment.editInspector.editDuctRoute"
+msgstr "ダクトのルートを編集"
+
+# Source-Hash: e6ad8e30edf8b8dc
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+# English: "Face alignment applies to free straight runs. Left and right follow the run’s section axes."
+#: packages/nodes/src/duct-segment/edit-inspector.tsx
+#, fuzzy
+msgid "node.ductSegment.editInspector.faceAlignmentAppliesToFreeStraight"
+msgstr "面合わせは自由な直線区間に適用されます。左右は区間の断面軸に従います。"
+
+# Source-Hash: 98b9dbf56de61e41
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+# English: "First bend from start (m)"
+#: packages/nodes/src/duct-segment/edit-inspector.tsx
+#, fuzzy
+msgid "node.ductSegment.editInspector.firstBend"
+msgstr "始点から最初の曲がりまで（m）"
+
+# Source-Hash: 46dd5dd1bd2712fd
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+# English: "Height (in)"
+#: packages/nodes/src/duct-segment/edit-inspector.tsx
+#, fuzzy
+msgid "node.ductSegment.editInspector.height"
+msgstr "高さ（in）"
+
+# Source-Hash: 13b1dec096cefeda
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+# English: "Keep bottom face"
+#: packages/nodes/src/duct-segment/edit-inspector.tsx
+#, fuzzy
+msgid "node.ductSegment.editInspector.keepBottomFace"
+msgstr "下面を保つ"
+
+# Source-Hash: 4d1bae9a034eef7b
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+# English: "Keep centerline"
+#: packages/nodes/src/duct-segment/edit-inspector.tsx
+#, fuzzy
+msgid "node.ductSegment.editInspector.keepCenterline"
+msgstr "中心線を保つ"
+
+# Source-Hash: 66a2843e7ee53206
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+# English: "Keep left face"
+#: packages/nodes/src/duct-segment/edit-inspector.tsx
+#, fuzzy
+msgid "node.ductSegment.editInspector.keepLeftFace"
+msgstr "左面を保つ"
+
+# Source-Hash: 422d33d91000c6d5
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+# English: "Keep right face"
+#: packages/nodes/src/duct-segment/edit-inspector.tsx
+#, fuzzy
+msgid "node.ductSegment.editInspector.keepRightFace"
+msgstr "右面を保つ"
+
+# Source-Hash: d68b946185860736
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+# English: "Keep top face"
+#: packages/nodes/src/duct-segment/edit-inspector.tsx
+#, fuzzy
+msgid "node.ductSegment.editInspector.keepTopFace"
+msgstr "上面を保つ"
+
+# Source-Hash: 5faa81fe58b2e707
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+# English: "Last bend from start (m)"
+#: packages/nodes/src/duct-segment/edit-inspector.tsx
+#, fuzzy
+msgid "node.ductSegment.editInspector.lastBend"
+msgstr "始点から最後の曲がりまで（m）"
+
+# Source-Hash: aac8ab5c8fe8dc80
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+# English: "Offset around obstacle"
+#: packages/nodes/src/duct-segment/edit-inspector.tsx
+#, fuzzy
+msgid "node.ductSegment.editInspector.offsetAroundObstacle"
+msgstr "障害物を迂回"
+
+# Source-Hash: 57fd5f8ee7415f5c
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+# English: "Offset side elevation preview"
+#: packages/nodes/src/duct-segment/edit-inspector.tsx
+#, fuzzy
+msgid "node.ductSegment.editInspector.offsetSideElevationPreview"
+msgstr "オフセットの側面立面プレビュー"
+
+# Source-Hash: ed6d7b3dd9d5fc69
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+# English: "Oval"
+#: packages/nodes/src/duct-segment/edit-inspector.tsx
+#, fuzzy
+msgid "node.ductSegment.editInspector.oval"
+msgstr "楕円"
+
+# Source-Hash: 4196843b0dd8f46c
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+# English: "{affected, plural, one {# existing part affected} other {# existing parts affected}} · {created, plural, one {# new part} other {# new parts}}"
+#: packages/nodes/src/duct-segment/edit-inspector.tsx
+#, fuzzy
+msgid "node.ductSegment.editInspector.partsSummary"
+msgstr "{affected, plural, other {既存の部材 # 個に影響}} · {created, plural, other {新規部材 # 個}}"
+
+# Source-Hash: d548731cb7cf5d27
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+# English: "Positive moves up; negative moves down. Four elbows preserve both endpoints. Check the obstacle’s clearance; this does not detect collisions."
+#: packages/nodes/src/duct-segment/edit-inspector.tsx
+#, fuzzy
+msgid "node.ductSegment.editInspector.positiveMovesUpNegativeMovesDown"
+msgstr "正の値で上へ、負の値で下へ移動します。4つのエルボで両端を保ちます。障害物とのクリアランスを確認してください。衝突は検出されません。"
+
+# Source-Hash: 3a046d5727f10a80
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+# English: "Preserve duct alignment"
+#: packages/nodes/src/duct-segment/edit-inspector.tsx
+#, fuzzy
+msgid "node.ductSegment.editInspector.preserveDuctAlignment"
+msgstr "保持するダクトの位置合わせ"
+
+# Source-Hash: f29fef1beeb25f22
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+# English: "Rectangular"
+#: packages/nodes/src/duct-segment/edit-inspector.tsx
+#, fuzzy
+msgid "node.ductSegment.editInspector.rectangular"
+msgstr "長方形"
+
+# Source-Hash: e8be4487b05f939d
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+# English: "Resize scope"
+#: packages/nodes/src/duct-segment/edit-inspector.tsx
+#, fuzzy
+msgid "node.ductSegment.editInspector.resizeScope"
+msgstr "サイズ変更の範囲"
+
+# Source-Hash: c4b16733095ad12f
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+# English: "Resize with connections"
+#: packages/nodes/src/duct-segment/edit-inspector.tsx
+#, fuzzy
+msgid "node.ductSegment.editInspector.resizeWithConnections"
+msgstr "接続を保ってサイズ変更"
+
+# Source-Hash: ad0457800a1f0eb4
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+# English: "Round"
+#: packages/nodes/src/duct-segment/edit-inspector.tsx
+#, fuzzy
+msgid "node.ductSegment.editInspector.round"
+msgstr "丸"
+
+# Source-Hash: bf79b8c8e7a3ba17
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+# English: "Side elevation · dashed line is the original route"
+#: packages/nodes/src/duct-segment/edit-inspector.tsx
+#, fuzzy
+msgid "node.ductSegment.editInspector.sideElevationDashedLineIsThe"
+msgstr "側面立面 · 破線は元のルートです"
+
+# Source-Hash: d271518d800f3e1c
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+# English: "This segment"
+#: packages/nodes/src/duct-segment/edit-inspector.tsx
+#, fuzzy
+msgid "node.ductSegment.editInspector.thisSegment"
+msgstr "この区間"
+
+# Source-Hash: 1bbbb491639e18e1
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+# English: "Unable to apply edit."
+#: packages/nodes/src/duct-segment/edit-inspector.tsx
+#, fuzzy
+msgid "node.ductSegment.editInspector.unableToApplyEdit"
+msgstr "編集を適用できません。"
+
+# Source-Hash: 0283a6615312b133
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+# English: "Unable to plan this edit."
+#: packages/nodes/src/duct-segment/edit-inspector.tsx
+#, fuzzy
+msgid "node.ductSegment.editInspector.unableToPlanEdit"
+msgstr "この編集を計画できません。"
+
+# Source-Hash: 2dad926bc0e26f4a
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+# English: "Vertical offset (m)"
+#: packages/nodes/src/duct-segment/edit-inspector.tsx
+#, fuzzy
+msgid "node.ductSegment.editInspector.verticalOffset"
+msgstr "垂直オフセット（m）"
+
+# Source-Hash: 087cae2b0e372680
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+# English: "Width (in)"
+#: packages/nodes/src/duct-segment/edit-inspector.tsx
+#, fuzzy
+msgid "node.ductSegment.editInspector.width"
+msgstr "幅（in）"
+
 # Source-Hash: e971d82044e2f48e
 # Review: required
 # AI-Provider: claude-code
@@ -24670,6 +25778,16 @@ msgstr "かご"
 msgid "node.elevator.panel.cabHeight"
 msgstr "かごの高さ"
 
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 4068260bb7e3d54b
+# Review: required
+# English: "Clear cab interior: {width} × {depth} × {height} m. Door opening: {doorWidth} × {doorHeight} m."
+#: packages/nodes/src/elevator/panel.tsx
+#, fuzzy
+msgid "node.elevator.panel.cabInteriorAndDoorOpening"
+msgstr "かご内寸：{width} × {depth} × {height} m。出入口：{doorWidth} × {doorHeight} m。"
+
 # Source-Hash: 65f410261609060b
 # Review: required
 # AI-Provider: claude-code
@@ -24680,6 +25798,16 @@ msgstr "かごの高さ"
 msgid "node.elevator.panel.centerOpening"
 msgstr "中央開き"
 
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 1ad164e4dd09e856
+# Review: required
+# English: "Cutaway shaft"
+#: packages/nodes/src/elevator/panel.tsx
+#, fuzzy
+msgid "node.elevator.panel.cutawayShaft"
+msgstr "昇降路の切断表示"
+
 # Source-Hash: c5433f4d3ea8a8a7
 # Review: required
 # AI-Provider: claude-code
@@ -24689,6 +25817,16 @@ msgstr "中央開き"
 #, fuzzy
 msgid "node.elevator.panel.defaultFloor"
 msgstr "既定の階"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 948544e79db10407
+# Review: required
+# English: "Default floor"
+#: packages/nodes/src/elevator/panel.tsx
+#, fuzzy
+msgid "node.elevator.panel.defaultFloor2"
+msgstr "既定の階層"
 
 # Source-Hash: b26de372b4b0eaac
 # Review: required
@@ -24730,6 +25868,16 @@ msgstr "接続先"
 msgid "node.elevator.panel.disabled"
 msgstr "無効"
 
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 42d26aa25a7b3dc5
+# Review: required
+# English: "Disable {level}"
+#: packages/nodes/src/elevator/panel.tsx
+#, fuzzy
+msgid "node.elevator.panel.disableLevel"
+msgstr "{level}を無効化"
+
 # Source-Hash: d8baf402fa9c52f0
 # Review: required
 # AI-Provider: claude-code
@@ -24739,6 +25887,26 @@ msgstr "無効"
 #, fuzzy
 msgid "node.elevator.panel.doorHeight"
 msgstr "扉の高さ"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: c694cae2f5a8d286
+# Review: required
+# English: "Door opening style"
+#: packages/nodes/src/elevator/panel.tsx
+#, fuzzy
+msgid "node.elevator.panel.doorOpeningStyle"
+msgstr "扉の開き方"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 990ae81752236e3a
+# Review: required
+# English: "Door panel style"
+#: packages/nodes/src/elevator/panel.tsx
+#, fuzzy
+msgid "node.elevator.panel.doorPanelStyle"
+msgstr "扉パネルのスタイル"
 
 # Source-Hash: 20f60b98de67849b
 # Review: required
@@ -24820,6 +25988,16 @@ msgstr "エレベーター"
 msgid "node.elevator.panel.from"
 msgstr "出発階"
 
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 4a7d8aa4abd3f13c
+# Review: required
+# English: "From level"
+#: packages/nodes/src/elevator/panel.tsx
+#, fuzzy
+msgid "node.elevator.panel.fromLevel"
+msgstr "開始階層"
+
 # Source-Hash: 8ab91094cf650204
 # Review: required
 # AI-Provider: claude-code
@@ -24839,6 +26017,16 @@ msgstr "ガラス"
 #, fuzzy
 msgid "node.elevator.panel.glassFrame"
 msgstr "ガラス枠"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 612cfaf47ccef086
+# Review: required
+# English: "Hover or focus a section to highlight its parts. Cutaway affects this inspection only."
+#: packages/nodes/src/elevator/panel.tsx
+#, fuzzy
+msgid "node.elevator.panel.hoverOrFocusASectionTo"
+msgstr "セクションにホバーまたはフォーカスすると、その部品が強調表示されます。切断表示はこの確認にのみ影響します。"
 
 # Source-Hash: c0ff16d77ebc9593
 # Review: required
@@ -24880,6 +26068,26 @@ msgstr "開き方"
 msgid "node.elevator.panel.position"
 msgstr "位置"
 
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 62e42f479e013bd9
+# Review: required
+# English: "Presets and inspection"
+#: packages/nodes/src/elevator/panel.tsx
+#, fuzzy
+msgid "node.elevator.panel.presetsAndInspection"
+msgstr "プリセットと確認"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 8e7f6a377134951b
+# Review: required
+# English: "Reset {section}"
+#: packages/nodes/src/elevator/panel.tsx
+#, fuzzy
+msgid "node.elevator.panel.resetSection"
+msgstr "{section}をリセット"
+
 # Source-Hash: 01989595ee7c1dc0
 # Review: required
 # AI-Provider: claude-code
@@ -24910,6 +26118,16 @@ msgstr "分割パネル"
 msgid "node.elevator.panel.service"
 msgstr "サービス"
 
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 74ce52847ea1b4e0
+# Review: required
+# English: "Service-only access for {level}"
+#: packages/nodes/src/elevator/panel.tsx
+#, fuzzy
+msgid "node.elevator.panel.serviceOnlyAccessForLevel"
+msgstr "{level}はサービス専用アクセス"
+
 # Source-Hash: 4fc63ad21de30103
 # Review: required
 # AI-Provider: claude-code
@@ -24938,6 +26156,16 @@ msgstr "昇降路の奥行き"
 #: packages/nodes/src/elevator/panel.tsx
 #, fuzzy
 msgid "node.elevator.panel.shaftStyle"
+msgstr "昇降路のスタイル"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: a7794a81141b4de4
+# Review: required
+# English: "Shaft style"
+#: packages/nodes/src/elevator/panel.tsx
+#, fuzzy
+msgid "node.elevator.panel.shaftStyle2"
 msgstr "昇降路のスタイル"
 
 # Source-Hash: 3dab61aeb47e504d
@@ -25010,6 +26238,16 @@ msgstr "速度"
 msgid "node.elevator.panel.stopStoporder"
 msgstr "停止階 {stopOrder}"
 
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 31eedbbae787f6e7
+# Review: required
+# English: "The cab needs more headroom than one or more served floors provide. Check the floor heights."
+#: packages/nodes/src/elevator/panel.tsx
+#, fuzzy
+msgid "node.elevator.panel.theCabNeedsMoreHeadroomThan"
+msgstr "かごに必要な頭上空間が、1つ以上の停止階層の高さを超えています。階層の高さを確認してください。"
+
 # Source-Hash: b3214a20e45a7aed
 # Review: required
 # AI-Provider: claude-code
@@ -25019,6 +26257,16 @@ msgstr "停止階 {stopOrder}"
 #, fuzzy
 msgid "node.elevator.panel.to"
 msgstr "終点"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: c14c46fb8719cb48
+# Review: required
+# English: "To level"
+#: packages/nodes/src/elevator/panel.tsx
+#, fuzzy
+msgid "node.elevator.panel.toLevel"
+msgstr "終了階層"
 
 # Source-Hash: 1a5ccd607c400d76
 # Review: required
@@ -25049,6 +26297,36 @@ msgstr "幅"
 #, fuzzy
 msgid "node.elevator.panel.yaw"
 msgstr "ヨー"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 8ab91094cf650204
+# Review: required
+# English: "Glass"
+#: packages/nodes/src/elevator/presets.ts
+#, fuzzy
+msgid "node.elevator.preset.glass"
+msgstr "ガラス"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 6f3a0cb35f471f06
+# Review: required
+# English: "Passenger"
+#: packages/nodes/src/elevator/presets.ts
+#, fuzzy
+msgid "node.elevator.preset.passenger"
+msgstr "乗用"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: aa7b49b13f96057f
+# Review: required
+# English: "Service"
+#: packages/nodes/src/elevator/presets.ts
+#, fuzzy
+msgid "node.elevator.preset.service"
+msgstr "サービス用"
 
 # Source-Hash: 7b22c91cf520e161
 # Review: required
@@ -26567,15 +27845,245 @@ msgstr "⌥ 軸"
 msgid "node.pipeFitting.tool.rTRotate"
 msgstr "R/T で回転"
 
-# Source-Hash: a0bb4762aa66fa3e
+# Source-Hash: a2d9b4f249d256a2
 # Review: required
-# AI-Provider: claude-code
+# AI-Provider: cursor-agent
 # AI-Model: claude-opus-5-5
-# English: "Drain / waste / vent pipe run — draw level or toggle a ¼″ per foot fall with S."
+# English: "Drain / waste / vent pipe run — draw level or choose grade and downhill direction."
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
 msgid "node.pipeSegment.description"
-msgstr "排水・汚水・通気管 — 水平に描くか、S で1フィートあたり¼″の勾配を切り替え。"
+msgstr "排水・汚水・通気管 — 水平に描くか、勾配と下り方向を選びます。"
+
+# Source-Hash: 1e023cceafd26c49
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+# English: "Choose an endpoint"
+#: packages/nodes/src/pipe-segment/grade-label.ts
+#, fuzzy
+msgid "node.pipeSegment.grade.chooseEndpoint"
+msgstr "端点を選択してください"
+
+# Source-Hash: 1d12cd840d742517
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+# English: "Level · no gravity fall"
+#: packages/nodes/src/pipe-segment/grade-label.ts
+#, fuzzy
+msgid "node.pipeSegment.grade.level"
+msgstr "水平 · 重力による勾配なし"
+
+# Source-Hash: 9ded568026ac7088
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+# English: "{percent}%"
+#: packages/nodes/src/pipe-segment/grade-label.ts
+#, fuzzy
+msgid "node.pipeSegment.grade.percent"
+msgstr "{percent}%"
+
+# Source-Hash: adba843f6e1128f2
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+# English: "{percent} · 1:{ratio} · {direction, select, forward {start → end} other {end → start}} (down)"
+#: packages/nodes/src/pipe-segment/grade-label.ts
+#, fuzzy
+msgid "node.pipeSegment.grade.sloped"
+msgstr "{percent} · 1:{ratio} · {direction, select, forward {始点 → 終点} other {終点 → 始点}}（下り）"
+
+# Source-Hash: b25fe0ebcdadc1a1
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+# English: "Vertical · {direction, select, forward {start → end} other {end → start}} (down)"
+#: packages/nodes/src/pipe-segment/grade-label.ts
+#, fuzzy
+msgid "node.pipeSegment.grade.vertical"
+msgstr "垂直 · {direction, select, forward {始点 → 終点} other {終点 → 始点}}（下り）"
+
+# Source-Hash: 1107996c9987dc5a
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+# English: "Apply grade to horizontal legs"
+#: packages/nodes/src/pipe-segment/grade-inspector.tsx
+#, fuzzy
+msgid "node.pipeSegment.gradeInspector.applyGradeToHorizontalLegs"
+msgstr "水平区間に勾配を適用"
+
+# Source-Hash: 6348d1ecbab8e926
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+# English: "Arrows show downhill direction. Level runs have no gravity fall. Editing a path point preserves each leg’s grade."
+#: packages/nodes/src/pipe-segment/grade-inspector.tsx
+#, fuzzy
+msgid "node.pipeSegment.gradeInspector.arrowsShowDownhillDirectionLevelRuns"
+msgstr "矢印は下り方向を示します。水平の区間には重力による勾配がありません。経路の点を編集しても各区間の勾配は保たれます。"
+
+# Source-Hash: 3c2d7360f5b0ec0f
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+# English: "Centerline elevations above level: start {start} m · end {end} m"
+#: packages/nodes/src/pipe-segment/grade-inspector.tsx
+#, fuzzy
+msgid "node.pipeSegment.gradeInspector.centerlineElevations"
+msgstr "階層からの中心線の高さ: 始点 {start} m · 終点 {end} m"
+
+# Source-Hash: 13a82ce00378a76a
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+# English: "End elevation (m)"
+#: packages/nodes/src/pipe-segment/grade-inspector.tsx
+#, fuzzy
+msgid "node.pipeSegment.gradeInspector.endElevation"
+msgstr "終点の高さ（m）"
+
+# Source-Hash: b9958602c0675e93
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+# English: "End → start"
+#: packages/nodes/src/pipe-segment/grade-inspector.tsx
+#, fuzzy
+msgid "node.pipeSegment.gradeInspector.endStart"
+msgstr "終点 → 始点"
+
+# Source-Hash: eac5f522f23d244b
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+# English: "Fixed pipe endpoint"
+#: packages/nodes/src/pipe-segment/grade-inspector.tsx
+#, fuzzy
+msgid "node.pipeSegment.gradeInspector.fixedPipeEndpoint"
+msgstr "固定する配管端点"
+
+# Source-Hash: f3d8fa71962558e5
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+# English: "Grade (%)"
+#: packages/nodes/src/pipe-segment/grade-inspector.tsx
+#, fuzzy
+msgid "node.pipeSegment.gradeInspector.grade"
+msgstr "勾配（%）"
+
+# Source-Hash: bf34bb5add643aeb
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+# English: "Grade and flow"
+#: packages/nodes/src/pipe-segment/grade-inspector.tsx
+#, fuzzy
+msgid "node.pipeSegment.gradeInspector.gradeAndFlow"
+msgstr "勾配と流れ"
+
+# Source-Hash: ce41df161aeed7a6
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+# English: "Keep end elevation"
+#: packages/nodes/src/pipe-segment/grade-inspector.tsx
+#, fuzzy
+msgid "node.pipeSegment.gradeInspector.keepEndElevation"
+msgstr "終点の高さを保つ"
+
+# Source-Hash: a73da2d9b324635d
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+# English: "Keep start elevation"
+#: packages/nodes/src/pipe-segment/grade-inspector.tsx
+#, fuzzy
+msgid "node.pipeSegment.gradeInspector.keepStartElevation"
+msgstr "始点の高さを保つ"
+
+# Source-Hash: 95b18c4f1c132276
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+# English: "Leg {number}: {grade}"
+#: packages/nodes/src/pipe-segment/grade-inspector.tsx
+#, fuzzy
+msgid "node.pipeSegment.gradeInspector.leg"
+msgstr "区間 {number}: {grade}"
+
+# Source-Hash: af7138d6a8a07914
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+# English: "Move elevation, keep grades"
+#: packages/nodes/src/pipe-segment/grade-inspector.tsx
+#, fuzzy
+msgid "node.pipeSegment.gradeInspector.moveElevationKeepGrades"
+msgstr "高さを移動し、勾配を保つ"
+
+# Source-Hash: a61f74b4b445e76c
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+# English: "Pipe anchor elevation"
+#: packages/nodes/src/pipe-segment/grade-inspector.tsx
+#, fuzzy
+msgid "node.pipeSegment.gradeInspector.pipeAnchorElevation"
+msgstr "配管の基準点の高さ"
+
+# Source-Hash: a3628871eae01da3
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+# English: "Pipe downhill flow"
+#: packages/nodes/src/pipe-segment/grade-inspector.tsx
+#, fuzzy
+msgid "node.pipeSegment.gradeInspector.pipeDownhillFlow"
+msgstr "配管の下り方向"
+
+# Source-Hash: 10c942b544edcbd4
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+# English: "Pipe grade percent"
+#: packages/nodes/src/pipe-segment/grade-inspector.tsx
+#, fuzzy
+msgid "node.pipeSegment.gradeInspector.pipeGradePercent"
+msgstr "配管勾配（%）"
+
+# Source-Hash: acb2a9b9e601c85b
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+# English: "Start elevation (m)"
+#: packages/nodes/src/pipe-segment/grade-inspector.tsx
+#, fuzzy
+msgid "node.pipeSegment.gradeInspector.startElevation"
+msgstr "始点の高さ（m）"
+
+# Source-Hash: c742d28f93020b10
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+# English: "Start → end"
+#: packages/nodes/src/pipe-segment/grade-inspector.tsx
+#, fuzzy
+msgid "node.pipeSegment.gradeInspector.startEnd"
+msgstr "始点 → 終点"
+
+# Source-Hash: 42b6489db22b36a3
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+# English: "This edit cannot preserve the pipe grade and connected collars. Adjust the fitting or use Grade and flow."
+#: packages/nodes/src/pipe-segment/grade-affordance.ts
+#, fuzzy
+msgid "node.pipeSegment.gradeNotice.blocked"
+msgstr "この編集では配管の勾配と接続されたカラーを維持できません。継手を調整するか、［勾配と流れ］を使用してください。"
 
 # Source-Hash: 457155657704f7cc
 # Review: required
@@ -26586,6 +28094,286 @@ msgstr "排水・汚水・通気管 — 水平に描くか、S で1フィート�
 #, fuzzy
 msgid "node.pipeSegment.label"
 msgstr "排水管"
+
+# Source-Hash: 58c093b768f21b93
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+# English: "This move would change a connected pipe’s grade. Choose another position or press Esc to cancel."
+#: packages/nodes/src/pipe-segment/move-tool.tsx
+#, fuzzy
+msgid "node.pipeSegment.moveTool.connectedGradeBlocked"
+msgstr "この移動では接続された配管の勾配が変わります。別の位置を選ぶか、Esc でキャンセルしてください。"
+
+# Source-Hash: 012c10b3fb071052
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+# English: "Apply pipe offset"
+#: packages/nodes/src/pipe-segment/offset-inspector.tsx
+#, fuzzy
+msgid "node.pipeSegment.offsetInspector.applyPipeOffset"
+msgstr "配管オフセットを適用"
+
+# Source-Hash: 6abc3bcf60f7aed7
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+# English: "Check obstacle clearance. The preview does not detect collisions."
+#: packages/nodes/src/pipe-segment/offset-inspector.tsx
+#, fuzzy
+msgid "node.pipeSegment.offsetInspector.checkObstacleClearanceThePreviewDoes"
+msgstr "障害物とのクリアランスを確認してください。プレビューは衝突を検出しません。"
+
+# Source-Hash: b23728d37200c667
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+# English: "Choose the first and last bend by horizontal distance from the start. Positive offset goes up; negative goes down. Each connector uses the offset height in horizontal travel."
+#: packages/nodes/src/pipe-segment/offset-inspector.tsx
+#, fuzzy
+msgid "node.pipeSegment.offsetInspector.chooseTheFirstAndLastBend"
+msgstr "最初と最後の曲がりを始点からの水平距離で指定します。正のオフセットは上へ、負は下へ移動します。各接続部はオフセット高さと同じ水平距離を使います。"
+
+# Source-Hash: 03528ff54200e797
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+# English: "First bend (m)"
+#: packages/nodes/src/pipe-segment/offset-inspector.tsx
+#, fuzzy
+msgid "node.pipeSegment.offsetInspector.firstBend"
+msgstr "最初の曲がり（m）"
+
+# Source-Hash: 4e6b6ed646a449cc
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+# English: "Last bend (m)"
+#: packages/nodes/src/pipe-segment/offset-inspector.tsx
+#, fuzzy
+msgid "node.pipeSegment.offsetInspector.lastBend"
+msgstr "最後の曲がり（m）"
+
+# Source-Hash: 102ac6742f497c2e
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+# English: "Offset applied in one undo step. End connections stayed fixed."
+#: packages/nodes/src/pipe-segment/offset-inspector.tsx
+#, fuzzy
+msgid "node.pipeSegment.offsetInspector.offsetAppliedInOneUndoStep"
+msgstr "オフセットを1回の取り消し単位で適用しました。両端の接続は固定されたままです。"
+
+# Source-Hash: aac8ab5c8fe8dc80
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+# English: "Offset around obstacle"
+#: packages/nodes/src/pipe-segment/offset-inspector.tsx
+#, fuzzy
+msgid "node.pipeSegment.offsetInspector.offsetAroundObstacle"
+msgstr "障害物を迂回"
+
+# Source-Hash: d6638d559a15dc79
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+# English: "Pipe offset side profile preview"
+#: packages/nodes/src/pipe-segment/offset-inspector.tsx
+#, fuzzy
+msgid "node.pipeSegment.offsetInspector.pipeOffsetSideProfilePreview"
+msgstr "配管オフセットの側面プロファイルのプレビュー"
+
+# Source-Hash: 93186c7801fe54b1
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+# English: "Side profile (schematic). Four bends · five pipe sections. Parallel sections keep the original grade; both end connections stay fixed."
+#: packages/nodes/src/pipe-segment/offset-inspector.tsx
+#, fuzzy
+msgid "node.pipeSegment.offsetInspector.sideProfileSchematicFourBendsFive"
+msgstr "側面プロファイル（模式図）。曲がり4か所 · 配管5区間。平行な区間は元の勾配を保ち、両端の接続は固定されたままです。"
+
+# Source-Hash: ab6a00ca812999d5
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+# English: "This offset includes an uphill waste section. It does not provide continuous downhill drainage."
+#: packages/nodes/src/pipe-segment/offset-inspector.tsx
+#, fuzzy
+msgid "node.pipeSegment.offsetInspector.thisOffsetIncludesAnUphillWaste"
+msgstr "このオフセットには上り勾配の排水区間が含まれます。連続した下り勾配の排水にはなりません。"
+
+# Source-Hash: 9da65d7ebc4d4ba1
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+# English: "Unable to apply offset."
+#: packages/nodes/src/pipe-segment/offset-inspector.tsx
+#, fuzzy
+msgid "node.pipeSegment.offsetInspector.unableToApplyOffset"
+msgstr "オフセットを適用できません。"
+
+# Source-Hash: b9d942406a6029e3
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+# English: "Unable to plan offset."
+#: packages/nodes/src/pipe-segment/offset-inspector.tsx
+#, fuzzy
+msgid "node.pipeSegment.offsetInspector.unableToPlanOffset"
+msgstr "オフセットを計画できません。"
+
+# Source-Hash: 2dad926bc0e26f4a
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+# English: "Vertical offset (m)"
+#: packages/nodes/src/pipe-segment/offset-inspector.tsx
+#, fuzzy
+msgid "node.pipeSegment.offsetInspector.verticalOffset"
+msgstr "垂直オフセット（m）"
+
+# Source-Hash: ab7feb5e8b9ef232
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+# English: "Apply pipe size"
+#: packages/nodes/src/pipe-segment/resize-inspector.tsx
+#, fuzzy
+msgid "node.pipeSegment.resizeInspector.applyPipeSize"
+msgstr "配管サイズを適用"
+
+# Source-Hash: 5a82f77707e6c422
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+# English: "Branches stop at junctions, size or material changes, and fixture connections. Reducers keep boundary collars fixed."
+#: packages/nodes/src/pipe-segment/resize-inspector.tsx
+#, fuzzy
+msgid "node.pipeSegment.resizeInspector.branchesStopAtJunctionsSizeOr"
+msgstr "分岐は合流部、サイズや材料の変更箇所、器具の接続部で止まります。レジューサーにより境界のカラーは固定されたままです。"
+
+# Source-Hash: 3406d3fb87431e87
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+# English: "Check resize"
+#: packages/nodes/src/pipe-segment/resize-inspector.tsx
+#, fuzzy
+msgid "node.pipeSegment.resizeInspector.checkResize"
+msgstr "サイズ変更を確認"
+
+# Source-Hash: 68e3596ff2fd6e60
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+# English: "Connected branch"
+#: packages/nodes/src/pipe-segment/resize-inspector.tsx
+#, fuzzy
+msgid "node.pipeSegment.resizeInspector.connectedBranch"
+msgstr "接続された分岐"
+
+# Source-Hash: c40570d3f7df8ad2
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+# English: "Current diameter: {diameter} in"
+#: packages/nodes/src/pipe-segment/resize-inspector.tsx
+#, fuzzy
+msgid "node.pipeSegment.resizeInspector.currentDiameter"
+msgstr "現在の直径: {diameter} in"
+
+# Source-Hash: e704515c0fe2a6ca
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+# English: "Diameter (in)"
+#: packages/nodes/src/pipe-segment/resize-inspector.tsx
+#, fuzzy
+msgid "node.pipeSegment.resizeInspector.diameterIn"
+msgstr "直径（in）"
+
+# Source-Hash: bf4fd51ca4d3d6c6
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+# English: "Pipe resize diameter"
+#: packages/nodes/src/pipe-segment/resize-inspector.tsx
+#, fuzzy
+msgid "node.pipeSegment.resizeInspector.pipeResizeDiameter"
+msgstr "変更後の配管直径"
+
+# Source-Hash: e31a6978e4744398
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+# English: "Pipe resize scope"
+#: packages/nodes/src/pipe-segment/resize-inspector.tsx
+#, fuzzy
+msgid "node.pipeSegment.resizeInspector.pipeResizeScope"
+msgstr "配管サイズ変更の範囲"
+
+# Source-Hash: 8b5479cd8378bf76
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+# English: "Pipe size"
+#: packages/nodes/src/pipe-segment/resize-inspector.tsx
+#, fuzzy
+msgid "node.pipeSegment.resizeInspector.pipeSize"
+msgstr "配管サイズ"
+
+# Source-Hash: ad7c5e79e9f545f2
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+# English: "Resized in one undo step. Grades and boundary connections preserved."
+#: packages/nodes/src/pipe-segment/resize-inspector.tsx
+#, fuzzy
+msgid "node.pipeSegment.resizeInspector.resized"
+msgstr "1回の取り消し単位でサイズを変更しました。勾配と境界の接続は保たれています。"
+
+# Source-Hash: 2681a615278ea7de
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+# English: "{runs, plural, one {# run} other {# runs}}, {fittings, plural, one {# fitting} other {# fittings}}, {reducers, plural, one {# new reducer} other {# new reducers}}. Grades stay unchanged."
+#: packages/nodes/src/pipe-segment/resize-inspector.tsx
+#, fuzzy
+msgid "node.pipeSegment.resizeInspector.resizeSummary"
+msgstr "{runs, plural, other {区間 # 本}}、{fittings, plural, other {継手 # 個}}、{reducers, plural, other {新規レジューサー # 個}}。勾配は変わりません。"
+
+# Source-Hash: d271518d800f3e1c
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+# English: "This segment"
+#: packages/nodes/src/pipe-segment/resize-inspector.tsx
+#, fuzzy
+msgid "node.pipeSegment.resizeInspector.thisSegment"
+msgstr "この区間"
+
+# Source-Hash: 0518760b3747bae1
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+# English: "Unable to resize pipe."
+#: packages/nodes/src/pipe-segment/resize-inspector.tsx
+#, fuzzy
+msgid "node.pipeSegment.resizeInspector.unableToResize"
+msgstr "配管のサイズを変更できません。"
+
+# Source-Hash: 4019007983696a57
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+# English: "{grade} · Start {start} m · End {end} m above level"
+#: packages/nodes/src/pipe-segment/tool.tsx
+#, fuzzy
+msgid "node.pipeSegment.tool.gradeDetail"
+msgstr "{grade} · 階層からの高さ: 始点 {start} m · 終点 {end} m"
 
 # Source-Hash: 6d0cdd14d0675e05
 # Review: required
@@ -26886,6 +28674,36 @@ msgstr "高さ"
 #, fuzzy
 msgid "node.roof.description"
 msgstr "1つ以上の面で構成される勾配・寄棟・切妻屋根。"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: ca5fae8856e13ced
+# Review: required
+# English: "Retry roof geometry"
+#: packages/nodes/src/roof/geometry-notice.tsx
+#, fuzzy
+msgid "node.roof.geometryNotice.retryRoofGeometry"
+msgstr "屋根形状を再試行"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 50b682dbab6737df
+# Review: required
+# English: "Roof geometry could not be rebuilt. The previous shape is still shown. Adjust the dimensions or intersections and retry."
+#: packages/nodes/src/roof/geometry-notice.tsx
+#, fuzzy
+msgid "node.roof.geometryNotice.roofGeometryCouldNotBeRebuilt"
+msgstr "屋根形状を再構築できませんでした。以前の形状が表示されたままです。寸法または交差部分を調整して再試行してください。"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 65436922f0b53083
+# Review: required
+# English: "Roof geometry is invalid. The previous shape is still shown. Adjust the dimensions or intersections and retry."
+#: packages/nodes/src/roof/geometry-notice.tsx
+#, fuzzy
+msgid "node.roof.geometryNotice.roofGeometryIsInvalidThePrevious"
+msgstr "屋根形状が無効です。以前の形状が表示されたままです。寸法または交差部分を調整して再試行してください。"
 
 # Source-Hash: b5be04471fd3fb7a
 # Review: required
@@ -29000,6 +30818,36 @@ msgstr "芯々 {spacing}"
 msgid "node.shared.buildUpControls.woodPlank"
 msgstr "板張り"
 
+# Source-Hash: 0fe1b70953df9304
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+# English: "Route preview"
+#: packages/nodes/src/shared/connection-feedback.tsx
+#, fuzzy
+msgid "node.shared.connectionFeedback.routePreview"
+msgstr "ルートのプレビュー"
+
+# Source-Hash: d4da45e25561382c
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+# English: "{system, select, return {Return} other {Supply}} · {size} in · {state, select, connected {Connected} other {Draw from collar}}"
+#: packages/nodes/src/shared/duct-collar-inspector.tsx
+#, fuzzy
+msgid "node.shared.ductCollarInspector.collarButton"
+msgstr "{system, select, return {還気} other {給気}} · {size} in · {state, select, connected {接続済み} other {カラーから描く}}"
+
+# Source-Hash: 8ef43378888dba30
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+# English: "Connect duct"
+#: packages/nodes/src/shared/duct-collar-inspector.tsx
+#, fuzzy
+msgid "node.shared.ductCollarInspector.connectDuct"
+msgstr "ダクトを接続"
+
 # Source-Hash: e7512c891d8da7d8
 # Review: required
 # AI-Provider: claude-code
@@ -29049,6 +30897,26 @@ msgstr "幅"
 #, fuzzy
 msgid "node.shared.openingDepthPosition.depthPosition"
 msgstr "奥行き位置"
+
+# Source-Hash: dde1a07755fd0e6e
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+# English: "{port, select, inlet {Inlet} outlet {Outlet} branch {Branch} branch2 {Second branch} other {Collar {number}}} · {diameter} in · {elevation} m · {state, select, connected {Connected} other {Draw from collar}}"
+#: packages/nodes/src/shared/pipe-collar-inspector.tsx
+#, fuzzy
+msgid "node.shared.pipeCollarInspector.collarButton"
+msgstr "{port, select, inlet {入口} outlet {出口} branch {分岐} branch2 {第2分岐} other {カラー {number}}} · {diameter} in · {elevation} m · {state, select, connected {接続済み} other {カラーから描く}}"
+
+# Source-Hash: 88a982140de95dcc
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+# English: "Connect pipe"
+#: packages/nodes/src/shared/pipe-collar-inspector.tsx
+#, fuzzy
+msgid "node.shared.pipeCollarInspector.connectPipe"
+msgstr "配管を接続"
 
 # Source-Hash: ee1c8bc3e27fb550
 # Review: required
@@ -34361,6 +36229,16 @@ msgstr "寸法"
 msgid "node.wall.panel.drywall"
 msgstr "石膏ボード"
 
+# Source-Hash: 99ae1e9f13fca0ad
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "End height offset"
+#: packages/nodes/src/wall/panel.tsx
+#, fuzzy
+msgid "node.wall.panel.endHeightOffset"
+msgstr "終端の高さオフセット"
+
 # Source-Hash: d6ba089e1ca40cdf
 # Review: required
 # AI-Provider: claude-code
@@ -36361,40 +38239,320 @@ msgstr "ゾーンの境界が利用できません"
 msgid "node.zone.quantitiesPanel.zoneQuantities"
 msgstr "ゾーンの数量"
 
+# Source-Hash: d7fd9acca338cd6a
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "{action, select, open {Open {name}} close {Close {name}} on {Turn on {name}} other {Turn off {name}}}"
+#: packages/viewer/src/components/viewer/selection-callout.tsx
+#, fuzzy
+msgid "viewer.callout.action"
+msgstr "{action, select, open {{name}を開く} close {{name}を閉じる} on {{name}をオンにする} other {{name}をオフにする}}"
+
+# Source-Hash: 5abe4ec7ade26a12
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Deselect"
+#: packages/viewer/src/components/viewer/selection-callout.tsx
+#, fuzzy
+msgid "viewer.callout.deselect"
+msgstr "選択を解除"
+
+# Source-Hash: 787e10f5db16904e
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Door"
+#: packages/viewer/src/systems/interactive/callout-actions.ts
+#, fuzzy
+msgid "viewer.callout.door"
+msgstr "ドア"
+
+# Source-Hash: db337a42db3a6c57
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Barn door"
+#: packages/viewer/src/systems/interactive/callout-actions.ts
+#, fuzzy
+msgid "viewer.callout.door.barn"
+msgstr "バーンドア"
+
+# Source-Hash: ddf96dbbf4fe7676
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Double door"
+#: packages/viewer/src/systems/interactive/callout-actions.ts
+#, fuzzy
+msgid "viewer.callout.door.double"
+msgstr "両開きドア"
+
+# Source-Hash: b44941a92287ab10
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Folding door"
+#: packages/viewer/src/systems/interactive/callout-actions.ts
+#, fuzzy
+msgid "viewer.callout.door.folding"
+msgstr "折れ戸"
+
+# Source-Hash: 3f4764e840dac031
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "French door"
+#: packages/viewer/src/systems/interactive/callout-actions.ts
+#, fuzzy
+msgid "viewer.callout.door.french"
+msgstr "フレンチドア"
+
+# Source-Hash: 31823c27167616e3
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Roll-up garage door"
+#: packages/viewer/src/systems/interactive/callout-actions.ts
+#, fuzzy
+msgid "viewer.callout.door.garageRollup"
+msgstr "巻き上げ式ガレージドア"
+
+# Source-Hash: 24e8e9cd9e871a0a
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Sectional garage door"
+#: packages/viewer/src/systems/interactive/callout-actions.ts
+#, fuzzy
+msgid "viewer.callout.door.garageSectional"
+msgstr "セクショナル式ガレージドア"
+
+# Source-Hash: 98363ee2b9b11dda
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Tilt-up garage door"
+#: packages/viewer/src/systems/interactive/callout-actions.ts
+#, fuzzy
+msgid "viewer.callout.door.garageTiltup"
+msgstr "跳ね上げ式ガレージドア"
+
+# Source-Hash: 329252b3466b76a4
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Hinged door"
+#: packages/viewer/src/systems/interactive/callout-actions.ts
+#, fuzzy
+msgid "viewer.callout.door.hinged"
+msgstr "開き戸"
+
+# Source-Hash: 039a3d3de4c98783
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Pocket door"
+#: packages/viewer/src/systems/interactive/callout-actions.ts
+#, fuzzy
+msgid "viewer.callout.door.pocket"
+msgstr "引き込み戸"
+
+# Source-Hash: f530856f6f28a285
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Sliding door"
+#: packages/viewer/src/systems/interactive/callout-actions.ts
+#, fuzzy
+msgid "viewer.callout.door.sliding"
+msgstr "引き戸"
+
+# Source-Hash: e04298381837252f
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Opening"
+#: packages/viewer/src/systems/interactive/callout-actions.ts
+#, fuzzy
+msgid "viewer.callout.opening"
+msgstr "開口部"
+
+# Source-Hash: fe1fc3c56075fce9
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "{action, select, close {Close the shutters of {name}} other {Open the shutters of {name}}}"
+#: packages/viewer/src/components/viewer/selection-callout.tsx
+#, fuzzy
+msgid "viewer.callout.shuttersAction"
+msgstr "{action, select, close {{name}の雨戸を閉じる} other {{name}の雨戸を開く}}"
+
+# Source-Hash: 1548587f53543270
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "{state, select, open {Open} closed {Closed} on {On} other {Off}}"
+#: packages/viewer/src/components/viewer/selection-callout.tsx
+#, fuzzy
+msgid "viewer.callout.state"
+msgstr "{state, select, open {開} closed {閉} on {オン} other {オフ}}"
+
+# Source-Hash: aa3c35ed33e181e5
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Window"
+#: packages/viewer/src/systems/interactive/callout-actions.ts
+#, fuzzy
+msgid "viewer.callout.window"
+msgstr "窓"
+
+# Source-Hash: b15485fd33092d23
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Awning window"
+#: packages/viewer/src/systems/interactive/callout-actions.ts
+#, fuzzy
+msgid "viewer.callout.window.awning"
+msgstr "突き出し窓"
+
+# Source-Hash: 03532a03a66cf1e0
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Bay window"
+#: packages/viewer/src/systems/interactive/callout-actions.ts
+#, fuzzy
+msgid "viewer.callout.window.bay"
+msgstr "ベイウィンドウ"
+
+# Source-Hash: f60c4e3b39f72154
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Bow window"
+#: packages/viewer/src/systems/interactive/callout-actions.ts
+#, fuzzy
+msgid "viewer.callout.window.bow"
+msgstr "ボウウィンドウ"
+
+# Source-Hash: af3f32206d00774b
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Casement window"
+#: packages/viewer/src/systems/interactive/callout-actions.ts
+#, fuzzy
+msgid "viewer.callout.window.casement"
+msgstr "開き窓"
+
+# Source-Hash: 65e81e2862cac8d5
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Double-hung window"
+#: packages/viewer/src/systems/interactive/callout-actions.ts
+#, fuzzy
+msgid "viewer.callout.window.doubleHung"
+msgstr "両上げ下げ窓"
+
+# Source-Hash: f5d602303a06631d
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Fixed window"
+#: packages/viewer/src/systems/interactive/callout-actions.ts
+#, fuzzy
+msgid "viewer.callout.window.fixed"
+msgstr "はめ殺し窓"
+
+# Source-Hash: 857acf0532fba09f
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Hopper window"
+#: packages/viewer/src/systems/interactive/callout-actions.ts
+#, fuzzy
+msgid "viewer.callout.window.hopper"
+msgstr "内倒し窓"
+
+# Source-Hash: 7e9cc44d46e0a73e
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Louvered window"
+#: packages/viewer/src/systems/interactive/callout-actions.ts
+#, fuzzy
+msgid "viewer.callout.window.louvered"
+msgstr "ルーバー窓"
+
+# Source-Hash: 952ef425d1aeb6f0
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Single-hung window"
+#: packages/viewer/src/systems/interactive/callout-actions.ts
+#, fuzzy
+msgid "viewer.callout.window.singleHung"
+msgstr "片上げ下げ窓"
+
+# Source-Hash: 1b3bf9d422f1a474
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Sliding window"
+#: packages/viewer/src/systems/interactive/callout-actions.ts
+#, fuzzy
+msgid "viewer.callout.window.sliding"
+msgstr "引き違い窓"
+
+# Source-Hash: 4cf588849369b27b
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Tilt-and-turn window"
+#: packages/viewer/src/systems/interactive/callout-actions.ts
+#, fuzzy
+msgid "viewer.callout.window.tiltTurn"
+msgstr "ドレーキップ窓"
+
 # Source-Hash: 8bf25afa3cb8baea
 # Review: human
 # English: "Orbit left"
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
+#: packages/viewer/src/ui/components/viewer-controls-bar.tsx
 msgid "viewer.camera.orbitLeft"
 msgstr "左に回転"
 
 # Source-Hash: b9cc64c1d1bb0d46
 # Review: human
 # English: "Orbit right"
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
+#: packages/viewer/src/ui/components/viewer-controls-bar.tsx
 msgid "viewer.camera.orbitRight"
 msgstr "右に回転"
 
 # Source-Hash: 1ab1eb3a14f4b0e0
 # Review: human
 # English: "Top view"
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
+#: packages/viewer/src/ui/components/viewer-controls-bar.tsx
 msgid "viewer.camera.topView"
 msgstr "上面図"
 
 # Source-Hash: 50accd740fa2e736
 # Review: human
 # English: "Off"
-#: packages/editor/src/components/viewer/render-settings-menu.tsx
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
+#: packages/viewer/src/ui/components/render-settings-menu.tsx
+#: packages/viewer/src/ui/components/viewer-controls-bar.tsx
 msgid "viewer.common.off"
 msgstr "オフ"
 
 # Source-Hash: 9cc01faad79c28da
 # Review: human
 # English: "On"
-#: packages/editor/src/components/viewer/render-settings-menu.tsx
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
+#: packages/viewer/src/ui/components/render-settings-menu.tsx
+#: packages/viewer/src/ui/components/viewer-controls-bar.tsx
 msgid "viewer.common.on"
 msgstr "オン"
 
@@ -36403,7 +38561,7 @@ msgstr "オン"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Sun position is approximate"
-#: packages/editor/src/components/viewer/render-settings-menu.tsx
+#: packages/viewer/src/ui/components/render-settings-menu.tsx
 #, fuzzy
 msgid "viewer.daylight.location.approximate"
 msgstr "太陽の位置はおおよそです"
@@ -36413,7 +38571,7 @@ msgstr "太陽の位置はおおよそです"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Sun follows your location"
-#: packages/editor/src/components/viewer/render-settings-menu.tsx
+#: packages/viewer/src/ui/components/render-settings-menu.tsx
 #, fuzzy
 msgid "viewer.daylight.location.device"
 msgstr "太陽の位置は現在地に基づきます"
@@ -36423,8 +38581,8 @@ msgstr "太陽の位置は現在地に基づきます"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Use my location"
-#: packages/editor/src/components/viewer/render-settings-menu.tsx
-#: packages/editor/src/components/viewer/sky-control.tsx
+#: packages/viewer/src/ui/components/render-settings-menu.tsx
+#: packages/viewer/src/ui/components/sky-control.tsx
 #, fuzzy
 msgid "viewer.daylight.location.use"
 msgstr "現在地を使用"
@@ -36434,7 +38592,7 @@ msgstr "現在地を使用"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Afternoon"
-#: packages/editor/src/components/viewer/sky-control.tsx
+#: packages/viewer/src/ui/components/sky-control.tsx
 #, fuzzy
 msgid "viewer.daylight.phase.afternoon"
 msgstr "午後"
@@ -36444,7 +38602,7 @@ msgstr "午後"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Morning"
-#: packages/editor/src/components/viewer/sky-control.tsx
+#: packages/viewer/src/ui/components/sky-control.tsx
 #, fuzzy
 msgid "viewer.daylight.phase.morning"
 msgstr "朝"
@@ -36454,7 +38612,7 @@ msgstr "朝"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Auto"
-#: packages/editor/src/components/viewer/render-settings-menu.tsx
+#: packages/viewer/src/ui/components/render-settings-menu.tsx
 #, fuzzy
 msgid "viewer.daylight.quality.auto"
 msgstr "自動"
@@ -36464,7 +38622,7 @@ msgstr "自動"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Picked for this device: {tier}"
-#: packages/editor/src/components/viewer/render-settings-menu.tsx
+#: packages/viewer/src/ui/components/render-settings-menu.tsx
 #, fuzzy
 msgid "viewer.daylight.quality.autoDetail"
 msgstr "このデバイス向けに選択: {tier}"
@@ -36474,7 +38632,7 @@ msgstr "このデバイス向けに選択: {tier}"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "High"
-#: packages/editor/src/components/viewer/render-settings-menu.tsx
+#: packages/viewer/src/ui/components/render-settings-menu.tsx
 #, fuzzy
 msgid "viewer.daylight.quality.high"
 msgstr "高"
@@ -36484,7 +38642,7 @@ msgstr "高"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Lighting-aware ambient occlusion and bloom"
-#: packages/editor/src/components/viewer/render-settings-menu.tsx
+#: packages/viewer/src/ui/components/render-settings-menu.tsx
 #, fuzzy
 msgid "viewer.daylight.quality.highDetail"
 msgstr "ライティング連動のアンビエントオクルージョンとブルーム"
@@ -36494,7 +38652,7 @@ msgstr "ライティング連動のアンビエントオクルージョンとブ
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Low"
-#: packages/editor/src/components/viewer/render-settings-menu.tsx
+#: packages/viewer/src/ui/components/render-settings-menu.tsx
 #, fuzzy
 msgid "viewer.daylight.quality.low"
 msgstr "低"
@@ -36504,7 +38662,7 @@ msgstr "低"
 # Source-Hash: 8b94a0f7e27f671d
 # Review: required
 # English: "Fastest — no ambient occlusion or bloom"
-#: packages/editor/src/components/viewer/render-settings-menu.tsx
+#: packages/viewer/src/ui/components/render-settings-menu.tsx
 #, fuzzy
 msgid "viewer.daylight.quality.lowDetail"
 msgstr "最速 — アンビエントオクルージョンとブルームなし"
@@ -36514,7 +38672,7 @@ msgstr "最速 — アンビエントオクルージョンとブルームなし"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Medium"
-#: packages/editor/src/components/viewer/render-settings-menu.tsx
+#: packages/viewer/src/ui/components/render-settings-menu.tsx
 #, fuzzy
 msgid "viewer.daylight.quality.medium"
 msgstr "中"
@@ -36524,7 +38682,7 @@ msgstr "中"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Half-resolution ambient occlusion"
-#: packages/editor/src/components/viewer/render-settings-menu.tsx
+#: packages/viewer/src/ui/components/render-settings-menu.tsx
 #, fuzzy
 msgid "viewer.daylight.quality.mediumDetail"
 msgstr "半解像度のアンビエントオクルージョン"
@@ -36534,7 +38692,7 @@ msgstr "半解像度のアンビエントオクルージョン"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Quality"
-#: packages/editor/src/components/viewer/render-settings-menu.tsx
+#: packages/viewer/src/ui/components/render-settings-menu.tsx
 #, fuzzy
 msgid "viewer.daylight.quality.title"
 msgstr "品質"
@@ -36544,7 +38702,7 @@ msgstr "品質"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Drag the sun to set the time"
-#: packages/editor/src/components/viewer/sky-control.tsx
+#: packages/viewer/src/ui/components/sky-control.tsx
 #, fuzzy
 msgid "viewer.daylight.sky.arc"
 msgstr "太陽をドラッグして時刻を設定"
@@ -36554,7 +38712,7 @@ msgstr "太陽をドラッグして時刻を設定"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Close"
-#: packages/editor/src/components/viewer/sky-control.tsx
+#: packages/viewer/src/ui/components/sky-control.tsx
 #, fuzzy
 msgid "viewer.daylight.sky.close"
 msgstr "閉じる"
@@ -36564,7 +38722,7 @@ msgstr "閉じる"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Cloud cover"
-#: packages/editor/src/components/viewer/sky-control.tsx
+#: packages/viewer/src/ui/components/sky-control.tsx
 #, fuzzy
 msgid "viewer.daylight.sky.cloudCover"
 msgstr "雲量"
@@ -36574,7 +38732,7 @@ msgstr "雲量"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Cloud cover: {current}. Change to {next}"
-#: packages/editor/src/components/viewer/sky-control.tsx
+#: packages/viewer/src/ui/components/sky-control.tsx
 #, fuzzy
 msgid "viewer.daylight.sky.cycleWeather"
 msgstr "雲量: {current}。{next} に変更"
@@ -36584,7 +38742,7 @@ msgstr "雲量: {current}。{next} に変更"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Cycle cloud cover"
-#: packages/editor/src/components/viewer/sky-control.tsx
+#: packages/viewer/src/ui/components/sky-control.tsx
 #, fuzzy
 msgid "viewer.daylight.sky.cycleWeatherTip"
 msgstr "雲量を切り替え"
@@ -36594,7 +38752,7 @@ msgstr "雲量を切り替え"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Follow the clock"
-#: packages/editor/src/components/viewer/sky-control.tsx
+#: packages/viewer/src/ui/components/sky-control.tsx
 #, fuzzy
 msgid "viewer.daylight.sky.followClock"
 msgstr "時計に合わせる"
@@ -36604,7 +38762,7 @@ msgstr "時計に合わせる"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "The sun moves with your local clock."
-#: packages/editor/src/components/viewer/sky-control.tsx
+#: packages/viewer/src/ui/components/sky-control.tsx
 #, fuzzy
 msgid "viewer.daylight.sky.followClockDetail"
 msgstr "太陽がローカル時刻に合わせて動きます。"
@@ -36614,7 +38772,7 @@ msgstr "太陽がローカル時刻に合わせて動きます。"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "In viewport"
-#: packages/editor/src/components/viewer/render-settings-menu.tsx
+#: packages/viewer/src/ui/components/render-settings-menu.tsx
 #, fuzzy
 msgid "viewer.daylight.sky.inViewport"
 msgstr "ビューポート内"
@@ -36624,7 +38782,7 @@ msgstr "ビューポート内"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Follows your local clock. Sun position is approximate."
-#: packages/editor/src/components/viewer/sky-control.tsx
+#: packages/viewer/src/ui/components/sky-control.tsx
 #, fuzzy
 msgid "viewer.daylight.sky.liveDetail"
 msgstr "ローカル時刻に合わせます。太陽の位置はおおよそです。"
@@ -36634,7 +38792,7 @@ msgstr "ローカル時刻に合わせます。太陽の位置はおおよそで
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Time & weather"
-#: packages/editor/src/components/viewer/render-settings-menu.tsx
+#: packages/viewer/src/ui/components/render-settings-menu.tsx
 #, fuzzy
 msgid "viewer.daylight.sky.menuItem"
 msgstr "時刻と天気"
@@ -36644,7 +38802,7 @@ msgstr "時刻と天気"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Time and weather"
-#: packages/editor/src/components/viewer/sky-control.tsx
+#: packages/viewer/src/ui/components/sky-control.tsx
 #, fuzzy
 msgid "viewer.daylight.sky.open"
 msgstr "時刻と天気"
@@ -36654,7 +38812,7 @@ msgstr "時刻と天気"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Reset"
-#: packages/editor/src/components/viewer/sky-control.tsx
+#: packages/viewer/src/ui/components/sky-control.tsx
 #, fuzzy
 msgid "viewer.daylight.sky.reset"
 msgstr "リセット"
@@ -36664,7 +38822,7 @@ msgstr "リセット"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Light and weather for this view"
-#: packages/editor/src/components/viewer/sky-control.tsx
+#: packages/viewer/src/ui/components/sky-control.tsx
 #, fuzzy
 msgid "viewer.daylight.sky.subtitle"
 msgstr "このビューの光と天気"
@@ -36674,7 +38832,7 @@ msgstr "このビューの光と天気"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Sunrise"
-#: packages/editor/src/components/viewer/sky-control.tsx
+#: packages/viewer/src/ui/components/sky-control.tsx
 #, fuzzy
 msgid "viewer.daylight.sky.sunrise"
 msgstr "日の出"
@@ -36684,7 +38842,7 @@ msgstr "日の出"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Sunset"
-#: packages/editor/src/components/viewer/sky-control.tsx
+#: packages/viewer/src/ui/components/sky-control.tsx
 #, fuzzy
 msgid "viewer.daylight.sky.sunset"
 msgstr "日の入り"
@@ -36694,7 +38852,7 @@ msgstr "日の入り"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Sky"
-#: packages/editor/src/components/viewer/sky-control.tsx
+#: packages/viewer/src/ui/components/sky-control.tsx
 #, fuzzy
 msgid "viewer.daylight.sky.title"
 msgstr "空"
@@ -36704,8 +38862,8 @@ msgstr "空"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Blue hour"
-#: packages/editor/src/components/viewer/render-settings-menu.tsx
-#: packages/editor/src/components/viewer/sky-control.tsx
+#: packages/viewer/src/ui/components/render-settings-menu.tsx
+#: packages/viewer/src/ui/components/sky-control.tsx
 #, fuzzy
 msgid "viewer.daylight.time.blue"
 msgstr "ブルーアワー"
@@ -36715,8 +38873,8 @@ msgstr "ブルーアワー"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Golden hour"
-#: packages/editor/src/components/viewer/render-settings-menu.tsx
-#: packages/editor/src/components/viewer/sky-control.tsx
+#: packages/viewer/src/ui/components/render-settings-menu.tsx
+#: packages/viewer/src/ui/components/sky-control.tsx
 #, fuzzy
 msgid "viewer.daylight.time.golden"
 msgstr "ゴールデンアワー"
@@ -36726,8 +38884,8 @@ msgstr "ゴールデンアワー"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Midday"
-#: packages/editor/src/components/viewer/render-settings-menu.tsx
-#: packages/editor/src/components/viewer/sky-control.tsx
+#: packages/viewer/src/ui/components/render-settings-menu.tsx
+#: packages/viewer/src/ui/components/sky-control.tsx
 #, fuzzy
 msgid "viewer.daylight.time.midday"
 msgstr "正午"
@@ -36737,8 +38895,8 @@ msgstr "正午"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Night"
-#: packages/editor/src/components/viewer/render-settings-menu.tsx
-#: packages/editor/src/components/viewer/sky-control.tsx
+#: packages/viewer/src/ui/components/render-settings-menu.tsx
+#: packages/viewer/src/ui/components/sky-control.tsx
 #, fuzzy
 msgid "viewer.daylight.time.night"
 msgstr "夜"
@@ -36748,8 +38906,8 @@ msgstr "夜"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Time of day"
-#: packages/editor/src/components/viewer/render-settings-menu.tsx
-#: packages/editor/src/components/viewer/sky-control.tsx
+#: packages/viewer/src/ui/components/render-settings-menu.tsx
+#: packages/viewer/src/ui/components/sky-control.tsx
 #, fuzzy
 msgid "viewer.daylight.time.title"
 msgstr "時間帯"
@@ -36759,8 +38917,8 @@ msgstr "時間帯"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Clear"
-#: packages/editor/src/components/viewer/render-settings-menu.tsx
-#: packages/editor/src/components/viewer/sky-control.tsx
+#: packages/viewer/src/ui/components/render-settings-menu.tsx
+#: packages/viewer/src/ui/components/sky-control.tsx
 #, fuzzy
 msgid "viewer.daylight.weather.clear"
 msgstr "快晴"
@@ -36770,8 +38928,8 @@ msgstr "快晴"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Cloudy"
-#: packages/editor/src/components/viewer/render-settings-menu.tsx
-#: packages/editor/src/components/viewer/sky-control.tsx
+#: packages/viewer/src/ui/components/render-settings-menu.tsx
+#: packages/viewer/src/ui/components/sky-control.tsx
 #, fuzzy
 msgid "viewer.daylight.weather.cloudy"
 msgstr "くもり"
@@ -36781,8 +38939,8 @@ msgstr "くもり"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Fair"
-#: packages/editor/src/components/viewer/render-settings-menu.tsx
-#: packages/editor/src/components/viewer/sky-control.tsx
+#: packages/viewer/src/ui/components/render-settings-menu.tsx
+#: packages/viewer/src/ui/components/sky-control.tsx
 #, fuzzy
 msgid "viewer.daylight.weather.fair"
 msgstr "晴れ"
@@ -36792,8 +38950,8 @@ msgstr "晴れ"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Overcast"
-#: packages/editor/src/components/viewer/render-settings-menu.tsx
-#: packages/editor/src/components/viewer/sky-control.tsx
+#: packages/viewer/src/ui/components/render-settings-menu.tsx
+#: packages/viewer/src/ui/components/sky-control.tsx
 #, fuzzy
 msgid "viewer.daylight.weather.overcast"
 msgstr "曇天"
@@ -36803,7 +38961,7 @@ msgstr "曇天"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Weather"
-#: packages/editor/src/components/viewer/render-settings-menu.tsx
+#: packages/viewer/src/ui/components/render-settings-menu.tsx
 #, fuzzy
 msgid "viewer.daylight.weather.title"
 msgstr "天気"
@@ -36811,315 +38969,325 @@ msgstr "天気"
 # Source-Hash: 14622745dbf93f4c
 # Review: human
 # English: "Camera"
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
+#: packages/viewer/src/ui/components/viewer-controls-bar.tsx
 msgid "viewer.display.camera"
 msgstr "カメラ"
 
 # Source-Hash: d3d478fa6c6d7ddc
 # Review: human
 # English: "Colored"
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
+#: packages/viewer/src/ui/components/viewer-controls-bar.tsx
 msgid "viewer.display.colored"
 msgstr "カラー表示"
 
 # Source-Hash: 82b74c4f5ef43336
 # Review: human
 # English: "Colors"
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
+#: packages/viewer/src/ui/components/viewer-controls-bar.tsx
 msgid "viewer.display.colors"
 msgstr "カラー"
 
 # Source-Hash: 027bbc8b7287c06a
 # Review: human
 # English: "Edges"
-#: packages/editor/src/components/viewer/render-settings-menu.tsx
+#: packages/viewer/src/ui/components/render-settings-menu.tsx
 msgid "viewer.display.edges.title"
 msgstr "エッジ"
 
 # Source-Hash: ecde2f7c26914be3
 # Review: human
 # English: "Monochrome"
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
+#: packages/viewer/src/ui/components/viewer-controls-bar.tsx
 msgid "viewer.display.monochrome"
 msgstr "モノクロ"
 
 # Source-Hash: ed59dd8ce7797a66
 # Review: human
 # English: "Orthographic"
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
+#: packages/viewer/src/ui/components/viewer-controls-bar.tsx
 msgid "viewer.display.orthographic"
 msgstr "平行投影"
 
 # Source-Hash: 316e25993ff72b88
 # Review: human
 # English: "Perspective"
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
+#: packages/viewer/src/ui/components/viewer-controls-bar.tsx
 msgid "viewer.display.perspective"
 msgstr "透視投影"
 
 # Source-Hash: 4c6bcb30b40047fc
 # Review: human
 # English: "Shadows"
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
+#: packages/viewer/src/ui/components/viewer-controls-bar.tsx
 msgid "viewer.display.shadows"
 msgstr "影"
 
 # Source-Hash: d0db46f206a88e2e
 # Review: human
 # English: "Display settings"
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
+#: packages/viewer/src/ui/components/viewer-controls-bar.tsx
 msgid "viewer.display.title"
 msgstr "表示設定"
+
+# Source-Hash: 793135ea48128fa7
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Drone: {state}"
+#: packages/viewer/src/ui/components/viewer-controls-bar.tsx
+#, fuzzy
+msgid "viewer.drone.label"
+msgstr "ドローン：{state}"
 
 # Source-Hash: 2bdf83801d4a40af
 # Review: human
 # English: "Align view to north"
-#: packages/editor/src/components/viewer/floorplan-compass-button.tsx
+#: packages/viewer/src/ui/components/floorplan-compass-button.tsx
 msgid "viewer.floorplan.alignNorth"
 msgstr "北を上に表示"
 
 # Source-Hash: 286a757d8b52bb02
 # Review: human
 # English: "No floor plans are available for this scene."
-#: packages/editor/src/components/viewer/floorplan-preview.tsx
+#: packages/viewer/src/ui/floorplan/floorplan-preview.tsx
 msgid "viewer.floorplan.empty"
 msgstr "このシーンには表示できる平面図がありません。"
 
 # Source-Hash: bf63c679ab94dbcd
 # Review: human
 # English: "Fit floor plan"
-#: packages/editor/src/components/viewer/floorplan-preview.tsx
+#: packages/viewer/src/ui/floorplan/floorplan-preview.tsx
 msgid "viewer.floorplan.fit"
 msgstr "全体を表示"
 
 # Source-Hash: d7148fa065bc709b
 # Review: human
 # English: "Floor"
-#: packages/editor/src/components/viewer/floorplan-preview.tsx
+#: packages/viewer/src/ui/floorplan/floorplan-preview.tsx
 msgid "viewer.floorplan.floor"
 msgstr "階"
 
 # Source-Hash: fee6203bb9046929
 # Review: human
 # English: "Floor plan"
-#: packages/editor/src/components/viewer/floorplan-preview.tsx
+#: packages/viewer/src/ui/floorplan/floorplan-preview.tsx
 msgid "viewer.floorplan.floorPlan"
 msgstr "平面図"
 
 # Source-Hash: 28b255b7bf5f1084
 # Review: human
 # English: "{floor} 2D view"
-#: packages/editor/src/components/viewer/floorplan-preview.tsx
+#: packages/viewer/src/ui/floorplan/floorplan-preview.tsx
 msgid "viewer.floorplan.viewLabel"
 msgstr "{floor}の2Dビュー"
 
 # Source-Hash: d17804412f8dd081
 # Review: human
 # English: "Zoom in"
-#: packages/editor/src/components/viewer/floorplan-preview.tsx
+#: packages/viewer/src/ui/floorplan/floorplan-preview.tsx
 msgid "viewer.floorplan.zoomIn"
 msgstr "拡大"
 
 # Source-Hash: 23b012a283b2c14a
 # Review: human
 # English: "Zoom out"
-#: packages/editor/src/components/viewer/floorplan-preview.tsx
+#: packages/viewer/src/ui/floorplan/floorplan-preview.tsx
 msgid "viewer.floorplan.zoomOut"
 msgstr "縮小"
 
 # Source-Hash: 7ceade8f25b58fe9
 # Review: human
 # English: "Back"
-#: packages/editor/src/components/viewer/viewer-scene-header.tsx
+#: packages/viewer/src/ui/components/viewer-scene-header.tsx
 msgid "viewer.header.back"
 msgstr "戻る"
 
 # Source-Hash: cc3d601d59e2e26c
 # Review: human
 # English: "Levels"
-#: packages/editor/src/components/viewer/viewer-scene-header.tsx
+#: packages/viewer/src/ui/components/viewer-scene-header.tsx
 msgid "viewer.header.levels"
 msgstr "階層"
 
 # Source-Hash: 3e7408ed44676176
 # Review: human
 # English: "Rooms"
-#: packages/editor/src/components/viewer/viewer-scene-header.tsx
+#: packages/viewer/src/ui/components/viewer-scene-header.tsx
 msgid "viewer.header.rooms"
 msgstr "部屋"
 
 # Source-Hash: 170b2049ef0f9131
 # Review: human
 # English: "Selection"
-#: packages/editor/src/components/viewer/viewer-scene-header.tsx
+#: packages/viewer/src/ui/components/viewer-scene-header.tsx
 msgid "viewer.header.selection"
 msgstr "選択"
 
 # Source-Hash: b404dded35241274
 # Review: human
 # English: "Units"
-#: packages/editor/src/components/viewer/viewer-scene-header.tsx
+#: packages/viewer/src/ui/components/viewer-scene-header.tsx
 msgid "viewer.header.units"
 msgstr "住戸"
 
 # Source-Hash: 6547a4c0c368042a
 # Review: human
 # English: "Untitled"
-#: packages/editor/src/components/viewer/viewer-scene-header.tsx
+#: packages/viewer/src/ui/components/viewer-scene-header.tsx
 msgid "viewer.header.untitled"
 msgstr "名称未設定"
 
 # Source-Hash: 665db49a26f81425
 # Review: human
 # English: "Zones"
-#: packages/editor/src/components/viewer/viewer-scene-header.tsx
+#: packages/viewer/src/ui/components/viewer-scene-header.tsx
 msgid "viewer.header.zones"
 msgstr "ゾーン"
 
 # Source-Hash: be12f8788f1f0a05
 # Review: human
 # English: "Exploded"
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
+#: packages/viewer/src/ui/components/viewer-controls-bar.tsx
 msgid "viewer.levels.exploded"
 msgstr "分解"
 
 # Source-Hash: 4bf4a6861d7d633e
 # Review: human
 # English: "Levels: {mode}"
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
+#: packages/viewer/src/ui/components/viewer-controls-bar.tsx
 msgid "viewer.levels.label"
 msgstr "階層：{mode}"
 
 # Source-Hash: 387082cd5f118bed
 # Review: human
 # English: "Manual"
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
+#: packages/viewer/src/ui/components/viewer-controls-bar.tsx
 msgid "viewer.levels.manual"
 msgstr "手動"
 
 # Source-Hash: e9f59b513f2f45ac
 # Review: human
 # English: "Solo"
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
+#: packages/viewer/src/ui/components/viewer-controls-bar.tsx
 msgid "viewer.levels.solo"
 msgstr "単独"
 
 # Source-Hash: c203c84eee18c0f6
 # Review: human
 # English: "Stacked"
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
+#: packages/viewer/src/ui/components/viewer-controls-bar.tsx
 msgid "viewer.levels.stacked"
 msgstr "積層"
 
 # Source-Hash: 9dd21ca47cffa3b8
 # Review: human
 # English: "Viewer layout"
-#: packages/editor/src/components/viewer/viewer-stage-switcher.tsx
+#: packages/viewer/src/ui/components/viewer-stage-switcher.tsx
 msgid "viewer.stage.layout"
 msgstr "ビュー配置"
 
 # Source-Hash: e4cd64b1680ac0d2
 # Review: human
 # English: "Split"
-#: packages/editor/src/components/viewer/viewer-stage-switcher.tsx
+#: packages/viewer/src/ui/components/viewer-stage-switcher.tsx
 msgid "viewer.stage.split"
 msgstr "分割"
 
 # Source-Hash: f14b89d713d2528a
 # Review: human
 # English: "Blueprint"
-#: packages/editor/src/i18n/scene-theme-name.ts
+#: packages/viewer/src/ui/lib/scene-theme-name.ts
 msgid "viewer.theme.blueprint"
 msgstr "青図"
 
 # Source-Hash: 142bcb2841f423c5
 # Review: human
 # English: "Mediterranean"
-#: packages/editor/src/i18n/scene-theme-name.ts
+#: packages/viewer/src/ui/lib/scene-theme-name.ts
 msgid "viewer.theme.mediterranean"
 msgstr "地中海"
 
 # Source-Hash: b399942ec5d7e1ba
 # Review: human
 # English: "Night"
-#: packages/editor/src/i18n/scene-theme-name.ts
+#: packages/viewer/src/ui/lib/scene-theme-name.ts
 msgid "viewer.theme.night"
 msgstr "夜景"
 
 # Source-Hash: f512d1b947b8ae5a
 # Review: human
 # English: "Overcast"
-#: packages/editor/src/i18n/scene-theme-name.ts
+#: packages/viewer/src/ui/lib/scene-theme-name.ts
 msgid "viewer.theme.overcast"
 msgstr "曇天"
 
 # Source-Hash: 583542b3bc837192
 # Review: human
 # English: "Paper"
-#: packages/editor/src/i18n/scene-theme-name.ts
+#: packages/viewer/src/ui/lib/scene-theme-name.ts
 msgid "viewer.theme.paper"
 msgstr "ペーパー"
 
 # Source-Hash: 7abc2dc6e39b1747
 # Review: human
 # English: "Studio"
-#: packages/editor/src/i18n/scene-theme-name.ts
+#: packages/viewer/src/ui/lib/scene-theme-name.ts
 msgid "viewer.theme.studio"
 msgstr "スタジオ"
 
 # Source-Hash: efe94d3ec8d8c44e
 # Review: human
 # English: "Sunset"
-#: packages/editor/src/i18n/scene-theme-name.ts
+#: packages/viewer/src/ui/lib/scene-theme-name.ts
 msgid "viewer.theme.sunset"
 msgstr "夕景"
 
 # Source-Hash: 82720864e5034398
 # Review: human
 # English: "Scene theme"
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
+#: packages/viewer/src/ui/components/viewer-controls-bar.tsx
 msgid "viewer.theme.title"
 msgstr "シーンテーマ"
 
 # Source-Hash: 4c10ea0aa0e2ea41
 # Review: human
 # English: "Twilight"
-#: packages/editor/src/i18n/scene-theme-name.ts
+#: packages/viewer/src/ui/lib/scene-theme-name.ts
 msgid "viewer.theme.twilight"
 msgstr "薄暮"
 
 # Source-Hash: f9592fb0672740c0
 # Review: human
 # English: "Verdant"
-#: packages/editor/src/i18n/scene-theme-name.ts
+#: packages/viewer/src/ui/lib/scene-theme-name.ts
 msgid "viewer.theme.verdant"
 msgstr "緑景"
 
 # Source-Hash: 892d5dd34372028b
 # Review: human
 # English: "Guides"
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
+#: packages/viewer/src/ui/components/viewer-controls-bar.tsx
 msgid "viewer.visibility.guides"
 msgstr "ガイド"
 
 # Source-Hash: 3260bfa69cca50e5
 # Review: human
 # English: "Scans"
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
+#: packages/viewer/src/ui/components/viewer-controls-bar.tsx
 msgid "viewer.visibility.scans"
 msgstr "3Dスキャン"
 
 # Source-Hash: 2cefbb554eadbb6e
 # Review: human
 # English: "Visibility"
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
+#: packages/viewer/src/ui/components/viewer-controls-bar.tsx
 msgid "viewer.visibility.title"
 msgstr "表示"
 
 # Source-Hash: 31afd9dee47ba943
 # Review: human
 # English: "Walkthrough: {state}"
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
+#: packages/viewer/src/ui/components/viewer-controls-bar.tsx
 msgid "viewer.walkthrough.label"
 msgstr "ウォークスルー：{state}"
 
@@ -37127,6 +39295,7 @@ msgstr "ウォークスルー：{state}"
 # Review: required
 # English: "Shutters"
 #: packages/viewer/src/components/viewer/glb-scene.tsx
+#: packages/viewer/src/systems/interactive/callout-actions.ts
 #, fuzzy
 msgid "viewer.walkthrough.shutters"
 msgstr "雨戸"
@@ -37134,27 +39303,27 @@ msgstr "雨戸"
 # Source-Hash: 4da8b3678ed77b45
 # Review: human
 # English: "Cutaway"
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
+#: packages/viewer/src/ui/components/viewer-controls-bar.tsx
 msgid "viewer.walls.cutaway"
 msgstr "カット表示"
 
 # Source-Hash: 131bac2467f4fdf6
 # Review: human
 # English: "Full height"
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
+#: packages/viewer/src/ui/components/viewer-controls-bar.tsx
 msgid "viewer.walls.fullHeight"
 msgstr "全高"
 
 # Source-Hash: 32f3d058cf2526d2
 # Review: human
 # English: "Walls: {mode}"
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
+#: packages/viewer/src/ui/components/viewer-controls-bar.tsx
 msgid "viewer.walls.label"
 msgstr "壁：{mode}"
 
 # Source-Hash: 803532407fb5962b
 # Review: human
 # English: "Low"
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
+#: packages/viewer/src/ui/components/viewer-controls-bar.tsx
 msgid "viewer.walls.low"
 msgstr "低く表示"

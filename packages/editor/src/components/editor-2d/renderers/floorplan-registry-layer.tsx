@@ -4,15 +4,22 @@ import {
   type AnyNode,
   type AnyNodeDefinition,
   type AnyNodeId,
+  buildFloorplanContext,
+  createFloorplanContextExtensions,
   createSceneApi,
   emitter,
   type FloorplanAffordanceSession,
+  type FloorplanAnnotationRole,
   type FloorplanGeometry,
   type FloorplanPalette,
   type FloorplanPoint,
   type FloorplanScope,
+  type FloorplanWallDimensionFaces,
+  floorplanAnnotationObstacleMode,
+  floorplanLayerRank,
   type GeometryContext,
   hidesDescendants,
+  isFloorplanAnnotationObstacleGeometry,
   isNodeKindEnabled,
   isRegistryMovable,
   kindsWithFloorplanScope,
@@ -20,6 +27,7 @@ import {
   type LiveTransform,
   nodeRegistry,
   pauseSceneHistory,
+  readFloorplanGeometryMetadata,
   resolveBuildingForLevel,
   resolveSelectionProxyId,
   resumeSceneHistory,
@@ -28,6 +36,10 @@ import {
   useLiveNodeOverrides,
   useLiveTransforms,
   useScene,
+  WALL_PULL_AFFORDANCE,
+  WALL_PUSH_AFFORDANCE,
+  type WallPullGripPayload,
+  withFloorplanGeometryMetadata,
 } from '@pascal-app/core'
 import {
   beginPerfAction,
@@ -37,6 +49,14 @@ import {
   useRevealWaiting,
   useViewer,
 } from '@pascal-app/viewer'
+import {
+  FloorplanDimensionRenderer,
+  FloorplanGeometryRenderer,
+  resolveFloorplanAnnotationUpdate,
+  resolveFloorplanLabelAngle,
+  selectionModifiersFromEvent,
+  updateSvgFloorplanLabelOrientations,
+} from '@pascal-app/viewer/ui'
 import {
   type ComponentProps,
   memo,
@@ -55,11 +75,14 @@ import {
   hoverRoomFromHit,
   resolvePlanRoomHit,
   roomPickingEnabled,
-  selectionModifiersFromEvent,
   useRoomRecords,
 } from '../../../hooks/use-selected-room'
 import { useCeilingEditSession } from '../../../lib/ceiling-edit-session'
-import { ROTATE_HANDLE_DRAG_LABEL } from '../../../lib/contextual-help'
+import {
+  AXIS_MOVE_DRAG_LABEL,
+  PATH_POINT_DRAG_LABEL,
+  ROTATE_HANDLE_DRAG_LABEL,
+} from '../../../lib/contextual-help'
 import {
   canDirectRotateNode,
   resolveDirectManipulationNode,
@@ -75,22 +98,11 @@ import {
   filterFloorplanAnnotationGeometry,
 } from '../../../lib/floorplan/annotation-visibility'
 import { resolveNodeForDrawingType } from '../../../lib/floorplan/drawing-coordination'
-import {
-  createFloorplanContextExtensions,
-  type FloorplanAnnotationRole,
-  type FloorplanWallDimensionFaces,
-  getFloorplanNodeExtension,
-  readFloorplanGeometryMetadata,
-  withFloorplanGeometryMetadata,
-} from '../../../lib/floorplan/floorplan-extension'
+import { getFloorplanNodeExtension } from '../../../lib/floorplan/floorplan-extension'
 import {
   type FloorplanMode,
   resolveFloorplanAnnotationVisibility,
 } from '../../../lib/floorplan/floorplan-mode'
-import {
-  buildFloorplanContext,
-  floorplanLayerRank,
-} from '../../../lib/floorplan/floorplan-readonly'
 import { clientToPlan } from '../../../lib/floorplan/plan-coords'
 import {
   type ActiveInteractionScope,
@@ -102,7 +114,7 @@ import {
   isIdle,
   tangentReshapeScope,
 } from '../../../lib/interaction/scope'
-import { runFloorplanWallPush, WALL_PUSH_AFFORDANCE } from '../../../lib/room-handle-drag'
+import { runFloorplanWallPush } from '../../../lib/room-handle-drag'
 import { selectRoom, selectRoomFromHit } from '../../../lib/room-selection-commands'
 import { clickZoneArea, hoverZoneArea } from '../../../lib/room-zone-routing'
 import {
@@ -114,11 +126,7 @@ import { createSessionWrites, type SessionWrites } from '../../../lib/session-wr
 import { sfxEmitter } from '../../../lib/sfx-bus'
 import { clearSurfacePlanSnapFeedback } from '../../../lib/surface-plan-snap'
 import { paintZoneMembership } from '../../../lib/units'
-import {
-  startWallPull,
-  WALL_PULL_AFFORDANCE,
-  type WallPullGripPayload,
-} from '../../../lib/wall-pull'
+import { startWallPull } from '../../../lib/wall-pull'
 import useDirectManipulationFeedback from '../../../store/use-direct-manipulation-feedback'
 import useDrawingView from '../../../store/use-drawing-view'
 import useEditor, { isAngleSnapActive, type Mode } from '../../../store/use-editor'
@@ -153,23 +161,11 @@ import {
   useFloorplanStaticRender,
   useFloorplanStaticUnitsPerPixel,
 } from '../floorplan-render-context'
-import {
-  floorplanAnnotationObstacleMode,
-  isFloorplanAnnotationObstacleGeometry,
-  resolveSvgAnnotationCollisions,
-  svgAnnotationLabelId,
-} from './floorplan-annotation-layout'
+import { resolveSvgAnnotationCollisions, svgAnnotationLabelId } from './floorplan-annotation-layout'
 import {
   FloorplanDimensionEditOverlay,
   typeableDimensionAt,
 } from './floorplan-dimension-edit-overlay'
-import { FloorplanDimensionRenderer } from './floorplan-dimension-renderer'
-import { FloorplanGeometryRenderer } from './floorplan-geometry-renderer'
-import {
-  resolveFloorplanAnnotationUpdate,
-  resolveFloorplanLabelAngle,
-  updateSvgFloorplanLabelOrientations,
-} from './floorplan-label-angle'
 import { useFloorplanReveal } from './floorplan-reveal'
 
 /**
@@ -321,7 +317,7 @@ export function subscribeFloorplanAffordanceToolCancel(
 // edits that set a direction/shape map to a scope; resize / rotate / body-move
 // affordances return `null` (no polygon/wall snapping chip). Keyed off the
 // affordance name the kinds register (`move-vertex` / `move-edge` / `add-vertex`
-// / `curve` / `move-endpoint`).
+// / `curve` / `move-endpoint` / `move-path-point` / `move-segment`).
 export function floorplanAffordanceReshapeScope(
   affordance: string,
   nodeId: string,
@@ -361,6 +357,14 @@ export function floorplanAffordanceReshapeScope(
   // the drag. The affordance applies the 15° angle step itself.
   if (affordance.includes('rotate')) {
     return { kind: 'handle-drag', nodeId, handle: ROTATE_HANDLE_DRAG_LABEL }
+  }
+  // MEP run point and run segment drags: the same handle-drag scopes as their
+  // 3D arrows, so they snap in the kind's own context (polygon for runs).
+  if (affordance === 'move-path-point') {
+    return { kind: 'handle-drag', nodeId, handle: PATH_POINT_DRAG_LABEL }
+  }
+  if (affordance === 'move-segment') {
+    return { kind: 'handle-drag', nodeId, handle: AXIS_MOVE_DRAG_LABEL }
   }
   return null
 }
@@ -3633,7 +3637,7 @@ export function collectFloorplanLinkedLevelNodes(
   for (const [rawId, node] of Object.entries(nodes)) {
     if (!node) continue
     const definition = nodeRegistry.get(node.type)
-    const linkedLevelIds = getFloorplanNodeExtension(definition)?.linkedLevelIds
+    const linkedLevelIds = definition?.floorplanLinkedLevelIds
     if (!definition?.floorplan || !linkedLevelIds) continue
     const id = rawId as AnyNodeId
     if (excludedIds.has(id)) continue

@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import { SEARCH_ASSETS_LIMIT } from '../agent-tools/assets'
-import { type AssetInput, ItemNode } from '../schema'
+import { scriptSource } from '../lib/geometry-script-node'
+import { type AssetInput, GeometryArtifactManifest, ItemNode } from '../schema'
 import {
   type AssetCatalogSource,
   type AssetSearchQuery,
@@ -9,6 +10,7 @@ import {
   rankAssets,
   readCatalog,
 } from './asset-catalog'
+import type { CatalogAsset } from './catalog-asset'
 import { searchAssets } from './search-assets'
 import type { SceneNodes } from './types'
 
@@ -18,6 +20,25 @@ const asset = (id: string, category = 'furniture'): AssetInput => ({
   category,
   thumbnail: `https://lib.test/${id}.webp`,
   src: `https://lib.test/${id}.glb`,
+})
+
+/** A library item built from a script: one param, its width. */
+const scripted = (id: string, name = id): CatalogAsset => ({
+  ...asset(id),
+  name,
+  script: scriptSource({
+    sha256: 'a'.repeat(64),
+    script: 'b'.repeat(64),
+    language: 'three',
+    mount: 'floor',
+    params: { width: 2.2 },
+    manifest: GeometryArtifactManifest.parse({
+      bounds: { min: [-1.1, 0, -0.45], max: [1.1, 0.8, 0.45] },
+      triangles: 12,
+      params: [{ id: 'width', kind: 'number', default: 2, min: 1.6, max: 3, unit: 'm' }],
+      slots: [{ id: 'fabric' }],
+    }),
+  }),
 })
 
 const nodes = {
@@ -49,6 +70,7 @@ describe('what a call reads of the library', () => {
       }),
     ).toEqual({
       ids: [],
+      placing: [],
       searches: [
         { text: 'sofa', limit: SEARCH_ASSETS_LIMIT },
         { text: 'lamp', category: 'lighting', limit: SEARCH_ASSETS_LIMIT },
@@ -90,8 +112,12 @@ describe('what a call reads of the library', () => {
           { tool: 'delete_node', input: { id: 'wall_a' } },
         ],
       }),
-    ).toEqual({ ids: ['toilet', 'sofa'], searches: [] })
-    expect(catalogReads(nodes, 'delete_node', { id: 'item_a' })).toEqual({ ids: [], searches: [] })
+    ).toEqual({ ids: ['toilet', 'sofa'], placing: ['toilet'], searches: [] })
+    expect(catalogReads(nodes, 'delete_node', { id: 'item_a' })).toEqual({
+      ids: [],
+      placing: [],
+      searches: [],
+    })
   })
 })
 
@@ -110,6 +136,28 @@ describe('ranking hits found elsewhere', () => {
       'paper',
       'bidet',
     ])
+  })
+
+  test('items built from a script lead the plain models the query names, not the others', () => {
+    const named = (id: string, name: string) => ({ ...asset(id), name })
+    const hits = [
+      named('plain', 'Sofa'),
+      scripted('loveseat', 'Loveseat'),
+      named('corner', 'Corner Sofa'),
+      scripted('modular', 'Modular Sofa'),
+    ]
+    expect(rankAssets(hits, 'sofa').map((item) => item.id)).toEqual([
+      'modular',
+      'plain',
+      'corner',
+      'loveseat',
+    ])
+
+    const baths = [
+      named('bathtub', 'Bathtub'),
+      { ...scripted('alcove', 'Alcove bath'), category: 'bathtubs' },
+    ]
+    expect(rankAssets(baths, 'bathtub').map((item) => item.id)).toEqual(['alcove', 'bathtub'])
   })
 })
 
@@ -130,6 +178,25 @@ describe('reading the library before a call', () => {
     expect(read.catalogSearches).toBeUndefined()
     expect(asked.ids).toEqual([['palm']])
   })
+
+  test('the scripted items a call places are brought into the project first; viewed ones are not', async () => {
+    const brought: string[][] = []
+    const source: AssetCatalogSource = {
+      search: async () => ({ items: [], total: 0 }),
+      byId: async (ids) => ids.map((id) => (id.startsWith('scripted') ? scripted(id) : asset(id))),
+      bring: async (items) => {
+        brought.push(items.map((item) => item.id))
+      },
+    }
+    await readCatalog(
+      nodes,
+      'place_items',
+      { items: [{ assetId: 'scripted-sofa' }, { assetId: 'lamp' }] },
+      source,
+    )
+    await readCatalog(nodes, 'view_assets', { ids: ['scripted-chair'] }, source)
+    expect(brought).toEqual([['scripted-sofa']])
+  })
 })
 
 describe('search_assets on a library kept elsewhere', () => {
@@ -143,6 +210,15 @@ describe('search_assets on a library kept elsewhere', () => {
       hint?: string
     }
   }
+
+  test('lists the params of an item built from a script', async () => {
+    const result = await search(() => ({ items: [scripted('sofa'), asset('chair')], total: 2 }))
+    const [sofa, chair] = result.groups[0]!.results as { params?: unknown }[]
+    expect(sofa!.params).toEqual([
+      { id: 'width', kind: 'number', default: 2, min: 1.6, max: 3, unit: 'm', value: 2.2 },
+    ])
+    expect(chair!.params).toBeUndefined()
+  })
 
   test("lists the host's hits in the host's order, with its total", async () => {
     const result = await search(() => ({

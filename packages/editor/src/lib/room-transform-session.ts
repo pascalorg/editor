@@ -10,7 +10,7 @@ import {
   useScene,
   type ZoneTransformPlan,
 } from '@pascal-app/core'
-import { useViewer } from '@pascal-app/viewer'
+import { isTypingTarget, useViewer } from '@pascal-app/viewer'
 import { Plane, Vector2, Vector3 } from 'three'
 import { create } from 'zustand'
 import { levelFrame } from '../components/editor/group-transform-shared'
@@ -23,7 +23,6 @@ import { beginGesture, type GestureHandle } from './gesture-lifecycle'
 import { isHistoryShortcut } from './history'
 import { mezzanineConflictMessage } from './mezzanine-messages'
 import { sfxEmitter } from './sfx-bus'
-import { isTypingTarget } from './typing-target'
 
 export const ROOM_MOVE_DRAG_LABEL = 'room-move'
 

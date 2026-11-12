@@ -37,6 +37,7 @@ function drafting(mode: SnappingMode) {
     mode: 'build',
     tool: 'beam',
     gridSnapStep: 0.5,
+    magneticSnap: true,
     snappingModeByContext: { ...state.snappingModeByContext, wall: mode },
   }))
 }

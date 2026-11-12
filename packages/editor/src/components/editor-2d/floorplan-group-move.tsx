@@ -8,6 +8,7 @@ import {
   DEFAULT_ANGLE_STEP,
   type FloorplanGeometry,
   type FloorplanPalette,
+  formatLinearMeasurement,
   pauseSceneHistory,
   pauseSpaceDetection,
   resumeSceneHistory,
@@ -16,18 +17,17 @@ import {
   useLiveTransforms,
   useScene,
 } from '@pascal-app/core'
-import { useViewer } from '@pascal-app/viewer'
+import { isTypingTarget, useViewer } from '@pascal-app/viewer'
+import { FloorplanDimensionRenderer } from '@pascal-app/viewer/ui'
 import { memo, type PointerEvent as ReactPointerEvent, useEffect, useMemo, useState } from 'react'
 import { create } from 'zustand'
 import { GROUP_MOVE_DRAG_LABEL, GROUP_ROTATE_DRAG_LABEL } from '../../lib/contextual-help'
 import { applyFloorplanAlignment } from '../../lib/floorplan/apply-alignment'
 import { clientToPlan } from '../../lib/floorplan/plan-coords'
 import { isHistoryShortcut } from '../../lib/history'
-import { formatLinearMeasurement } from '../../lib/measurements'
 import type { WallGroupPush } from '../../lib/room-handle-drag'
 import { useRoomHandleDrag } from '../../lib/room-handle-drag'
 import { sfxEmitter } from '../../lib/sfx-bus'
-import { isTypingTarget } from '../../lib/typing-target'
 import useAlignmentGuides from '../../store/use-alignment-guides'
 import useEditor, {
   isAlignmentGuideActive,
@@ -55,7 +55,6 @@ import {
 import { swallowNextClick } from '../editor/handles/use-handle-drag'
 import { useMeshSettleEpoch } from '../editor/use-mesh-settle-epoch'
 import { useFloorplanSceneRotation } from './floorplan-render-context'
-import { FloorplanDimensionRenderer } from './renderers/floorplan-dimension-renderer'
 
 // 2D sibling of the 3D body-drag group move (`group-move-3d.ts`): dragging
 // any selected element of a multi-selection slides the whole selection

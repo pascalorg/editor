@@ -1,10 +1,11 @@
 import type { TerrainVerb } from '@pascal-app/core'
+import { initInteractionSounds } from '@pascal-app/viewer/sfx'
 import mitt from 'mitt'
-import useAudio from '../store/use-audio'
 import {
   disposeSFX,
   type LoopSFXName,
   playSFX,
+  preloadSFX,
   startLoopSFX,
   stopLoopSFX,
   updateSFXVolumes,
@@ -72,7 +73,7 @@ const TERRAIN_LOOP_BY_VERB = {
 } as const satisfies Record<TerrainVerb, LoopSFXName>
 const handleTerrainSculptStart = (verb: TerrainVerb) => startLoopSFX(TERRAIN_LOOP_BY_VERB[verb])
 const handleTerrainSculptStop = () => stopLoopSFX()
-let unsubscribeAudio: (() => void) | null = null
+let unsubscribeInteractions: (() => void) | null = null
 
 /**
  * Initialize SFX Bus - connects SFX events to actual sound playback.
@@ -100,7 +101,8 @@ export function initSFXBus() {
   sfxEmitter.on('sfx:turn-needs-input', handleTurnNeedsInput)
   sfxEmitter.on('sfx:terrain-sculpt-start', handleTerrainSculptStart)
   sfxEmitter.on('sfx:terrain-sculpt-stop', handleTerrainSculptStop)
-  unsubscribeAudio = useAudio.subscribe(updateSFXVolumes)
+  unsubscribeInteractions = initInteractionSounds()
+  preloadSFX()
   updateSFXVolumes()
 }
 
@@ -125,8 +127,8 @@ export function disposeSFXBus() {
     sfxEmitter.off('sfx:turn-needs-input', handleTurnNeedsInput)
     sfxEmitter.off('sfx:terrain-sculpt-start', handleTerrainSculptStart)
     sfxEmitter.off('sfx:terrain-sculpt-stop', handleTerrainSculptStop)
-    unsubscribeAudio?.()
-    unsubscribeAudio = null
+    unsubscribeInteractions?.()
+    unsubscribeInteractions = null
     sfxBusInitialized = false
   }
   disposeSFX()

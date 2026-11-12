@@ -3,7 +3,9 @@
 import { Icon } from '@iconify/react'
 import {
   acquireSceneReadOnlyLease,
+  computeSceneBoundsXZ,
   createI18n,
+  emitter,
   getCatalogMaterialById,
   getLibraryMaterialIdFromRef,
   getMaterialSwatch,
@@ -28,6 +30,24 @@ import {
   type ViewerImmersiveSession,
   ViewerPresentations,
 } from '@pascal-app/viewer'
+import { useViewerUiSounds } from '@pascal-app/viewer/sfx'
+import {
+  type ActionMenuPlacement,
+  ParametricViewerRooms,
+  SceneLoader,
+  SceneLoadFailed,
+  SKY_DOCK_HEIGHT,
+  SkyControl,
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+  useIsMobile,
+  useViewerFloorDisplay,
+  ViewerHoverLabel,
+  ViewerSelectionManager,
+  ViewerStage,
+  type ViewerStageMode,
+} from '@pascal-app/viewer/ui'
 import {
   type CSSProperties,
   memo,
@@ -43,9 +63,9 @@ import {
 } from 'react'
 import { ViewerOverlay } from '../../components/viewer-overlay'
 import { ViewerZoneSystem } from '../../components/viewer-zone-system'
+import { useAutoFrame } from '../../hooks/use-auto-frame'
 import { type SaveStatus, useAutoSave } from '../../hooks/use-auto-save'
 import { useKeyboard } from '../../hooks/use-keyboard'
-import { useIsMobile } from '../../hooks/use-mobile'
 import { useSaveShortcut } from '../../hooks/use-save-shortcut'
 import { type HINT_KEY_NAMES, toolHintKey, toolHintKeyDescriptor } from '../../i18n/node-messages'
 import { useCeilingEditSessionOwner } from '../../lib/ceiling-edit-session'
@@ -70,12 +90,12 @@ import {
 import { disposeSFXBus, initSFXBus } from '../../lib/sfx-bus'
 import { useUnitFocusRules } from '../../lib/units'
 import { cn } from '../../lib/utils'
-import { useViewerFloorDisplay } from '../../lib/viewer-selection'
 import { type CameraHintAction, useCameraHintFocus } from '../../store/use-camera-hint-focus'
 import useEditor from '../../store/use-editor'
 import useFloorplanMode from '../../store/use-floorplan-mode'
 import useSessionGroups from '../../store/use-session-groups'
 import { paneOfView, VIEW_2D, VIEW_3D, type ViewPaneIndex } from '../../store/view-layout'
+import { FloorplanDimensionHitsGate } from '../editor-2d/renderers/floorplan-dimension-edit-overlay'
 import { PointAskLayer } from '../point-ask/point-ask-layer'
 import { CeilingSelectionAffordanceSystem } from '../systems/ceiling/ceiling-selection-affordance-system'
 import { CeilingSystem, CeilingTopsSync } from '../systems/ceiling/ceiling-system'
@@ -86,7 +106,7 @@ import { ZoneSystem } from '../systems/zone/zone-system'
 import { BoxSelectTool } from '../tools/select/box-select-tool'
 import { ToolManager } from '../tools/tool-manager'
 import { ActionMenu } from '../ui/action-menu'
-import { type ActionMenuPlacement, TOP_MENU_CLEARANCE } from '../ui/action-menu/placement'
+import { TOP_MENU_CLEARANCE } from '../ui/action-menu/placement'
 import { CommandPalette, type CommandPaletteEmptyAction } from '../ui/command-palette'
 import { EditorCommands } from '../ui/command-palette/editor-commands'
 import { FloatingLevelSelector } from '../ui/floating-level-selector'
@@ -94,21 +114,13 @@ import { HelperManager } from '../ui/helpers/helper-manager'
 import { PanelManager } from '../ui/panels/panel-manager'
 import { ErrorBoundary } from '../ui/primitives/error-boundary'
 import { useSidebarStore } from '../ui/primitives/sidebar'
-import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/primitives/tooltip'
 import { RightStack } from '../ui/right-stack'
-import { SceneLoader, SceneLoadFailed } from '../ui/scene-loader'
 import { AppSidebar } from '../ui/sidebar/app-sidebar'
 import type { ExtraPanel } from '../ui/sidebar/icon-rail'
 import { SettingsPanel, type SettingsPanelProps } from '../ui/sidebar/panels/settings-panel'
 import { SitePanel, type SitePanelProps } from '../ui/sidebar/panels/site-panel'
 import type { SidebarTab } from '../ui/sidebar/tab-bar'
 import { useHostPanels } from '../ui/sidebar/use-plugin-panels'
-import { SKY_DOCK_HEIGHT, SkyControl } from '../viewer/sky-control'
-import { ViewerHoverLabel } from '../viewer/viewer-hover-label'
-import { ParametricViewerRooms } from '../viewer/viewer-rooms'
-import { ViewerSelectionManager } from '../viewer/viewer-selection-manager'
-import { ViewerStage } from '../viewer/viewer-stage'
-import type { ViewerStageMode } from '../viewer/viewer-stage-modes'
 import { CaptureCameraRig } from './capture-camera-rig'
 import { CustomCameraControls } from './custom-camera-controls'
 import { DeleteConfirmationDialog } from './delete-confirmation-dialog'
@@ -1465,6 +1477,7 @@ function PreviewStage({
   )
 
   useViewerFloorDisplay()
+  useViewerUiSounds()
   const stageMode = isFirstPersonMode || !hasFloorplan ? '3d' : mode
   const stageModes = hasFloorplan && !isFirstPersonMode ? undefined : (['3d'] as const)
 
@@ -1567,6 +1580,8 @@ function EditorContent({
 
   useKeyboard({ isVersionPreviewMode, disabled: isFirstPersonMode || isStudioMode })
   useGestureLifecycleOwner()
+
+  useAutoFrame()
 
   const { beginSceneLoad, completeSceneLoad, saveNow } = useAutoSave({
     guardAgainstSceneWipe,
@@ -1739,6 +1754,21 @@ function EditorContent({
     return () => window.clearTimeout(timer)
   }, [hasLoadedInitialScene, isLoading, isSceneLoading, isViewerSceneReady, sceneReadyKey])
 
+  // The useAutoFrame emit can be clobbered by the level-follow effect's
+  // first-run pivot rest on fast (client-side navigation) loads. Re-emitting
+  // here is the last word after every load-driven camera effect has run.
+  // Once per load: a remounted viewer reports ready again, but only a new
+  // load reframes; remounted controls rest their own pivot on the level.
+  const framedSceneReadyKeyRef = useRef<number | null>(null)
+  useEffect(() => {
+    if (!isViewerSceneReady || framedSceneReadyKeyRef.current === sceneReadyKey) return
+    framedSceneReadyKeyRef.current = sceneReadyKey
+    const nodes = useScene.getState().nodes
+    if (Object.keys(nodes).length === 0) return
+    const bounds = computeSceneBoundsXZ(nodes)
+    emitter.emit('camera-controls:fit-scene', bounds ? { bounds } : {})
+  }, [isViewerSceneReady, sceneReadyKey])
+
   const isSceneDataLoading = isLoading || isSceneLoading || !hasLoadedInitialScene
   const showLoader = isSceneDataLoading || !isViewerSceneReady
   const visibleLoader =
@@ -1794,6 +1824,13 @@ function EditorContent({
       })
     }
   }, [isFirstPersonMode, isPreviewMode])
+
+  // The viewer's walkthrough says how the first-person camera moves, for the
+  // viewer-side consumers that tell a walk from a drone flight.
+  const firstPersonMovementMode = useEditor((s) => s.firstPersonMovementMode)
+  useEffect(() => {
+    if (isFirstPersonMode) useViewer.getState().setWalkthroughMovement(firstPersonMovementMode)
+  }, [isFirstPersonMode, firstPersonMovementMode])
 
   const previewViewerContent = (
     <Viewer
@@ -2046,7 +2083,9 @@ function EditorContent({
 function EditorFrame(props: EditorProps) {
   return (
     <Profiler id="editor" onRender={recordEditorRender}>
-      <EditorContent {...props} />
+      <FloorplanDimensionHitsGate>
+        <EditorContent {...props} />
+      </FloorplanDimensionHitsGate>
     </Profiler>
   )
 }

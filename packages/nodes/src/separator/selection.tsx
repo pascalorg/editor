@@ -1,10 +1,15 @@
 'use client'
 
-import { type AnyNodeId, type SeparatorNode, sceneRegistry, useScene } from '@pascal-app/core'
+import {
+  type AnyNodeId,
+  type SeparatorNode,
+  sceneRegistry,
+  separatorFloorElevation,
+  useScene,
+} from '@pascal-app/core'
 import {
   type SelectionAffordanceProps,
   SeparatorEndGrip,
-  separatorFloorElevation,
   separatorPushHandles,
   useEditor,
   useInteractionScope,

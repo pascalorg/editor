@@ -120,6 +120,8 @@ function roofSurfaceFaceCacheKey(segment: RoofSegmentNode): string {
     segment.dutchHipWidthRatio ?? ROOF_SHAPE_DEFAULTS.dutchHipWidthRatio,
     segment.dutchHipHeightRatio ?? ROOF_SHAPE_DEFAULTS.dutchHipHeightRatio,
     segment.dutchWaistLengthRatio ?? ROOF_SHAPE_DEFAULTS.dutchWaistLengthRatio,
+    segment.dutchGabletRake ?? ROOF_SHAPE_DEFAULTS.dutchGabletRake,
+    segment.dutchTopRakeThickness ?? ROOF_SHAPE_DEFAULTS.dutchTopRakeThickness,
   ].join('|')
 }
 

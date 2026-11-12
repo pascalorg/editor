@@ -148,3 +148,97 @@ describe('port connectivity — DWV pipe family', () => {
     expect(trapConnectivity.connections.find((c) => c.nodeId === run.id)).toBeDefined()
   })
 })
+
+type Point = [number, number, number]
+
+function widestJointGap(before: Record<string, AnyNode>, after: Record<string, AnyNode>): number {
+  const distance = (a: Point, b: Point) => Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2])
+  let widest = 0
+  for (const a of Object.values(before)) {
+    for (const b of Object.values(before)) {
+      if (a.id >= b.id) continue
+      for (const pa of portsOf(a.type, a)) {
+        for (const pb of portsOf(b.type, b)) {
+          if (distance(pa.position, pb.position) > 1e-6) continue
+          const na = portsOf(a.type, after[a.id]!).find((p) => p.id === pa.id)!
+          const nb = portsOf(b.type, after[b.id]!).find((p) => p.id === pb.id)!
+          widest = Math.max(widest, distance(na.position, nb.position))
+        }
+      }
+    }
+  }
+  return widest
+}
+
+describe('port connectivity — pipe runs carried through elbows', () => {
+  beforeEach(async () => {
+    nodeRegistry._reset()
+    await loadPlugin(builtinPlugin)
+  })
+
+  afterEach(() => {
+    nodeRegistry._reset()
+  })
+
+  const elbowAt = (position: Point) =>
+    PipeFittingNode.parse({
+      ...nodeRegistry.get('pipe-fitting')!.defaults!(),
+      parentId: null,
+      position,
+      rotation: [0, 0, 0],
+    })
+  const runAlong = (path: Point[]) =>
+    PipeSegmentNode.parse({
+      ...nodeRegistry.get('pipe-segment')!.defaults!(),
+      parentId: null,
+      path,
+    })
+
+  // A straight run into an elbow, an L run to a second elbow, and a tail run.
+  const lChain = () => {
+    const first = runAlong([
+      [0.07, 1, 0],
+      [3.93, 1, 0],
+    ])
+    const l = runAlong([
+      [4, 1, 0.07],
+      [4, 1, 2],
+      [6.93, 1, 2],
+    ])
+    const chain = [
+      first,
+      elbowAt([4, 1, 0]),
+      l,
+      elbowAt([7, 1, 2]),
+      runAlong([
+        [7, 1, 2.07],
+        [7, 1, 5],
+      ]),
+    ] as AnyNode[]
+    return { first, l, nodes: Object.fromEntries(chain.map((node) => [node.id, node])) }
+  }
+
+  test.each([
+    [0.3, 0, 0.4],
+    [0.05, 0, 0.05],
+    [0.3, 0.2, 0.4],
+  ])('dragging the first run by (%p, %p, %p) keeps every joint welded', (dx, dy, dz) => {
+    const { first, l, nodes } = lChain()
+    const moved = {
+      ...first,
+      path: first.path.map(([x, y, z]) => [x + dx, y + dy, z + dz]),
+    } as AnyNode
+    const updates = resolveConnectivityUpdates(
+      analyzePortConnectivity(first as AnyNode, nodes),
+      moved,
+    )
+    expect(updates).not.toBeNull()
+
+    const after: Record<string, AnyNode> = { ...nodes, [first.id]: moved }
+    for (const update of updates!)
+      after[update.id] = { ...after[update.id]!, ...update.data } as AnyNode
+    expect(widestJointGap(nodes, after)).toBeLessThan(1e-6)
+    const [, corner, end] = (after[l.id] as PipeSegmentNode).path
+    expect(Math.hypot(end![0] - corner![0], end![2] - corner![2])).toBeCloseTo(2.93, 6)
+  })
+})

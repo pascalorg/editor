@@ -9,6 +9,7 @@ import {
   FenceNode,
   generateId,
   ItemNode,
+  isNodeDuplicable,
   nodeRegistry,
   RoofSegmentNode,
   runSceneHistoryDraftWrite,
@@ -48,7 +49,7 @@ export function copyCollectionIds(copy: AnyNode): CollectionId[] {
  * every inspector's Duplicate. The copy is in the collections its source is in.
  */
 export function duplicateNodeAndPickUp(node: AnyNode) {
-  if (!node.parentId) return
+  if (!(node.parentId && isNodeDuplicable(node))) return
   if (startZoneRoomTransform(node, 'duplicate')) return
   sfxEmitter.emit('sfx:item-pick')
   const { setMovingNode } = useEditor.getState()

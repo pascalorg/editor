@@ -319,6 +319,16 @@ export function isRegistryMovable(kind: string): boolean {
 }
 
 /**
+ * Whether Duplicate, copy and paste may clone this node: its kind is not
+ * `duplicable: false` and its `duplicable.allow` (if any) accepts it.
+ */
+export function isNodeDuplicable(node: AnyNode): boolean {
+  const duplicable = nodeRegistry.get(node.type)?.capabilities.duplicable
+  if (duplicable === false) return false
+  return typeof duplicable === 'object' && duplicable.allow ? duplicable.allow({ node }) : true
+}
+
+/**
  * Whether the kind has a move tool that MOUNTS in the 3D viewport — the
  * generic `capabilities.movable` mover or a bespoke `affordanceTools.move`.
  * Narrower than {@link isRegistryMovable}, which also accepts floorplan-only

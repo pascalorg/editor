@@ -13,7 +13,7 @@ import {
   Vector3,
 } from 'three'
 import { createPascalPointerEvents, type ViewerBreadcrumb } from '../../lib/pointer-events'
-import { collectElevatorButtons } from './elevator-interaction-system'
+import { collectElevatorButtons, pickElevatorButton } from './elevator-interaction-system'
 
 const cleanups: (() => void)[] = []
 afterEach(() => {
@@ -149,4 +149,33 @@ describe('elevator buttons', () => {
         },
       ])
     })
+})
+
+test('buttons behind opaque walls or hidden elevator groups cannot be clicked', () => {
+  const scene = new Scene()
+  const panel = new Group()
+  panel.userData.elevatorButton = {
+    action: 'open-door',
+    disabled: false,
+    elevatorId: 'e',
+    kind: 'cab',
+  }
+  panel.add(new Mesh(new BoxGeometry(1, 1, 0.1), new MeshBasicMaterial()))
+  const wall = new Mesh(new BoxGeometry(2, 2, 0.1), new MeshBasicMaterial())
+  wall.position.z = 1
+  scene.add(panel, wall)
+  scene.updateMatrixWorld(true)
+  const ray = new Raycaster(new Vector3(0, 0, 5), new Vector3(0, 0, -1))
+  expect(pickElevatorButton(scene, ray)).toBeNull()
+  wall.visible = false
+  expect(pickElevatorButton(scene, ray)?.elevatorId).toBe('e')
+  panel.visible = false
+  expect(pickElevatorButton(scene, ray)).toBeNull()
+  panel.visible = true
+  wall.visible = true
+  wall.material = [new MeshBasicMaterial()]
+  wall.geometry.clearGroups()
+  wall.geometry.addGroup(0, Number.POSITIVE_INFINITY, 4)
+  expect(() => pickElevatorButton(scene, ray)).not.toThrow()
+  expect(pickElevatorButton(scene, ray)?.elevatorId).toBe('e')
 })

@@ -930,6 +930,10 @@ describe('a source other than open quotes the request', () => {
     expect(
       named('catalog', 'depuis la bibliothèque Pascal', 'Depuis la Bibliothèque Pascal, meuble'),
     ).toBeNull()
+    expect(
+      named('catalog', 'from the item library', 'furnish it with a sofa from the item library'),
+    ).toBeNull()
+    expect(named('catalog', 'library items only', 'a bedroom, library items only')).toBeNull()
     expect(named('catalog', 'with a library', 'Build a house with a library')).toBe(
       'source_not_named',
     )

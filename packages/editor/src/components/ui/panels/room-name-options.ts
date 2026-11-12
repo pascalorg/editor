@@ -4,11 +4,7 @@ import {
   numberedRoomName,
   type RoomNameSection,
 } from '../../../lib/room-name-catalog'
-import {
-  type DescriptorTranslator,
-  displayRoomName,
-  editedRoomName,
-} from '../../../lib/room-name-messages'
+import { type DescriptorTranslator, displayRoomName, editedRoomName } from '@pascal-app/viewer/ui'
 import { renameRoom } from '../../../lib/room-structure-commands'
 
 export type RoomNameOption = {

@@ -24,6 +24,12 @@ import {
 } from '@pascal-app/core'
 import { migrateCeilingRoomLinks, migrateRoomZones } from '@pascal-app/core/scene-migrations'
 import { useViewer } from '@pascal-app/viewer'
+import {
+  type RoomKey,
+  RoomSelectionIndex,
+  resolveRoomHit,
+  shouldSelectRoom,
+} from '@pascal-app/viewer/ui'
 import { _roots, act } from '@react-three/fiber'
 import { createElement } from 'react'
 import { Group, type LineSegments } from 'three'
@@ -37,12 +43,6 @@ import useSessionGroups from '../store/use-session-groups'
 import { withSelectionHarness } from '../test-utils/selection-harness'
 import { startRoomDivide } from './room-divide-session'
 import { runRoomHandleDrag } from './room-handle-drag'
-import {
-  type RoomKey,
-  RoomSelectionIndex,
-  resolveRoomHit,
-  shouldSelectRoom,
-} from './room-selection'
 import { selectRoom, selectRoomFromHit, shouldInterceptRoom } from './room-selection-commands'
 
 const levelId = 'level_room_selection'

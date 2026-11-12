@@ -909,7 +909,9 @@ export function buildIfcExport(input: IfcExportInput): IfcExportResult {
       const chord = Math.hypot(endPlan[0] - startPlan[0], endPlan[1] - startPlan[1])
       const support = wallSupportForNodes(wall, nodes)
       const base = support.elevation
-      const top = getWallTop(wall, levelId, nodes as Record<AnyNodeId, AnyNode>, base)
+      const startTop = getWallTop(wall, levelId, nodes as Record<AnyNodeId, AnyNode>, base, 0)
+      const endTop = getWallTop(wall, levelId, nodes as Record<AnyNodeId, AnyNode>, base, 1)
+      const top = Math.max(startTop, endTop)
       const cells = wallBaseCells(wall, support, top)
       if (chord < 1e-6 || cells.every((cell) => top - cell.bottom <= 1e-4)) {
         skipped.push({ nodeId: wall.id, type: wall.type, reason: 'degenerate' })
@@ -944,7 +946,7 @@ export function buildIfcExport(input: IfcExportInput): IfcExportResult {
       }
       // A stepped base (runs on different supports, or faces on different
       // floors) becomes one prism per run, each clipped from the footprint.
-      const solids =
+      const prisms =
         cells.length === 1
           ? [
               model.extrusion(
@@ -969,9 +971,17 @@ export function buildIfcExport(input: IfcExportInput): IfcExportResult {
                       : []
                   }),
             )
+      // A sloped top is linear along the chord, the wall frame's +X: each prism rises to the
+      // higher end and the plane through both end tops cuts it down.
+      const sloped = Math.abs(endTop - startTop) > 1e-6
+      const solids = sloped
+        ? prisms.map((prism) =>
+            model.clipAboveSlope(prism, [0, 0, startTop - base], (endTop - startTop) / chord),
+          )
+        : prisms
       const shape = model.shape([
         model.axisRepresentation(model.polyline2(axisPoints, false)),
-        model.bodyRepresentation('SweptSolid', solids),
+        model.bodyRepresentation(sloped ? 'Clipping' : 'SweptSolid', solids),
       ])
       const wallPlacement = model.localPlacement(storey.placement, frame)
       const wallRef = emitElement(

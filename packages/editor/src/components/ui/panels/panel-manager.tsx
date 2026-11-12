@@ -11,6 +11,8 @@ import {
   type DormerNode,
   type ElevatorNode,
   type FenceNode,
+  isMoveLocked,
+  isNodeDuplicable,
   type ItemNode,
   type RoofNode,
   type RoofSegmentNode,
@@ -26,7 +28,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useSelectedRoom, useZoneRoom } from '../../../hooks/use-selected-room'
 import { FloorOpeningPanel } from './floor-opening-panel'
 import { OpenRoomPanel, RoomPanel } from './room-panel'
-import { useIsMobile } from '../../../hooks/use-mobile'
+import { useIsMobile } from '@pascal-app/viewer/ui'
 import { shouldShowEditingControls } from '../../../lib/interaction/overlay-policy'
 import { captureElementActionOrigin, completeElementAction } from '../../../lib/room-zone-routing'
 import { sfxEmitter } from '../../../lib/sfx-bus'
@@ -155,9 +157,9 @@ function MobilePanelLayer({
         <MobileSelectionBar
           node={node}
           onDelete={handleDelete}
-          onDuplicate={handleDuplicate}
+          onDuplicate={isNodeDuplicable(node) ? handleDuplicate : undefined}
           onEdit={() => setIsSheetOpen((v) => !v)}
-          onMove={handleMove}
+          onMove={isMoveLocked(node) ? undefined : handleMove}
         />
       )}
       <MobilePanelSheet

@@ -5,6 +5,7 @@ import {
   type RoofSegmentNode,
   sceneRegistry,
 } from '@pascal-app/core'
+import { isGridSnapActive, useEditor } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import * as THREE from 'three'
 import { type RoofSegmentHit, resolveRoofSegmentHit } from './roof-segment-hit'
@@ -17,8 +18,6 @@ export type RelativeRoofDragTarget = {
   localZ: number
   hit: RoofSegmentHit
 }
-
-const ROOF_DRAG_SNAP_STEP_M = 0.05
 
 type RelativeRoofDragState = {
   segmentId: string
@@ -121,9 +120,10 @@ export function snapRelativeRoofDragTarget(
   target: RelativeRoofDragTarget,
   bypass = false,
 ): RelativeRoofDragTarget {
-  if (bypass) return target
-  const localX = Math.round(target.localX / ROOF_DRAG_SNAP_STEP_M) * ROOF_DRAG_SNAP_STEP_M
-  const localZ = Math.round(target.localZ / ROOF_DRAG_SNAP_STEP_M) * ROOF_DRAG_SNAP_STEP_M
+  const step = isGridSnapActive() ? useEditor.getState().gridSnapStep : 0
+  if (bypass || step <= 0) return target
+  const localX = Math.round(target.localX / step) * step
+  const localZ = Math.round(target.localZ / step) * step
   const surfaceOffsetY = target.localY - getSurfaceY(target.localX, target.localZ, target.segment)
   const localY = getSurfaceY(localX, localZ, target.segment) + surfaceOffsetY
   return {
