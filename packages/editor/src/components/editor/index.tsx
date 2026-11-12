@@ -1660,9 +1660,15 @@ function EditorContent({
   // layout back.
   const openedOnColumnRef = useRef<string | null>(null)
   useEffect(() => {
-    if (layoutVersion !== 'v2' || !columnTabId || isMobile) return
+    if (layoutVersion !== 'v2' || !columnTabId) return
     const project = projectId ?? ''
     if (openedOnColumnRef.current === project) return
+    // A project opened on a phone has had its opening: widening the window later keeps the tab
+    // and tool in use.
+    if (isMobile) {
+      openedOnColumnRef.current = project
+      return
+    }
     const open = () => {
       openedOnColumnRef.current = project
       useEditor.getState().setActiveSidebarPanel(columnTabId)
