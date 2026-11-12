@@ -172,6 +172,14 @@ if (!inputs.some((path) => path.endsWith('packages/viewer/dist/sfx/index.js')))
   throw new Error('SFX entry must resolve through the built package export to dist/sfx/index.js')
 if (!inputs.some((path) => path.endsWith('packages/viewer/dist/ui/index.js')))
   throw new Error('UI entry must resolve through the built package export to dist/ui/index.js')
+for (const cameraModule of [
+  'components/viewer-camera-controls',
+  'components/viewer-opening-camera',
+  'lib/opening-camera',
+]) {
+  if (!inputs.some((path) => path.endsWith(`packages/viewer/dist/ui/${cameraModule}.js`)))
+    throw new Error(`UI boundary must inspect the camera module: ${cameraModule}`)
+}
 if (!inputs.some((path) => path.endsWith('packages/nodes/dist/render.js')))
   throw new Error('Render entry must resolve through the built package export to dist/render.js')
 let scannedPascalModules = 0
@@ -244,6 +252,11 @@ const consumerSource = `
   export const ui = { SceneLoader, ViewerControlsBar, ViewerSceneHeader, WalkthroughHud, link };
   export const rooms = { ParametricViewerRooms, RoomPillsLayer2D, RoomPillsLayer3D, ViewerRooms };
   import { FloorplanPreview, ViewerStage, ViewerStageSwitcher, type ViewerStageMode } from '@pascal-app/viewer/ui';
+  import { ViewerCameraControls, ViewerOpeningCamera, parseOpeningCamera, savedSceneCamera, type ViewerCameraControlsProps, type ViewerOpeningCameraProps, type OpeningCameraPose } from '@pascal-app/viewer/ui';
+  const controlsProps: ViewerCameraControlsProps = {};
+  const pose: OpeningCameraPose = { position: [30, 30, 30], target: [0, 0, 0] };
+  const openingProps: ViewerOpeningCameraProps = { pose, ready: true, onApplied: () => {} };
+  export const camera = { ViewerCameraControls, ViewerOpeningCamera, parseOpeningCamera, savedSceneCamera, controlsProps, openingProps };
   const mode: ViewerStageMode = 'split';
   export const stage = { FloorplanPreview, ViewerStage, ViewerStageSwitcher, mode };
   const plugin: Plugin = renderPlugin;

@@ -33,8 +33,16 @@ export { ParametricViewerRooms, ViewerRooms } from './components/rooms/viewer-ro
 export { SceneLoader, SceneLoadFailed } from './components/scene-loader'
 export { openSkyPanel, SKY_DOCK_HEIGHT, SkyControl, useSkyPanel } from './components/sky-control'
 export { useViewerCameraNavigationSync } from './components/use-viewer-camera-navigation-sync'
+export {
+  ViewerCameraControls,
+  type ViewerCameraControlsProps,
+} from './components/viewer-camera-controls'
 export { ViewerControlsBar, type ViewerControlsBarProps } from './components/viewer-controls-bar'
 export { ViewerHoverLabel, viewerHoverLabel } from './components/viewer-hover-label'
+export {
+  ViewerOpeningCamera,
+  type ViewerOpeningCameraProps,
+} from './components/viewer-opening-camera'
 export {
   type ViewerLinkProps,
   ViewerSceneHeader,
@@ -113,6 +121,11 @@ export {
 } from './lib/camera-pose'
 export { authoredLevelName, localizedLevelName } from './lib/level-name'
 export { nodeDisplayLabel } from './lib/node-display-label'
+export {
+  type OpeningCameraPose,
+  parseOpeningCamera,
+  savedSceneCamera,
+} from './lib/opening-camera'
 export { formatRoomArea } from './lib/room-area'
 export { type RoomAssemblyHeights, resolveRoomAssemblyHeights } from './lib/room-assembly-overlay'
 export {
