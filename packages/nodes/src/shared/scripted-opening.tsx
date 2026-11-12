@@ -15,8 +15,8 @@ import {
   type WindowNode,
 } from '@pascal-app/core'
 import { SCRIPTED_MODEL_FLAG } from '@pascal-app/viewer'
-import { useCallback, useMemo, useRef } from 'react'
-import type { Group } from 'three'
+import { type RefObject, useCallback, useMemo, useRef } from 'react'
+import type { Group, Object3D } from 'three'
 import { ScriptedModel } from '../item/renderer'
 
 /**
@@ -25,7 +25,17 @@ import { ScriptedModel } from '../item/renderer'
  * is its bottom centre: an opening's mesh is centred on the opening, a column's
  * sits on its support point.
  */
-export function ScriptedOpeningModel({ node }: { node: WindowNode | DoorNode | ColumnNode }) {
+export function ScriptedOpeningModel({
+  node,
+  host,
+}: {
+  node: WindowNode | DoorNode | ColumnNode
+  /**
+   * The node's own group, for a kind with no system of its own (a column): its batch reads there
+   * whether the artifact has loaded. A window's or door's system reads it on this model's group.
+   */
+  host?: RefObject<Object3D | null>
+}) {
   const source = node.source!
   const ref = useRef<Group>(null)
   const modelData = useMemo(() => ({ [SCRIPTED_MODEL_FLAG]: true }), [])
@@ -54,16 +64,12 @@ export function ScriptedOpeningModel({ node }: { node: WindowNode | DoorNode | C
   }, [node.id, node.type, node.parentId, node.metadata, node.slots, source])
   const setSettled = useCallback(
     (settled: boolean) => {
-      if (ref.current) {
-        ref.current.userData.itemModelSettled = settled
-        // A column has no system of its own: its renderer and batch read the flag on the node's group.
-        if (node.type === 'column' && ref.current.parent)
-          ref.current.parent.userData.itemModelSettled = settled
-      }
-      // The opening's system holds its dirty mark until the artifact has loaded.
+      if (ref.current) ref.current.userData.itemModelSettled = settled
+      if (host?.current) host.current.userData.itemModelSettled = settled
+      // The node's dirty mark is held until the artifact has loaded.
       if (settled) useScene.getState().markDirty(node.id)
     },
-    [node.id, node.type],
+    [node.id, host],
   )
   const [, height] = scriptedSize(source.manifest)
   return (
