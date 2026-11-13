@@ -14653,6 +14653,14 @@ msgstr "ウォークインクローゼット"
 msgid "editor.roomName.workshop"
 msgstr "作業場"
 
+# Source-Hash: 4323751093d4c560
+# Review: required
+# AI-Provider: claude-code
+#: packages/editor/src/components/editor/index.tsx
+#, fuzzy
+msgid "editor.sceneData.pending"
+msgstr "プロジェクトを読み込み中です。完了するまで編集は一時停止されます。"
+
 # Source-Hash: 83909f82446ee9c3
 # Review: required
 # AI-Provider: claude-code

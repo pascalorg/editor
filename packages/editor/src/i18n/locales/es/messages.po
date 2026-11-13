@@ -14653,6 +14653,14 @@ msgstr "Vestidor"
 msgid "editor.roomName.workshop"
 msgstr "Taller"
 
+# Source-Hash: 4323751093d4c560
+# Review: required
+# AI-Provider: claude-code
+#: packages/editor/src/components/editor/index.tsx
+#, fuzzy
+msgid "editor.sceneData.pending"
+msgstr "Todavía se está cargando el proyecto. La edición está en pausa hasta que termine."
+
 # Source-Hash: 83909f82446ee9c3
 # Review: required
 # AI-Provider: claude-code
