@@ -1641,6 +1641,9 @@ function EditorContent({
 
   const [isSceneLoading, setIsSceneLoading] = useState(false)
   const [hasLoadedInitialScene, setHasLoadedInitialScene] = useState(false)
+  // The `onLoad` the store's graph came from: a new one is pending from the
+  // render that receives it, before the load effect resets the flags above.
+  const [loadedFrom, setLoadedFrom] = useState<{ onLoad: typeof onLoad } | null>(null)
   // A failed `onLoad` is shown as an error with a retry, never as an empty
   // scene: an editor that renders the default scaffold after a failed load
   // autosaves that scaffold over the real project.
@@ -1742,6 +1745,7 @@ function EditorContent({
           // The store holds the loaded graph: autosave resumes now, not on a
           // frame — a tab loaded while hidden never gets one.
           completeSceneLoad()
+          setLoadedFrom({ onLoad })
           // A new project gets its own opening camera frame.
           useEditor.getState().setOpeningCameraSettled(false)
           setIsViewerSceneReady(false)
@@ -1810,10 +1814,12 @@ function EditorContent({
     setIsViewerSceneReady(ready)
   }, [])
 
-  const isSceneDataLoading = isLoading || isSceneLoading || !hasLoadedInitialScene
+  const isEditorSceneLoading =
+    isSceneLoading || !hasLoadedInitialScene || loadedFrom === null || loadedFrom.onLoad !== onLoad
+  const isSceneDataLoading = isLoading || isEditorSceneLoading
   const { showLoader, sceneData } = useSceneLoader({
     isHostLoading: isLoading,
-    isSceneDataLoading: isSceneLoading || !hasLoadedInitialScene,
+    isSceneDataLoading: isEditorSceneLoading,
     isViewerSceneReady,
     hasLoadError: sceneLoadError != null,
     loadKey: `${sceneLoadGeneration}:${sceneReadyKey}`,

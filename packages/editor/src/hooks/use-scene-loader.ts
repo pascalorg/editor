@@ -1,4 +1,6 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useLayoutEffect, useState } from 'react'
+
+const useClientLayoutEffect = typeof window === 'undefined' ? useEffect : useLayoutEffect
 
 export const SCENE_READY_FALLBACK_MS = 8000
 export const SCENE_DATA_FALLBACK_MS = 20_000
@@ -89,10 +91,14 @@ export function useSceneLoader({
     dataLoadTimeoutMs,
   ])
 
-  useEffect(() => {
+  // Layout effects, so the attribute never lags the committed state by a paint.
+  useClientLayoutEffect(() => {
     document.documentElement.setAttribute(SCENE_DATA_ATTRIBUTE, sceneData)
   }, [sceneData])
-  useEffect(() => () => document.documentElement.removeAttribute(SCENE_DATA_ATTRIBUTE), [])
+  useClientLayoutEffect(
+    () => () => document.documentElement.removeAttribute(SCENE_DATA_ATTRIBUTE),
+    [],
+  )
 
   return { showLoader: hasLoadError || (waiting && !timedOut), sceneData }
 }
