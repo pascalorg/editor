@@ -67,6 +67,7 @@ import { useAutoFrame } from '../../hooks/use-auto-frame'
 import { type SaveStatus, useAutoSave } from '../../hooks/use-auto-save'
 import { useKeyboard } from '../../hooks/use-keyboard'
 import { useSaveShortcut } from '../../hooks/use-save-shortcut'
+import { useSceneLoader } from '../../hooks/use-scene-loader'
 import { type HINT_KEY_NAMES, toolHintKey, toolHintKeyDescriptor } from '../../i18n/node-messages'
 import { useCeilingEditSessionOwner } from '../../lib/ceiling-edit-session'
 import { showsWholeBuilding, useEditorLevelDisplay } from '../../lib/editor-level-display'
@@ -170,7 +171,6 @@ const PAINT_CURSOR_BADGE_DISABLED_COLOR = '#94a3b8'
 const ERASE_CURSOR_BADGE_COLOR = '#e4e4e7'
 const PAINT_CURSOR_BADGE_OFFSET_X = 14
 const PAINT_CURSOR_BADGE_OFFSET_Y = 14
-const SCENE_READY_FALLBACK_MS = 8000
 const PRESENTATION_PROJECT_NOT_RESTORED = Symbol('presentation-project-not-restored')
 const useClientLayoutEffect = typeof window === 'undefined' ? useEffect : useLayoutEffect
 // `aim`: a region sub-mode off what it draws on — the HUD says where to go; no
@@ -1624,6 +1624,7 @@ function EditorContent({
   const [sceneLoadError, setSceneLoadError] = useState<unknown>(null)
   const [sceneLoadAttempt, setSceneLoadAttempt] = useState(0)
   const [sceneReadyKey, setSceneReadyKey] = useState(0)
+  const [sceneLoadGeneration, setSceneLoadGeneration] = useState(0)
   const [isViewerSceneReady, setIsViewerSceneReady] = useState(false)
   const [previewStageMode, setPreviewStageMode] = useState<ViewerStageMode>('3d')
   const isPreviewMode = useEditor((s) => s.isPreviewMode)
@@ -1699,6 +1700,7 @@ function EditorContent({
 
     async function load(attempt: number) {
       beginSceneLoad()
+      setSceneLoadGeneration((generation) => generation + 1)
       setSceneLoadError(null)
       setHasLoadedInitialScene(false)
       setIsViewerSceneReady(false)
@@ -1785,36 +1787,30 @@ function EditorContent({
     setIsViewerSceneReady(ready)
   }, [])
 
-  useEffect(() => {
-    if (isLoading || isSceneLoading || !hasLoadedInitialScene || isViewerSceneReady) return
-
-    const timer = window.setTimeout(() => {
-      console.warn('[editor] viewer scene readiness timed out; showing editor shell anyway', {
-        sceneReadyKey,
-      })
-      setIsViewerSceneReady(true)
-    }, SCENE_READY_FALLBACK_MS)
-
-    return () => window.clearTimeout(timer)
-  }, [hasLoadedInitialScene, isLoading, isSceneLoading, isViewerSceneReady, sceneReadyKey])
+  const isSceneDataLoading = isLoading || isSceneLoading || !hasLoadedInitialScene
+  const showLoader = useSceneLoader({
+    isSceneDataLoading,
+    isViewerSceneReady,
+    hasLoadError: sceneLoadError != null,
+    loadKey: `${sceneLoadGeneration}:${sceneReadyKey}`,
+  })
 
   // The useAutoFrame emit can be clobbered by the level-follow effect's
   // first-run pivot rest on fast (client-side navigation) loads. Re-emitting
   // here is the last word after every load-driven camera effect has run.
   // Once per load: a remounted viewer reports ready again, but only a new
   // load reframes; remounted controls rest their own pivot on the level.
+  // A readiness fallback that took the loader down counts as ready here.
   const framedSceneReadyKeyRef = useRef<number | null>(null)
   useEffect(() => {
-    if (!isViewerSceneReady || framedSceneReadyKeyRef.current === sceneReadyKey) return
+    if (showLoader || framedSceneReadyKeyRef.current === sceneReadyKey) return
     framedSceneReadyKeyRef.current = sceneReadyKey
     const nodes = useScene.getState().nodes
     if (Object.keys(nodes).length === 0) return
     const bounds = computeSceneBoundsXZ(nodes)
     emitter.emit('camera-controls:fit-scene', bounds ? { bounds } : {})
-  }, [isViewerSceneReady, sceneReadyKey])
+  }, [showLoader, sceneReadyKey])
 
-  const isSceneDataLoading = isLoading || isSceneLoading || !hasLoadedInitialScene
-  const showLoader = isSceneDataLoading || !isViewerSceneReady
   const visibleLoader =
     showLoader &&
     !(
