@@ -1189,6 +1189,26 @@ function PaintCursorLayer({
   )
 }
 
+// The loader's fallback can take it down while the scene data is still
+// loading; until then the scene is read-only, so say why edits are refused.
+function SceneDataPendingNotice() {
+  const i18n = usePascalI18n()
+  return (
+    <div className="pointer-events-none absolute inset-x-0 top-3 z-40 flex justify-center">
+      <div
+        className="flex items-center gap-2 rounded-full border border-border bg-background/90 px-3 py-1.5 text-muted-foreground text-xs shadow-sm backdrop-blur-md"
+        role="status"
+      >
+        <span className="size-1.5 animate-pulse rounded-full bg-amber-500" />
+        {i18n._({
+          id: 'editor.sceneData.pending',
+          message: 'Still loading the project. Editing is paused until it finishes.',
+        })}
+      </div>
+    </div>
+  )
+}
+
 // ── Viewer canvas: memoized, subscribes to the view layout internally ──
 // This prevents Editor from re-rendering when the layout changes.
 
@@ -1206,6 +1226,7 @@ const ViewerCanvas = memo(function ViewerCanvas({
   onThumbnailCapture,
   onViewerBreadcrumb,
   presentationsReady,
+  sceneDataPending,
   viewerSceneSlot,
   floorplanSceneSlot,
   disablePostFx = false,
@@ -1225,6 +1246,7 @@ const ViewerCanvas = memo(function ViewerCanvas({
   onThumbnailCapture?: (blob: Blob, cameraData: SnapshotCameraData) => void
   onViewerBreadcrumb?: ViewerBreadcrumbHandler
   presentationsReady: boolean
+  sceneDataPending: boolean
   viewerSceneSlot?: ReactNode
   floorplanSceneSlot?: ReactNode
   disablePostFx?: boolean
@@ -1323,6 +1345,7 @@ const ViewerCanvas = memo(function ViewerCanvas({
       {/* `relative` so the floorplan compass (portaled here to stay visible in
           every layout) can anchor to this container's bottom-left. */}
       <div className="relative h-full" ref={setViewerAreaNode}>
+        {sceneDataPending ? <SceneDataPendingNotice /> : null}
         <QuickMeasurementHud />
         <DeleteConfirmationDialog />
         <div
@@ -1788,8 +1811,9 @@ function EditorContent({
   }, [])
 
   const isSceneDataLoading = isLoading || isSceneLoading || !hasLoadedInitialScene
-  const showLoader = useSceneLoader({
-    isSceneDataLoading,
+  const { showLoader, sceneData } = useSceneLoader({
+    isHostLoading: isLoading,
+    isSceneDataLoading: isSceneLoading || !hasLoadedInitialScene,
     isViewerSceneReady,
     hasLoadError: sceneLoadError != null,
     loadKey: `${sceneLoadGeneration}:${sceneReadyKey}`,
@@ -1921,6 +1945,7 @@ function EditorContent({
       onThumbnailCapture={onThumbnailCapture}
       onViewerBreadcrumb={onViewerBreadcrumb}
       presentationsReady={presentationsReady}
+      sceneDataPending={!showLoader && sceneData === 'loading'}
       sceneReadyKey={sceneReadyKey}
       showLoader={showLoader}
       viewerSceneSlot={viewerSceneSlot}

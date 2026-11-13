@@ -1,9 +1,16 @@
 import { afterEach, beforeEach, expect, spyOn, test } from 'bun:test'
 import { act, create } from '@react-three/test-renderer'
-import { type SceneLoaderInput, useSceneLoader } from './use-scene-loader'
+import {
+  SCENE_DATA_ATTRIBUTE,
+  type SceneLoaderInput,
+  type SceneLoaderState,
+  useSceneLoader,
+} from './use-scene-loader'
 
 const TIMEOUT_MS = 20
 const originalWindow = globalThis.window
+const originalDocument = globalThis.document
+const rootAttributes = new Map<string, string>()
 const actGlobal = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
 const previousAct = actGlobal.IS_REACT_ACT_ENVIRONMENT
 let renderer: Awaited<ReturnType<typeof create>> | undefined
@@ -12,6 +19,13 @@ let warn: ReturnType<typeof spyOn>
 beforeEach(() => {
   actGlobal.IS_REACT_ACT_ENVIRONMENT = true
   globalThis.window = globalThis as unknown as Window & typeof globalThis
+  rootAttributes.clear()
+  globalThis.document = {
+    documentElement: {
+      setAttribute: (name: string, value: string) => rootAttributes.set(name, value),
+      removeAttribute: (name: string) => rootAttributes.delete(name),
+    },
+  } as unknown as Document
   warn = spyOn(console, 'warn').mockImplementation(() => {})
 })
 
@@ -19,6 +33,7 @@ afterEach(async () => {
   await renderer?.unmount()
   renderer = undefined
   globalThis.window = originalWindow
+  globalThis.document = originalDocument
   actGlobal.IS_REACT_ACT_ENVIRONMENT = previousAct
   warn.mockRestore()
 })
@@ -29,9 +44,9 @@ const fallbackWarnings = () =>
 type Input = Omit<SceneLoaderInput, 'viewerReadyTimeoutMs' | 'dataLoadTimeoutMs'>
 
 async function mount(input: Input) {
-  const shown: boolean[] = []
+  const states: SceneLoaderState[] = []
   function Host(props: Input) {
-    shown.push(
+    states.push(
       useSceneLoader({
         ...props,
         viewerReadyTimeoutMs: TIMEOUT_MS,
@@ -42,7 +57,8 @@ async function mount(input: Input) {
   }
   renderer = await create(<Host {...input} />)
   return {
-    showLoader: () => shown.at(-1),
+    showLoader: () => states.at(-1)?.showLoader,
+    sceneData: () => states.at(-1)?.sceneData,
     update: (next: Input) => renderer!.update(<Host {...next} />),
   }
 }
@@ -52,7 +68,10 @@ const elapse = (ms = TIMEOUT_MS * 3) =>
     await new Promise((resolve) => setTimeout(resolve, ms))
   })
 
+const sceneDataAttribute = () => rootAttributes.get(SCENE_DATA_ATTRIBUTE)
+
 const loading: Input = {
+  isHostLoading: false,
   isSceneDataLoading: true,
   isViewerSceneReady: false,
   hasLoadError: false,
@@ -95,7 +114,7 @@ test('clears when isSceneLoading / hasLoadedInitialScene stay stuck', async () =
 })
 
 test('clears when a host isLoading stays stuck after the scene loaded', async () => {
-  const loader = await mount({ ...loaded, isSceneDataLoading: true, isViewerSceneReady: true })
+  const loader = await mount({ ...loaded, isHostLoading: true, isViewerSceneReady: true })
   expect(loader.showLoader()).toBe(true)
   await elapse()
   expect(loader.showLoader()).toBe(false)
@@ -125,4 +144,48 @@ test('a load error keeps its surface up with no fallback', async () => {
   await elapse()
   expect(loader.showLoader()).toBe(true)
   expect(fallbackWarnings()).toBe(0)
+})
+
+test('scene data: loading, then ready once the load completes', async () => {
+  const loader = await mount(loading)
+  expect(sceneDataAttribute()).toBe('loading')
+
+  await loader.update(loaded)
+  expect(sceneDataAttribute()).toBe('ready')
+  await loader.update({ ...loaded, isViewerSceneReady: true })
+  expect(loader.showLoader()).toBe(false)
+  expect(sceneDataAttribute()).toBe('ready')
+
+  await renderer!.unmount()
+  renderer = undefined
+  expect(sceneDataAttribute()).toBeUndefined()
+})
+
+test('scene data stays loading after the loader fallback, until the data arrives', async () => {
+  const loader = await mount(loading)
+  await elapse()
+  expect(loader.showLoader()).toBe(false)
+  expect(loader.sceneData()).toBe('loading')
+  expect(sceneDataAttribute()).toBe('loading')
+
+  await loader.update({ ...loaded, isViewerSceneReady: true })
+  expect(loader.sceneData()).toBe('ready')
+  expect(sceneDataAttribute()).toBe('ready')
+})
+
+test('a host isLoading does not hold the scene data state', async () => {
+  const loader = await mount({ ...loaded, isHostLoading: true })
+  expect(loader.showLoader()).toBe(true)
+  expect(sceneDataAttribute()).toBe('ready')
+})
+
+test('scene data: failed on a load error, loading again on retry', async () => {
+  const loader = await mount(loading)
+  await loader.update({ ...loading, hasLoadError: true })
+  expect(sceneDataAttribute()).toBe('failed')
+
+  await loader.update({ ...loading, loadKey: '2:0' })
+  expect(sceneDataAttribute()).toBe('loading')
+  await loader.update({ ...loaded, loadKey: '2:1' })
+  expect(sceneDataAttribute()).toBe('ready')
 })

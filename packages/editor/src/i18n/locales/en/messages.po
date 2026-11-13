@@ -5893,6 +5893,10 @@ msgstr "Walk-in closet"
 msgid "editor.roomName.workshop"
 msgstr "Workshop"
 
+#: packages/editor/src/components/editor/index.tsx
+msgid "editor.sceneData.pending"
+msgstr "Still loading the project. Editing is paused until it finishes."
+
 #: packages/editor/src/components/ui/sidebar/icon-rail.tsx
 msgid "editor.sidebar.iconRail.settings"
 msgstr "Settings"
