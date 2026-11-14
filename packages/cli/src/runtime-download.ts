@@ -46,6 +46,8 @@ export interface EnsureWebRuntimeOptions {
   activate?: boolean
   environment?: NodeJS.ProcessEnv
   sourceFile?: string
+  /** Overrides the download socket timeout in ms; the downloader defaults to 60s. */
+  downloadTimeoutMs?: number
   onProgress?: (event: RuntimeProvisionProgress) => void
 }
 
@@ -213,6 +215,7 @@ async function download(
   try {
     await downloadToFile(source.url, archiveFile, {
       environment: options.environment ?? process.env,
+      timeoutMs: options.downloadTimeoutMs,
       onProgress: ({ received, total }) =>
         options.onProgress?.({
           step: 'runtime-downloading',
