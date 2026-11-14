@@ -214,6 +214,8 @@ const WallRenderer = ({ node }: { node: WallNode }) => {
     },
     [baseMaterials, extraMaterials],
   )
+  // Trim and scripted finishes dress a wall's faces: a curtain wall and a railing have none.
+  const hasFaces = node.wallType !== 'curtain' && node.wallType !== 'railing'
 
   return (
     <mesh
@@ -242,7 +244,7 @@ const WallRenderer = ({ node }: { node: WallNode }) => {
         {...handlers}
       />
 
-      {node.wallType !== 'curtain' && hasWallTreatments(treatmentNode) && (
+      {hasFaces && hasWallTreatments(treatmentNode) && (
         <WallTreatmentSubscription
           childrenNodes={childNodes}
           materials={extraMaterials}
@@ -250,7 +252,7 @@ const WallRenderer = ({ node }: { node: WallNode }) => {
         />
       )}
 
-      {node.wallType !== 'curtain' &&
+      {hasFaces &&
         (['a', 'b'] as const).map((face) => {
           const script = node.finishScripts?.[face]
           return script ? (

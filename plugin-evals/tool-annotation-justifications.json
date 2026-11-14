@@ -397,6 +397,19 @@
       }
     },
     {
+      "name": "duplicate_node",
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "openWorldHint": false
+      },
+      "justifications": {
+        "readOnlyHint": "It is not read-only because it creates copies of existing nodes and everything under them.",
+        "destructiveHint": "Its intended operation adds new modeled state without deleting or replacing existing Pascal scene or project state.",
+        "openWorldHint": "It operates on the connected Pascal scene or project service without accessing the public internet."
+      }
+    },
+    {
       "name": "duplicate_zone",
       "annotations": {
         "readOnlyHint": false,
@@ -748,6 +761,19 @@
       }
     },
     {
+      "name": "move_node",
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": true,
+        "openWorldHint": false
+      },
+      "justifications": {
+        "readOnlyHint": "It is not read-only because it moves an existing node to a new seat on its host.",
+        "destructiveHint": "The operation overwrites the existing node's position and can displace hosted construction that rides with it.",
+        "openWorldHint": "It operates on the connected Pascal scene or project service without accessing the public internet."
+      }
+    },
+    {
       "name": "move_roofs_to_roof_level",
       "annotations": {
         "readOnlyHint": false,
@@ -1031,6 +1057,19 @@
         "readOnlyHint": "It is not read-only because it rewrites the member zone list of an existing unit in the connected Pascal scene.",
         "destructiveHint": "It replaces the unit's whole member list, so a wrong call can drop zones from the unit; it never deletes zones or other modeled state.",
         "openWorldHint": "It operates on the connected Pascal scene, project, and configured catalog data without accessing the public internet."
+      }
+    },
+    {
+      "name": "set_wall_type",
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": true,
+        "openWorldHint": false
+      },
+      "justifications": {
+        "readOnlyHint": "It writes wall assemblies and thicknesses in the connected Pascal scene.",
+        "destructiveHint": "It replaces existing assembly intent; undo restores it.",
+        "openWorldHint": "It operates on the connected Pascal scene without accessing the public internet."
       }
     },
     {

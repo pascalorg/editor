@@ -6,16 +6,18 @@ import {
   floorPlacedCollides,
   nodeRegistry,
   type TerrainVerb,
-  useScene,
+  useScene, usePascalI18n,
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { useEffect, useMemo, useState, useSyncExternalStore } from 'react'
 import { useShallow } from 'zustand/react/shallow'
-import { useIsMobile } from '../../../hooks/use-mobile'
+import { useIsMobile } from '@pascal-app/viewer/ui'
 import {
+  AXIS_MOVE_DRAG_LABEL,
   type ContextualShortcutHint,
   GROUP_MOVE_DRAG_LABEL,
   GROUP_ROTATE_DRAG_LABEL,
+  PATH_POINT_DRAG_LABEL,
   ROTATE_HANDLE_DRAG_LABEL,
   resolveRotateHandleHelpHints,
   resolveSelectModeHelpHints,
@@ -42,7 +44,7 @@ import {
   terrainHudTitle,
   toolHudTitle,
 } from '../../../lib/hud-title'
-import type { ReshapeKind } from '../../../lib/interaction/scope'
+import type { InteractionScope, ReshapeKind } from '../../../lib/interaction/scope'
 import {
   type MezzanineShape,
   useMezzanineDraft,
@@ -94,7 +96,7 @@ function reshapingHints(reshape: ReshapeKind): ContextualShortcutHint[] {
         : 'Move corner'
   return [
     { keys: ['Drag'], label: action },
-    { keys: ['Esc'], label: 'Cancel' },
+    { keys: ['Esc'], label: /* i18n */ { id: 'editor.helpers.helperManager.cancel', message: 'Cancel' } },
   ]
 }
 
@@ -106,8 +108,8 @@ function reshapingHints(reshape: ReshapeKind): ContextualShortcutHint[] {
 function terrainSculptHints(verb: TerrainVerb, sampling: boolean): ContextualShortcutHint[] {
   if (sampling) {
     return [
-      { keys: ['Click'], label: 'Pick target height' },
-      { keys: ['Esc'], label: 'Cancel picking' },
+      { keys: ['Click'], label: /* i18n */ { id: 'editor.helpers.helperManager.pickTargetHeight', message: 'Pick target height' } },
+      { keys: ['Esc'], label: /* i18n */ { id: 'editor.helpers.helperManager.cancelPicking', message: 'Cancel picking' } },
     ]
   }
   const action =
@@ -122,8 +124,8 @@ function terrainSculptHints(verb: TerrainVerb, sampling: boolean): ContextualSho
     { keys: ['Drag'], label: action },
     // Nested, so the two render as alternatives ("[ / ]") rather than a chord —
     // a flat `['[', ']']` joins with "+" and would read as "press both".
-    { keys: [['[', ']']], label: 'Brush size' },
-    { keys: ['Esc'], label: 'Cancel stroke' },
+    { keys: [['[', ']']], label: /* i18n */ { id: 'editor.helpers.helperManager.brushSize', message: 'Brush size' } },
+    { keys: ['Esc'], label: /* i18n */ { id: 'editor.helpers.helperManager.cancelStroke', message: 'Cancel stroke' } },
   ]
 }
 
@@ -141,12 +143,12 @@ const EMPTY_CONTEXTUAL_HINTS: ContextualShortcutHint[] = []
 export function paintHints(mode: PaintMode): ContextualShortcutHint[] {
   if (mode === 'pick')
     return [
-      { keys: ['Left click'], label: 'Paint with this material' },
-      { keys: ['Esc'], label: 'Cancel' },
+      { keys: ['Left click'], label: /* i18n */ { id: 'editor.helpers.helperManager.paintWithThisMaterial', message: 'Paint with this material' } },
+      { keys: ['Esc'], label: /* i18n */ { id: 'editor.helpers.helperManager.cancel', message: 'Cancel' } },
     ]
   if (mode === 'erase')
-    return [{ keys: ['Left click'], label: 'Remove a painted part, or reset a surface' }]
-  if (mode === 'surface') return [{ keys: [['Alt', 'Option']], label: 'Hold to pick a material' }]
+    return [{ keys: ['Left click'], label: /* i18n */ { id: 'editor.helpers.helperManager.removeAPaintedPartOrReset', message: 'Remove a painted part, or reset a surface' } }]
+  if (mode === 'surface') return [{ keys: [['Alt', 'Option']], label: /* i18n */ { id: 'editor.helpers.helperManager.holdToPickAMaterial', message: 'Hold to pick a material' } }]
   return []
 }
 
@@ -156,43 +158,45 @@ export function paintRegionHints(
   hovering = true,
 ): ContextualShortcutHint[] {
   const gesture: Record<typeof mode, ContextualShortcutHint> = {
-    rectangle: { keys: ['Drag'], label: 'Press anywhere, drag to the opposite corner' },
-    polygon: { keys: ['Left click'], label: 'Add point · click the first to close' },
+    rectangle: { keys: ['Drag'], label: /* i18n */ { id: 'editor.helpers.helperManager.pressAnywhereDragToTheOpposite', message: 'Press anywhere, drag to the opposite corner' } },
+    polygon: { keys: ['Left click'], label: /* i18n */ { id: 'editor.helpers.helperManager.addPointClickTheFirstTo', message: 'Add point · click the first to close' } },
   }
   // Off anything the sub-mode draws on, the HUD says where to go instead.
   if (!hovering)
     return [
       ...(notice ? [{ keys: ['!'], label: notice, active: true }] : []),
       { keys: ['Hover'], label: paintRegionHoverHint(mode), active: true },
-      { keys: ['Esc'], label: 'Cancel' },
+      { keys: ['Esc'], label: /* i18n */ { id: 'editor.helpers.helperManager.cancel', message: 'Cancel' } },
     ]
   return [
     ...(notice ? [{ keys: ['!'], label: notice, active: true }] : []),
     gesture[mode],
-    ...(mode === 'polygon' ? [{ keys: ['Backspace'], label: 'Remove last point' }] : []),
-    { keys: ['Esc'], label: 'Cancel' },
+    ...(mode === 'polygon' ? [{ keys: ['Backspace'], label: /* i18n */ { id: 'editor.helpers.helperManager.removeLastPoint', message: 'Remove last point' } }] : []),
+    { keys: ['Esc'], label: /* i18n */ { id: 'editor.helpers.helperManager.cancel', message: 'Cancel' } },
   ]
 }
+const DRAW_MEZZANINE = /* i18n */ { id: 'editor.helpers.helperManager.drawTheMezzanine', message: 'Draw the mezzanine' }
+const DRAW_OPENING = /* i18n */ { id: 'editor.helpers.helperManager.drawTheOpening', message: 'Draw the opening' }
 // "Add mezzanine": the outline gesture for the shape picked in the room panel,
 // then Esc; the snapping chip sits below.
 export function mezzanineHints(shape: MezzanineShape): ContextualShortcutHint[] {
   return shape === 'rectangle'
     ? [
-        { keys: ['Left click'], label: 'Set one corner, then the opposite' },
-        { keys: ['Drag'], label: 'Draw the mezzanine' },
-        { keys: ['Esc'], label: 'Cancel' },
+        { keys: ['Left click'], label: /* i18n */ { id: 'editor.helpers.helperManager.setOneCornerThenTheOpposite', message: 'Set one corner, then the opposite' } },
+        { keys: ['Drag'], label: DRAW_MEZZANINE },
+        { keys: ['Esc'], label: /* i18n */ { id: 'editor.helpers.helperManager.cancel', message: 'Cancel' } },
       ]
     : [
-        { keys: ['Left click'], label: 'Add point · click the first to close' },
-        { keys: ['Backspace'], label: 'Remove last point' },
-        { keys: ['Enter'], label: 'Finish' },
-        { keys: ['Esc'], label: 'Cancel' },
+        { keys: ['Left click'], label: /* i18n */ { id: 'editor.helpers.helperManager.addPointClickTheFirstTo', message: 'Add point · click the first to close' } },
+        { keys: ['Backspace'], label: /* i18n */ { id: 'editor.helpers.helperManager.removeLastPoint', message: 'Remove last point' } },
+        { keys: ['Enter'], label: /* i18n */ { id: 'editor.helpers.helperManager.finish', message: 'Finish' } },
+        { keys: ['Esc'], label: /* i18n */ { id: 'editor.helpers.helperManager.cancel', message: 'Cancel' } },
       ]
 }
 /** "Cut opening": the outline gesture for the chosen shape, then Esc. */
 export function openingHints(shape: OpeningShape): ContextualShortcutHint[] {
   return mezzanineHints(shape).map((hint) =>
-    hint.label === 'Draw the mezzanine' ? { ...hint, label: 'Draw the opening' } : hint,
+    typeof hint.label !== 'string' && hint.label.id === DRAW_MEZZANINE.id ? { ...hint, label: DRAW_OPENING } : hint,
   )
 }
 const TERRACE_CHIP_HINTS = [TERRACE_SHAPE_HINT]
@@ -200,22 +204,22 @@ const TERRACE_CHIP_HINTS = [TERRACE_SHAPE_HINT]
 export function terraceHints(shape: TerraceShape): ContextualShortcutHint[] {
   return shape === 'rectangle'
     ? [
-        { keys: ['Left click'], label: 'Set one corner, then the opposite' },
-        { keys: ['Drag'], label: 'Draw the terrace' },
-        { keys: ['Esc'], label: 'Done' },
+        { keys: ['Left click'], label: /* i18n */ { id: 'editor.helpers.helperManager.setOneCornerThenTheOpposite', message: 'Set one corner, then the opposite' } },
+        { keys: ['Drag'], label: /* i18n */ { id: 'editor.helpers.helperManager.drawTheTerrace', message: 'Draw the terrace' } },
+        { keys: ['Esc'], label: /* i18n */ { id: 'editor.helpers.helperManager.done', message: 'Done' } },
       ]
     : [
-        { keys: ['Left click'], label: 'Add point · click the first to close' },
-        { keys: ['Backspace'], label: 'Remove last point' },
-        { keys: ['Enter'], label: 'Finish' },
-        { keys: ['Esc'], label: 'Done' },
+        { keys: ['Left click'], label: /* i18n */ { id: 'editor.helpers.helperManager.addPointClickTheFirstTo', message: 'Add point · click the first to close' } },
+        { keys: ['Backspace'], label: /* i18n */ { id: 'editor.helpers.helperManager.removeLastPoint', message: 'Remove last point' } },
+        { keys: ['Enter'], label: /* i18n */ { id: 'editor.helpers.helperManager.finish', message: 'Finish' } },
+        { keys: ['Esc'], label: /* i18n */ { id: 'editor.helpers.helperManager.done', message: 'Done' } },
       ]
 }
 export const ROOM_DIVIDE_HINTS: ContextualShortcutHint[] = [
-  { keys: ['Left click'], label: 'Add point' },
-  { keys: ['Backspace'], label: 'Remove last point' },
-  { keys: ['Enter'], label: 'Finish at the edge' },
-  { keys: ['Esc'], label: 'Cancel' },
+  { keys: ['Left click'], label: /* i18n */ { id: 'editor.helpers.helperManager.addPoint', message: 'Add point' } },
+  { keys: ['Backspace'], label: /* i18n */ { id: 'editor.helpers.helperManager.removeLastPoint', message: 'Remove last point' } },
+  { keys: ['Enter'], label: /* i18n */ { id: 'editor.helpers.helperManager.finishAtTheEdge', message: 'Finish at the edge' } },
+  { keys: ['Esc'], label: /* i18n */ { id: 'editor.helpers.helperManager.cancel', message: 'Cancel' } },
 ]
 const NO_CONTEXTUAL_HELP_SUBSCRIPTION = () => () => {}
 
@@ -277,22 +281,76 @@ export function mezzanineGesture(
 
 export const MEZZANINE_GESTURE_HINTS: Record<MezzanineGesture, ContextualShortcutHint[]> = {
   raise: [
-    { keys: ['Drag'], label: 'Raise or lower' },
-    { keys: ['Esc'], label: 'Cancel' },
+    { keys: ['Drag'], label: /* i18n */ { id: 'editor.helpers.helperManager.raiseOrLower', message: 'Raise or lower' } },
+    { keys: ['Esc'], label: /* i18n */ { id: 'editor.helpers.helperManager.cancel', message: 'Cancel' } },
   ],
   resize: [
-    { keys: ['Drag'], label: 'Resize' },
-    { keys: ['Esc'], label: 'Cancel' },
+    { keys: ['Drag'], label: /* i18n */ { id: 'editor.helpers.helperManager.resize', message: 'Resize' } },
+    { keys: ['Esc'], label: /* i18n */ { id: 'editor.helpers.helperManager.cancel', message: 'Cancel' } },
   ],
   move: [
-    { keys: ['Left click'], label: 'Place inside the room' },
-    { keys: [['R', 'T']], label: 'Rotate ±45°' },
-    { keys: ['Alt'], label: 'Free move' },
-    { keys: ['Esc'], label: 'Cancel' },
+    { keys: ['Left click'], label: /* i18n */ { id: 'editor.helpers.helperManager.placeInsideTheRoom', message: 'Place inside the room' } },
+    { keys: [['R', 'T']], label: /* i18n */ { id: 'editor.helpers.helperManager.rotate45', message: 'Rotate ±45°' } },
+    { keys: ['Alt'], label: /* i18n */ { id: 'editor.helpers.helperManager.freeMove', message: 'Free move' } },
+    { keys: ['Esc'], label: /* i18n */ { id: 'editor.helpers.helperManager.cancel', message: 'Cancel' } },
   ],
 }
 
+export type MepHandleGesture = 'edit-path' | 'move'
+
+/**
+ * A drag on an MEP handle — a run point, where Alt detaches the joint, or a
+ * fitting, run or run segment slid along an axis — or null. Its HUD names the
+ * kind and the gesture, not "Resize".
+ */
+export function mepHandleGesture(
+  drag: { nodeId: string; label: string } | null,
+): MepHandleGesture | null {
+  if (drag?.label === PATH_POINT_DRAG_LABEL) return 'edit-path'
+  if (drag?.label === AXIS_MOVE_DRAG_LABEL) return 'move'
+  return null
+}
+
+export function mepHandleGestureHints(
+  gesture: MepHandleGesture,
+  altPressed: boolean,
+): ContextualShortcutHint[] {
+  const cancel: ContextualShortcutHint = {
+    keys: ['Esc'],
+    label: /* i18n */ { id: 'editor.helpers.helperManager.cancel', message: 'Cancel' },
+  }
+  if (gesture === 'move') return [cancel]
+  return [
+    {
+      keys: ['Alt'],
+      label: /* i18n */ { id: 'editor.helpers.helperManager.detachTheJoint', message: 'Detach the joint' },
+      active: altPressed,
+    },
+    cancel,
+  ]
+}
+
+/**
+ * Whether the armed tool's own hints (`toolHints`) win over the node in hand: a registry tool that
+ * holds its draft in a placing scope (the roof's footprint, a fitting, a block) says what its clicks
+ * do, where the generic rows misnamed it ("Move roof · Left click: Place" while a click draws a
+ * footprint).
+ */
+export function toolHintsOwnPlacing(
+  scope: InteractionScope,
+  tool: string | null,
+  toolHintCount: number,
+): boolean {
+  return (
+    scope.kind === 'placing' &&
+    scope.driver === 'registry-tool' &&
+    scope.nodeType === tool &&
+    toolHintCount > 0
+  )
+}
+
 export function HelperManager() {
+  const i18n = usePascalI18n()
   const mode = useEditor((s) => s.mode)
   const tool = useEditor((s) => s.tool)
   const terrainVerb = useEditor((s) => s.terrainVerb)
@@ -318,6 +376,10 @@ export function HelperManager() {
   const reshapingNode = useReshapingNode()
   const activeHandleDrag = useActiveHandleDrag()
   const mezzanineHandle = useScene((s) => mezzanineGesture(activeHandleDrag, s.nodes))
+  const mepHandle = mepHandleGesture(activeHandleDrag)
+  const mepHandleKind = useScene((s) =>
+    mepHandle && activeHandleDrag ? s.nodes[activeHandleDrag.nodeId as AnyNodeId]?.type : undefined,
+  )
   const selectedIds = useViewer((s) => s.selection.selectedIds)
   const isMobile = useIsMobile()
   const modifiers = useActiveModifierKeys()
@@ -417,7 +479,7 @@ export function HelperManager() {
   if (activeHandleDrag?.label === GROUP_MOVE_DRAG_LABEL) {
     return (
       <ContextualHelperPanel
-        hints={[{ keys: ['R / T'], label: 'Rotate the selection ±45°' }]}
+        hints={[{ keys: ['R / T'], label: i18n._({ id: 'editor.helpers.helperManager.rotateTheSelection45', message: 'Rotate the selection ±45°' }) }]}
         snapContext={snapContext}
         title={MOVE_SELECTION_HUD_TITLE}
       />
@@ -440,10 +502,10 @@ export function HelperManager() {
     return (
       <ContextualHelperPanel
         hints={[
-          { keys: ['Left click'], label: 'Place' },
-          { keys: [['R', 'T']], label: 'Rotate ±45°' },
-          { keys: ['Alt'], label: 'Free move · slide doors and windows' },
-          { keys: ['Esc'], label: 'Cancel' },
+          { keys: ['Left click'], label: i18n._({ id: 'editor.helpers.helperManager.place', message: 'Place' }) },
+          { keys: [['R', 'T']], label: i18n._({ id: 'editor.helpers.helperManager.rotate45', message: 'Rotate ±45°' }) },
+          { keys: ['Alt'], label: i18n._({ id: 'editor.helpers.helperManager.freeMoveSlideDoorsAndWindows', message: 'Free move · slide doors and windows' }) },
+          { keys: ['Esc'], label: i18n._({ id: 'editor.helpers.helperManager.cancel', message: 'Cancel' }) },
         ]}
         snapContext={snapContext}
         title={MOVE_ROOM_HUD_TITLE}
@@ -496,6 +558,20 @@ export function HelperManager() {
     )
   }
 
+  if (mepHandle) {
+    return (
+      <ContextualHelperPanel
+        hints={mepHandleGestureHints(mepHandle, modifiers.alt)}
+        snapContext={snapContext}
+        title={
+          mepHandleKind
+            ? nodeKindHudTitle(mepHandleKind, mepHandle === 'move' ? 'move' : 'edit')
+            : null
+        }
+      />
+    )
+  }
+
   // A single-node resize arrow is still an active snapping interaction. Roof
   // width/depth handles opt into grid snapping, so keep the mode and grid-step
   // controls visible for the whole drag instead of falling through to idle
@@ -504,8 +580,8 @@ export function HelperManager() {
     return (
       <ContextualHelperPanel
         hints={[
-          { keys: ['Drag'], label: 'Resize' },
-          { keys: ['Esc'], label: 'Cancel' },
+          { keys: ['Drag'], label: i18n._({ id: 'editor.helpers.helperManager.resize', message: 'Resize' }) },
+          { keys: ['Esc'], label: i18n._({ id: 'editor.helpers.helperManager.cancel', message: 'Cancel' }) },
         ]}
         snapContext={snapContext}
         title={RESIZE_HUD_TITLE}
@@ -522,7 +598,7 @@ export function HelperManager() {
       ? nodeRegistry.get(reshapingNode.type)?.affordanceHints?.[scope.reshape]
       : undefined
     const title = reshapingNode
-      ? nodeKindHudTitle(reshapingNode.type, scope.reshape === 'split' ? 'Split' : 'Edit')
+      ? nodeKindHudTitle(reshapingNode.type, scope.reshape === 'split' ? 'split' : 'edit')
       : null
     if (hints) {
       return (
@@ -543,12 +619,15 @@ export function HelperManager() {
     )
   }
 
-  if (movingNode) {
+  if (
+    movingNode &&
+    !toolHintsOwnPlacing(scope, tool, tool ? (nodeRegistry.get(tool)?.toolHints?.length ?? 0) : 0)
+  ) {
     // A fresh placement (e.g. a positioned preset like a shelf) advertises its
     // once/repeat continuation, exactly like the GLB item tool — but an existing
     // node being *moved* is not a placement, so it gets no continuation chip.
     const isFreshPlacement = isFreshPlacementMetadata(movingNode.metadata)
-    const movingTitle = nodeKindHudTitle(movingNode.type, isFreshPlacement ? undefined : 'Move')
+    const movingTitle = nodeKindHudTitle(movingNode.type, isFreshPlacement ? undefined : 'move')
     if (movingNode.type === 'building') return <BuildingHelper showRotate title={movingTitle} />
     const movingContinuationContext = isFreshPlacement
       ? keyCyclableContinuationContext(continuationContextOf(movingNode.type))
@@ -611,7 +690,7 @@ export function HelperManager() {
       <ContextualHelperPanel
         hints={contextualEditHints}
         snapContext={snapContext}
-        title={contextualHelpNode ? nodeKindHudTitle(contextualHelpNode.type, 'Edit') : null}
+        title={contextualHelpNode ? nodeKindHudTitle(contextualHelpNode.type, 'edit') : null}
       />
     )
   }
@@ -639,9 +718,9 @@ export function HelperManager() {
     return (
       <ContextualHelperPanel
         hints={[
-          { keys: ['Hover'], label: 'Inspect surface dimensions' },
-          { keys: ['Click'], label: 'Pin measurement lens' },
-          { keys: ['Esc'], label: 'Exit smart measure' },
+          { keys: ['Hover'], label: i18n._({ id: 'editor.helpers.helperManager.inspectSurfaceDimensions', message: 'Inspect surface dimensions' }) },
+          { keys: ['Click'], label: i18n._({ id: 'editor.helpers.helperManager.pinMeasurementLens', message: 'Pin measurement lens' }) },
+          { keys: ['Esc'], label: i18n._({ id: 'editor.helpers.helperManager.exitSmartMeasure', message: 'Exit smart measure' }) },
         ]}
         title={SMART_MEASURE_HUD_TITLE}
       />

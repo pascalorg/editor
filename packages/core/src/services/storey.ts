@@ -1,7 +1,11 @@
 import { footprintLift } from '../lib/floor-foundation-datum'
-import { levelConstructionDisplacements } from '../lib/floor-foundation-stack'
+import {
+  levelConstructionDisplacements,
+  upperStoreyFootprints,
+} from '../lib/floor-foundation-stack'
 import { area, intersection } from '../lib/polygon-boolean'
 import { isSiteFlatwork } from '../lib/site-flatwork'
+import { queryNodes } from '../runtime/node-queries'
 import type { BuildingNode, LevelNode, SlabNode, WallNode } from '../schema'
 import type { AnyNode, AnyNodeId } from '../schema/types'
 import {
@@ -9,6 +13,7 @@ import {
   pointOnPolygonBoundary,
   wallOverlapsSlabFootprint,
 } from '../systems/slab/slab-support'
+import { getWallChordFractionAt } from '../systems/wall/wall-curve'
 import { resolveWallTop } from '../systems/wall/wall-top'
 import { DEFAULT_LEVEL_HEIGHT } from './level-height'
 
@@ -75,7 +80,11 @@ export function getLevelElevations(nodes: Record<AnyNodeId, AnyNode>): Map<strin
   const hit = elevationMemo.get(nodes)
   if (hit) return hit
   const elevations = new Map(getAuthoredLevelElevations(nodes))
-  if (Object.values(nodes).some((node) => node.type === 'slab' && node.plateRole === 'base'))
+  if (
+    queryNodes(nodes, { type: 'slab' }).some(
+      (node) => node.type === 'slab' && node.plateRole === 'base',
+    )
+  )
     for (const [id, lift] of levelConstructionDisplacements(nodes)) {
       const entry = elevations.get(id)!
       if (lift) elevations.set(id, { ...entry, baseY: entry.baseY + lift })
@@ -90,14 +99,10 @@ export function getAuthoredLevelElevations(
   const memoized = authoredElevationMemo.get(nodes)
   if (memoized) return memoized
 
-  const buildings = Object.values(nodes).filter(
-    (node): node is BuildingNode => node?.type === 'building',
-  )
+  const buildings = queryNodes<BuildingNode>(nodes, { type: 'building' })
 
   const entries: Array<{ baseElevation: number; levelId: string } & LevelElevation> = []
-  for (const node of Object.values(nodes)) {
-    if (node?.type !== 'level') continue
-    const level = node as LevelNode
+  for (const level of queryNodes<LevelNode>(nodes, { type: 'level' })) {
     entries.push({
       levelId: level.id,
       baseElevation: level.baseElevation ?? 0,
@@ -406,13 +411,22 @@ function resolveCoveringSlabContext(
   const authoredHeight =
     resolveLevelFloorToFloorHeight(levelId, getAuthoredLevelElevations(nodes)) ??
     getStoredLevelHeight(level)
+  // A plate carrying the storey above rises to that storey's floor: when a
+  // neighbouring plate's foundation lifted the storey, this plate's walls grow
+  // taller to meet it instead of stopping short. A plate with nothing above
+  // keeps its own storey height.
+  const carriesStoreyAbove = new Set(
+    (aboveId ? (upperStoreyFootprints(nodes).get(aboveId) ?? []) : []).map((base) => base.id),
+  )
   const context = {
     floorToFloorHeight,
     planeHeight: authoredHeight,
     slabs,
     footprintPlanes: footprints.map(({ slab, lift }) => ({
       slab,
-      top: authoredHeight + lift,
+      top: carriesStoreyAbove.has(slab.id)
+        ? Math.max(authoredHeight + lift, floorToFloorHeight)
+        : authoredHeight + lift,
     })),
   }
 
@@ -523,6 +537,7 @@ export function getWallTop(
   levelId: string,
   nodes: Record<AnyNodeId, AnyNode>,
   electedBase: number,
+  t: number,
 ): number {
   const level = nodes[levelId as LevelNode['id']]
   const authoredStoreyHeight = level?.type === 'level' ? (level.height ?? null) : null
@@ -531,7 +546,25 @@ export function getWallTop(
     getWallPlaneTop(wall, levelId, nodes),
     electedBase,
     authoredStoreyHeight,
+    t,
   )
+}
+
+/**
+ * The lowest point of {@link getWallTop} over arc-length stations `[left, right]`. A sloped top is
+ * linear along the chord (the frame the viewer slopes the extrusion in), so it is lowest at one end.
+ */
+export function getWallTopOver(
+  wall: WallNode,
+  levelId: string,
+  nodes: Record<AnyNodeId, AnyNode>,
+  electedBase: number,
+  left: number,
+  right: number,
+): number {
+  const at = (station: number) =>
+    getWallTop(wall, levelId, nodes, electedBase, getWallChordFractionAt(wall, station))
+  return Math.min(at(left), at(right))
 }
 
 export function getWallCoveringSlabUnderside(

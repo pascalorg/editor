@@ -5,6 +5,7 @@ export {
   resolveZoneTransformHosts,
   type SupportHostAssignment,
 } from './apply-zone-transform'
+export { planAttachedWallChanges } from './attached-walls'
 export { type CreateMezzanineInput, createMezzanine } from './create-mezzanine'
 export {
   type CreateZoneInput,
@@ -29,6 +30,14 @@ export {
 } from './floor-opening'
 export { type LockOutsideFacesInput, lockOutsideFaces } from './lock-outside-faces'
 export { mergeZones } from './merge-zones'
+export {
+  joinedSeparatorIds,
+  planAttachedSeparatorUpdates,
+  SEPARATOR_JOIN_REACH,
+  type SeparatorSpan,
+  setSeparatorEnd,
+  translateSeparators,
+} from './move-separators'
 export { type MezzanineStairPlan, planMezzanineStair } from './plan-mezzanine-stair'
 export { planWallDeletion } from './plan-wall-deletion'
 export { rebaseFloorReference } from './rebase-floor-reference'
@@ -55,3 +64,12 @@ export {
   structureChangeBatch,
 } from './shared'
 export { type TransformZoneInput, transformZone, type ZoneTransformPlan } from './transform-zone'
+export {
+  finishWallEdit,
+  retypeOutlineBridges,
+  sameWallConstruction,
+  trimWallOverlaps,
+  WALL_CONSTRUCTION_FIELDS,
+  wallConstructionPatch,
+  wallsRunAlong,
+} from './wall-overlap'

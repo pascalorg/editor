@@ -2,10 +2,11 @@ import { liftedManualSlab } from '../lib/floor-construction-lift'
 import { withHostedCutterHoles } from '../lib/object-cuts'
 import { area, difference, intersection, type Ring } from '../lib/polygon-boolean'
 import { getRenderableSlabPolygon, slabPolygonContextForLevel } from '../lib/slab-polygon'
-import type { AnyNode } from '../schema'
+import type { AnyNode, ItemNode, SlabNode } from '../schema'
 import { resolveCeilingHeight } from '../services/level-height'
 import { CEILING_DRAW_OFFSET, getLevelElevations } from '../services/storey'
 import { scriptItemBoundsInLevel } from './layout-clearance'
+import { queryNodes } from './scene-queries'
 
 type BoundsEvidence = {
   severity?: 'info'
@@ -58,8 +59,8 @@ export function ceilingObjectObservations(
 ): CeilingObjectObservation[] {
   const observations: CeilingObjectObservation[] = []
   const elevations = getLevelElevations(nodes)
-  for (const item of Object.values(nodes)) {
-    if (item.type !== 'item' || item.asset.attachTo !== 'ceiling') continue
+  for (const item of queryNodes<ItemNode>(nodes, { type: 'item' })) {
+    if (item.asset.attachTo !== 'ceiling') continue
     const ceiling = item.parentId ? nodes[item.parentId] : undefined
     if (ceiling?.type !== 'ceiling') continue
     const resolved = scriptItemBoundsInLevel(item, nodes)
@@ -90,8 +91,8 @@ export function ceilingObjectObservations(
         attachmentElevation: attachment,
       })
     const footprint = projectedHull(resolved.corners)
-    for (const original of Object.values(nodes)) {
-      if (original.type !== 'slab' || original.recessed || !original.parentId) continue
+    for (const original of queryNodes<SlabNode>(nodes, { type: 'slab' })) {
+      if (original.recessed || !original.parentId) continue
       const slabLevel = elevations.get(original.parentId)
       // Unlinked legacy levels are not evidence that two different storeys share a building.
       if (

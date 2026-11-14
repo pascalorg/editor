@@ -6,6 +6,7 @@ import {
   getConicalRoofCoverage,
   getRoofSegmentDeckReach,
   getSegmentSlopeFrame,
+  isRailingWall,
   type LevelNode,
   type SlabNode,
   type WallNode,
@@ -52,10 +53,10 @@ export function wallSpans(nodes: Nodes, levelId: string): Map<string, WallSpan> 
         0,
         nodes,
       )
-      const top = resolveWallTop(
-        wall,
-        getWallPlaneTop(wall, levelId, nodes as Record<AnyNodeId, AnyNode>),
-        support.elevation,
+      const planeTop = getWallPlaneTop(wall, levelId, nodes as Record<AnyNodeId, AnyNode>)
+      const top = Math.max(
+        resolveWallTop(wall, planeTop, support.elevation, planeTop, 0),
+        resolveWallTop(wall, planeTop, support.elevation, planeTop, 1),
       )
       return [wall.id, { base: support.elevation, top }]
     }),
@@ -167,7 +168,10 @@ type LevelPlan = { walls: WallNode[]; rooms: ZoneNode[]; spans: Map<string, Wall
 // against them (a 500-node paste of 450 segments read the whole scene per wall per segment: 13 s).
 const planMemo = new WeakMap<object, Map<string, LevelPlan>>()
 
-/** A level's visible walls, its rooms and where its walls stand. */
+/**
+ * A level's visible walls, its rooms and where its walls stand. A railing is a guard round a deck
+ * or a porch, not a wall: no roof sits on it.
+ */
 function planOf(nodes: Nodes, levelId: string): LevelPlan {
   let memo = planMemo.get(nodes)
   if (!memo) {
@@ -180,7 +184,7 @@ function planOf(nodes: Nodes, levelId: string): LevelPlan {
   const rooms: ZoneNode[] = []
   for (const node of Object.values(nodes)) {
     if (node.parentId !== levelId) continue
-    if (node.type === 'wall' && node.visible !== false) walls.push(node)
+    if (node.type === 'wall' && node.visible !== false && !isRailingWall(node)) walls.push(node)
     else if (node.type === 'zone' && node.polygon.length >= 3) rooms.push(node)
   }
   const plan = { walls, rooms, spans: wallSpans(nodes, levelId) }

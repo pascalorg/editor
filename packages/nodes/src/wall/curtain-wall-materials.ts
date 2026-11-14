@@ -14,6 +14,7 @@ import {
 } from '@pascal-app/viewer'
 import type { Material } from 'three'
 import { MeshLambertNodeMaterial, MeshStandardNodeMaterial } from 'three/webgpu'
+import { createRailingWallMaterials } from './railing-wall-materials'
 
 export function createCurtainWallMaterials(
   wall: WallNode,
@@ -76,10 +77,13 @@ export function getCurtainAwareWallMaterials(
   materials?: Record<SceneMaterialId, SceneMaterial>,
   finishRefs: readonly string[] = [],
 ): WallMaterials {
-  const override =
-    textures && wall.wallType === 'curtain'
+  const override = !textures
+    ? undefined
+    : wall.wallType === 'curtain'
       ? createCurtainWallMaterials(wall, shading, materials)
-      : undefined
+      : wall.wallType === 'railing'
+        ? createRailingWallMaterials(wall, shading, materials)
+        : undefined
   return getMaterialsForWall(
     wall,
     shading,

@@ -26,7 +26,7 @@ import {
   useScene,
 } from '@pascal-app/core'
 import { nodeLevelFrame } from '@pascal-app/core/procedural-items'
-import { useViewer } from '@pascal-app/viewer'
+import { isTypingTarget, useViewer } from '@pascal-app/viewer'
 import { useEffect, useMemo } from 'react'
 import { commitFreshPlacementSubtree } from '../../lib/fresh-planar-placement'
 import { isHistoryShortcut } from '../../lib/history'
@@ -39,7 +39,6 @@ import {
 import { movementSfxStepKey } from '../../lib/sfx/movement-tick'
 import { sfxEmitter } from '../../lib/sfx-bus'
 import { surfaceAttachmentId } from '../../lib/surface-attachment'
-import { isTypingTarget } from '../../lib/typing-target'
 import { resolveAlignmentForFloorplanView } from '../../lib/world-grid-snap'
 import useAlignmentGuides from '../../store/use-alignment-guides'
 import useEditor, {
@@ -388,7 +387,13 @@ export function FloorplanRegistryMoveOverlay() {
             endTransientMarkers()
           })
           sfxEmitter.emit('sfx:item-place')
-          useViewer.getState().setSelection({ selectedIds: initialAffectedIds })
+          // The moved node stays selected, as after a 3D move: the joined walls and
+          // rooms a wall move reshapes are part of its write, not a pick.
+          useViewer.getState().setSelection({
+            selectedIds: useScene.getState().nodes[movingNode.id]
+              ? [movingNode.id]
+              : initialAffectedIds,
+          })
           return
         }
 
@@ -844,14 +849,25 @@ export function FloorplanRegistryMoveOverlay() {
       }
       boxEl.setAttribute('transform', transform)
       const oldY = originalPosition[1]
+      const position = nodeRegistry.get(movingNode.type)?.capabilities?.movable?.resolvePosition?.({
+        node: useScene.getState().nodes[movingNode.id] ?? movingNode,
+        position: [finalX, oldY, finalZ],
+        nodes: useScene.getState().nodes,
+      }) ?? [finalX, oldY, finalZ]
+      if (def?.capabilities?.movable?.resolvePosition) {
+        useLiveTransforms.getState().set(movingNode.id, {
+          position: position as [number, number, number],
+          rotation: currentRotation,
+        })
+      }
       lastPositionValid = movableValidityConfig?.isValidPosition
         ? movableValidityConfig.isValidPosition({
             node: {
               ...movingNode,
-              position: [finalX, oldY, finalZ],
+              position,
               rotation: currentRotation,
             } as AnyNode,
-            position: [finalX, oldY, finalZ],
+            position: position as [number, number, number],
             rotation: currentRotation,
             levelId:
               (useViewer.getState().selection.levelId as AnyNodeId | null) ??
@@ -879,6 +895,11 @@ export function FloorplanRegistryMoveOverlay() {
             (storedRotation as [number?, number?, number?])[2] ?? 0,
           ]
         : snapped.rotation
+      const position = nodeRegistry.get(movingNode.type)?.capabilities?.movable?.resolvePosition?.({
+        node: useScene.getState().nodes[movingNode.id] ?? movingNode,
+        position: [sx, oldY, sz],
+        nodes: useScene.getState().nodes,
+      }) ?? [sx, oldY, sz]
       const rotationPatch = 'rotation' in movingNode ? { rotation } : {}
       const atomicPreview =
         isFreshPlacement &&
@@ -931,7 +952,7 @@ export function FloorplanRegistryMoveOverlay() {
         const committedId = commitFreshPlacementSubtree(
           movingNode.id as AnyNodeId,
           {
-            position: [sx, oldY, sz],
+            position,
             ...rotationPatch,
             metadata: stripPlacementMetadataFlags((movingNode as { metadata?: unknown }).metadata),
             visible: true,
@@ -947,7 +968,7 @@ export function FloorplanRegistryMoveOverlay() {
         useScene.getState().updateNode(
           movingNode.id as AnyNodeId,
           {
-            position: [sx, oldY, sz],
+            position,
             ...rotationPatch,
           } as Partial<AnyNode>,
         )
@@ -999,6 +1020,8 @@ export function FloorplanRegistryMoveOverlay() {
       for (const relatedEntry of relatedEntries) {
         relatedEntry.style.visibility = ''
       }
+      if (def?.capabilities?.movable?.resolvePosition)
+        useLiveTransforms.getState().clear(movingNode.id)
       boxEl.remove()
       useAlignmentGuides.getState().clear()
     }

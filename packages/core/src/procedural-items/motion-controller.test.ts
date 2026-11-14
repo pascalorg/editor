@@ -83,3 +83,21 @@ test('spin ramps over 0.35 s and holds phase at rest', () => {
   const phase = controller.tick(0).spins.rotor!.phase
   expect(controller.tick(1).spins.rotor!.phase).toBe(phase)
 })
+
+test('settled waits for opening and sliding parts to land, not for spinning ones', () => {
+  const controller = cabinet()
+  expect(controller.tick(0).settled).toBe(true)
+  controller.command({ sequence: 1, scope: { partId: 'drawer' }, target: true })
+  expect(controller.tick(0.1).settled).toBe(false)
+  let frame = controller.tick(0.1)
+  for (let i = 0; i < 100 && !frame.settled; i++) frame = controller.tick(0.05)
+  expect(frame.settled).toBe(true)
+  expect(frame.fractions.drawer).toBe(1)
+
+  const fan = new ProceduralMotionController(evaluateRecipe(parseRecipe(ceilingJson)).motions, {
+    [evaluateRecipe(parseRecipe(ceilingJson)).motions[0]!.partId]: true,
+  })
+  const running = fan.tick(0.1)
+  expect(running.pending).toBe(true)
+  expect(running.settled).toBe(true)
+})

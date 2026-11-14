@@ -1,6 +1,10 @@
 import {
   type AnyNode,
   getCatalogMaterialById,
+  getLinearUnitLabel,
+  getMaterialSwatch,
+  type LinearUnit,
+  metersToLinearUnit,
   parseMaterialRef,
   roomSideFaces,
   type SceneMaterial,
@@ -10,7 +14,6 @@ import {
   type WallFaceRegion,
   type WallNode,
 } from '@pascal-app/core'
-import { getLinearUnitLabel, type LinearUnit, metersToLinearUnit } from './measurements'
 
 // Rows for the wall panel's "Paint regions" list: finish swatch + name, the
 // face in room terms when the wall has a room on exactly one side, and the
@@ -18,7 +21,13 @@ import { getLinearUnitLabel, type LinearUnit, metersToLinearUnit } from './measu
 
 const FALLBACK_SWATCH_COLOR = '#d4d4d8'
 
-export type WallRegionFinish = { name: string; color: string; imageUrl?: string }
+export type WallRegionFinish = {
+  name: string
+  color: string
+  imageUrl?: string
+  /** The image is a white albedo `color` tints: multiply it (a siding's profile). */
+  tinted?: boolean
+}
 
 export type WallRegionRow = {
   id: string
@@ -63,11 +72,13 @@ export function describeRegionFinish(
   }
   if (parsed?.kind === 'library') {
     const item = getCatalogMaterialById(parsed.id)
-    const imageUrl = item?.previewThumbnailUrl ?? item?.preset.maps.albedoMap
+    if (!item) return { name: 'Library finish', color: FALLBACK_SWATCH_COLOR }
+    const swatch = getMaterialSwatch(item)
     return {
-      name: item?.label ?? 'Library finish',
-      color: item?.previewColor ?? item?.preset.mapProperties.color ?? FALLBACK_SWATCH_COLOR,
-      ...(imageUrl ? { imageUrl } : {}),
+      name: item.label,
+      color: swatch.color,
+      ...(swatch.imageUrl ? { imageUrl: swatch.imageUrl } : {}),
+      ...(swatch.tinted ? { tinted: true } : {}),
     }
   }
   return { name: 'Custom finish', color: FALLBACK_SWATCH_COLOR }

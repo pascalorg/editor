@@ -2,7 +2,7 @@
 
 import { type BuildingNode, sceneRegistry, useScene } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
-import { Html } from '@react-three/drei'
+import { LocalizedHtml as Html } from '@pascal-app/viewer/ui'
 import { useFrame } from '@react-three/fiber'
 import { useCallback, useRef } from 'react'
 import * as THREE from 'three'

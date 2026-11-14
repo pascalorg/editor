@@ -33,7 +33,7 @@ separately from the runtime, so updating the CLI does not replace your work.
 
 ## Requirements
 
-- Node.js 22.13 or newer
+- Node.js 22.23.4+ on 22.x, 24.22.1+ on 24.x, or 26.12.1+
 - npm, including when the CLI itself is launched with pnpm or Bun
 - A browser, unless you pass `--no-open`
 - Network access the first time you start the editor, or a local copy of the web runtime
@@ -99,6 +99,7 @@ update should include this size report so media growth is visible in review.
 
 Every command that starts the editor (`editor`, `start`, `open`, `resume`, `projects`,
 `project open`, `update`) resolves that runtime in this order:
+
 1. `PASCAL_BUNDLED_RUNTIME_DIR`, an already-extracted runtime directory.
 2. `--runtime <directory-or-archive>`, which every one of those commands accepts.
 3. The runtime already installed in `~/.pascal/runtime/<version>` for this CLI version.
@@ -141,32 +142,33 @@ downloaded the web runtime.
 
 ## Commands
 
-| Command                                                  | Purpose                                                                                         |
-| -------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
-| `pascal editor [--runtime <path>]`                       | Install the web runtime if needed, ensure the editor is running, and open it.                   |
-| `pascal start [--runtime <path>]`                        | Ensure the editor is running without opening a browser.                                         |
-| `pascal stop [--force]`                                  | Stop the managed editor and MCP processes; `--force` is a guarded recovery path.                |
-| `pascal restart`                                         | Restart the editor and MCP service with their current configuration.                            |
-| `pascal status [--json]`                                 | Show editor and MCP health, version, PIDs, ports, URL, and runtime metadata.                    |
-| `pascal open [project]`                                  | Start Pascal if needed, then open the editor or a project by ID, ID prefix, or unique name.     |
-| `pascal resume [project]`                                | Open the latest project, or a selected project.                                                 |
-| `pascal projects [--json]`                               | List local projects.                                                                            |
-| `pascal logs [--follow]`                                 | Read or follow the managed editor log.                                                          |
-| `pascal update [--version <version>] [--runtime <path>]` | Health-check and activate the runtime this CLI publishes, or an npm-published target.           |
-| `pascal doctor [--json]`                                 | Diagnose Node.js, storage, runtime, process, and plugin state.                                  |
-| `pascal info [--json]`                                   | Print platform, paths, runtime, and plugin context.                                             |
-| `pascal project list [--json]`                           | Explicit form of `pascal projects`.                                                             |
-| `pascal project open <id-or-name>`                       | Explicit form of `pascal open <project>`.                                                       |
-| `pascal agent claim [--no-open] [--json]`                | Link an autonomous hosted agent to the person accountable for it.                               |
-| `pascal agent status [--json]`                           | Verify the hosted agent credential and inspect its claim and organization scope.                |
-| `pascal architect run "<brief>"`                         | Start a hosted architect run from a brief and stream its output.                                |
-| `pascal architect status <id> [--json]`                  | Show a hosted architect run's status and output.                                                |
-| `pascal architect cancel <id> [--json]`                  | Cancel a queued or running hosted architect run.                                                |
-| `pascal mcp connect`                                     | Stable local connector for MCP clients; starts the bundled MCP service without the web runtime. |
-| `pascal mcp status [--json]`                             | Show managed MCP health.                                                                        |
-| `pascal mcp config [--json]`                             | Print generic MCP client configuration.                                                         |
-| `pascal mcp setup <codex\|claude>`                       | Configure an installed client without overwriting existing entries.                             |
-| `pascal plugin list [--json]`                            | Inspect the reserved managed-plugin lock.                                                       |
+| Command                                                         | Purpose                                                                                         |
+| --------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| `pascal editor [--runtime <path>]`                              | Install the web runtime if needed, ensure the editor is running, and open it.                   |
+| `pascal start [--runtime <path>]`                               | Ensure the editor is running without opening a browser.                                         |
+| `pascal stop [--force]`                                         | Stop the managed editor and MCP processes; `--force` is a guarded recovery path.                |
+| `pascal restart`                                                | Restart the editor and MCP service with their current configuration.                            |
+| `pascal status [--json]`                                        | Show editor and MCP health, version, PIDs, ports, URL, and runtime metadata.                    |
+| `pascal open [project]`                                         | Start Pascal if needed, then open the editor or a project by ID, ID prefix, or unique name.     |
+| `pascal resume [project]`                                       | Open the latest project, or a selected project.                                                 |
+| `pascal projects [--json]`                                      | List local projects.                                                                            |
+| `pascal logs [--follow]`                                        | Read or follow the managed editor log.                                                          |
+| `pascal update [--version <version>] [--runtime <path>]`        | Health-check and activate the runtime this CLI publishes, or an npm-published target.           |
+| `pascal doctor [--json]`                                        | Diagnose Node.js, storage, runtime, process, and plugin state.                                  |
+| `pascal info [--json]`                                          | Print platform, paths, runtime, and plugin context.                                             |
+| `pascal project list [--json]`                                  | Explicit form of `pascal projects`.                                                             |
+| `pascal project open <id-or-name>`                              | Explicit form of `pascal open <project>`.                                                       |
+| `pascal agent claim [--no-open] [--json]`                       | Link an autonomous hosted agent to the person accountable for it.                               |
+| `pascal agent status [--json]`                                  | Verify the hosted agent credential and inspect its claim and organization scope.                |
+| `pascal architect run "<brief>"`                                | Start a hosted architect run from a brief and stream its output.                                |
+| `pascal architect status <id> [--json]`                         | Show a hosted architect run's status and output.                                                |
+| `pascal architect cancel <id> [--json]`                         | Cancel a queued or running hosted architect run.                                                |
+| `pascal viewer deploy <dir> --viewer <id> [--dry-run] [--json]` | Upload and activate a static build for a hosted viewer.                                         |
+| `pascal mcp connect`                                            | Stable local connector for MCP clients; starts the bundled MCP service without the web runtime. |
+| `pascal mcp status [--json]`                                    | Show managed MCP health.                                                                        |
+| `pascal mcp config [--json]`                                    | Print generic MCP client configuration.                                                         |
+| `pascal mcp setup <codex\|claude>`                              | Configure an installed client without overwriting existing entries.                             |
+| `pascal plugin list [--json]`                                   | Inspect the reserved managed-plugin lock.                                                       |
 
 When you do not install globally, prefix commands with a runner—for example,
 `npx @pascal-app/cli doctor`.
@@ -235,6 +237,28 @@ Claiming lifts claim-gated capabilities for the autonomous agent. It does not tr
 ownership, grant the agent access to the person's private projects, or grant the person access
 to the agent's private projects. The local editor and its projects remain local unless a
 separate hosted project action explicitly moves data.
+
+## Deploy a hosted viewer
+
+The `pascal viewer deploy` command ships in the next `@pascal-app/cli` release after 1.1.1;
+1.1.1 and earlier do not include it.
+
+Register your viewer under Settings → Viewers → **Host on Pascal** first, then deploy the
+static build output with a key that can manage the viewer's workspace:
+
+```bash
+PASCAL_API_KEY='sk_live_...' pascal viewer deploy ./dist --viewer viewer_...
+```
+
+The CLI checks the build, uploads it, and activates the deployment. It never stores or prints
+`PASCAL_API_KEY`. Use `--dry-run` to check the manifest without a key or network requests,
+and `--json` for structured output without progress. Hidden entries, including symlinks, are skipped except the
+top-level `.well-known/` directory; visible symlinks are refused.
+
+Builds need a root `index.html` and must fit within 2,000 files, 100 MiB total, and 25 MiB per
+file. The server accepts static web, font, media, and 3D asset extensions. See the
+[hosting API documentation](https://editor.pascal.app/docs/developers/api) for the allowlist.
+Exit code 2 means invalid usage; 75 means a temporary failure worth retrying.
 
 ## Hosted architect runs
 

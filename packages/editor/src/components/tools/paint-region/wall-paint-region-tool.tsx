@@ -4,12 +4,18 @@ import {
   type AnyNode,
   type AnyNodeId,
   emitter,
+  formatLinearMeasurement,
   sceneRegistry,
   useScene,
   type WallFace,
   type WallNode,
 } from '@pascal-app/core'
-import { getSceneTheme, setSurfaceRaycastLayers, useViewer } from '@pascal-app/viewer'
+import {
+  getSceneTheme,
+  isTypingTarget,
+  setSurfaceRaycastLayers,
+  useViewer,
+} from '@pascal-app/viewer'
 import { useFrame, useThree } from '@react-three/fiber'
 import { useEffect, useMemo, useRef } from 'react'
 import {
@@ -27,9 +33,7 @@ import {
 import { LineBasicNodeMaterial, MeshBasicNodeMaterial } from 'three/webgpu'
 import { markToolCancelConsumed } from '../../../hooks/use-keyboard'
 import { EDITOR_LAYER } from '../../../lib/constants'
-import { formatLinearMeasurement } from '../../../lib/measurements'
 import { paintRegionTargets, usePaintRegionMode } from '../../../lib/paint-region-mode'
-import { isTypingTarget } from '../../../lib/typing-target'
 import {
   activeWallRegionGesture,
   activeWallRegionTarget,

@@ -300,10 +300,12 @@ describe('3D wall move', () => {
   })
 
   test('drop rejoins a moved endpoint within the connect radius in one reversible step', async () => {
+    // Slanted, so the move's line-up with parallel walls leaves the drop at 2.5
+    // and only the rejoin carries the endpoint onto it.
     const target = WallNode.parse({
       id: 'wall_drop_target',
       parentId: LEVEL_ID,
-      start: [2.53, -2],
+      start: [3.53, -2],
       end: [2.53, 0.04],
     })
     useScene.getState().applyNodeChanges({

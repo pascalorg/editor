@@ -74,7 +74,22 @@ describe('validate_design', () => {
     expect(broken.structuredContent).toMatchObject({
       valid: false,
       diagnostics: [{ code: 'invalid_json' }],
+      schemaUri: 'pascal://schema/design',
+      example: DESIGN_EXAMPLE,
     })
+    const blind = await client.callTool({
+      name: 'validate_design',
+      arguments: { design: { version: 1, mounting: 'floor' } },
+    })
+    expect(blind.isError).toBeFalsy()
+    expect(blind.structuredContent).toMatchObject({ valid: false, example: DESIGN_EXAMPLE })
+    expect((blind.structuredContent as { diagnostics: unknown[] }).diagnostics).toContainEqual(
+      expect.objectContaining({
+        path: 'mounting',
+        received: '"floor"',
+        expected: expect.stringContaining('A floor design leaves mounting out'),
+      }),
+    )
     await client.close()
   })
 

@@ -55,6 +55,11 @@ function nodeOffersRoomScope(node: AnyNode): boolean {
   return nodeRegistry.get(node.type)?.capabilities?.paint?.roomScope === true
 }
 
+/** The scopes the hovered surface declares for itself (`capabilities.paint.scopes`), if any. */
+function surfaceScopes(node: AnyNode, role: string) {
+  return nodeRegistry.get(node.type)?.capabilities?.paint?.scopes?.(node, role) ?? null
+}
+
 const isFloorPlate = (node: AnyNode): boolean => node.type === 'slab' && node.boundary === 'auto'
 
 const FOOTPRINT_FACE_LABELS: Record<string, string> = {
@@ -104,6 +109,8 @@ export function availablePaintScopes(args: {
   if (args.node.type === 'wall') return ['single', 'room']
   const plate = args.role === undefined ? null : platePaintScopes(args.node, args.role)
   if (plate) return plate.scopes
+  const own = args.role === undefined ? null : surfaceScopes(args.node, args.role)
+  if (own) return own.scopes
   const scopes: PaintScope[] = ['single']
   if (args.slotRoles.length > 1) scopes.push('object')
   if (nodeHasAsset(args.node)) scopes.push('matching')
@@ -123,7 +130,7 @@ export function paintHoverInfo(node: AnyNode, role: string, slotRoles: string[])
     scopes: availablePaintScopes({ node, slotRoles, role }),
     slotLabel: paintSurfaceLabel(node, role),
     nodeNoun: node.type,
-    labels: platePaintScopes(node, role)?.labels,
+    labels: platePaintScopes(node, role)?.labels ?? surfaceScopes(node, role)?.labels,
   }
 }
 
@@ -168,12 +175,13 @@ export function paintSurfaceLabel(node: AnyNode, role: string): string {
   return slotDisplayLabel(node, role)
 }
 
-/** Display label for the hovered slot — declared label wins, else derived from the id. */
+/** Display label for the hovered slot, with a capability override for contextual copy. */
 export function slotDisplayLabel(node: AnyNode, role: string): string {
   const capabilities = nodeRegistry.get(node.type)?.capabilities
+  const roleLabel = capabilities?.paint?.roleLabel?.(node, role)
+  if (roleLabel) return roleLabel
   const declared = capabilities?.slots?.(node)?.find((slot) => slot.slotId === role)
-  if (declared) return declared.label
-  return capabilities?.paint?.roleLabel?.(node, role) ?? slotLabelFromId(role)
+  return declared?.label ?? slotLabelFromId(role)
 }
 
 // ── Fan-out resolution ──────────────────────────────────────────────────────
@@ -505,6 +513,12 @@ export function resolvePaintScopeTargets(args: {
       )
       .map((other) => ({ nodeId: other.id, role: stepRole }))
     return targets.length ? targets : [{ nodeId: node.id as AnyNodeId, role: stepRole }]
+  }
+  // A surface with its own scope set paints the role it names for the scope.
+  const own = surfaceScopes(node, role)
+  if (own) {
+    const roleFor = own.roleFor?.(effectivePaintScope(scope, own.scopes)) ?? role
+    return [{ nodeId: node.id as AnyNodeId, role: roleFor }]
   }
   if (scope === 'single') return single
 

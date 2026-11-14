@@ -72,6 +72,10 @@ can supply `supportHeight(node, x, z, { nodes })`; return its height where it
 supports a point and `null` elsewhere. Keep footprint and hole rules in the
 kind's definition so viewer code can discover support through the registry.
 
+`capabilities.surfaces.renderOpeningContent(node)` can return false when a host
+renders a door as a gap, without its leaf, frame or threshold. It defaults to true;
+railing walls resolve it per node so ordinary walls keep their door content.
+
 ### `surfaceRole`
 
 A kind may declare `surfaceRole?: SurfaceRole` on its definition. It is a colour token only (`core` stores no material), used to resolve the per-role clay/theme colour for untextured surfaces. See [materials-and-themes](materials-and-themes.md).
@@ -98,6 +102,7 @@ type GeometryContext = {
 - **Shelf, spawn, item, column, fence segment** — builder reads only `node`. `ctx` argument unused.
 - **Wall** — `ctx.siblings` for corner mitering with adjacent walls. `ctx.children` for cutout footprints (doors / windows hosted on the wall).
 - **Door / window** — `ctx.parent` for parent-wall thickness, so the frame depth lines up with the wall it's cut into.
+- **Roof** — `ctx.children` (its segments) and `ctx.siblings` (the level's other roofs) for the merged outline and the ridges, hips and valleys. The editor plan outlines the eave and rake and runs those lines out to them, as the 3D shows the roof from above; a drafted sheet outlines the wall line and dashes the overhang. The roof projects its segments' and siblings' live overrides and transforms (`floorplanSiblingOverrides`), and a segment's live edit rebuilds every roof on its level (`floorplanAffectedIds`), so the plan follows a move, resize or turn as it happens. Selected or moved, the roof draws each segment's wall line too. Moving a roof or a segment, in the plan or in 3D, catches its wall line on the centre lines of its level's and the storey below's walls (`roof/wall-catch.ts`; a wall drawn by a face at its body's centre) in grid and lines, and a segment's side arrows catch the dragged side the same way, ahead of the grid; Alt and off move it freely. A segment drawn, moved or sized onto walls takes their thickness for its gable and heel walls (`bearingWallThickness`), so they stand flush with the walls below. A porch's, deck's or patio's invisible walls and railings are edges, not walls (`RoofEdgeLine`): drawing snaps to the invisible walls' lines and the railings' outside faces (`roofSnapEdges`), a move or side arrow catches the segment's outer face on them, a segment drawn or picked out to them is set in by half its wall thickness so its outer face stands there (`settleRoofOnEdges`), and Room over such a room roofs its outside edge (core's `outdoorRoomRoofOutline`); they give no wall thickness, and no roof sits on a railing's top. A segment's layers (`buildUp`, below) set its deck and covering thickness, so every reader of `deckThickness` and `shingleThickness` (the roof system, prints, sections) draws the build-up.
 
 `GeometryContext` exists so builders stay pure (no `useScene` import, no store mutation) and trivially unit-testable. The generic `<GeometrySystem>` builds `ctx` from the current scene snapshot once per dirty node; the cost is a few `Map.get` calls.
 
@@ -119,6 +124,25 @@ site-scoped output and paints that output below level architecture. A plugin
 therefore keeps one semantic Site child while the same representation appears
 from every level of every building on that Site. Scope discovery is
 registry-driven; editor code must not name plugin kinds.
+
+`def.floorplanLinkedLevelIds(node)` names other levels whose plans also draw
+the node (a stair climbing to an upper floor); the plan builds it there with
+`ctx.parent` set to that level.
+
+The read-only plan is part of a kind's render half. A built-in kind declares
+`floorplan`, `computeFloorplanLevelData`, `floorplanScope` and
+`floorplanLinkedLevelIds` in its `definition.render.ts`, and those builders
+import only `core` and `viewer` — never the editor — so
+`@pascal-app/nodes/render` draws the plan in a viewer without the editor (the
+render bundle gate holds this). The shared plan contract they use
+(`readFloorplanContext`, `floorplanGeometryMetadata`, the SVG path and plan
+math helpers, the wall grip affordance ids) lives in `core`. A builder may emit
+handles while `ctx.viewState.selected`; they are plain data, and a read-only
+host never selects. Plan editing stays in `definition.edit.ts`:
+`floorplanAffordances`, `floorplanMoveTarget`, `floorplanSiblingOverrides`,
+`floorplanAffectedIds`, `floorplanDependencies`, `floorplanDependsOnSiblings`
+and the editor's `pascal:editor/floorplan` extension (tools, contextual and
+selection dimensions, action menus, schedules).
 
 `FloorplanStyle.fillRule` is the winding rule for compound contours. Use
 `'evenodd'` when nested rings represent holes; both the interactive SVG
@@ -148,6 +172,15 @@ portaled into that level's `Object3D`, so it rides level stacking and can draw
 instanced meshes in level-local space — per-instance phase for animated
 content, and a few non-raycast meshes instead of one per node under the baked
 scene's pointer handlers.
+
+The baked viewer never loads the scene graph into `useScene`: the store is
+empty there. A `bakeReplaceRenderer` that builds from other nodes — a ground
+surface that needs its parent site's polygon and terrain, a water body that
+needs its siblings — reads them through its `resolve` prop, which looks up
+any node of the graph the artifact was baked from (same signature as
+`GeometryContext.resolve`). A renderer that reads `useScene` for that context
+draws nothing in the baked viewer. `GlbScene` builds `resolve` from its
+`sceneNodes` prop; a host that omits `sceneNodes` leaves `resolve` undefined.
 
 ## Export-only geometry
 
@@ -451,6 +484,35 @@ capabilities: {
 
 ---
 
+### `capabilities.roofs`
+
+A kind that roofs: a node of it is one face of the roof that holds it (a plugin's solved roof plane), as a segment is one of the roof's masses. A roof lists its faces in `children` beside its segments.
+
+- **Holding.** `RoofNode.children` keeps any id, a plugin's own prefix (`roofplane_…`) included. The roof's `validateRelations` refuses a child a write adds whose kind is registered and is neither a segment nor roofs; what a roof already held stays, so an old scene still edits, and so does a kind this runtime has not registered.
+- **Rendering.** The roof system merges only the segments into the shell. The roof's renderer mounts each face through the face's own renderer inside the roof's group, so the face stands in the roof's frame, and hiding, selecting, moving or deleting the roof carries it.
+- **Reading.** The roof's readers count a face through `outline` and `heightAt`, which `roofFaceShapes(roof, nodes)` turns into the frame of what holds the roof: the storey a roof covers (`roofsOver`), where it bears and the walls it follows, the height of a roof level a seat makes, a view's frame, a floor plate's support, the site plan's roof outline and the level summary. A face is not read for the seat that moves a roof off its storey's walls (`isRoofOnStoreyWalls`): an outline and heights cannot tell a porch on posts from a roof on walls, so the face's writer seats it by the roof-level rule.
+
+```ts
+type RoofsCapability = {
+  outline: (node: AnyNode) => readonly (readonly [x: number, z: number])[] // the roof's plan
+  heightAt: (node: AnyNode, x: number, z: number) => number // over the roof's origin
+}
+```
+
+The frame is the roof's. A roof standing unturned at its level's origin holds its faces in the level's metres, as a plugin's planes store them; a roof moved or turned takes them with it. A face carries its own heights, so a roof of faces stands where it is placed (`support: { kind: 'level' }`, the default). Readers take a face's lowest and highest points at its outline's corners. A face draws in the plan only if its kind declares `floorplan`, which reads the roof's transform from `ctx.parent`.
+
+```ts
+// a plugin's roof plane
+capabilities: {
+  roofs: {
+    outline: (node) => (node as RoofPlaneNode).polygon,
+    heightAt: (node, x, z) => roofPlaneHeightAt(node as RoofPlaneNode, x, z),
+  },
+},
+```
+
+---
+
 ### `capabilities.cuts`
 
 Frozen contract (F5b cut intents), not read by any host yet. A kind that removes material from a host publishes what it removes, and each host kernel intersects the intents with its own faces. It supersedes `cuttable`, which nothing ever read: that field stays as a deprecated, ignored alias until plugin API v2.
@@ -505,6 +567,8 @@ type PaintCapability = {
 }
 ```
 
+**`scopes`** *(optional)* replaces the derived scope set for one surface: `{ scopes, labels?, roleFor? }`, where `roleFor(scope)` names the role a click paints under that scope. The roof's merged shell uses it for a gable (`nodes/src/roof/paint.ts`): `single` paints `gable-left:<segmentId>` (that segment's gable alone), `matching` ("All gables") paints `gables:all` (the roof's edge, every segment's own gable cleared). A wider-scope role carries a `:` so the fan-out routes it through the kind's `commit`.
+
 Implement the capability in a `paint.ts` file next to `definition.ts`. Keep it pure — no `useScene`, no store mutation. Reference implementations: `packages/nodes/src/chimney/paint.ts` (body/top split), `packages/nodes/src/wall/paint.ts` (interior/exterior + normal-based disambiguation).
 
 ```ts
@@ -536,6 +600,15 @@ type AssemblyHostConfig = {
 | `wall` (declared in `nodes/src/wall/definition.ts`) | `front` (+n) or the exterior face (`face: 'exterior'`) | `thickness` | The layer sum; `wallAssemblyPatch` writes both. The Architect's WS5 helpers (`resolveWallAssembly`, `wallAssemblyFinishRef`, `wallAssemblyFraming`, the presets) read F2. Scenes saved with the WS5 `WallAssembly` shape are converted on load by `migrateLegacyWallAssemblies` (`wallAssemblyFromLegacy`: exterior → `finish`, sheathing → `sheathing`, framing → the `core` structure layer, interior → `lining`), and the inspector edits through `wallAssemblyToLegacy`, a WS5 view plugin readers can use too. |
 
 Each kind declares its own host in its definition; core ships none. `resolveAssemblyStack(assembly, host)` returns each layer's depth and thickness exactly as declared, and, on a host that accepts backing, the backing layers with their depth from the body's far face (a ceiling with no body and insulation backing resolves), never throwing; a stored thickness that disagrees with the sum is reported as `assembly.thickness-mismatch`. `getWallLayerBands(wall, assembly, miters)` slices the mitred plan footprint into one band per layer (`back`/`front` offsets from the centreline along +n, and the footprint ∩ strip rings); it draws no bands on a mismatch.
+
+**Typed build-ups: roof planes and ceilings.** A roof segment and a ceiling store their layers as product choices, not an F2 list: `buildUp` (`RoofBuildUp`, `CeilingBuildUp` in `core/src/schema/build-up.ts`), so a framing tool reads the structure it frames (system, lumber size, spacing on centre) and the inspector edits choices. Absent, a node draws as it always did.
+
+| Node | Layers | Derived | Rule |
+|---|---|---|---|
+| `roof-segment` | outside in: roofing, underlayment, sheathing, structure (rafters or trusses: size, spacing), insulation, interior finish | `deckThickness` = finish + framing + rigid insulation + sheathing; `shingleThickness` = roofing + underlayment (`roofBuildUpDepths`) | Writers set both with the layers through `roofBuildUpPatch`; while layers are set, the panel shows the two as readouts. Batt and blown fill the cavity (deeper than the framing, they set it); rigid board adds. |
+| `ceiling` | bottom up from `height`, the finished underside: finish, framing (joists or truss bottom chords), decking, insulation | the thickness (`ceilingBuildUpThickness`) | The underside stays at the height. With ceiling tops shown, the cap stands on the layers, stopped `CEILING_CLAMP_MARGIN` short of a floor slab above (`ceilingCapLift`). |
+
+Presets (`ROOF_BUILD_UP_PRESETS`, `CEILING_BUILD_UP_PRESETS`) carry their `presetId`; editing a layer clears it. The first roof preset is a 0.100 m deck, the deck of a plane without layers. Both kinds' panel models offer the preset to a multi-selection, in one undo step; the plane panel also applies its layers to the other planes of its roof.
 
 ---
 

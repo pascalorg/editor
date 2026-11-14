@@ -1,5 +1,6 @@
 'use client'
 
+import { usePascalI18n } from '@pascal-app/core'
 import type { AnyNode } from '@pascal-app/core'
 import { Copy, Move, SlidersHorizontal, Trash2 } from 'lucide-react'
 import type { MouseEventHandler } from 'react'
@@ -11,8 +12,8 @@ interface MobileSelectionBarProps {
   node: AnyNode | null
   label?: string
   icon?: string
-  onMove: () => void
-  onDuplicate: () => void
+  onMove?: () => void
+  onDuplicate?: () => void
   onDelete: () => void
   onEdit: () => void
 }
@@ -29,7 +30,8 @@ export function MobileSelectionBar({
   onDelete,
   onEdit,
 }: MobileSelectionBarProps) {
-  const display = getNodeDisplay(node)
+  const i18n = usePascalI18n()
+  const display = getNodeDisplay(node, i18n)
   const resolvedLabel = label ?? display.label
   const resolvedIcon = icon ?? display.icon
 
@@ -38,7 +40,7 @@ export function MobileSelectionBar({
   return (
     <div className="pointer-events-auto absolute right-3 bottom-6 left-3 z-50 flex h-12 items-stretch gap-1 rounded-2xl border border-border/50 bg-background/95 px-2 shadow-2xl backdrop-blur-xl">
       <button
-        aria-label={`Edit ${resolvedLabel}`}
+        aria-label={i18n._({ id: 'editor.panels.mobileSelectionBar.editResolvedlabel', message: 'Edit {resolvedLabel}', values: { resolvedLabel } })}
         className={cn(
           'flex min-w-0 flex-1 items-center gap-2 rounded-lg px-2 text-left transition-colors hover:bg-black/5 dark:hover:bg-white/8',
         )}
@@ -56,30 +58,34 @@ export function MobileSelectionBar({
       </button>
 
       <div className="flex items-center gap-0.5 border-border/40 border-l pl-1">
+        {onMove && (
+          <button
+            aria-label={i18n._({ id: 'editor.panels.mobileSelectionBar.move', message: 'Move' })}
+            className={ACTION_BTN}
+            onClick={(e) => {
+              stop(e)
+              onMove()
+            }}
+            type="button"
+          >
+            <Move className="h-4 w-4" />
+          </button>
+        )}
+        {onDuplicate && (
+          <button
+            aria-label={i18n._({ id: 'editor.panels.mobileSelectionBar.duplicate', message: 'Duplicate' })}
+            className={ACTION_BTN}
+            onClick={(e) => {
+              stop(e)
+              onDuplicate()
+            }}
+            type="button"
+          >
+            <Copy className="h-4 w-4" />
+          </button>
+        )}
         <button
-          aria-label="Move"
-          className={ACTION_BTN}
-          onClick={(e) => {
-            stop(e)
-            onMove()
-          }}
-          type="button"
-        >
-          <Move className="h-4 w-4" />
-        </button>
-        <button
-          aria-label="Duplicate"
-          className={ACTION_BTN}
-          onClick={(e) => {
-            stop(e)
-            onDuplicate()
-          }}
-          type="button"
-        >
-          <Copy className="h-4 w-4" />
-        </button>
-        <button
-          aria-label="Delete"
+          aria-label={i18n._({ id: 'editor.panels.mobileSelectionBar.delete', message: 'Delete' })}
           className={cn(
             ACTION_BTN,
             'hover:bg-red-500/15 hover:text-red-600 dark:hover:bg-red-500/15 dark:hover:text-red-400',
@@ -93,7 +99,7 @@ export function MobileSelectionBar({
           <Trash2 className="h-4 w-4" />
         </button>
         <button
-          aria-label="Edit properties"
+          aria-label={i18n._({ id: 'editor.panels.mobileSelectionBar.editProperties', message: 'Edit properties' })}
           className={ACTION_BTN}
           onClick={(e) => {
             stop(e)

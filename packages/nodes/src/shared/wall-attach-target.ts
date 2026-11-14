@@ -2,6 +2,7 @@ import {
   type AnyNode,
   type AnyNodeId,
   collectLevelWallSegments,
+  getDoorOpeningSize,
   getScaledDimensions,
   getWallArcData,
   getWallCurveFrameAt,
@@ -9,6 +10,7 @@ import {
   type ItemNode,
   isCurvedWall,
   nearestWallSegment,
+  openingHostFacing,
   WALL_SNAP_DISTANCE_M,
   type WallNode,
 } from '@pascal-app/core'
@@ -257,8 +259,11 @@ const ALONG_WALL_ALIGN_THRESHOLD_M = 0.08
  *  footprint. */
 function wallAttachmentSpan(node: AnyNode): { center: number; half: number } | null {
   if (node.type === 'door' || node.type === 'window') {
-    const n = node as { position: [number, number, number]; width: number }
-    return { center: n.position[0], half: n.width / 2 }
+    const size = getDoorOpeningSize(node)
+    return {
+      center: node.position[0] - size.leafOffsetX * openingHostFacing(node),
+      half: size.width / 2,
+    }
   }
   if (node.type === 'item') {
     const item = node as ItemNode

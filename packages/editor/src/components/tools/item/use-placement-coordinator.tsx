@@ -9,6 +9,7 @@ import {
   collectAlignmentAnchors,
   emitter,
   findLevelAncestorId,
+  formatLinearMeasurement,
   type GridEvent,
   getScaledDimensions,
   getWallBodyCenterOffset,
@@ -29,8 +30,8 @@ import {
   useSpatialQuery,
   type WallEvent,
 } from '@pascal-app/core'
-import { useViewer } from '@pascal-app/viewer'
-import { Html } from '@react-three/drei'
+import { isTypingTarget, useViewer } from '@pascal-app/viewer'
+import { LocalizedHtml as Html } from '@pascal-app/viewer/ui'
 import { useFrame, useThree } from '@react-three/fiber'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
@@ -50,7 +51,6 @@ import {
   publishPlacementSurface,
 } from '../../../lib/active-placement-surface'
 import { EDITOR_LAYER } from '../../../lib/constants'
-import { formatLinearMeasurement } from '../../../lib/measurements'
 import { isFreshPlacementMetadata } from '../../../lib/placement-metadata'
 import { createMovementSfxTick } from '../../../lib/sfx/movement-tick'
 import { sfxEmitter } from '../../../lib/sfx-bus'
@@ -59,7 +59,6 @@ import {
   surfaceFramePose,
   updateSurfaceNode as writeSurfaceNode,
 } from '../../../lib/surface-attachment'
-import { isTypingTarget } from '../../../lib/typing-target'
 import { createWallPointerTracker } from '../../../lib/wall-placement-pointer'
 import {
   projectAlignmentGuidesWorldToActiveBuildingLocal,
@@ -1008,9 +1007,9 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
 
     // Floor grab-offset: the item tracks the grabbed point instead of snapping
     // its origin under the cursor. The offset is computed in building-local space
-    // (`event.localPosition`), but `floorStrategy.move` snaps on the WORLD grid
-    // (`event.position`), so the corrected local point is re-projected to a
-    // corrected world point and both frames carry the offset to stay consistent.
+    // (`event.localPosition`, which `floorStrategy.move` snaps), and the corrected
+    // local point is re-projected to a corrected world point so both frames carry
+    // the offset and stay consistent.
     const applyFloorGrabOffset = (event: GridEvent): GridEvent => {
       if (relativeFloorStart === null) return event
       const rawX = event.localPosition[0]
@@ -1871,6 +1870,11 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
           position: floorPos,
           rotation,
         })
+        // The surface moves published a building-space cursor (the host's top, level height
+        // included) as the live transform. Back on the floor the item renders level-local, so
+        // that stale height lifted it by its level's elevation (a bedside left on a 4th-floor bed
+        // floated ~10 m up) until the next floor move: publish the floor pose now.
+        useLiveTransforms.getState().set(draft.id, { position: floorPos, rotation: rotation[1] })
       }
 
       revalidate()
@@ -2717,13 +2721,31 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
 
     // ---- Subscribe ----
 
+    // With a level selected, surfaces on other floors don't capture the draft: past the building
+    // edge, through a window or over a stairwell the ray finds a lower floor's furniture, slab or
+    // wall, and adopting it re-parented the item to that floor mid-gesture (and paid a level
+    // change each time). The floor cursor keeps following the selected level instead.
+    const onActiveLevel = (node: AnyNode | undefined) => {
+      const levelId = useViewer.getState().selection.levelId
+      if (!levelId || !node) return true
+      return resolveLevelId(node, useScene.getState().nodes) === levelId
+    }
     const specializedKinds = new Set<string>()
-    const subscribeSpecialized = <E,>(key: string, handler: (event: E) => void) => {
+    const unsubscribeSpecialized: (() => void)[] = []
+    const subscribeSpecialized = <E extends { node?: AnyNode }>(
+      key: string,
+      handler: (event: E) => void,
+    ) => {
       specializedKinds.add(key.slice(0, key.lastIndexOf(':')))
-      emitter.on(key as never, handler as never)
+      const gated = (event: E) => {
+        if (onActiveLevel(event.node)) handler(event)
+      }
+      emitter.on(key as never, gated as never)
+      unsubscribeSpecialized.push(() => emitter.off(key as never, gated as never))
     }
     const genericRoute = (phase: 'enter' | 'move' | 'click' | 'leave') => (event: NodeEvent) => {
       if (specializedKinds.has(event.node.type)) return
+      if (!onActiveLevel(event.node)) return
       if (
         !surfaceOwnership.allows(event.node.id, event.nativeEvent.nativeEvent ?? event.nativeEvent)
       )
@@ -2820,38 +2842,11 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
       gridDispatch.cancel()
       emitter.off('grid:move', gridDispatch.schedule)
       emitter.off('grid:click', onGridClick)
-      emitter.off('item:enter', onItemEnter)
-      emitter.off('item:move', onItemMove)
-      emitter.off('item:leave', onItemLeave)
-      emitter.off('item:click', onItemClick)
-      emitter.off('wall:enter', onWallEnter)
-      emitter.off('wall:move', onWallMove)
-      emitter.off('wall:click', onWallClick)
-      emitter.off('wall:leave', onWallLeave)
-      emitter.off('roof:enter', onRoofWallEnter)
-      emitter.off('roof:move', onRoofWallMove)
-      emitter.off('roof:click', onRoofWallClick)
-      emitter.off('roof:leave', onRoofWallLeave)
+      for (const unsubscribe of unsubscribeSpecialized) unsubscribe()
       emitter.off('node:enter', onNodeEnter)
       emitter.off('node:move', onNodeMove)
       emitter.off('node:click', onNodeClick)
       emitter.off('node:leave', onNodeLeave)
-      emitter.off('ceiling:enter', onCeilingEnter)
-      emitter.off('ceiling:move', onCeilingMove)
-      emitter.off('ceiling:click', onCeilingClick)
-      emitter.off('ceiling:leave', onCeilingLeave)
-      emitter.off('cabinet:enter', onItemEnter)
-      emitter.off('procedural-item:enter' as never, onItemEnter)
-      emitter.off('cabinet:move', onItemMove)
-      emitter.off('procedural-item:move' as never, onItemMove)
-      emitter.off('cabinet:click', onItemClick)
-      emitter.off('procedural-item:click' as never, onItemClick)
-      emitter.off('cabinet:leave', onItemLeave)
-      emitter.off('procedural-item:leave' as never, onItemLeave)
-      emitter.off('shelf:enter', onShelfEnter)
-      emitter.off('shelf:move', onShelfMove)
-      emitter.off('shelf:click', onShelfClick)
-      emitter.off('shelf:leave', onShelfLeave)
       emitter.off('node:click', commitFloorOnSurfaceClick as never)
       emitter.off('tool:cancel', onCancel)
       window.removeEventListener('keydown', onKeyDown)

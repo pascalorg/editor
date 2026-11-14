@@ -11,11 +11,14 @@ import {
   evaluateCorner,
   type GridEvent,
   getOpeningWallPlacement,
+  getWallThickness,
   holdHiddenWallPointerEvents,
   isCurvedWall,
   prefersReducedMotion,
   type RoofEvent,
   type RoofNode,
+  resolveHostedOpeningFrameDepth,
+  resolveOpeningFrameDepth,
   runSceneHistoryDraftWrite,
   sceneRegistry,
   spatialGridManager,
@@ -56,6 +59,7 @@ import {
   getDormerWindowWorldYaw,
   resolveDormerWindowTarget,
 } from '../shared/dormer-wall-opening-placement'
+import { movedOpeningCasingFaces } from '../shared/opening-casing-move'
 import {
   clearOpeningGuides3D,
   publishOpeningGuidesForWallEvent,
@@ -206,6 +210,9 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
 
     // Same-wall moves keep the wall-local plane offset; another host resets it.
     const planeOffsetOn = (wallId: string) => openingPlaneOffsetOnWall(movingWindowNode, wallId)
+    // Another host may name its faces the other way round: the casing keeps to its side of it.
+    const casingOn = (hostId: string, rotation: WindowNode['rotation']) =>
+      movedOpeningCasingFaces(movingWindowNode, hostId, rotation, useScene.getState().nodes)
 
     let currentHostId: string | null = movingWindowNode.parentId
     let committed = false
@@ -456,6 +463,7 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
       )
       const { clampedY } = slid
       let clampedX = slid.clampedX
+      let fits = slid.fits
       // The corner zone: the edge snaps to the corner, unless a curtain wall's margin keeps it off.
       // Alt, or snapping off, places the window where it is dropped.
       const found =
@@ -483,18 +491,23 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
         if (Math.abs(settled.clampedX - snap.centreX) > 1e-6) {
           block = { reason: 'curtain', end: snap.end }
           snap = null
-        } else clampedX = snap.centreX
+        } else {
+          clampedX = snap.centreX
+          fits = settled.fits
+        }
       }
 
-      const valid = !hasWallChildOverlap(
-        event.node.id,
-        nodes,
-        clampedX,
-        clampedY,
-        movingWindowNode.width,
-        movingWindowNode.height,
-        movingWindowNode.id,
-      )
+      const valid =
+        fits &&
+        !hasWallChildOverlap(
+          event.node.id,
+          nodes,
+          clampedX,
+          clampedY,
+          movingWindowNode.width,
+          movingWindowNode.height,
+          movingWindowNode.id,
+        )
 
       return {
         wallNode: event.node,
@@ -617,7 +630,7 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
           ghostWorldPos[2],
         ],
         rotationY: ghostYaw,
-        depth: movingWindowNode.frameDepth ?? 0.07,
+        depth: resolveOpeningFrameDepth(movingWindowNode, getWallThickness(target.wallNode)),
       })
       // Publish the wall surface so the snap grid tilts into the wall plane at
       // the opening (its outward normal is the window's facing, +Z by `ghostYaw`).
@@ -718,6 +731,7 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
           side: target.side,
           wallId: target.wallId,
           parentId: target.wallId,
+          ...casingOn(target.wallId, [0, target.itemRotation, 0]),
           roofSegmentId: undefined,
           roofFace: undefined,
           // Hidden during free-follow; the committed window must be visible.
@@ -755,6 +769,7 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
             side: target.side,
             parentId: target.wallId,
             wallId: target.wallId,
+            ...casingOn(target.wallId, [0, target.itemRotation, 0]),
             roofSegmentId: undefined,
             visible: true,
           })
@@ -844,14 +859,7 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
       // Scene writes, not overrides: leaving the wall must actually remove the
       // window from the wall's `children` or the CSG cut trails the ghost
       // around the old wall (see the wall-branch note in `applyPreview`).
-      if (currentHostId === levelId) {
-        updateDraft({
-          position: [localX, sillCenterY, localZ],
-          rotation: [0, yaw, 0],
-          side: sideOverride,
-          visible: false,
-        })
-      } else {
+      if (currentHostId !== levelId) {
         if (currentHostId && currentHostId !== levelId) markHostDirty(currentHostId)
         updateDraft({
           position: [localX, sillCenterY, localZ],
@@ -1195,6 +1203,7 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
           roofSegmentId: segmentId,
           roofFace: target.face.id,
           parentId: segmentId,
+          ...casingOn(segmentId, [0, 0, 0]),
           visible: true,
         })
         history.commitStep(() => {
@@ -1229,6 +1238,7 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
             wallId: undefined,
             roofSegmentId: segmentId,
             roofFace: target.face.id,
+            ...casingOn(segmentId, [0, 0, 0]),
             visible: true,
           })
           settleMovedWindow(movingWindowNode.id, null)
@@ -1495,7 +1505,7 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
     const boxGeo = new BoxGeometry(
       movingWindowNode.width,
       movingWindowNode.height,
-      movingWindowNode.frameDepth ?? 0.07,
+      resolveHostedOpeningFrameDepth(movingWindowNode, useScene.getState().nodes),
     )
     const geo = new EdgesGeometry(boxGeo)
     boxGeo.dispose()

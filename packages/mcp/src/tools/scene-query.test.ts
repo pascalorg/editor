@@ -305,7 +305,9 @@ describe('scene query tools', () => {
     expect(parsed.occupiedStoryCount).toBe(2)
     expect(parsed.supportLevelCount).toBe(1)
     expect(parsed.roofLevelIds).toEqual([roofLevel.id])
-    expect(parsed.hasIssues).toBe(true)
+    // The bridge settles the stair's rise to the storey and its floor opening, as the editor does
+    // (reconcileDocument): only the informational design targets remain.
+    expect(parsed.hasIssues).toBe(false)
     expect(
       parsed.issues.some((issue: { type: string }) => issue.type === 'stair_riser_target'),
     ).toBe(true)

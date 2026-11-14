@@ -91,6 +91,19 @@ describe('wallDefinition floor-plan extension', () => {
     const canCurve = getFloorplanNodeExtension(wallDefinition)?.actionMenu?.canCurve
     expect(canCurve?.({ node: wall, nodes })).toBe(false)
   })
+  test('takes its own plan hits and shows typeable dimensions only between rooms', () => {
+    const extension = getFloorplanNodeExtension(wallDefinition)
+    expect(extension?.planHitSelectsNode).toBe(true)
+    const wall = wallDefinition.schema.parse({
+      id: 'wall_lone',
+      parentId: 'level_lone',
+      start: [0, 0],
+      end: [4, 0],
+    })
+    const nodes = { [wall.id]: wall } as Record<AnyNodeId, AnyNode>
+    // A wall bounding no room has no room widths to show.
+    expect(extension?.selectionDimensions?.({ node: wall, nodes, faces: 'both' })).toEqual([])
+  })
 })
 
 test('wall top surface follows the effective level-bound height', () => {

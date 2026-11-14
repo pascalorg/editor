@@ -1,16 +1,29 @@
 // @ts-expect-error — bun:test is provided by the Bun runtime; viewer does not
 // depend on @types/bun so the import type is unresolved at compile time.
 import { describe, expect, test } from 'bun:test'
-import { MaterialProperties, type MaterialSchema } from '@pascal-app/core'
-import { MeshPhysicalMaterial, MeshStandardMaterial } from 'three'
+import { DoorNode, MaterialProperties, type MaterialSchema, WindowNode } from '@pascal-app/core'
+import { doorStyleLook } from '@pascal-app/core/building'
+import {
+  FrontSide,
+  Mesh,
+  MeshPhysicalMaterial,
+  MeshStandardMaterial,
+  NoColorSpace,
+  SRGBColorSpace,
+  Texture,
+  TextureLoader,
+} from 'three'
 import { MeshLambertNodeMaterial, MeshStandardNodeMaterial } from 'three/webgpu'
 import {
   createMaterial as createSceneMaterial,
   materialCastsShadow,
   resolveMaterialRef as resolveSceneMaterialRef,
 } from '../index'
+import { buildDoorPreviewMesh } from '../systems/door/door-system'
+import { buildWindowPreviewMesh } from '../systems/window/window-system'
 import {
   createMaterial,
+  createMaterialFromPreset,
   getTextureKey,
   resolveMaterialRef,
   resolveSlotDefaultMaterial,
@@ -41,6 +54,58 @@ describe('legacy texture repeat values', () => {
     expect(getTextureKey(materialWithRepeat({ x: 2, y: 3 }))).not.toBe(
       getTextureKey(materialWithRepeat({ x: 4, y: 5 })),
     )
+  })
+})
+
+describe('native texture placement', () => {
+  const placed = (offset: [number, number]): MaterialSchema => ({
+    texture: {
+      url: 'https://example.com/tile.png',
+      repeat: [2, 2],
+      offset,
+      normalMap: 'https://example.com/tile-normal.png',
+      normalScale: 0.5,
+      bumpMap: 'https://example.com/tile-height.png',
+    },
+  })
+
+  // TextureLoader creates an <img>; no request is made in this runtime.
+  function withImageStub<T>(run: () => T): T {
+    const previous = globalThis.document
+    globalThis.document = {
+      createElementNS: () => ({ addEventListener() {}, removeEventListener() {} }),
+    } as unknown as Document
+    try {
+      return run()
+    } finally {
+      globalThis.document = previous
+    }
+  }
+
+  test('offset, normal and bump maps share the albedo placement; maps stay linear', () => {
+    const material = withImageStub(() =>
+      createMaterial(placed([0.25, 0.5]), 'rendered'),
+    ) as MeshStandardNodeMaterial
+    for (const map of [material.map, material.normalMap, material.bumpMap]) {
+      expect(map?.offset.toArray()).toEqual([0.25, 0.5])
+      expect(map?.repeat.toArray()).toEqual([2, 2])
+    }
+    expect(material.map?.colorSpace).toBe(SRGBColorSpace)
+    expect(material.normalMap?.colorSpace).toBe(NoColorSpace)
+    expect(material.bumpMap?.colorSpace).toBe(NoColorSpace)
+    expect(material.normalScale.toArray()).toEqual([0.5, 0.5])
+    expect(material.bumpScale).toBe(1)
+  })
+
+  test('a different offset is a different texture and material', () => {
+    expect(getTextureKey(placed([0, 0]))).not.toBe(getTextureKey(placed([0.5, 0])))
+    const [first, second] = withImageStub(() => [
+      createMaterial(placed([0, 0]), 'rendered') as MeshStandardNodeMaterial,
+      createMaterial(placed([0.5, 0]), 'rendered') as MeshStandardNodeMaterial,
+    ])
+    expect(first).not.toBe(second)
+    expect(first.map).not.toBe(second.map)
+    expect(second.map?.offset.toArray()).toEqual([0.5, 0])
   })
 })
 
@@ -134,3 +199,56 @@ describe('plain colour material refs', () => {
     )
   })
 })
+
+describe('catalog maps the asset CDN does not have yet', () => {
+  test('a CDN miss loads the app’s own copy of the map', async () => {
+    const requested: string[] = []
+    const original = TextureLoader.prototype.loadAsync
+    TextureLoader.prototype.loadAsync = ((url: string) => {
+      requested.push(url)
+      return url.startsWith('/')
+        ? Promise.resolve(new Texture())
+        : Promise.reject(new Error('404 on the CDN'))
+    }) as typeof original
+    try {
+      const material = createMaterialFromPreset({
+        maps: { albedoMap: '/material/test/cdn-miss_basecolor.webp' },
+        mapProperties: { color: '#ffffff' },
+      } as never) as MeshStandardNodeMaterial
+      await Bun.sleep(0)
+      await Promise.resolve()
+      expect(requested).toEqual([
+        expect.stringMatching(/^https?:\/\/.+\/material\/test\/cdn-miss_basecolor\.webp$/),
+        '/material/test/cdn-miss_basecolor.webp',
+      ])
+      expect(material.map).toBeInstanceOf(Texture)
+    } finally {
+      TextureLoader.prototype.loadAsync = original
+    }
+  })
+})
+
+for (const [id, opacity, roughness] of [
+  ['preset-glass-frosted', 0.6, 0.6],
+  ['preset-glass-tinted', 0.45, 0.1],
+] as const) {
+  test(`${id} resolves through both opening glass slots without transmission or DoubleSide`, () => {
+    const ref = `library:${id}`
+    const expected = resolveMaterialRef(ref, undefined, 'rendered')!
+    expect(expected.side).toBe(FrontSide)
+    expect(expected.opacity).toBe(opacity)
+    expect((expected as MeshStandardMaterial).roughness).toBe(roughness)
+    expect((expected as MeshPhysicalMaterial).transmission ?? 0).toBe(0)
+    for (const root of [
+      buildDoorPreviewMesh(DoorNode.parse({ ...doorStyleLook('glass'), slots: { glass: ref } })),
+      buildWindowPreviewMesh(WindowNode.parse({ slots: { glass: ref } })),
+    ]) {
+      const glass: Mesh[] = []
+      root.traverse((part) => {
+        if (part instanceof Mesh && part.userData.slotId === 'glass') glass.push(part)
+      })
+      expect(glass.length).toBeGreaterThan(0)
+      for (const part of glass) expect(part.material).toBe(expected)
+    }
+  })
+}

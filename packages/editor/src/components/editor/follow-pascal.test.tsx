@@ -18,12 +18,11 @@ import {
   WindowNode,
 } from '@pascal-app/core'
 import { isNodeRevealing, startConstructionReveal, useViewer } from '@pascal-app/viewer'
+import { followBelowGrade, useFollowPascal } from '@pascal-app/viewer/ui'
 import { act, create } from '@react-three/test-renderer'
 import { BoxGeometry, DoubleSide, Group, Mesh, MeshBasicMaterial, Raycaster, Vector3 } from 'three'
-import { followBelowGrade } from '../../lib/below-grade'
 import { openingExterior, wallExterior } from '../../lib/follow-pascal-exterior.test-fixture'
 import useEditor from '../../store/use-editor'
-import useFollowPascal from '../../store/use-follow-pascal'
 import { usePointAsk } from '../../store/use-point-ask'
 import { FollowPascal } from './follow-pascal'
 

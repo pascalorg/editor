@@ -6,7 +6,6 @@ import { viewAssetsTool } from '../agent-tools'
 import { ItemNode } from '../schema'
 import {
   assetViewNeeds,
-  assetViewsReadCatalog,
   createAssetViewLoader,
   createFetchAssetViewIO,
   readGlbSurfaces,
@@ -310,18 +309,6 @@ describe('what a host reads before a call', () => {
       assetViewNeeds(stranger, 'paint', { targets: ['item_a'] }, { catalog }).subjects,
     ).toEqual([])
     expect(assetViewNeeds(nodes, 'paint', { targets: ['item_a'] }, {}).subjects).toEqual([])
-  })
-
-  test('only a paint with no role asks for the catalog', () => {
-    expect(assetViewsReadCatalog('paint', { targets: ['item_a'] })).toBe(true)
-    expect(assetViewsReadCatalog('paint', { targets: ['item_a'], role: 'body' })).toBe(false)
-    expect(
-      assetViewsReadCatalog('run_batch', {
-        calls: [{ tool: 'paint', input: { targets: ['item_a'] } }],
-      }),
-    ).toBe(true)
-    expect(assetViewsReadCatalog('view_assets', { ids: ['sofa'] })).toBe(true)
-    expect(assetViewsReadCatalog('delete_node', { id: 'item_a' })).toBe(false)
   })
 
   test('any other tool reads nothing', () => {

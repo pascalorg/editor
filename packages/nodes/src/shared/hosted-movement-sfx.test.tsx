@@ -20,8 +20,8 @@ import {
   useScene,
 } from '@pascal-app/core'
 import { ProceduralItemNode, type Recipe } from '@pascal-app/core/procedural-items'
+import { LocalizedHtml } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
-import { Html } from '@react-three/drei'
 import { act, create } from '@react-three/test-renderer'
 import { Children, cloneElement, isValidElement, type ReactNode, useMemo } from 'react'
 import { Group, Vector3 } from 'three'
@@ -227,7 +227,7 @@ function hit(run: AnyNode, local: [number, number, number] = [0, 0.85, 0]): Node
 // The mounted coordinator keeps its real cursor refs; DOM-only measurement labels need no canvas test coverage.
 function withoutLabels(element: ReactNode): ReactNode {
   if (!isValidElement<{ children?: ReactNode }>(element)) return element
-  if (element.type === Html) return null
+  if (element.type === LocalizedHtml) return null
   return cloneElement(element, {}, Children.map(element.props.children, withoutLabels))
 }
 function CatalogMover() {

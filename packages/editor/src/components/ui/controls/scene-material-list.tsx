@@ -12,9 +12,9 @@ import { Copy, Paintbrush, Pencil, Trash2 } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { sceneMaterialUsageCounts } from '../../../lib/scene-material-refs'
 import useEditor from '../../../store/use-editor'
-import { Button } from '../primitives/button'
+import { Button } from '@pascal-app/viewer/ui'
 import { Input } from '../primitives/input'
-import { Tooltip, TooltipContent, TooltipTrigger } from '../primitives/tooltip'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@pascal-app/viewer/ui'
 import { MaterialPropertiesEditor } from './material-properties-editor'
 
 export function SceneMaterialList({ autoEditId }: { autoEditId?: SceneMaterialId | null }) {

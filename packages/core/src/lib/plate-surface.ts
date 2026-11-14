@@ -8,8 +8,14 @@ import type {
   ZoneNode,
 } from '../schema'
 import { DEFAULT_SLAB_ELEVATION } from '../schema/nodes/slab'
-import { getWallCurveFrameAt, getWallCurveStationAtPoint } from '../systems/wall/wall-curve'
+import {
+  getWallCurveFrameAt,
+  getWallCurveLength,
+  getWallCurveStationAtPoint,
+  isCurvedWall,
+} from '../systems/wall/wall-curve'
 import { calculateLevelMiters, getWallPlanFootprint } from '../systems/wall/wall-footprint'
+import { getWallFaceOffsets } from '../systems/wall/wall-frame'
 import { openingLandings } from './floor-opening-footprints'
 import type { PlateRoom } from './floor-plates'
 import { floorRoomFaces } from './floor-room-faces'
@@ -791,7 +797,14 @@ function classifySides(
             ],
       )
     const role = adjacent || neighbour ? ('riser' as const) : ('edge' as const)
-    const owner = role === 'riser' || plate.plateRole !== 'base' ? ownerId : undefined
+    // A base plate's side facing into one of its own holes (a void, a stairwell) belongs to the
+    // room around the hole, so it can wear that room's floor edge rather than the facade's.
+    const holeOwner =
+      plate.plateRole === 'base' &&
+      top.some(({ outer }) => containsPoint([{ outer, holes: [] }], outside))
+        ? zones.find((entry) => containsPoint(entry.polygon, inside))?.zone.id
+        : undefined
+    const owner = role === 'riser' || plate.plateRole !== 'base' ? ownerId : holeOwner
     // A door jamb's side of the step meets the aperture only at its edge, so
     // the doorway is looked for on both sides of the face too.
     const doorway =
@@ -830,6 +843,54 @@ const partitionCache = new Map<string, PlateSurfacePartition>()
  * `platePartitionSignature`. Returns `null` for anything that is not an
  * unrecessed floor plate — manual slabs and pools keep the plain two-slot path.
  */
+/**
+ * The doorways cut out of `plate`, each its wall's span past both faces (whole, so a cut never
+ * runs along the plate's own edge): those of the openings reaching below their floor (a negative
+ * sill: a garage door down to the garage floor sunk beside its wall) where the plate stands above
+ * the opening's bottom. The doorway is then open from its bottom to its head on both faces, with
+ * no strip of the floor the wall stands on left across it.
+ */
+export function plateDoorwayCuts(plate: SlabNode, context: PlateLevelContext): MultiPolygon {
+  if (!isFloorPlate(plate) || plate.recessed || plate.polygon.length < 3) return []
+  const elevation = plate.elevation ?? DEFAULT_SLAB_ELEVATION
+  const top = slabTop(plate)
+  return union(
+    levelInputs(context).openings.flatMap(({ opening, wall, cut }) => {
+      if (opening.position[1] - opening.height / 2 >= -BELOW_FLOOR_SILL) return []
+      if (cut.bottom >= elevation - 1e-3) return []
+      const band = doorwayBand(wall, opening)
+      return area(intersection(band, top)) > 0 ? [band] : []
+    }),
+  )
+}
+
+/**
+ * The doorway's span of the wall, past both faces by {@link DOORWAY_OVERSHOOT}: a plate edge a few
+ * millimetres off the face (a plate drawn to the wall's line, a wall a hair out of square) would
+ * otherwise leave a sliver whose side face shows as a bar across the doorway.
+ */
+function doorwayBand(wall: WallNode, opening: OpeningSpan): Ring {
+  const length = getWallCurveLength(wall)
+  const from = Math.max(0, (opening.position[0] - opening.width / 2) / length)
+  const to = Math.min(1, (opening.position[0] + opening.width / 2) / length)
+  const faces = getWallFaceOffsets(wall)
+  const count = isCurvedWall(wall) ? Math.max(2, Math.ceil((to - from) * 96)) : 1
+  const side = (offset: number) =>
+    Array.from({ length: count + 1 }, (_, i): [number, number] => {
+      const frame = getWallCurveFrameAt(wall, from + ((to - from) * i) / count)
+      return [frame.point.x + frame.normal.x * offset, frame.point.y + frame.normal.y * offset]
+    })
+  return [...side(faces.a + DOORWAY_OVERSHOOT), ...side(faces.b - DOORWAY_OVERSHOOT).reverse()]
+}
+
+type OpeningSpan = { position: [number, number, number]; width: number }
+
+/** How far past each wall face a doorway is cut out of the plates it crosses. */
+const DOORWAY_OVERSHOOT = 0.02
+
+/** A sill this far under its floor reaches below it; nearer is the floor (rounding). */
+const BELOW_FLOOR_SILL = 1e-3
+
 export function computePlateSurfacePartition(
   plate: SlabNode,
   context: PlateLevelContext,
@@ -839,7 +900,8 @@ export function computePlateSurfacePartition(
   const cached = partitionCache.get(signature)
   if (cached) return cached
 
-  const top = slabTop(plate)
+  const doorways = plateDoorwayCuts(plate, context)
+  const top = doorways.length ? difference(slabTop(plate), doorways) : slabTop(plate)
   if (!top.length) return null
   const wallCover = levelWallCover(context.walls)
   const prepared = levelInputs(context)

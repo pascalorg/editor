@@ -131,8 +131,8 @@ export const wallCurveAffordance: FloorplanAffordance<WallNode> = {
       affectedIds: [node.id],
       apply({ planPoint }) {
         const snapStep = getSegmentGridStep()
-        // World-grid snap so a rotated building doesn't drag the curve
-        // handle off the visible grid.
+        // Building-grid snap, the lattice the plan draws (it turns with the
+        // building).
         const [x, y] = snapBuildingLocalToWorldGrid([planPoint[0], planPoint[1]], snapStep)
 
         // Signed projection of (snappedPoint - chord midpoint) onto the
@@ -263,16 +263,19 @@ export const wallMoveEndpointAffordance: FloorplanAffordance<WallNode> = {
         // is 0 outside grid mode), so `'lines' / 'angles' / 'off'` no longer
         // force a grid snap the mode chip says is inactive. In `'angles'` mode
         // the endpoint angle-locks off the fixed corner (free length), matching
-        // the draft tool — the angle path ignores the `gridSnap` override.
-        const angleLocked = isAngleSnapActive()
+        // the draft tool — the angle path ignores the `gridSnap` override. The
+        // fixed corner is the segment's start in every mode, as in the 3D tool:
+        // the body capture slides the end along it, so a wall whose fixed end
+        // is T-joined on another wall can't fold onto that wall's line.
         const snapped = snapWallDraftPoint({
           point: planPoint as WallPlanPoint,
           walls,
           ignoreWallIds: staleWallIds,
-          start: angleLocked ? fixedPoint : undefined,
-          angleSnap: angleLocked,
+          start: fixedPoint,
+          angleSnap: isAngleSnapActive(),
           magnetic: isMagneticSnapActive(),
           gridSnap: (p) => snapBuildingLocalToWorldGrid(p, getSegmentGridStep()),
+          captureWallBodies: true,
         })
         // Figma-style alignment on the dragged corner — snaps it onto another
         // object's edge / wall face and publishes a guide. The guide is

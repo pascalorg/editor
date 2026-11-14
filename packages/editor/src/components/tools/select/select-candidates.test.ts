@@ -139,4 +139,49 @@ describe('selectable candidates', () => {
     })
     expect(collectSelectableCandidateIds().sort()).toEqual(['item_pick', 'wall_pick'])
   })
+
+  test("a box leaves a room's automatic floor plate and ceiling to the room, keeping what hangs from it", () => {
+    const restore = nodeRegistry._snapshot()
+    try {
+      for (const kind of ['slab', 'ceiling', 'box-select-test-light'] as const)
+        if (!nodeRegistry.has(kind))
+          registerNode({
+            kind,
+            schemaVersion: 1,
+            schema: z.object({ type: z.literal(kind) }) as never,
+            category: 'structure',
+            defaults: () => ({}),
+            capabilities: { selectable: {} },
+          } as AnyNodeDefinition)
+      useScene.setState({
+        nodes: {
+          level_test: {
+            id: 'level_test',
+            type: 'level',
+            parentId: 'building_test',
+            children: ['slab_shared', 'slab_drawn', 'ceiling_auto'],
+          },
+          slab_shared: {
+            id: 'slab_shared',
+            type: 'slab',
+            parentId: 'level_test',
+            boundary: 'auto',
+            plateRole: 'base',
+          },
+          slab_drawn: { id: 'slab_drawn', type: 'slab', parentId: 'level_test' },
+          ceiling_auto: {
+            id: 'ceiling_auto',
+            type: 'ceiling',
+            parentId: 'level_test',
+            boundary: 'auto',
+            children: ['light_hung'],
+          },
+          light_hung: { id: 'light_hung', type: 'box-select-test-light', parentId: 'ceiling_auto' },
+        } as unknown as Record<string, AnyNode>,
+      })
+      expect(collectSelectableCandidateIds().sort()).toEqual(['light_hung', 'slab_drawn'])
+    } finally {
+      restore()
+    }
+  })
 })

@@ -21,7 +21,6 @@ import {
   levelHoldsFoundationWalls,
   wallsAgainstGround,
 } from './foundation-wall'
-import { genericFoundation } from './generic-foundation'
 import { levelGradeStanding } from './grade-standing'
 import { encodeTerrainField } from './terrain-codec'
 import { createTerrainField } from './terrain-field'
@@ -412,33 +411,5 @@ describe('only the walls against the ground are foundation walls', () => {
     if (!result.ok) throw Error(result.reason)
     expect(result.plan.insertedWalls[0]).toMatchObject({ thickness: 0.3 })
     expect(result.plan.insertedWalls[0]!.assembly).toBeUndefined()
-  })
-
-  test('the generic foundation still finds the perimeter and draws nothing under the partition', () => {
-    const { scene } = drawEach(house(), 'level_base', [
-      ...PERIMETER,
-      [
-        [4, 0],
-        [4, 6],
-      ],
-    ])
-    const walls = Object.values(scene).filter((node): node is WallNode => node.type === 'wall')
-    const level = scene.level_base as LevelNode
-    const nodes: Nodes = {
-      ...scene,
-      level_base: { ...level, children: [...level.children, ...walls.map((wall) => wall.id)] },
-    } as Nodes
-    const members = genericFoundation(nodes)
-    const partition = walls.find((wall) => wall.start[0] === 4 && wall.end[0] === 4)!
-    expect(isPlainWall(partition)).toBe(true)
-    expect(members.length).toBeGreaterThan(0)
-    for (const member of members) {
-      expect(member.levelId).toBe('level_base')
-      // every run lies on the perimeter: x or z at 0, 8 / 6, never along the x = 4 partition
-      const onPartition = [member.from, member.to].every(([x]) => Math.abs(x - 4) < 1e-6)
-      expect(onPartition).toBe(false)
-    }
-    const east = members.filter((m) => m.from[0] > 7.9 && m.to[0] > 7.9)
-    expect(east.length).toBeGreaterThan(0)
   })
 })

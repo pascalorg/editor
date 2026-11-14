@@ -4,6 +4,7 @@ import {
   type GeometryContext,
   getConicalRoofCoverage,
   getDutchRoofMetrics,
+  getRoofSegmentVisibleTopBounds,
   type RoofNode,
   type RoofSegmentNode,
 } from '@pascal-app/core'
@@ -68,7 +69,8 @@ export function buildRoofSegmentFloorplan(
   const palette = view?.palette
   const isSelected = view?.selected ?? false
   const isHighlighted = view?.highlighted ?? false
-  const showSelectedChrome = isSelected || isHighlighted
+  // Moved too: the wall line shows whether it lands on the walls' centre lines.
+  const showSelectedChrome = isSelected || isHighlighted || (view?.moving ?? false)
 
   // Black architectural outline by default; palette accent on select.
   // Mirrors the elevator / column style so all structural elements read
@@ -154,9 +156,8 @@ export function buildRoofSegmentFloorplan(
     })
 
     const sideArrowOffset = 0.12
-    const rotateCornerOffset = 0.22
+    const rotateCornerOffset = 0.3
     const halfW = node.width / 2
-    const halfD = node.depth / 2
     // Effective rotation = parent roof rotation + segment-local rotation.
     // Reuse `cos` / `sin` from the corner computation above (they were
     // computed for the same `rotation` value).
@@ -175,16 +176,18 @@ export function buildRoofSegmentFloorplan(
         payload: { mode: 'radial' },
       })
     } else {
+      // Past the eaves and rakes the plan outlines, so the arrows sit clear of the roof's edge.
+      const eave = getRoofSegmentVisibleTopBounds(node)
       const sides: Array<{
         local: [number, number]
         localAngle: number
         axis: 'x' | 'z'
         side: 1 | -1
       }> = [
-        { local: [halfW + sideArrowOffset, 0], localAngle: 0, axis: 'x', side: 1 },
-        { local: [-(halfW + sideArrowOffset), 0], localAngle: Math.PI, axis: 'x', side: -1 },
-        { local: [0, halfD + sideArrowOffset], localAngle: Math.PI / 2, axis: 'z', side: 1 },
-        { local: [0, -(halfD + sideArrowOffset)], localAngle: -Math.PI / 2, axis: 'z', side: -1 },
+        { local: [eave.maxX + sideArrowOffset, 0], localAngle: 0, axis: 'x', side: 1 },
+        { local: [eave.minX - sideArrowOffset, 0], localAngle: Math.PI, axis: 'x', side: -1 },
+        { local: [0, eave.maxZ + sideArrowOffset], localAngle: Math.PI / 2, axis: 'z', side: 1 },
+        { local: [0, eave.minZ - sideArrowOffset], localAngle: -Math.PI / 2, axis: 'z', side: -1 },
       ]
       for (const side of sides) {
         const [ox, oz] = rotateLocal(side.local[0], side.local[1])
@@ -199,11 +202,15 @@ export function buildRoofSegmentFloorplan(
       }
     }
 
-    // Rotate-arrow at the +X / +Z corner. Local angle π/4 puts the
-    // curved arrow's bow at the diagonal corner so it reads as a
-    // rotation gizmo around the segment centre.
+    // Rotate-arrow off the +X / +Z corner of the eaves, clear of the plan's
+    // outline, sized to a roof. Local angle π/4 puts the curved arrow's bow
+    // on the diagonal so it reads as a rotation gizmo around the centre.
     if (node.roofType !== 'conical') {
-      const [cornerX, cornerZ] = rotateLocal(halfW + rotateCornerOffset, halfD + rotateCornerOffset)
+      const eave = getRoofSegmentVisibleTopBounds(node)
+      const [cornerX, cornerZ] = rotateLocal(
+        eave.maxX + rotateCornerOffset,
+        eave.maxZ + rotateCornerOffset,
+      )
       const [radialX, radialZ] = rotateLocal(1, 1)
       children.push({
         kind: 'rotate-arrow',
@@ -211,6 +218,7 @@ export function buildRoofSegmentFloorplan(
         angle: Math.atan2(radialZ, radialX),
         affordance: 'roof-segment-rotate',
         pivot: [cx, cz],
+        scale: 2,
       })
     }
   }

@@ -9,6 +9,7 @@ import {
   createAngleAccumulator,
   createSceneApi,
   DEFAULT_ANGLE_STEP,
+  formatAngleRadians,
   type HandleDescriptor,
   type HandlePortal,
   type LatchHandle,
@@ -21,7 +22,7 @@ import {
   useScene,
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
-import { Html } from '@react-three/drei'
+import { LocalizedHtml as Html } from '@pascal-app/viewer/ui'
 import { createPortal, type ThreeEvent, useFrame, useThree } from '@react-three/fiber'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
@@ -41,7 +42,6 @@ import {
   Vector3,
 } from 'three'
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
-
 import { MeshBasicNodeMaterial } from 'three/webgpu'
 import { useCeilingEditCeilingId } from '../../lib/ceiling-edit-session'
 import { EDITOR_LAYER } from '../../lib/constants'
@@ -61,7 +61,6 @@ import useInteractionScope, {
   useMovingNode,
 } from '../../store/use-interaction-scope'
 import useOpeningGuides from '../../store/use-opening-guides'
-import { formatAngleRadians } from '../tools/shared/segment-angle'
 import {
   ARROW_COLOR,
   ARROW_HOVER_COLOR,

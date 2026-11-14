@@ -1,5 +1,6 @@
 import z from 'zod'
 import { ProceduralItemNode } from '../procedural-items/node'
+import { BeamNode } from './nodes/beam'
 import { BlockNode } from './nodes/block'
 import { BoxVentNode } from './nodes/box-vent'
 import { BuildingNode } from './nodes/building'
@@ -95,6 +96,7 @@ export const AnyNode = nodeUnion([
   LevelNode,
   LeanToExtensionNode,
   ColumnNode,
+  BeamNode,
   ConstructionDimensionNode,
   BlockNode,
   StructuralGridNode,

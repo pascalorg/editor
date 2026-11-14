@@ -10,7 +10,7 @@ import {
   useLiveTerrain,
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
-import { Html } from '@react-three/drei'
+import { LocalizedHtml as Html } from '@pascal-app/viewer/ui'
 import { useFrame, useThree } from '@react-three/fiber'
 import { type MutableRefObject, useEffect, useMemo, useRef } from 'react'
 import {

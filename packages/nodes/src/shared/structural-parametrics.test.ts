@@ -31,7 +31,7 @@ describe('structural spatial settings', () => {
 
     expect(visibleKeys(elevator, elevatorParametrics.groups)).toContain('doorStyle')
     const derived = elevatorParametrics.derive?.({ ...elevator, width: 0.8 }, { width: 0.8 })
-    expect(derived?.doorWidth).toBeCloseTo(0.7)
+    expect(derived?.doorWidth).toBeCloseTo(0.62)
   })
 
   test('exposes the settings appropriate to each stair shape', () => {

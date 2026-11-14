@@ -1,3 +1,4 @@
+import { draftOf } from '../runtime/reader'
 import type { AnyNode, Collection, SceneMaterial } from '../schema'
 import type { NodeWrite, SceneChanges, SceneNodes } from './types'
 
@@ -23,7 +24,7 @@ export function applySceneWrites(
   nodes: SceneNodes,
   writes: readonly NodeWrite[],
 ): Record<string, AnyNode> {
-  const next: Record<string, AnyNode> = { ...nodes }
+  const next = draftOf(nodes as Record<string, AnyNode>)
   const setChildren = (parentId: string | null | undefined, edit: (ids: string[]) => string[]) => {
     const parent = parentId ? next[parentId] : undefined
     const children = childrenOf(parent)

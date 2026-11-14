@@ -1,6 +1,6 @@
 {
   "name": "@pascal-app/nodes",
-  "version": "1.0.5",
+  "version": "1.1.4",
   "description": "Built-in node bundles for the Pascal 3D editor — one folder per kind, exported as `builtinPlugin`",
   "type": "module",
   "main": "./dist/index.js",
@@ -25,6 +25,11 @@
       "types": "./dist/agent-operations/index.d.ts",
       "import": "./dist/agent-operations/index.js",
       "default": "./dist/agent-operations/index.js"
+    },
+    "./render": {
+      "types": "./dist/render.d.ts",
+      "import": "./dist/render.js",
+      "default": "./dist/render.js"
     }
   },
   "files": [
@@ -35,34 +40,35 @@
     "build": "NODE_OPTIONS=--max-old-space-size=6144 tsc --build && bun ../../scripts/fix-node-esm-imports.ts dist",
     "dev": "tsgo --build --watch",
     "test": "bun test",
-    "prepublishOnly": "bun run build && bun test"
+    "prepublishOnly": "bun run build && bun test",
+    "bench:elevator": "bun test ./src/elevator/__bench__/rendering.bench.tsx && bun ./src/elevator/__bench__/runtime.ts"
   },
   "peerDependencies": {
-    "@pascal-app/core": "^1.0.5",
-    "@pascal-app/editor": "^1.0.5",
-    "@pascal-app/viewer": "^1.0.5",
+    "@pascal-app/core": "^1.1.4",
+    "@pascal-app/editor": "^1.1.4",
+    "@pascal-app/viewer": "^1.1.4",
     "@react-three/drei": "^10",
     "@react-three/fiber": "^9",
     "lucide-react": "^1",
     "react": "^18 || ^19",
     "react-dom": "^18 || ^19",
-    "three": "^0.186",
+    "three": "^0.187",
     "zustand": "^5"
   },
   "devDependencies": {
-    "@modelcontextprotocol/client": "^2.3.1",
-    "@modelcontextprotocol/server": "^2.3.1",
-    "@pascal-app/core": "^1.0.5",
-    "@pascal-app/editor": "^1.0.5",
-    "@pascal-app/mcp": "^1.0.5",
-    "@pascal-app/viewer": "^1.0.5",
+    "@modelcontextprotocol/client": "^2.4.0",
+    "@modelcontextprotocol/server": "^2.4.0",
+    "@pascal-app/core": "^1.1.4",
+    "@pascal-app/editor": "^1.1.4",
+    "@pascal-app/mcp": "^1.1.4",
+    "@pascal-app/viewer": "^1.1.4",
     "@pascal/typescript-config": "*",
     "@react-three/test-renderer": "^9.1.1",
-    "@types/bun": "^1.4.3",
-    "@types/node": "^26.6.5",
+    "@types/bun": "^1.4.4",
+    "@types/node": "^26.6.6",
     "@types/react": "19.3.0",
     "@types/react-dom": "19.3.0",
-    "@types/three": "^0.186.0",
+    "@types/three": "^0.187",
     "typescript": "7.0.2"
   },
   "keywords": [
@@ -78,5 +84,10 @@
   },
   "license": "MIT",
   "homepage": "https://github.com/pascalorg/editor/tree/main/packages/nodes#readme",
-  "bugs": "https://github.com/pascalorg/editor/issues"
+  "bugs": "https://github.com/pascalorg/editor/issues",
+  "peerDependenciesMeta": {
+    "@pascal-app/editor": {
+      "optional": true
+    }
+  }
 }

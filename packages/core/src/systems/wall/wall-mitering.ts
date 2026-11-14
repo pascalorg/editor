@@ -25,7 +25,12 @@ interface LineEquation {
 }
 
 // Map of wallId -> { left?: Point2D, right?: Point2D } for each junction
-type WallIntersections = Map<string, { left?: Point2D; right?: Point2D; closing?: Point2D }>
+// `closingPath` (left to right) closes an end through several points where one
+// `closing` point can't.
+type WallIntersections = Map<
+  string,
+  { left?: Point2D; right?: Point2D; closing?: Point2D; closingPath?: Point2D[] }
+>
 
 // Map of junctionKey -> WallIntersections
 type JunctionData = Map<string, WallIntersections>
@@ -293,90 +298,27 @@ interface ProcessedWall {
   halfThickness: number // Used to bound the miter joint against runaway spikes
   isPassthrough: boolean // True if wall passes through junction (T-junction)
   wallId: string
+  /** An outside wall: one face is outdoors (`frontSide` / `backSide`). */
+  outside: boolean
+  /** Unit direction out of the junction, and its left normal. */
+  dir: Point2D
+  normal: Point2D
+  /** The body across `normal` from the meeting point: edge B at `lo`, edge A at `hi`. */
+  lo: number
+  hi: number
 }
 
-function calculateJunctionIntersections(
-  junction: Junction,
-  facePadding: number,
+function isOutsideWall(wall: WallNode) {
+  return wall.frontSide === 'exterior' || wall.backSide === 'exterior'
+}
+
+/** Each wall's joint with its neighbours round the junction (sorted by angle). */
+function miterAdjacentWalls(
+  processedWalls: ProcessedWall[],
+  meetingPoint: Point2D,
 ): WallIntersections {
-  const { meetingPoint, connectedWalls } = junction
-  const processedWalls: ProcessedWall[] = []
-
-  for (const { wall, endType } of connectedWalls) {
-    const faces = getWallFaceOffsets(wall)
-    const offsets =
-      facePadding === 0 ? faces : { a: faces.a + facePadding, b: faces.b - facePadding }
-    const halfT = Math.max(offsets.a, -offsets.b)
-
-    if (endType === 'passthrough') {
-      // For passthrough walls (T-junctions), add both directions
-      // This allows walls meeting the middle of this wall to miter against it
-      const v1 = { x: wall.end[0] - wall.start[0], y: wall.end[1] - wall.start[1] }
-      const v2 = { x: -v1.x, y: -v1.y }
-
-      for (const v of [v1, v2]) {
-        const L = Math.sqrt(v.x * v.x + v.y * v.y)
-        if (L < 1e-9) continue
-
-        const nUnit = { x: -v.y / L, y: v.x / L }
-        const a = v === v1 ? offsets.a : -offsets.b
-        const b = v === v1 ? offsets.b : -offsets.a
-        const pA = { x: meetingPoint.x + nUnit.x * a, y: meetingPoint.y + nUnit.y * a }
-        const pB = { x: meetingPoint.x - nUnit.x * -b, y: meetingPoint.y - nUnit.y * -b }
-
-        const edgeA = createLineFromPointAndVector(pA, v)
-        const edgeB = createLineFromPointAndVector(pB, v)
-        const angle = Math.atan2(v.y, v.x)
-
-        processedWalls.push({
-          wallId: wall.id,
-          angle,
-          edgeA,
-          edgeB,
-          isPassthrough: true,
-          halfThickness: halfT,
-        })
-      }
-    } else {
-      // Normal wall endpoint (start or end)
-      const v = getWallDirectionFromJunction(wall, endType)
-
-      const L = Math.sqrt(v.x * v.x + v.y * v.y)
-      if (L < 1e-9) continue
-
-      const nUnit = { x: -v.y / L, y: v.x / L }
-      const a = endType === 'start' ? offsets.a : -offsets.b
-      const b = endType === 'start' ? offsets.b : -offsets.a
-      const pA = { x: meetingPoint.x + nUnit.x * a, y: meetingPoint.y + nUnit.y * a }
-      const pB = { x: meetingPoint.x - nUnit.x * -b, y: meetingPoint.y - nUnit.y * -b }
-
-      const edgeA = createLineFromPointAndVector(pA, v)
-      const edgeB = createLineFromPointAndVector(pB, v)
-      const angle = Math.atan2(v.y, v.x)
-
-      processedWalls.push({
-        wallId: wall.id,
-        angle,
-        edgeA,
-        edgeB,
-        isPassthrough: false,
-        halfThickness: halfT,
-      })
-    }
-  }
-
-  // Sort by outgoing angle, then by wall ID so equal-angle walls produce the
-  // same pairing regardless of scene iteration order.
-  processedWalls.sort((a, b) => {
-    const angleOrder = a.angle - b.angle
-    if (angleOrder !== 0) return angleOrder
-    return a.wallId < b.wallId ? -1 : a.wallId > b.wallId ? 1 : 0
-  })
-
   const wallIntersections: WallIntersections = new Map()
   const n = processedWalls.length
-
-  if (n < 2) return wallIntersections
 
   // Calculate intersections between adjacent walls (exactly like demo)
   for (let i = 0; i < n; i++) {
@@ -428,20 +370,212 @@ function calculateJunctionIntersections(
     }
   }
 
-  if (connectedWalls.some(({ wall }) => wall.justification !== undefined)) {
-    const host = connectedWalls.find(({ endType }) => endType === 'passthrough')
+  return wallIntersections
+}
+
+// Walls within about 15° of each other don't make an outside corner.
+const CORNER_MIN_SINE = Math.sin(Math.PI / 12)
+// Walls within about 1° of each other run in line.
+const IN_LINE_SINE = Math.sin(Math.PI / 180)
+
+const dot2 = (a: Point2D, b: Point2D) => a.x * b.x + a.y * b.y
+const cross2 = (a: Point2D, b: Point2D) => a.x * b.y - a.y * b.x
+
+/**
+ * An outside corner keeps its own miter when a partition carries one of its
+ * walls on past the corner (two outside walls at an angle, one inside wall in
+ * line with one of them): the outside faces miter to the corner, the partition
+ * stops square at the other outside wall's inside face, and the in-line outside
+ * wall fills the corner on the partition's room side. So each room's own walls
+ * cover its side of the corner, and its floor and ceiling stop at them, where a
+ * three-way miter would notch the corner. Null for any other junction.
+ */
+function outsideCornerIntersections(
+  processedWalls: ProcessedWall[],
+  meetingPoint: Point2D,
+): WallIntersections | null {
+  if (processedWalls.length !== 3 || processedWalls.some((wall) => wall.isPassthrough)) return null
+  const outside = processedWalls.filter((wall) => wall.outside)
+  const inside = processedWalls.find((wall) => !wall.outside)
+  if (outside.length !== 2 || !inside) return null
+  const inLine = outside.find(
+    (wall) =>
+      Math.abs(cross2(wall.dir, inside.dir)) < IN_LINE_SINE && dot2(wall.dir, inside.dir) < 0,
+  )
+  const across = outside.find((wall) => wall !== inLine)
+  if (!(inLine && across) || Math.abs(cross2(inLine.dir, across.dir)) < CORNER_MIN_SINE) {
+    return null
+  }
+
+  const corner = miterAdjacentWalls(outside, meetingPoint)
+  const inLineEnds = corner.get(inLine.wallId)
+  const acrossEnds = corner.get(across.wallId)
+  if (!(inLineEnds?.left && inLineEnds.right && acrossEnds?.left && acrossEnds.right)) return null
+
+  // Of the L's two joints, the one toward the partition is its inside corner.
+  const toward = (point: Point2D) =>
+    dot2({ x: point.x - meetingPoint.x, y: point.y - meetingPoint.y }, inside.dir)
+  // Where a line parallel to the partition, `offset` across it, meets the
+  // across wall's face toward the partition.
+  const face = dot2(inside.dir, across.normal) > 0 ? across.hi : across.lo
+  const rate = dot2(inside.dir, across.normal)
+  const onFace = (offset: number): Point2D => {
+    const origin = {
+      x: meetingPoint.x + inside.normal.x * offset,
+      y: meetingPoint.y + inside.normal.y * offset,
+    }
+    const along = (face - offset * dot2(inside.normal, across.normal)) / rate
+    return { x: origin.x + inside.dir.x * along, y: origin.y + inside.dir.y * along }
+  }
+  // The shared line's point on that face: the in-line wall fills the corner up to it.
+  const heel = onFace(0)
+
+  corner.set(inLine.wallId, {
+    left: inLineEnds.left,
+    right: inLineEnds.right,
+    closingPath:
+      toward(inLineEnds.left) > toward(inLineEnds.right)
+        ? [heel, meetingPoint]
+        : [meetingPoint, heel],
+  })
+  corner.set(
+    across.wallId,
+    toward(acrossEnds.left) > toward(acrossEnds.right)
+      ? { left: heel, right: acrossEnds.right }
+      : { left: acrossEnds.left, right: heel },
+  )
+  const left = onFace(inside.hi)
+  const right = onFace(inside.lo)
+  corner.set(inside.wallId, {
+    left,
+    right,
+    // Square across the partition: closing through the junction would reach
+    // back into the corner.
+    closing: { x: (left.x + right.x) / 2, y: (left.y + right.y) / 2 },
+  })
+  return corner
+}
+
+function calculateJunctionIntersections(
+  junction: Junction,
+  facePadding: number,
+): WallIntersections {
+  const { meetingPoint, connectedWalls } = junction
+  const processedWalls: ProcessedWall[] = []
+
+  for (const { wall, endType } of connectedWalls) {
+    const faces = getWallFaceOffsets(wall)
+    const offsets =
+      facePadding === 0 ? faces : { a: faces.a + facePadding, b: faces.b - facePadding }
+    const halfT = Math.max(offsets.a, -offsets.b)
+
+    if (endType === 'passthrough') {
+      // For passthrough walls (T-junctions), add both directions
+      // This allows walls meeting the middle of this wall to miter against it
+      const v1 = { x: wall.end[0] - wall.start[0], y: wall.end[1] - wall.start[1] }
+      const v2 = { x: -v1.x, y: -v1.y }
+
+      for (const v of [v1, v2]) {
+        const L = Math.sqrt(v.x * v.x + v.y * v.y)
+        if (L < 1e-9) continue
+
+        const nUnit = { x: -v.y / L, y: v.x / L }
+        const a = v === v1 ? offsets.a : -offsets.b
+        const b = v === v1 ? offsets.b : -offsets.a
+        const pA = { x: meetingPoint.x + nUnit.x * a, y: meetingPoint.y + nUnit.y * a }
+        const pB = { x: meetingPoint.x - nUnit.x * -b, y: meetingPoint.y - nUnit.y * -b }
+
+        const edgeA = createLineFromPointAndVector(pA, v)
+        const edgeB = createLineFromPointAndVector(pB, v)
+        const angle = Math.atan2(v.y, v.x)
+
+        processedWalls.push({
+          wallId: wall.id,
+          angle,
+          edgeA,
+          edgeB,
+          isPassthrough: true,
+          halfThickness: halfT,
+          outside: isOutsideWall(wall),
+          dir: { x: v.x / L, y: v.y / L },
+          normal: nUnit,
+          lo: b,
+          hi: a,
+        })
+      }
+    } else {
+      // Normal wall endpoint (start or end)
+      const v = getWallDirectionFromJunction(wall, endType)
+
+      const L = Math.sqrt(v.x * v.x + v.y * v.y)
+      if (L < 1e-9) continue
+
+      const nUnit = { x: -v.y / L, y: v.x / L }
+      const a = endType === 'start' ? offsets.a : -offsets.b
+      const b = endType === 'start' ? offsets.b : -offsets.a
+      const pA = { x: meetingPoint.x + nUnit.x * a, y: meetingPoint.y + nUnit.y * a }
+      const pB = { x: meetingPoint.x - nUnit.x * -b, y: meetingPoint.y - nUnit.y * -b }
+
+      const edgeA = createLineFromPointAndVector(pA, v)
+      const edgeB = createLineFromPointAndVector(pB, v)
+      const angle = Math.atan2(v.y, v.x)
+
+      processedWalls.push({
+        wallId: wall.id,
+        angle,
+        edgeA,
+        edgeB,
+        isPassthrough: false,
+        halfThickness: halfT,
+        outside: isOutsideWall(wall),
+        dir: { x: v.x / L, y: v.y / L },
+        normal: nUnit,
+        lo: b,
+        hi: a,
+      })
+    }
+  }
+
+  // Sort by outgoing angle, then by wall ID so equal-angle walls produce the
+  // same pairing regardless of scene iteration order.
+  processedWalls.sort((a, b) => {
+    const angleOrder = a.angle - b.angle
+    if (angleOrder !== 0) return angleOrder
+    return a.wallId < b.wallId ? -1 : a.wallId > b.wallId ? 1 : 0
+  })
+
+  if (processedWalls.length < 2) return new Map()
+
+  if (!connectedWalls.some(({ wall }) => wall.justification !== undefined)) {
+    const corner = outsideCornerIntersections(processedWalls, meetingPoint)
+    if (corner) return corner
+  }
+
+  const wallIntersections = miterAdjacentWalls(processedWalls, meetingPoint)
+
+  const host = connectedWalls.find(({ endType }) => endType === 'passthrough')
+  if (host) {
+    // A wall T'd into another's body ends square on its face: both edges
+    // already meet the host's near face, and closing through the reference
+    // vertex would add a triangular sliver inside the host.
     for (const entry of connectedWalls) {
       if (entry.endType === 'passthrough') continue
       const edges = wallIntersections.get(entry.wall.id)
-      if (!edges) continue
-      if (host && edges.left && edges.right) {
-        // Both edges already meet the host's near face. Closing through the
-        // reference vertex would add a triangular sliver inside the host.
+      if (edges?.left && edges.right) {
         edges.closing = {
           x: (edges.left.x + edges.right.x) / 2,
           y: (edges.left.y + edges.right.y) / 2,
         }
-      } else if (connectedWalls.length === 2) {
+      }
+    }
+  }
+
+  if (connectedWalls.some(({ wall }) => wall.justification !== undefined)) {
+    for (const entry of connectedWalls) {
+      if (entry.endType === 'passthrough') continue
+      const edges = wallIntersections.get(entry.wall.id)
+      if (!edges || (host && edges.left && edges.right)) continue
+      if (connectedWalls.length === 2) {
         const other = connectedWalls.find((candidate) => candidate !== entry)!
         if (other.endType === 'passthrough') continue
         const bodyLine = (candidate: typeof entry) => {

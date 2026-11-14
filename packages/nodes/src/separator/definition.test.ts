@@ -34,3 +34,31 @@ test('separator registers selectable dashed plan and 3D renderers, without movem
     restore()
   }
 })
+
+test('a selected separator shows a wall’s handles on the plan: its two ends and a push arrow off each side', () => {
+  const node = separatorDefinition.schema.parse({
+    ...separatorDefinition.defaults(),
+    start: [0, 0],
+    end: [4, 0],
+  })
+  const geometry = separatorDefinition.floorplan!(node, { viewState: { selected: true } } as never)
+  const children = geometry?.kind === 'group' ? geometry.children : []
+  expect(children[0]).toMatchObject({ kind: 'line', strokeDasharray: '6 4' })
+  expect(
+    children.flatMap((child) =>
+      child.kind === 'endpoint-handle' ? [[child.affordance, child.payload]] : [],
+    ),
+  ).toEqual([
+    ['move-endpoint', { separatorId: node.id, endpoint: 'start' }],
+    ['move-endpoint', { separatorId: node.id, endpoint: 'end' }],
+  ])
+  const arrows = children.flatMap((child) => (child.kind === 'move-arrow' ? [child] : []))
+  expect(arrows.map((arrow) => arrow.payload)).toEqual([
+    { wallId: node.id, side: 'a' },
+    { wallId: node.id, side: 'b' },
+  ])
+  // One off each side of the line.
+  expect(arrows.map((arrow) => Math.sign(arrow.point[1]))).toEqual([1, -1])
+  expect(separatorDefinition.floorplanAffordances?.['move-endpoint']).toBeDefined()
+  expect(separatorDefinition.snapProfile).toBe('structural')
+})

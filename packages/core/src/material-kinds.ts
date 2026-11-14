@@ -5,6 +5,7 @@
 export const MATERIAL_CATEGORIES = [
   'colors',
   'wood',
+  'siding',
   'stone',
   'brick',
   'tile',

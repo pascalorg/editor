@@ -160,3 +160,52 @@ describe('syncAutoElevatorOpenings', () => {
     expect(slabUpdate?.data.holeMetadata).toEqual([{ source: 'manual' }])
   })
 })
+
+for (const legacyParent of [false, true]) {
+  test(`elevator openings stay inside the owning building with legacy parenting ${legacyParent}`, () => {
+    const a = BuildingNode.parse({})
+    const b = BuildingNode.parse({})
+    const groundA = LevelNode.parse({ parentId: a.id, level: 0 })
+    const upperA = LevelNode.parse({ parentId: a.id, level: 1 })
+    const groundB = LevelNode.parse({ parentId: b.id, level: 0 })
+    const upperB = LevelNode.parse({ parentId: b.id, level: 1 })
+    const elevator = ElevatorNode.parse({
+      parentId: legacyParent ? groundA.id : a.id,
+      fromLevelId: groundA.id,
+      toLevelId: upperA.id,
+    })
+    a.children = [groundA.id, upperA.id, ...(legacyParent ? [] : [elevator.id])]
+    b.children = [groundB.id, upperB.id]
+    if (legacyParent) groundA.children = [elevator.id]
+    const polygon: [number, number][] = [
+      [-5, -5],
+      [5, -5],
+      [5, 5],
+      [-5, 5],
+    ]
+    const ownSlab = SlabNode.parse({ parentId: upperA.id, polygon })
+    const ownCeiling = CeilingNode.parse({ parentId: groundA.id, polygon })
+    const otherSlab = SlabNode.parse({ parentId: upperB.id, polygon })
+    const otherCeiling = CeilingNode.parse({ parentId: groundB.id, polygon })
+    const nodes = Object.fromEntries(
+      [
+        a,
+        b,
+        groundA,
+        upperA,
+        groundB,
+        upperB,
+        elevator,
+        ownSlab,
+        ownCeiling,
+        otherSlab,
+        otherCeiling,
+      ].map((n) => [n.id, n]),
+    )
+    const ids = syncAutoElevatorOpenings(nodes).map((update) => update.id)
+    expect(ids).toContain(ownSlab.id)
+    expect(ids).toContain(ownCeiling.id)
+    expect(ids).not.toContain(otherSlab.id)
+    expect(ids).not.toContain(otherCeiling.id)
+  })
+}

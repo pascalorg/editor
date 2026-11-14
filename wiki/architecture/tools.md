@@ -118,6 +118,14 @@ export function MyTool() {
 - **Help mirrors the model.** The shortcut dialog and the contextual HUD are part of the interaction
   contract: they describe the always-visible mode chip + `Alt` = force, **not** a hidden Shift bypass.
   The HUD is driven by the active interaction scope, so it shows only the current context's controls.
+- **Tool keys are listed once.** `lib/tool-shortcuts.ts` holds the keys that arm a tool and the
+  tooltip text built from them (`withToolShortcut`: "Door (Shift+D)"), which the Build panel tiles of
+  both hosts and the shortcut dialog use. Where a tool's own letter is already a key (W/A/S/D pan, R
+  rotates or flips), the tool takes Shift with that letter: Shift+D door, Shift+W window, Shift+S
+  stairs, Shift+R roof. Pan stands down for those chords (`claimsKeyboardPan`); during a gesture that
+  holds Shift (moving, placing, a handle drag, mesh editing…) the chords are off and Shift+WASD pans
+  as before, and an armed placement keeps Shift+R as its own R. `B` arms the wall tool on the Rooms
+  shape picked last (see *Wall lifecycle*).
 - **Preview geometry is local** — transient meshes shown while a tool is active live in the tool component, not in the scene store.
 - **Clean up on unmount** — remove any pending/incomplete nodes *and* any live transforms/mesh offsets when the tool unmounts.
 - **Tools must not import from `@pascal-app/viewer`** — use the scene store and core hooks only. `sceneRegistry` is exported from `@pascal-app/core` and is the allowed door into the Three.js graph for the narrow purposes above.
@@ -138,15 +146,22 @@ Concretely, door/window placement/move keeps these in lockstep across `{door,win
 
 - **Snap target**: nearest wall to the true cursor (shared `findClosestWallInPlan` / wall raycast), free-follow off-wall, commit only on a host.
 - **Move SFX**: a soft `sfx:grid-snap` click per grid step while sliding (free-follow plan XZ or on-wall along-X, quantized + deduped so it isn't a machine-gun) and a soft `sfx:item-pick` cue on the floor→wall snap. Both tools carry an identical `tickGridStep` / `tickWallSnap` pair — keep them in sync.
+- **Swing from the cursor side** while placing a door with its tool: the leaf swings into the side of the wall the cursor is on (`placementSwing` in `nodes/src/door/swing.ts`), in 3D from the hovered face's normal and in 2D from the side of the wall the plan point is on (`wallSideOfPlanPoint`, which gives the plan's synthesized `wall:*` events their normal). A door on an outside wall still faces out (`placedDoorFace`); only its `swingDirection` follows the cursor. R flips facing and swing together. A selected door's action bar carries *Swap hinge side* (hinges and handle trade jambs) and *Swap swing side* (`nodes/src/door/actions.tsx`), so neither needs the panel's Swing section.
 - **R-flip** facing mid-placement, **Alt (hold)** to force-place past snapping and collisions (guides stay visible) and **Shift (tap)** to cycle the snapping mode — the rule above, never a held-Shift bypass — faithful ghost/symbol, deterministic single-undo commit.
 - **Corner windows.** A window that ends at a corner has a **Corner** section in its panel: *Wrap the corner* adds the matching window on the other wall (the same width, height, sill, type and frame), *This side* and *Other side* set each side's width with its corner end pinned, *Fused glass* or *Corner post* sets the corner (only a fixed window's glass fuses: the other types keep their frames and meet at the corner as at a post, so the choice shows only for fixed windows), and *Unwrap* leaves two plain windows. The agent's `add_corner_window` builds the same pair (core `planCornerWindow`, `wrapCorner`, `unwrapCorner`); the wall cut runs past the wall's end so the corner opens between the sides at any angle, and in the plan each side runs to the walls' mitre, so the corner reads as glass there too. A pair holds only while each side reaches its corner end, both walls end at that corner on one level and the angle stays between 10° and 170° (`cornerPair`, which the viewer, the plan and every tool read). Deleting one side, dragging it off its corner (3D or plan) or onto a roof or dormer leaves the other a plain window, framed at the corner; a window whose frame was built for a pair that has since broken (a wall moved away) is rebuilt. A copy of one side is plain; a level duplicated, or both walls copied and pasted, keeps the copies joined to each other. **Merge windows** (core `mergeWindows`, the agent's `merge_windows`, one operation for both surfaces): select two windows and use *Merge windows* in the multi-selection panel (the panel gives the reason when it will not merge, in the editor's units, from the refusal's code: the refusal's own message is the agents'); two windows that already wrap their corner get *Unwrap the corner* there instead. Two windows on walls that meet at a corner, each within `CORNER_REACH_M` (0.30 m) of it, become one corner window: each slides to the corner keeping its width, the glass is fused, and both take the first selected window's height, sill and type. Two windows side by side on one wall, at most `MERGE_GAP_M` (0.30 m) apart with nothing between (or overlapping), become one window spanning both, from the lower sill to the higher head. *Wrap the corner* uses the same operation, so a window already waiting at the other wall's corner end is adopted rather than doubled. While placing or dragging a window near a corner where one waits (in 3D, and dragging it in the plan), the ghost snaps its edge to the corner (`evaluateCorner`: enter within 0.30 m, leave past 0.40 m so it does not flicker; a short ease, none under reduced motion), the waiting window is outlined with the hover colour (in the plan, the walls' hover stroke), the HUD reads *Join as a corner window*, and the click or release fuses the pair in the same undo step. Where no window waits the snap still shows, the HUD reads *Corner window*, and the click or release wraps the corner, making the partner on the other wall. Where a wall end within 0.30 m is not a corner a window can wrap, the HUD's "!" row says why instead of staying silent: no other wall ends there, three or more do, they meet at under 10° or over 170°, either wall is curved or a curtain wall, or the other wall has no room for the matching window; and where a window waits but the join would be refused, why: an opening in the way of sliding them to the corner, or the waiting window taller than this wall. **Alt**, or snapping set to Off, places or moves it plain; releasing Alt brings the snap back without moving the pointer.
+- **R** flips the roof tool's ridge chip (`useRoofRidgeMode`, `packages/nodes/src/roof/roof-ridge-mode.ts`): a drawn or room-picked gable runs its ridge along the footprint's long side unless the chip says *Short side*; the 3D ghost, the plan's draft ridge line and the commit all read `ridgeQuarterTurn`, and each arming starts on *Long side*.
+- **Typed entry** (`store/use-placement-typing.ts`): one convention for every tool that takes typed coordinates — a digit or `.` opens a session, Tab or comma switches field, Enter commits, the first cancel (Escape, ⌘Z mid-draft or a toolbar cancel) clears what was typed and is consumed, and the next cancels the draft. `routePlacementTypingKey` is that convention; a tool decides only when a session may open and what its two fields mean. A wall draft types its length and angle (`resolveTypedWallEnd`; Tab with no session opens the angle), a cabinet its distance along the wall and offset from it. A typed wall angle is an absolute heading in the building's plan frame, measured the way the 15° angle snap builds its rays: `atan2(dz, dx)` from +X towards +Z, in [0°, 360°), so on an unrotated plan 0° points right and 90° points down. The angle field's placeholder is the draft's live heading in that same convention (`formatWallDraftHeading`), so typing over it starts from what is on screen; the draft's own angle labels stay relative (to the nearest axis or the connected wall). The HUD (`PlacementCoordinateInput`) only displays the store, in 3D through `LocalizedHtml` and in the plan through `FloorplanPlacementTypingHud`, so split view shows it in both panes. While typing, the plan forwards its snapped pointer on `grid:move`, never the typed end, and each side re-projects that pointer onto what was typed. In 2D-only view the plan takes these keys in a window capture listener (`installFloorplanWallTypingKeys`), so they never reach the global shortcuts.
 - **O / L** cycle the door and window tools' Type and Style chips (`ToolHint.chip`, by key or click): the choices of the panel's Type and Style rows, written from the same core fields (`doorTypeFields`, `DOOR_TYPE_SIZES` and `doorStyleLook` for a door; `windowTypeFields` and the window style presets for a window), so a door placed by hand matches one changed in the panel. A window placed as Bay or Bow has no sill; every other type has one. A window style shapes a Fixed window's panes, which only a Fixed window draws, so the panel's Style row and the tool's L chip show for a Fixed window only (cycling O away from Fixed hides L), and `add_window` refuses a style on another type (`style_needs_fixed_window`). The Style row and the L chip offer one entry per look (`WINDOW_STYLE_CHOICES`); `picture`, which draws what `single` draws, stays an accepted alias for agents.
 
 Tells that you've broken parity: a sound/guide/snap that fires in 3D but is silent in 2D (or vice-versa), or a fix landed in one move file but not its sibling. The two move files are deliberately near-mirrors; diff them when in doubt.
 
-**Navigation is part of parity.** Movement learned in one view works in the other (WASD, Space + drag, middle drag, wheel, orbit), and split view keeps both in sync through `navigationSyncPose`. In 2D-only view the 3D canvas is paused (`renderPaused`), so nothing driven from its frame loop reaches the plan: the plan owns WASD and the orbit buttons there itself (`components/editor/floorplan-panel.tsx`, sharing `lib/keyboard-pan.ts` with `custom-camera-controls.tsx` — physical keys, same guards and speed) and publishes the pose to 3D when the move ends, while the camera stands down. A navigation input that only exists on the camera side is a 2D regression waiting to happen.
+**Navigation is part of parity.** Movement learned in one view works in the other (WASD, Space + drag, middle drag, wheel, orbit), and split view keeps both in sync through the navigation pose store (`navigationSyncPoseStore`, `@pascal-app/viewer/ui`). In 2D-only view the 3D canvas is paused (`renderPaused`), so nothing driven from its frame loop reaches the plan: the plan owns WASD and the orbit buttons there itself (`components/editor/floorplan-panel.tsx`, sharing `lib/keyboard-pan.ts` with `custom-camera-controls.tsx` — physical keys, same guards and speed) and publishes the pose to 3D when the move ends, while the camera stands down. A navigation input that only exists on the camera side is a 2D regression waiting to happen.
+
+**Drafting has one owner per view.** In split and 3D view a kind's 3D tool drafts and commits, fed in split view by the grid events the plan forwards. In 2D-only view the 3D tool never mounts if 3D was never shown (the hidden canvas has no size, so nothing under it renders) and keeps hearing the plan's events if it was, so the kind's plan tool (`extensions['pascal:editor/floorplan'].tool`, mounted by `FloorplanRegisteredToolLayer`) commits there instead. Three rules keep the two from fighting: the 3D tool returns early from every input handler while `visibleScene(...) === '2d'`, or each click makes the node twice; whoever loses the input drops its half-drawn draft when the view changes (the 3D tool on entering 2D-only, the plan tool as it takes over), or the next draft closes against corners nothing shows; and the tool that owns the input writes the shared draft (`useFloorplanDraftPreview`) from the point it commits, so the plan only draws it. Anything that drives a tool's HUD, such as a hint's `visible`, reads state both tools share (the armed `toolDefaults`), not a flag one of them sets on mount. Reference: the roof (`nodes/src/roof/tool.tsx` and `floorplan-tool.tsx`). The ceiling follows the same rules with one difference: its plan draft (`floorplan-panel.tsx`) is a second copy of the corners, kept beside the 3D tool's (`nodes/src/ceiling/tool.tsx`) in split view, so both drop their corners on any view change that shows the plan.
 
 **Group selection acts on the selection.** Group move / rotate / duplicate transform the selected participants only; connected walls outside the selection stretch at their shared ends (`LinkedNeighbor`). Their footprint comes from plan data, never from meshes: `groupPlanBounds` (`components/editor/group-transform-shared.ts`) reads wall outlines, polygon rings and fence runs in the level frame, and measures meshes only for placed objects (fresh bounds, `userData.placeholder` skipped, anchor as fallback). A world-space mesh box mapped into the level frame lands beside the meshes under a rotated building, and in 2D-only view meshes may be unbuilt. The 2D dashed box, the 3D rotate gizmo and keyboard R/T all pivot on that box's centre.
+
+**Moving several walls pushes each one.** When every participant of a group move is a wall (doors and windows ride their wall and don't count), the move, dragged in either view or picked up, moves each wall as its own push arrow would rather than sliding the selection rigidly (`planWallGroupPush` in `lib/room-handle-drag.ts`, branched in by `beginGroupWallPush`): along its normal by the drag projected on it, so it stays parallel, its neighbours following through the junction planner. An end on another moved wall that is not in line with it (a corner or a T between them) moves by the whole drag, the one point on both moved lines, so they stay joined. The preview rides the push's overrides and ghosts; the dashed boxes hide and each wall's room widths show as its push shows them (`useRoomHandleDrag` kind `wall-group-push`); release commits one undo step. Grid snapping steps the drag; there is no box to align and R/T do nothing. A selection that mixes walls with anything else, and a pasted or duplicated carry, keeps the rigid slide.
 
 **A room's slab and ceiling deselect together in the plan.** The floor plan draws the ceiling as an unfilled outline under the walls (`fill="none"` is click-through, see below), so a marquee can select it but a click can't reach it. Removing either surface from the selection removes its same-outline counterpart: slab and ceiling declare `extensions['pascal:editor/floorplan'].selectionCounterparts` (`packages/nodes/src/shared/surface-counterparts.ts`) and `applyEntrySelection` asks the registry, so the plan never names a kind. Adding stays single, and 3D keeps single toggles because each surface is clickable there.
 
@@ -323,7 +338,7 @@ If the tool *also* rotates the node during the drag, it should drive `rotation` 
 
 ## Wall lifecycle: draw, split, merge
 
-Walls are drawn as a rectangle, a chain that closes into a room, or one wall at a time — the Build panel's Rooms tiles (Rectangle / Polygon / Walls). The choice is picked before drawing, never toggled mid-draw: it is stored as the wall's continuation mode (`rectangle` / `room` / `single`, persisted with the editor preferences, `CONTINUATION_PROFILES.wall.chosenInPanel`), read through `useWallDrawVariant` (`packages/editor/src/lib/wall-draw-variant.ts`), and the HUD header names it (`lib/hud-title.ts`); C and the continuation chip skip it. `B` arms the wall tool on Rectangle and opens the Build panel (`P` opens Paint; `lib/sidebar-panel.ts` picks the first panel the host has). A Polygon room is draft state until it completes (`lib/wall-polygon-draft.ts`): its corners live in `useFloorplanDraftPreview.wallPolygonDraftPoints`, drawn as ghost sides by the 3D tool and the plan's draft layer and used as snap targets, and no wall is written. Closing on the first corner, sealing or teeing into existing walls, or a double-click plans every side against a scratch copy of the scene (`planWallInsertion`, as the chain used to) and writes them in one `applyNodeChanges` batch — one undo step, one scene commit, room detection derives the floor and ceiling from it. Esc, a tool / shape / level change or ⌘Z just drops the draft: the scene, history, autosave and collaboration never saw it. The 3D tool owns the draft; the plan owns it only in 2D-only view. Walls and Rectangle keep their per-command history. The cursor bubble (3D `CursorSphere`, 2D cursor indicator) shows the variant's tile icon. In 2D the rectangle tool only claims clicks and publishes its first corner to `useFloorplanDraftPreview`; the panel's linear draft layer draws the four mitered walls with the line draft's plates and guides, so cursor, snapping and alignment are the line wall's own (`packages/nodes/src/wall/floorplan-tool.tsx`).
+Walls are drawn as a rectangle, a chain that closes into a room, or one wall per two clicks — the Build panel's Rooms tiles (Rectangle / Polygon / Walls). New walls are plain: no assembly or finish is given at draw time, room detection sides each wall exterior or interior, and a wall's type is set afterwards in its panel's Assembly section, whose Preset lists the cited presets and the project's own wall types (`SiteNode.wallTypes`), made, edited and duplicated beside it (`WallTypeMenu`, `lib/wall-type.ts`). A host-placed preset with its own thickness or assembly, and a foundation wall, keep their own. While Walls is armed the Rooms caption gives way to its kinds (`WALL_KINDS`, `selectWallKind`, session-only and dropped when the wall tool is left or reshaped): Standard draws plain walls, Invisible draws room separators (`createInvisibleWallOnCurrentLevel`), Railing draws railing walls (`railingWallDefaults`). A Walls segment snaps as the first point does, locked to 15° rays from its start, and the tool stops once it is placed; a Polygon side, and a run pulled from a wall end (`lib/wall-pull.ts`), hold square to the wall before (`lib/wall-run-snap.ts`) and chain on from its end (`wallDraftIsRun`). The choice is picked before drawing, never toggled mid-draw: it is stored as the wall's continuation mode (`rectangle` / `room` / `single`, persisted with the editor preferences, `CONTINUATION_PROFILES.wall.chosenInPanel`), read through `useWallDrawVariant` (`packages/editor/src/lib/wall-draw-variant.ts`), and the HUD header names it (`lib/hud-title.ts`); C and the continuation chip skip it. `B` arms the wall tool on the shape picked last (Rectangle until one is) and opens the Build panel (`P` opens Paint; `lib/sidebar-panel.ts` picks the first panel the host has). A Polygon room is draft state until it completes (`lib/wall-polygon-draft.ts`): its corners live in `useFloorplanDraftPreview.wallPolygonDraftPoints`, drawn as ghost sides by the 3D tool and the plan's draft layer and used as snap targets, and no wall is written. Closing on the first corner, sealing or teeing into existing walls, or a double-click plans every side against a scratch copy of the scene (`planWallInsertion`, as the chain used to) and writes them in one `applyNodeChanges` batch — one undo step, one scene commit, room detection derives the floor and ceiling from it. Esc, a tool / shape / level change or ⌘Z just drops the draft: the scene, history, autosave and collaboration never saw it. The 3D tool owns the draft; the plan owns it only in 2D-only view. Walls and Rectangle keep their per-command history. The cursor bubble (3D `CursorSphere`, 2D cursor indicator) shows the variant's tile icon. In 2D the rectangle tool only claims clicks and publishes its first corner to `useFloorplanDraftPreview`; the panel's linear draft layer draws the four mitered walls with the line draft's plates and guides, so cursor, snapping and alignment are the line wall's own (`packages/nodes/src/wall/floorplan-tool.tsx`).
 
 Split is a HUD-driven loop cut that lives entirely in `packages/nodes/src/wall/`: `split-session.ts` opens the wall's own `reshaping` scope (`reshape: 'split'`, `driver: 'tool'`, which resolves to the `polygon` snap context — see `interaction-scope.md`) and owns every transition of the `split-store.ts` draft; scrolling sets 1–32 cuts, a single cut follows the pointer with the snapping modes, several divide the wall evenly, and a click commits them as one undo step through `planWallDivisions` (core). The editor mounts it through kind-agnostic seams only: `def.affordanceTools.split` (3D markers, `split-tool.tsx`), `extensions['pascal:editor/floorplan'].reshapeLayers.split` (the plan layer, `split-floorplan-layer.tsx`, mounted by `FloorplanRegisteredToolLayer` while the scope runs), `def.affordanceHints.split` (the HUD's cut-count chip and hints, rendered by `HelperManager` like `toolHints`), and `actionMenu.actions` (`actions.tsx`, the Split and Merge buttons `NodeActionMenu` renders for whichever kinds are selected). Any reshape name without a dedicated arm in `ToolManager` resolves the same way, so the next kind-owned reshape needs no editor change. Merge is the inverse (core `planWallMerge`): selected walls that continue each other join into the wall with the most attachments, openings keep their world position, rooms keep one boundary reference; refusals name the difference in the button's tooltip. The join rule (`systems/wall/wall-merge.ts`) is shared with the delete heal.
 
@@ -415,3 +430,106 @@ node, parent and context nodes. This supports tools whose ghosts never enter the
 committed scene. The helper merges that preview only for the notice query; moving
 nodes still use their kind's live-transform frame, and selected inspectors call
 `usePlacementNotice(id)` without adopting a tool's preview.
+
+
+## Duct and pipe build settings
+
+Duct and DWV run definitions contribute `toolOptions` for system, profile/size,
+material, routing and crossing intent. `ToolOption.input` lets a host render an
+exact numeric field with the schema's limits instead of a fixed choice list.
+The settings share `useEditor.toolDefaults` with keyboard shortcuts and survive
+switching tools within the session. Continuation context is consumed separately;
+returning to a tool must not resume an old endpoint.
+
+Follow surface keeps the existing floor/wall/ceiling behavior. Horizontal starts
+at a level-local centreline elevation; the pipe fall setting still applies.
+Vertical keeps X/Z fixed and uses an exact target elevation, available in either
+view. Alt retains the existing temporary vertical-drag behavior. Sidebar changes
+refresh the draft without requiring another pointer move.
+
+Connect retains automatic branch/cross fittings. Cross without joining disables
+body snapping and automatic interior crosses while leaving endpoint connections
+available. It creates no clearance or obstacle detour. Preview and commit consume
+the same choice. Connection feedback includes text as well as color, with screen
+coordinates for snapped-port labels in the plan view.
+
+Duct routing adds supply-trunk, round-branch, flex and return-trunk starting
+profiles. These are editable dimensional presets, not airflow sizing calculations.
+Equipment and terminal inspectors can start a run from an unoccupied air collar,
+carrying its section and system. Transition feedback includes both sections and
+the planned fitting length.
+
+Duct profile edits use the `duct_edit` operation in both the inspector and agent
+hosts. Segment scope inserts transitions against fixed neighbours; branch scope
+follows same-profile ducts through elbows, couplings, dampers and caps, stopping
+at junctions, size changes and equipment. Changed fitting collars retarget the
+joined run endpoints. Insufficient space refuses the entire edit. Face alignment
+supports free straight runs; connected routes require center alignment because
+current fittings do not represent eccentric transitions. There is no separate
+node-lock contract for this operation.
+
+The same operation adds a measured vertical obstacle offset to a straight
+horizontal run: four elbows and intervening ducts preserve both original
+endpoints. The inspector previews a side elevation before applying. This is a
+manual routing aid, not collision detection or an automatic obstacle solver.
+Rolled non-round runs are refused because the offset cannot express the required
+twist. Both operations apply one scene change batch and invalidate stale offset
+rewind metadata. The inspector is shared by 2D and 3D.
+
+Pipe grade remains derived from path elevations; existing scenes need no new
+fields. Drawing offers grade percentage and downhill direction, and reports
+start/end centerline elevations above the level. Continuing at either end
+inherits the source leg’s signed grade. Snapped connections that conflict with
+the requested grade are refused, including fitting collar adjustments.
+
+`pipe_grade` provides the inspector and agent operation for applying grade with
+a fixed start/end elevation, translating elevation without changing grades,
+and editing a path point while preserving each leg’s grade. Vertical legs keep
+their rise; a stack cannot become a diagonal by dragging one endpoint. Flow
+arrows describe downhill geometry, not hydraulic simulation; level runs have no
+gravity-flow direction. Plan selection shows downhill chevrons and grade labels.
+
+Plan point drags use live overrides and commit once. The 3D endpoint tools apply
+the same grade constraint before their existing fitting planners. Connected
+collars that cannot turn cleanly, or neighbours whose grade would change, refuse
+the edit. Alt detaches a path-point edit while retaining the edited run’s grade.
+Explicit grade edits may change the selected run’s grade; connected runs retain
+theirs. Profile resizing is unchanged because diameter does not alter the stored
+centerline path.
+
+Pipe size edits use the `pipe_resize` operation from both the inspector (plan and
+3D views) and agent tools. Segment scope carries end caps; branch scope traverses
+same-size, same-material pipes through elbows, couplings and cleanouts. Junctions,
+reducers, size/material changes and fixture or equipment collars form boundaries.
+The operation inserts reducers into the selected run at fixed boundaries, moves
+run endpoints to resized fitting collars, and checks every leg's direction and
+signed grade before returning one atomic batch. Ambiguous collars, incompatible
+angles and insufficient straight length refuse the entire edit. “Check resize”
+reports affected runs, fittings and new reducers without changing the scene.
+
+`pipe_offset` adds a user-controlled four-bend detour to a straight, non-vertical
+pipe. The inspector exposes the same operation in plan and 3D with a side-profile
+schematic. `from` and `to` measure horizontal distance from the start to the first
+and last bend; `offset` is the signed vertical displacement. Each connector uses
+`abs(offset)` horizontal travel. The three parallel sections retain the original
+signed grade; the two connectors have their own grades. Boundary positions and
+collar directions remain fixed. The original node becomes the first section and
+four new runs plus four elbows form the rest, committed in one undo step. The far
+automatic cap transfers ownership to the new tail without moving.
+
+Insufficient fitting space, vertical or polyline source runs, hosted children and
+custom hanger overrides refuse without partial edits. Ordinary automatic hangers
+regenerate on the new sections. Waste offsets report uphill connectors explicitly;
+the operation does not certify continuous downhill drainage or check obstacles.
+
+Fixed waste/vent collars use `planPipeCollarConnection` in both drawing and the
+`pipe_connect` agent operation. Trap and fitting inspectors offer “Draw from
+collar”; plugins can reuse the exported `PipeCollarInspector` for fixtures with
+registered ports. The seed inherits size, material, elevation and direction.
+The first free section follows the collar axis; subsequent turns use ordinary
+pipe continuation. Occupied collars are disabled and rechecked before commit.
+Diameter changes preview and create a reducer entirely outside the fixed collar;
+short, incompatible or stale connections refuse without moving the source.
+`pipe_connect` extends to a free endpoint; interactive drawing can also join an
+existing open collar. Decorative catalog fixtures without authored waste/vent
+ports are not inferred from their mesh.

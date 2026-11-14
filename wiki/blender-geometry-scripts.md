@@ -92,7 +92,7 @@ The result lists its parts (`body`, `door_left`, `door_right`), paint slots (`wo
 | Metres, Z up, the front facing −Y (Blender's Front view) | Pascal's metres, Y up, front +Z |
 | object `part:<id>`, custom property `type` | an addressable, typed part (`find_by_type`) |
 | material `slot_<id>` | a paint slot; while its shader keeps the default base colour, its viewport `diffuse_color` colours it |
-| object `light:<id>` holding a light, custom property `intensity` (default 2) | a switchable light; Blender's watts are not read |
+| object `light:<id>` holding a point or spot light, custom properties `intensity` (default 2), `shadows`, `glow` (`{"size": 0.2, "strength": 1}`) | a switchable light, a spot keeping its cone and blend; Blender's watts are not read |
 | empty `anchor:<id>` | a socket |
 | object `cutout`, `cut:wall`, `cut:ceiling`, `cut:slab` | a cutter for the mounted host |
 | object `collider` | the walkthrough proxy |

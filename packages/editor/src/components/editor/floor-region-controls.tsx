@@ -3,12 +3,19 @@
 import {
   containsPoint,
   emitter,
+  formatAreaLabel,
   type MultiPolygon,
   resolveCeilingHeight,
+  roomFloorElevation,
   sceneRegistry,
   useScene,
 } from '@pascal-app/core'
-import { getSceneTheme, setSurfaceRaycastLayers, useViewer } from '@pascal-app/viewer'
+import {
+  getSceneTheme,
+  isTypingTarget,
+  setSurfaceRaycastLayers,
+  useViewer,
+} from '@pascal-app/viewer'
 import { useFrame, useThree } from '@react-three/fiber'
 import { Pentagon, Square } from 'lucide-react'
 import { useEffect, useMemo, useRef } from 'react'
@@ -60,21 +67,18 @@ import {
 } from '../../lib/floor-region-session'
 import { type FloorRegionPoint, snapFloorRegionPoint } from '../../lib/floor-region-snap'
 import { clientToPlan } from '../../lib/floorplan/plan-coords'
-import { formatAreaLabel } from '../../lib/measurements'
 import {
   cancelMezzanineDraft,
   mezzanineDraftActive,
   useMezzanineDraft,
 } from '../../lib/mezzanine-draft'
 import { usePaintRegionMode } from '../../lib/paint-region-mode'
-import { roomFloorElevation } from '../../lib/room-handle-drag'
 import {
   cancelTerraceDraft,
   terraceDraftActive,
   toggleTerraceShape,
   useTerraceDraft,
 } from '../../lib/terrace-draft'
-import { isTypingTarget } from '../../lib/typing-target'
 import useEditor from '../../store/use-editor'
 import { useFloorplanRender } from '../editor-2d/floorplan-render-context'
 import { usePaintTint } from '../tools/paint-region/use-paint-tint'

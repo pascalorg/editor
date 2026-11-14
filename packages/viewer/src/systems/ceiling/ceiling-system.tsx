@@ -4,6 +4,7 @@ import {
   CEILING_SURFACE_ROLE,
   type CeilingNode,
   type CeilingSurfaceCell,
+  ceilingCapLift,
   ceilingPaintRegions,
   computeCeilingSurfaceCells,
   getEffectiveCutterNode,
@@ -24,6 +25,12 @@ import { mergeSurfaceHolePolygons } from '../surface-hole-geometry'
 
 /** Name of the meshes a ceiling draws its paint regions with, one per region. */
 export const CEILING_REGION_MESH = 'ceiling-region'
+
+/**
+ * Name of the mesh that draws a ceiling's upper face while `showCeilingTops` is on. It shares the
+ * grid's geometry, which covers the whole ceiling, and stands on top of the ceiling's build-up.
+ */
+export const CEILING_CAP_MESH = 'ceiling-cap'
 
 /**
  * The material a ceiling draws a region finish with. The ceiling's renderer
@@ -146,6 +153,11 @@ export function updateCeilingGeometry(
   if (gridMesh) {
     gridMesh.geometry.dispose()
     gridMesh.geometry = cells ? newGeo : newGeo.clone()
+    const capMesh = mesh.getObjectByName(CEILING_CAP_MESH) as THREE.Mesh | undefined
+    if (capMesh) {
+      capMesh.geometry = gridMesh.geometry
+      capMesh.position.y = ceilingCapLift(node, nodes)
+    }
   } else if (cells) {
     newGeo.dispose()
   }

@@ -2,9 +2,11 @@ export { bakeCabinetAnimationClip, poseCabinetMovingParts } from './animation'
 export { cabinetDefinition, cabinetModuleDefinition } from './definition'
 export {
   findKitchenItems,
+  KITCHEN_ITEM_LABELS,
   KITCHEN_ITEMS,
   kitchenItemMatches,
   kitchenPresetForModule,
+  kitchenPresetForPlacedModule,
 } from './kitchen-catalog'
 export { KitchenCollection, KitchenThumbnail } from './kitchen-collection'
 export { beginKitchenPlacement } from './kitchen-placement'

@@ -1,8 +1,23 @@
-import { resolveLevelId } from '../../lib/node-ancestry'
+import { findLevelAncestorId, resolveLevelId } from '../../lib/node-ancestry'
 import { wallSupportForNodes } from '../../lib/opening-floor-datum'
-import type { AnyNode, LevelNode, RoofNode, RoofSegmentNode, WallNode } from '../../schema'
+import { roofFaceOf, roofFaceShapes } from '../../registry/roofs'
+import { queryNodes } from '../../runtime/node-queries'
+import type {
+  AnyNode,
+  AnyNodeId,
+  LevelNode,
+  RoofNode,
+  RoofSegmentNode,
+  WallNode,
+} from '../../schema'
+import { isRailingWall } from '../../schema/nodes/railing-wall'
 import { coveredStoreyId, servesAsRoofLevel } from '../../services/roof-level'
-import { findLevelBelowId, getLevelElevations, getWallTop } from '../../services/storey'
+import {
+  findLevelAboveId,
+  findLevelBelowId,
+  getLevelElevations,
+  getWallTop,
+} from '../../services/storey'
 import { wallOverlapsSlabFootprint } from '../slab/slab-support'
 import { getWallArcData } from '../wall/wall-curve'
 import { resolveRoomRoofFootprintOnLevel } from './roof-footprint'
@@ -17,13 +32,18 @@ export function resolveRoofWallTopElevation(
   const sourceLevelY = elevations.get(sourceLevelId)?.baseY ?? 0
   const targetLevelY = elevations.get(targetLevelId)?.baseY ?? 0
   const support = wallSupportForNodes(wall, nodes)
-  return sourceLevelY + getWallTop(wall, sourceLevelId, nodes, support.elevation) - targetLevelY
+  const top = Math.max(
+    getWallTop(wall, sourceLevelId, nodes, support.elevation, 0),
+    getWallTop(wall, sourceLevelId, nodes, support.elevation, 1),
+  )
+  return sourceLevelY + top - targetLevelY
 }
 
 /**
- * The walls among `wallIds` a roof stands on: those under its segments' footprints, closed room or
- * not (a room missing a wall, an L-shaped room whose centre falls outside, or a redrawn enclosure
- * all still hold the roof up); a cone's, its round wall. Null for a roof with no segments yet.
+ * The walls among `wallIds` a roof stands on: those under its segments' footprints and its faces'
+ * outlines (`capabilities.roofs`), closed room or not (a room missing a wall, an L-shaped room whose
+ * centre falls outside, or a redrawn enclosure all still hold the roof up); a cone's, its round
+ * wall. Null for a roof with neither segments nor faces yet.
  */
 function wallsUnderRoof(
   roof: RoofNode,
@@ -33,7 +53,8 @@ function wallsUnderRoof(
   const segments = roof.children
     .map((id) => nodes[id])
     .filter((node): node is RoofSegmentNode => node?.type === 'roof-segment')
-  if (segments.length === 0) return null
+  const faces = roofFaceShapes(roof, nodes).map((face) => face.outline)
+  if (segments.length === 0 && faces.length === 0) return null
   const cos = Math.cos(roof.rotation)
   const sin = Math.sin(roof.rotation)
   const toLevel = (x: number, z: number): [number, number] => [
@@ -72,6 +93,7 @@ function wallsUnderRoof(
       toLevel(segment.position[0] + x * c + z * s, segment.position[2] - x * s + z * c),
     )
   })
+  footprints.push(...faces)
   return wallIds.filter((id) => {
     const wall = nodes[id]
     return (
@@ -81,7 +103,10 @@ function wallsUnderRoof(
   })
 }
 
-/** The tallest of these walls' tops, from `targetLevelId`'s floor; undefined for none. */
+/**
+ * The tallest of these walls' tops, from `targetLevelId`'s floor; undefined for none. A railing is a
+ * guard round a deck or a porch, not a wall: no roof stands on its top.
+ */
 function highestWallTop(
   targetLevelId: string,
   wallIds: readonly string[],
@@ -91,7 +116,7 @@ function highestWallTop(
   let highest: number | undefined
   for (const id of wallIds) {
     const wall = nodes[id]
-    if (wall?.type !== 'wall') continue
+    if (wall?.type !== 'wall' || isRailingWall(wall)) continue
     const top = resolveRoofWallTopElevation(
       targetLevelId as LevelNode['id'],
       wall,
@@ -143,7 +168,7 @@ export function resolveRoofElevation(
 
 /**
  * The tallest top of `levelId`'s walls a roof stands on, from the floor of the level holding the
- * roof (m); null when it stands on none of them, or has no segments to stand with.
+ * roof (m); null when it stands on none of them, or has neither segments nor faces to stand with.
  */
 export function roofWallTop(
   roof: RoofNode,
@@ -157,4 +182,95 @@ export function roofWallTop(
   return (
     highestWallTop(resolveLevelId(roof, nodes), wallIds, nodes, getLevelElevations(nodes)) ?? null
   )
+}
+
+const ROOF_ELEVATION_EPSILON = 1e-4
+
+/**
+ * Nodes whose change can move a wall-supported roof: the roof, what it is made of (its segments and
+ * its faces, `capabilities.roofs`, whose footprints find its walls) and what it stands on. The one
+ * test the live sync and `reconcileDocument` both go by.
+ */
+export function isRoofElevationInput(node: AnyNode | undefined): boolean {
+  return (
+    node?.type === 'roof' ||
+    node?.type === 'roof-segment' ||
+    roofFaceOf(node) !== undefined ||
+    node?.type === 'wall' ||
+    node?.type === 'slab' ||
+    node?.type === 'level' ||
+    node?.type === 'building' ||
+    node?.type === 'site'
+  )
+}
+
+/** Wall-supported roofs whose stored Y no longer sits on their walls, and where it should. */
+export function planRoofElevationUpdates(
+  nodes: Readonly<Record<string, AnyNode>>,
+  only?: ReadonlySet<string> | null,
+): Array<{ id: AnyNodeId; data: Partial<AnyNode> }> {
+  const updates: Array<{ id: AnyNodeId; data: Partial<AnyNode> }> = []
+  for (const node of queryNodes<RoofNode>(nodes, { type: 'roof' })) {
+    if (node.support?.kind !== 'walls' || (only && !only.has(node.id))) continue
+    const elevation = resolveRoofElevation(node, nodes)
+    if (Math.abs(node.position[1] - elevation) <= ROOF_ELEVATION_EPSILON) continue
+    updates.push({
+      id: node.id,
+      data: { position: [node.position[0], elevation, node.position[2]] },
+    })
+  }
+  return updates
+}
+
+/**
+ * The roofs an edit can move, from the nodes it changed. A roof rests on the walls of its own level
+ * or the level below, so: a changed roof (or segment, or face); for a changed wall, the roofs on
+ * its level and the level above; for a changed slab, the levels whose walls it touches (its own,
+ * which it carries, and the one below, whose plane-bound tops it caps) and every level above it in
+ * its building (a base plate lifts them). Null, for every roof, when a level, building or site
+ * changed.
+ */
+export function roofsAffectedBy(
+  before: Readonly<Record<string, AnyNode>>,
+  after: Readonly<Record<string, AnyNode>>,
+  changedIds: Iterable<string>,
+): Set<string> | null {
+  const roofs = new Set<string>()
+  const levels = new Set<string>()
+  for (const id of changedIds)
+    for (const nodes of [before, after] as const) {
+      const node = nodes[id]
+      if (!node) continue
+      if (node.type === 'level' || node.type === 'building' || node.type === 'site') return null
+      if (node.type === 'roof') roofs.add(id)
+      else if (
+        node.parentId &&
+        (node.type === 'roof-segment' ||
+          (roofFaceOf(node) && nodes[node.parentId]?.type === 'roof'))
+      )
+        roofs.add(node.parentId)
+      else if (node.type === 'wall' || node.type === 'slab') {
+        const levelId = findLevelAncestorId(id as AnyNodeId, nodes as Record<string, AnyNode>)
+        if (!levelId) return null
+        const elevations = getLevelElevations(nodes as Record<string, AnyNode>)
+        levels.add(levelId)
+        if (node.type === 'wall') {
+          const above = findLevelAboveId(levelId, elevations)
+          if (above) levels.add(above)
+          continue
+        }
+        const below = findLevelBelowId(levelId, elevations)
+        if (below) levels.add(below)
+        const own = elevations.get(levelId)
+        for (const [otherId, other] of elevations)
+          if (own && other.buildingId === own.buildingId && other.ordinal > own.ordinal)
+            levels.add(otherId)
+      }
+    }
+  if (levels.size)
+    for (const roof of queryNodes<RoofNode>(after as Record<string, AnyNode>, { type: 'roof' })) {
+      const levelId = findLevelAncestorId(roof.id, after as Record<string, AnyNode>)
+      if (levelId && levels.has(levelId)) roofs.add(roof.id)
+    }
+  return roofs
 }

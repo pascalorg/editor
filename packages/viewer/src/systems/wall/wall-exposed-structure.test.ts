@@ -62,13 +62,12 @@ describe('the exterior face of a wall with no cladding over a bare core', () => 
   })
 
   test('it follows the exterior side of the wall, whichever face that is', () => {
-    const turned = wall({
-      assembly: FOUNDATION_CONSTRUCTIONS.cmu.assembly,
-      frontSide: 'interior',
-      backSide: 'exterior',
-    })
-    expect(faceB(turned)).not.toBe(faceB(wall()))
-    expect(faceA(turned)).toBe(faceA(wall()))
+    const sides = { frontSide: 'interior', backSide: 'exterior' }
+    const turned = wall({ assembly: FOUNDATION_CONSTRUCTIONS.cmu.assembly, ...sides })
+    // A face's default follows its side too, so the plain wall is turned the same way.
+    const plain = wall(sides)
+    expect(faceB(turned)).not.toBe(faceB(plain))
+    expect(faceA(turned)).toBe(faceA(plain))
   })
 
   test('paint on the face still wins, on the exposed face and on the other', () => {
@@ -100,13 +99,10 @@ describe('the exterior face of a wall with no cladding over a bare core', () => 
   })
 
   test('a wall whose exterior side is not resolved, and a wall with no assembly, keep the default', () => {
-    const unresolved = wall({
-      assembly: FOUNDATION_CONSTRUCTIONS.cmu.assembly,
-      frontSide: 'unknown',
-      backSide: 'unknown',
-    })
-    expect(faceA(unresolved)).toBe(faceA(wall()))
-    expect(faceB(unresolved)).toBe(faceB(wall()))
+    const sides = { frontSide: 'unknown', backSide: 'unknown' }
+    const unresolved = wall({ assembly: FOUNDATION_CONSTRUCTIONS.cmu.assembly, ...sides })
+    expect(faceA(unresolved)).toBe(faceA(wall(sides)))
+    expect(faceB(unresolved)).toBe(faceB(wall(sides)))
   })
 
   test('the face is made once for every wall, and is a flat colour in solid shading', () => {

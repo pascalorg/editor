@@ -3,6 +3,7 @@ import {
   type AnyNode,
   type AnyNodeId,
   BuildingNode,
+  createI18n,
   createZone,
   floorFootprintSupportClass,
   generateId,
@@ -10,6 +11,7 @@ import {
   getLevelElevations,
   initSpaceDetectionSync,
   LevelNode,
+  levelFootprints,
   type SlabNode,
   upperFloorHeightControl,
   useScene,
@@ -29,12 +31,13 @@ import {
   footprintHeightMinimum,
   footprintHeightPatch,
   footprintHeightValue,
-  levelFootprints,
   presetPatch,
   setFootprintHeight,
   thickFloorAdvice,
 } from './floor-footprints'
 import { applyRoomPlan } from './room-structure-commands'
+
+const english = createI18n()
 
 const GROUND = 'level_support_ground'
 const UPPER = 'level_support_upper'
@@ -98,8 +101,10 @@ describe('Floor & foundation support class (point 5)', () => {
   })
 
   test('the kicker says where the plate is and what it rests on', () => {
-    expect(floorPlateKicker(nodes(), plateOf(GROUND, 'Living'))).toBe('Floor plate · Ground floor')
-    expect(floorPlateKicker(nodes(), plateOf(UPPER, 'Bedroom'))).toBe(
+    expect(floorPlateKicker(nodes(), plateOf(GROUND, 'Living'), english, 'en')).toBe(
+      'Floor plate · Ground floor',
+    )
+    expect(floorPlateKicker(nodes(), plateOf(UPPER, 'Bedroom'), english, 'en')).toBe(
       'Floor plate · Floor 1 · rests on Ground floor',
     )
   })
@@ -164,7 +169,6 @@ describe('Upper-floor height drag release (round-final item 6)', () => {
     test(`a drag of ${delta} m lands on release`, () => {
       const bedroom = plateOf(UPPER, 'Bedroom')
       const start = footprintHeightValue(nodes(), bedroom)
-      const past = useScene.temporal.getState().pastStates.length
       const preview = beginFootprintHeightPreview(bedroom.id)
       expect(preview.preview(start + delta / 2)).toBeNull()
       expect(preview.preview(start + delta)).toBeNull()
@@ -172,7 +176,13 @@ describe('Upper-floor height drag release (round-final item 6)', () => {
       const after = nodes()[bedroom.id] as SlabNode
       expect(after.thickness).toBeCloseTo(bedroom.thickness + delta, 6)
       expect(footprintHeightValue(nodes(), after)).toBeCloseTo(start + delta, 6)
-      expect(useScene.temporal.getState().pastStates.length).toBe(past + 1)
+      useScene.temporal.getState().undo()
+      expect(footprintHeightValue(nodes(), nodes()[bedroom.id] as SlabNode)).toBeCloseTo(start, 6)
+      useScene.temporal.getState().redo()
+      expect(footprintHeightValue(nodes(), nodes()[bedroom.id] as SlabNode)).toBeCloseTo(
+        start + delta,
+        6,
+      )
     })
   }
 })
@@ -183,7 +193,6 @@ describe('Floor & foundation panel (point 5)', () => {
     expect(ground).toMatchObject({ upper: false, preset: 'ground', underFloor: true, minHeight: 0 })
     const upper = floorFoundationModel(nodes(), plateOf(UPPER, 'Bedroom'))
     expect(upper).toMatchObject({ upper: true, underFloor: false, thickFloor: false })
-    expect(upper.kicker).toBe('Floor plate · Floor 1 · rests on Ground floor')
   })
 
   test('on the ground the two inputs are slab thickness and foundation height; the top follows', () => {

@@ -1,7 +1,7 @@
 // @ts-expect-error — bun:test is provided by the Bun runtime; viewer does not
 // include Bun ambient types in its production declaration build.
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import useViewer, { anyGroundVeiled, groundVeiled, siteGroundShown } from './use-viewer'
+import useViewer, { groundVeiled, siteGroundShown } from './use-viewer'
 
 const resetMeasurementPreferences = () => {
   useViewer.setState({
@@ -37,6 +37,23 @@ describe('measurement display preferences', () => {
 
     useViewer.getState().setProjectId('project-a')
     expect(useViewer.getState().showMeasurements).toBe(false)
+  })
+
+  // Framing only hides the shell; carried into another project, that house opened invisible.
+  test('another project opens with the whole house, not framing only', () => {
+    useViewer.getState().setProjectId('project-a')
+    useViewer.getState().setFramingOnly(true)
+    useViewer.getState().setProjectId('project-b')
+    expect(useViewer.getState().framingOnly).toBe(false)
+  })
+
+  // The frame in the finished house opens its floors and roofs: the view's, not the project's.
+  test('another project opens with its floors and roofs closed, the frame not shown', () => {
+    useViewer.getState().setProjectId('project-a')
+    useViewer.getState().setFramingShown(true)
+    expect(useViewer.getState().framingShown).toBe(true)
+    useViewer.getState().setProjectId('project-b')
+    expect(useViewer.getState().framingShown).toBe(false)
   })
 
   test('changes display units without changing measurement visibility preferences', () => {
@@ -163,12 +180,6 @@ describe('the ground over a level below grade', () => {
 
   test('is solid in the walkthrough, whatever level the overview had shown', () => {
     expect(groundVeiled({ ...below, walkthroughMode: true })).toBe(false)
-    expect(anyGroundVeiled({ ...below, groundWindowVeiled: true, walkthroughMode: true })).toBe(
-      false,
-    )
-    expect(anyGroundVeiled({ ...below, groundWindowVeiled: true, walkthroughMode: false })).toBe(
-      true,
-    )
   })
 })
 
@@ -209,10 +220,11 @@ describe('project rendering defaults', () => {
     expect(useViewer.getState().lookDefaults).toMatchObject({ theme: 'paper', edges: 'strong' })
     expect(useViewer.getState().projectPreferences['look-a']?.look).toBeUndefined()
     store.setProjectId('look-b')
+    // Edges are on or off (a saved 'strong' reads as on); Solid is retired into the quality tiers.
     expect(useViewer.getState()).toMatchObject({
       sceneTheme: 'paper',
-      edges: 'strong',
-      shading: 'solid',
+      edges: 'soft',
+      shading: 'rendered',
     })
   })
 
@@ -236,7 +248,8 @@ describe('project rendering defaults', () => {
     expect(useViewer.getState()).toMatchObject({
       sceneTheme: 'night',
       edges: 'soft',
-      shading: 'solid',
+      shading: 'rendered',
+      renderQuality: 'low',
     })
     store.resetProjectLook()
     expect(useViewer.getState()).toMatchObject({
@@ -269,9 +282,10 @@ describe('project rendering defaults', () => {
     store.setShading('solid')
     expect(useViewer.getState()).toMatchObject({
       sceneTheme: 'night',
-      edges: 'strong',
+      edges: 'soft',
       shadows: false,
-      shading: 'solid',
+      shading: 'rendered',
+      renderQuality: 'low',
     })
     store.resetProjectLook()
     expect(useViewer.getState()).toMatchObject({
@@ -301,4 +315,61 @@ describe('the site ground with showGround off', () => {
       expect(siteGroundShown({ showGround }, { belowGrade: true })).toBe(true)
     }
   })
+})
+
+describe('render quality', () => {
+  const original = useViewer.getState()
+  afterEach(() => useViewer.setState(original, true))
+
+  test('auto follows the detected tier; a pick holds until auto is chosen again', () => {
+    const store = useViewer.getState()
+    store.setRenderQuality('auto')
+    store.setDetectedRenderQuality('low')
+    expect(useViewer.getState().renderQuality).toBe('low')
+    store.setRenderQuality('high')
+    store.setDetectedRenderQuality('medium')
+    expect(useViewer.getState()).toMatchObject({
+      renderQuality: 'high',
+      renderQualityChoice: 'high',
+    })
+    store.setRenderQuality('auto')
+    expect(useViewer.getState().renderQuality).toBe('medium')
+  })
+})
+
+test('denied preference storage does not block hydration or presentation changes', async () => {
+  const savedWindow = Object.getOwnPropertyDescriptor(globalThis, 'window')
+  try {
+    for (const storage of [
+      {
+        get localStorage(): Storage {
+          throw new DOMException('Denied', 'SecurityError')
+        },
+      },
+      {
+        localStorage: {
+          getItem() {
+            throw new DOMException('Denied', 'SecurityError')
+          },
+          setItem() {
+            throw new DOMException('Full', 'QuotaExceededError')
+          },
+          removeItem() {
+            throw new DOMException('Denied', 'SecurityError')
+          },
+        },
+      },
+    ]) {
+      Object.defineProperty(globalThis, 'window', { configurable: true, value: storage })
+      await useViewer.persist.rehydrate()
+      useViewer.getState().setShowMeasurements(false)
+      expect(useViewer.getState().showMeasurements).toBe(false)
+      useViewer.getState().setShowMeasurements(true)
+      expect(useViewer.getState().showMeasurements).toBe(true)
+      expect(() => useViewer.persist.clearStorage()).not.toThrow()
+    }
+  } finally {
+    if (savedWindow) Object.defineProperty(globalThis, 'window', savedWindow)
+    else Reflect.deleteProperty(globalThis, 'window')
+  }
 })

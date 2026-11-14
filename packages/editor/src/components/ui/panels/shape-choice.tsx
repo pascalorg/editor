@@ -1,13 +1,14 @@
 'use client'
 
+import { usePascalI18n } from '@pascal-app/core'
 import { Pentagon, Square } from 'lucide-react'
 import { cn } from '../../../lib/utils'
 
 export type OutlineShape = 'rectangle' | 'polygon'
 
 const SHAPES = [
-  { id: 'rectangle', label: 'Rectangle', Icon: Square },
-  { id: 'polygon', label: 'Polygon', Icon: Pentagon },
+  { id: 'rectangle', label: /* i18n */ { id: 'editor.panels.shapeChoice.rectangle', message: 'Rectangle' }, Icon: Square },
+  { id: 'polygon', label: /* i18n */ { id: 'editor.panels.shapeChoice.polygon', message: 'Polygon' }, Icon: Pentagon },
 ] as const
 
 const pill =
@@ -32,13 +33,14 @@ export function ShapeChoice({
   /** `data-shape-choice` hook for tests and proofs. */
   data?: string
 }) {
+  const i18n = usePascalI18n()
   return (
     <div
-      className={cn('flex min-h-7 items-center justify-between gap-2', className)}
+      className={cn('flex min-h-7 flex-wrap items-center justify-between gap-2', className)}
       data-shape-choice={data}
     >
       <span className="whitespace-nowrap">{label}</span>
-      <div className="flex items-center gap-1.5">
+      <div className="flex flex-wrap items-center gap-1.5">
         {SHAPES.map(({ id, label: shapeLabel, Icon }) => (
           <button
             className={pill}
@@ -49,7 +51,7 @@ export function ShapeChoice({
             type="button"
           >
             <Icon aria-hidden className="h-3 w-3" />
-            {shapeLabel}
+            {i18n._(shapeLabel)}
           </button>
         ))}
       </div>

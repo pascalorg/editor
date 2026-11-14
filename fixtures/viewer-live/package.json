@@ -1,0 +1,28 @@
+{
+  "name": "pascal-viewer-live-fixture",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1",
+    "build": "vite build",
+    "preview": "vite preview --host 127.0.0.1"
+  },
+  "dependencies": {
+    "@pascal-app/core": "^1.0.7",
+    "@pascal-app/viewer": "^1.0.7",
+    "@pascal-app/nodes": "^1.0.7",
+    "@react-three/drei": "^10",
+    "@react-three/fiber": "^9",
+    "react": "^19",
+    "react-dom": "^19",
+    "three": "^0.187",
+    "lucide-react": "^1",
+    "zustand": "^5"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.3.4",
+    "tailwindcss": "^4.3.4",
+    "vite": "^7.3.1"
+  }
+}

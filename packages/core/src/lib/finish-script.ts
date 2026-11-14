@@ -12,6 +12,7 @@ import {
   floorScriptInputs,
   floorScriptInputsKey,
   floorScriptRecord,
+  slabSurfaceScriptInputs,
 } from './floor-script'
 import {
   type WallFaceScriptInputs,
@@ -23,8 +24,8 @@ import {
 type SceneNodes = Readonly<Record<string, AnyNode>>
 
 /**
- * A finish a script builds for its host: a room's floor (`nodeId` a zone) or one face of a wall
- * (`nodeId` a wall, with `face`).
+ * A finish a script builds for its host: a room's floor (`nodeId` a zone), a standalone slab's
+ * surface (`nodeId` a slab) or one face of a wall (`nodeId` a wall, with `face`).
  */
 export type FinishScriptTarget = { nodeId: string; face?: WallFace }
 export type FinishScriptInputs = FloorScriptInputs | WallFaceScriptInputs
@@ -33,6 +34,8 @@ type FinishScript = ZoneFloorScript | WallFaceScript
 function finishScriptsOf(node: AnyNode): (FinishScriptTarget & { script: FinishScript })[] {
   if (node.type === 'zone')
     return node.floor?.script ? [{ nodeId: node.id, script: node.floor.script }] : []
+  if (node.type === 'slab')
+    return node.surfaceScript ? [{ nodeId: node.id, script: node.surfaceScript }] : []
   if (node.type !== 'wall') return []
   return (['a', 'b'] as const).flatMap((face) => {
     const script = node.finishScripts?.[face]
@@ -50,7 +53,10 @@ function currentInputs(
     const inputs = wallFaceScriptInputs(nodes, nodeId, face, (script as WallFaceScript).toHeight)
     return inputs && { inputs, key: wallFaceScriptInputsKey(inputs) }
   }
-  const inputs = floorScriptInputs(nodes, nodeId)
+  const inputs =
+    nodes[nodeId]?.type === 'slab'
+      ? slabSurfaceScriptInputs(nodes, nodeId)
+      : floorScriptInputs(nodes, nodeId)
   return inputs && { inputs, key: floorScriptInputsKey(inputs) }
 }
 
@@ -62,9 +68,9 @@ export type StaleFinishScript = FinishScriptTarget & {
 
 /**
  * The finish scripts whose floor or face is no longer the one they were built for: the structure
- * reconcile re-derived a room (a wall moved, an edge pushed, a floor raised), or a wall changed
- * length, height or openings, so the key differs. A host with nothing to build on now (a room with
- * no floor, a wall turned curved) keeps its script as it was.
+ * reconcile re-derived a room (a wall moved, an edge pushed, a floor raised), a slab was reshaped
+ * or holed, or a wall changed length, height or openings, so the key differs. A host with nothing
+ * to build on now (a room with no floor, a wall turned curved) keeps its script as it was.
  */
 export function staleFinishScripts(nodes: SceneNodes): StaleFinishScript[] {
   return Object.values(nodes).flatMap((node) =>
@@ -146,6 +152,8 @@ export function finishScriptWrites(
     if (!held || currentInputs(nodes, target, held.script)?.key !== script.inputs) continue
     if (node.type === 'zone') {
       writes.set(node.id, { floor: { ...node.floor, script: script as ZoneFloorScript } })
+    } else if (node.type === 'slab') {
+      writes.set(node.id, { surfaceScript: script as ZoneFloorScript })
     } else if (node.type === 'wall' && target.face) {
       const earlier = writes.get(node.id) as Pick<WallNode, 'finishScripts'> | undefined
       writes.set(node.id, {

@@ -2,7 +2,7 @@
 
 Public, open-source home of `@pascal-app/{core,viewer,editor,nodes,mcp,cli,ifc-converter}` and the standalone editor app. Consumed as npm packages and, in `pascalorg/private-editor`, as a git submodule.
 
-**Read `DECISIONS.md` first**: what Pascal is, the architecture invariants (E-IDs), the testing rule (T-001), and what is explicitly delegated to you. Everything else here is a map.
+Use this map to find the owner of a change, then consult the relevant invariants in `DECISIONS.md` and the linked subsystem docs. Implementation choices are delegated to you.
 
 ## Packages
 
@@ -29,7 +29,7 @@ Public, open-source home of `@pascal-app/{core,viewer,editor,nodes,mcp,cli,ifc-c
 
 ## Commands
 
-`bun run ci` is exactly what CI runs (check, skills:validate, check-types, test, build). The git hooks (installed by `bun install`) are fast feedback: Biome on staged files, typecheck of the packages you changed.
+Use the Bun version in `package.json`. Run focused checks for the changed behavior; `bun run ci` runs the full suite when needed. Localization guidance lives in `i18n/README.md`. Git hooks provide staged-file checks and typechecks for changed packages.
 
 ## Working agreements
 
@@ -37,3 +37,4 @@ Public, open-source home of `@pascal-app/{core,viewer,editor,nodes,mcp,cli,ifc-c
 - No compatibility shims, dead code or speculative abstractions; comments only for a non-obvious *why*.
 - Old scenes must still load after your change (E-003).
 - Never cite private-repo plan paths from this repo (E-015).
+- Complete authorized work; honor review-only requests. Merge on green required CI and actual GitHub reviews, resolving P0/P1 findings. No fleet approval is needed. Reuse authorization; obtain it for secrets, spend, new access, sign-ins, destructive or access-widening data, and messages under a person's name. Preserve checks and branch protection.

@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import { type AnyNode, LevelNode, WallNode, WindowNode } from '../schema'
 import { MERGE_GAP_M, windowMergeOffer } from './merge-windows'
+import { planWallOpening } from './wall-openings'
 
 // The Merge windows button: offered when exactly two windows are selected, disabled with the
 // reason when they cannot join, and silent for any other selection.
@@ -52,5 +53,25 @@ describe('windowMergeOffer', () => {
 
     expect(refusal?.code).toBe('windows_not_adjacent')
     expect(refusal?.details).toMatchObject({ limit: MERGE_GAP_M })
+  })
+})
+
+test('merging newly placed windows keeps their casing and frame width', () => {
+  const scene = nodes()
+  const first = planWallOpening(scene, { kind: 'window', wallId: 'wall_m', t: 0.2, width: 1 }).node
+  const second = planWallOpening(scene, {
+    kind: 'window',
+    wallId: 'wall_m',
+    t: 0.35,
+    width: 1,
+  }).node
+  const placed = { ...scene, [first.id]: first, [second.id]: second }
+  const offer = windowMergeOffer(placed, [first.id, second.id])!
+  expect(offer.refusal).toBeNull()
+  const patch = offer.merge!.changes.update.find((change) => change.id === first.id)!.data
+  expect({ ...first, ...patch }).toMatchObject({
+    casingFaceA: true,
+    casingFaceB: true,
+    frameThickness: 0.02,
   })
 })

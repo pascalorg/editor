@@ -15,6 +15,7 @@ import {
   parseMaterialRef,
   plannedWallIds,
   planWallPaint,
+  type RailingWallSlotId,
   resolveWallFaceChain,
   resolveWallFinish,
   type SceneMaterialId,
@@ -55,6 +56,7 @@ import {
   resolveSlotPaintMaterialRef,
 } from '../shared/slot-paint'
 import { swapPreviewMaterial } from '../shared/swap-preview-material'
+import { RAILING_WALL_SLOTS } from './railing-wall-materials'
 
 // Roles (see `parseWallPaintRole` in core): face / trim slots write
 // `node.slots`, `region:<id>` a paint region, `room:<zoneId>/<face>` this face
@@ -63,7 +65,7 @@ import { swapPreviewMaterial } from '../shared/swap-preview-material'
 // shows there: a region, else the room's finish on that face, else the face slot.
 
 type ResolvedWallPaintRole =
-  | { kind: 'slot'; slotId: WallSurfaceSlotId | CurtainWallRole }
+  | { kind: 'slot'; slotId: WallSurfaceSlotId | CurtainWallRole | RailingWallSlotId }
   | Exclude<CoreWallPaintRole, { kind: 'slot' }>
 
 const WALL_SLOT_IDS = new Set<string>(Object.keys(WALL_SURFACE_SLOT_DEFAULTS))
@@ -72,6 +74,9 @@ const CURTAIN_WALL_ROLES = ['curtain-frame', 'curtain-glass', 'curtain-solid'] a
 type CurtainWallRole = (typeof CURTAIN_WALL_ROLES)[number]
 const isCurtainWallRole = (role: string): role is CurtainWallRole =>
   (CURTAIN_WALL_ROLES as readonly string[]).includes(role)
+// A railing paints its posts and rails, and its infill (palette 0..1).
+const isRailingWallRole = (role: string): role is RailingWallSlotId =>
+  (RAILING_WALL_SLOTS as readonly string[]).includes(role)
 
 const FACE_MATERIAL_INDEX: Record<WallFace, number> = { a: 1, b: 2 }
 
@@ -80,7 +85,7 @@ export { wallRegionRole, wallRoomFaceRole, wallRoomFinishRole }
 export function parseWallPaintRole(role: string): ResolvedWallPaintRole | null {
   return parseCoreWallPaintRole(
     role,
-    (slotId) => WALL_SLOT_IDS.has(slotId) || isCurtainWallRole(slotId),
+    (slotId) => WALL_SLOT_IDS.has(slotId) || isCurtainWallRole(slotId) || isRailingWallRole(slotId),
   ) as ResolvedWallPaintRole | null
 }
 
@@ -126,12 +131,13 @@ export function resolveWallRole(args: {
   nodes?: Readonly<Record<string, AnyNode | undefined>>
 }): string | null {
   const { node, hitObject, localPosition, ray } = args
-  if (node.wallType === 'curtain') {
+  if (node.wallType === 'curtain' || node.wallType === 'railing') {
     const root = sceneRegistry.nodes.get(node.id)
     if (!(root && ray && hasMaterialsForGroups(root))) return null
     wallSlotRaycaster.ray.copy(ray)
     const hit = wallSlotRaycaster.intersectObject(root, false)[0]
-    return CURTAIN_WALL_ROLES[hit?.face?.materialIndex ?? -1] ?? null
+    const roles = node.wallType === 'curtain' ? CURTAIN_WALL_ROLES : RAILING_WALL_SLOTS
+    return roles[hit?.face?.materialIndex ?? -1] ?? null
   }
   const directSlotId = hitObject?.userData?.slotId
   if (typeof directSlotId === 'string' && WALL_SLOT_IDS.has(directSlotId)) {
@@ -205,10 +211,12 @@ function refToEffective(ref: string | undefined) {
 /**
  * The wall mesh's palette entry a non-face slot draws with, when it is part of
  * the wall body rather than its own mesh: a curtain wall's frame / glass /
- * solid panels (0..2), or the underpinning's stemwall (a finish ref, 3..).
+ * solid panels (0..2), a railing's frame / infill (0..1), or the underpinning's
+ * stemwall (a finish ref, 3..).
  */
 function wallPaletteSlotIndex(wall: WallNode, slotId: string, mesh: Mesh): number | null {
   if (isCurtainWallRole(slotId)) return CURTAIN_WALL_ROLES.indexOf(slotId)
+  if (isRailingWallRole(slotId)) return RAILING_WALL_SLOTS.indexOf(slotId)
   if (slotId !== 'foundation' || !wall.underpinning) return null
   const ref = wall.slots?.foundation ?? WALL_SURFACE_SLOT_DEFAULTS.foundation
   const at = getWallFinishRefs(mesh.geometry).indexOf(ref)

@@ -3,6 +3,7 @@ import { FenceNode } from '../schema'
 import { type LevelTargetInput, targetLevel } from './level-target'
 import { finishSurface, requireMaterialRef } from './material-refs'
 import { refuseRoofLevel } from './roof-writes'
+import { queryNodes } from './scene-queries'
 import type { AgentOperation } from './types'
 
 type Pt = [number, number]
@@ -42,7 +43,7 @@ export const addFence: AgentOperation<AddFenceInput> = (nodes, input, context) =
       `The side from [${short[0]}] to [${short[1]}] is shorter than ${FENCE_MIN_SIDE * 100} cm: drop the repeated point.`,
       { start: short[0], end: short[1] },
     )
-  const first = Object.values(nodes).filter((node) => node.type === 'fence').length
+  const first = queryNodes(nodes, { type: 'fence' }).length
   const fences = sides.map(([start, end], i) =>
     FenceNode.parse({
       name: `Fence ${first + i + 1}`,

@@ -2,6 +2,9 @@ import type { DoorNode, DoorSegment } from '../schema'
 import { type DoorType, defaultDoorSegments } from '../schema/nodes/opening-types'
 import { type DoorStyle, doorStyleLook, doorStylesOf } from './opening-style-presets'
 
+// The schema keeps 0.05 m for saved doors that omit the field (E-003).
+export const NEW_DOOR_FRAME_THICKNESS = 0.02
+
 /** A door type's own size: the door panel's Type row sets it, and add_door takes it when none is given. */
 export const DOOR_TYPE_SIZES: Record<DoorType, { width: number; height: number }> = {
   hinged: { width: 0.9, height: 2.1 },

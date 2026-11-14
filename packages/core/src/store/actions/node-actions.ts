@@ -1,6 +1,8 @@
 import { planWallDeletion } from '../../commands/structure/plan-wall-deletion'
 import type { StructurePlan } from '../../commands/structure/shared'
+import { getWallEffectiveHeightForNodes } from '../../hooks/spatial-grid/spatial-grid-manager'
 import { withoutFloorStepOverrideKeys } from '../../lib/floor-step-finish'
+import { wouldCreateHierarchyCycle } from '../../lib/hierarchy'
 import { isSpaceDetectionPaused } from '../../lib/space-detection'
 import { deletedSurfaceSupportPatch } from '../../lib/surface-support-references'
 import { nodeRegistry } from '../../registry/registry'
@@ -38,6 +40,7 @@ import {
   areWallsCollinearAcrossPoint,
   buildMergedWallAttachmentUpdates,
   getWallEndpointAtPoint,
+  mergedWallTop,
   mergeWallFaceRegions,
   planMergedZoneReferences,
   resolveMergedWallEndpoints,
@@ -59,6 +62,7 @@ import {
   noteDerivedNodeWrites,
   runWithSceneCommitNodeIds,
 } from '../history-control'
+import { currentSceneEnvironment } from '../scene-environment'
 import type { SceneState } from '../use-scene'
 
 type AnyContainerNode = AnyNode & { children: string[] }
@@ -95,6 +99,7 @@ type WallMergePlan = {
   mergedStart: [number, number]
   mergedEnd: [number, number]
   mergedChildren: WallNode['children']
+  mergedTop: Pick<WallNode, 'height' | 'endHeightOffset'>
   mergedFaceRegions: WallNode['faceRegions']
   attachmentUpdates: WallAttachmentUpdate[]
   zoneUpdates: Array<{ id: AnyNodeId; data: Partial<AnyNode> }>
@@ -680,7 +685,7 @@ function parseUpdatedNode(currentNode: AnyNode, data: Partial<AnyNode>): AnyNode
   return mergeNodeUpdate(currentNode, sanitized.value as Partial<AnyNode>)
 }
 
-function shouldRefreshDefaultRidgeVents(data: Partial<AnyNode>) {
+export function shouldRefreshDefaultRidgeVents(data: Partial<AnyNode>) {
   return Object.keys(data).some((key) => DEFAULT_RIDGE_VENT_REFRESH_FIELDS.has(key))
 }
 
@@ -718,7 +723,7 @@ function refreshDefaultRidgeVentsForSegment(
   return nextVents.map((vent) => vent.id as AnyNodeId)
 }
 
-function shouldRefreshDefaultGutters(data: Partial<AnyNode>) {
+export function shouldRefreshDefaultGutters(data: Partial<AnyNode>) {
   return Object.keys(data).some((key) => DEFAULT_GUTTER_REFRESH_FIELDS.has(key))
 }
 
@@ -1090,13 +1095,19 @@ function refreshDefaultGuttersForRoofIds(
   }
 }
 
-// Track pending RAF for updateNodesAction to prevent multiple queued callbacks
-let pendingRafId: number | null = null
-let pendingUpdates: Set<AnyNodeId> = new Set()
+// One frame's pending dirty marks per scene environment, so a detached scene's update never
+// cancels (or receives) the editor's.
+type PendingDirtyMarks = { frame: number | null; ids: Set<AnyNodeId> }
+const PENDING_DIRTY_MARKS = Symbol('pending-dirty-marks')
+const pendingDirtyMarks = () =>
+  currentSceneEnvironment().slot<PendingDirtyMarks>(PENDING_DIRTY_MARKS, () => ({
+    frame: null,
+    ids: new Set(),
+  }))
 
-/** Authored updates whose deferred dirty intent has not reached render systems yet. */
+/** The current environment's authored updates whose deferred dirty intent has not reached render systems yet. */
 export function getPendingNodeUpdateCount(): number {
-  return pendingUpdates.size
+  return pendingDirtyMarks().ids.size
 }
 
 function buildWallMergePlans(
@@ -1145,10 +1156,14 @@ function buildWallMergePlans(
       }
 
       const { start, end } = resolveMergedWallEndpoints(primary, secondary, junction)
-      // A heal that would repaint a room or overflow a side's regions leaves the walls split.
+      // A heal that would repaint a room, overflow a side's regions or kink a slope leaves the
+      // walls split.
+      const mergedTop = mergedWallTop(primary, secondary, junction, (wall, t) =>
+        getWallEffectiveHeightForNodes(wall, nodes, t),
+      )
       const mergedFaceRegions = mergeWallFaceRegions([primary, secondary], start, end)
       const zoneUpdates = planMergedZoneReferences(nodes, primary, secondary, start, end)
-      if (!(mergedFaceRegions && zoneUpdates)) continue
+      if (!(mergedTop && mergedFaceRegions && zoneUpdates)) continue
       const mergedChildren = Array.from(
         new Set([...(primary.children ?? []), ...(secondary.children ?? [])]),
       ) as WallNode['children']
@@ -1167,6 +1182,7 @@ function buildWallMergePlans(
         mergedStart: start,
         mergedEnd: end,
         mergedChildren,
+        mergedTop,
         mergedFaceRegions: mergedFaceRegions.length > 0 ? mergedFaceRegions : undefined,
         attachmentUpdates,
         zoneUpdates,
@@ -1205,6 +1221,11 @@ const createNodesActionImpl = (
         parseCreatedNode(node, effectiveParentId),
         collectionIds,
       )
+      if (wouldCreateHierarchyCycle(newNode.id, effectiveParentId, nextNodes)) {
+        throw new Error(
+          `invalid hierarchy: placing "${newNode.id}" under "${effectiveParentId}" would create a cycle`,
+        )
+      }
 
       nextNodes[newNode.id] = newNode
 
@@ -1365,6 +1386,12 @@ const applyNodeChangesActionImpl = (
       addLeanToHostRoofId(updatedNode, nextNodes, roofsToRefresh)
 
       if (data.parentId !== undefined && data.parentId !== currentNode.parentId) {
+        const newParentId = data.parentId as AnyNodeId | null
+        if (wouldCreateHierarchyCycle(id, newParentId, nextNodes)) {
+          throw new Error(
+            `invalid hierarchy: placing "${id}" under "${newParentId}" would create a cycle`,
+          )
+        }
         const oldParentId = currentNode.parentId as AnyNodeId | null
         if (oldParentId && nextNodes[oldParentId]) {
           const oldParent = nextNodes[oldParentId] as AnyContainerNode
@@ -1375,7 +1402,6 @@ const applyNodeChangesActionImpl = (
           parentsToMarkDirty.add(oldParent.id)
         }
 
-        const newParentId = data.parentId as AnyNodeId | null
         if (newParentId && nextNodes[newParentId]) {
           const newParent = nextNodes[newParentId] as AnyContainerNode
           nextNodes[newParent.id] = {
@@ -1406,6 +1432,11 @@ const applyNodeChangesActionImpl = (
         parseCreatedNode(node, effectiveParentId),
         collectionIds,
       )
+      if (wouldCreateHierarchyCycle(newNode.id, effectiveParentId, nextNodes)) {
+        throw new Error(
+          `invalid hierarchy: placing "${newNode.id}" under "${effectiveParentId}" would create a cycle`,
+        )
+      }
 
       nextNodes[newNode.id as AnyNodeId] = newNode
       nodesToMarkDirty.add(newNode.id as AnyNodeId)
@@ -1473,6 +1504,9 @@ const applyNodeChangesActionImpl = (
       removeFromCollections(nextCollections, id)
 
       delete nextNodes[id]
+      // A mark left on a deleted node would sit in the dirty set for good,
+      // as `deleteNodes` notes: a preview may have marked it before the drop.
+      nodesToClearDirty.add(id)
     }
 
     refreshDefaultGuttersForRoofIds(nextNodes, roofsToRefresh, nodesToMarkDirty, nodesToClearDirty)
@@ -1487,14 +1521,16 @@ const applyNodeChangesActionImpl = (
     return { nodes: nextNodes, rootNodeIds: resolvedRootIds, collections: nextCollections }
   })
 
+  // A store subscriber may already have deleted a node this write touched (the
+  // structure sync merging a room away): nothing is left to rebuild there.
   for (const id of nodesToMarkDirty) {
-    get().markDirty(id)
+    if (get().nodes[id]) get().markDirty(id)
   }
   for (const id of nodesToClearDirty) {
     get().clearDirty(id)
   }
   for (const id of parentsToMarkDirty) {
-    get().markDirty(id)
+    if (get().nodes[id]) get().markDirty(id)
     const parent = get().nodes[id]
     if (parent && 'children' in parent && Array.isArray(parent.children)) {
       for (const childId of parent.children) {
@@ -1554,6 +1590,12 @@ const updateNodesActionImpl = (
 
       // Handle Reparenting Logic
       if (data.parentId !== undefined && data.parentId !== currentNode.parentId) {
+        const newParentId = data.parentId as AnyNodeId | null
+        if (wouldCreateHierarchyCycle(id, newParentId, nextNodes)) {
+          throw new Error(
+            `invalid hierarchy: placing "${id}" under "${newParentId}" would create a cycle`,
+          )
+        }
         // 1. Remove from old parent
         const oldParentId = currentNode.parentId as AnyNodeId | null
         if (oldParentId && nextNodes[oldParentId]) {
@@ -1574,7 +1616,6 @@ const updateNodesActionImpl = (
         // and a spread of `undefined` here throws and aborts the entire
         // `set` callback. Initialising to `[]` matches what the schema's
         // default would have produced.
-        const newParentId = data.parentId as AnyNodeId | null
         if (newParentId && nextNodes[newParentId]) {
           const newParent = nextNodes[newParentId] as AnyContainerNode
           const newChildren = Array.isArray((newParent as { children?: unknown }).children)
@@ -1625,6 +1666,9 @@ const updateNodesActionImpl = (
     return
   }
   // Batch dirty-marking into a single RAF to avoid redundant callbacks during rapid updates
+  const environment = currentSceneEnvironment()
+  const pending = pendingDirtyMarks()
+  const pendingUpdates = pending.ids
   for (const u of updates) {
     // Visibility is applied by React before the deferred dirty callback. Mark
     // it now so render systems can release collective geometry in that same
@@ -1642,17 +1686,25 @@ const updateNodesActionImpl = (
     get().clearDirty(id)
   }
 
-  if (pendingRafId !== null) {
-    cancelAnimationFrame(pendingRafId)
-  }
-
-  pendingRafId = requestAnimationFrame(() => {
+  const flush = () => {
+    pending.frame = null
+    // A disposed scene's frame reaches nothing.
+    if (environment.disposed) return
     pendingUpdates.forEach((id) => {
-      get().markDirty(id)
+      // A node deleted since its update (a room merged away by the same drop)
+      // has nothing left to rebuild; marking it would leave it in the set.
+      if (get().nodes[id]) get().markDirty(id)
     })
     pendingUpdates.clear()
-    pendingRafId = null
-  })
+  }
+  if (typeof requestAnimationFrame === 'function') {
+    if (pending.frame !== null) cancelAnimationFrame(pending.frame)
+    pending.frame = requestAnimationFrame(flush)
+  } else if (pending.frame === null) {
+    // Headless (a worker, a server) there is no frame: the marks land after the current task.
+    pending.frame = -1
+    queueMicrotask(flush)
+  }
 }
 
 /** The scene record a node deletion reads and rewrites. */
@@ -1809,6 +1861,7 @@ export function planNodeDeletion(
     const { faceRegions: _regions, ...keptWall } = primaryWall
     nextNodes[plan.primaryWallId] = {
       ...keptWall,
+      ...plan.mergedTop,
       ...(plan.mergedFaceRegions ? { faceRegions: plan.mergedFaceRegions } : {}),
       start: plan.mergedStart,
       end: plan.mergedEnd,

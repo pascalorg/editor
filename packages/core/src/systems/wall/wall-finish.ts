@@ -3,8 +3,8 @@ import { sampleWallPointsForRoomDetection, WALL_JUNCTION_TOLERANCE } from '../..
 import type { AnyNode, AnyNodeId } from '../../schema'
 import {
   getEffectiveWallFaceMaterial,
+  getWallFaceDefault,
   WALL_FACE_REGION_LIMIT,
-  WALL_SLOT_DEFAULT,
   type WallFace,
   type WallFaceRegion,
   type WallNode,
@@ -325,7 +325,8 @@ export function wallFinishMaterialIndex(
 /**
  * The wall's own chain for one face, in the order the renderer walks it:
  * `slots[face]` ref → legacy inline finish (per-face, then wall-wide) → the
- * declared default. A dangling ref renders the declared default.
+ * face's default (`getWallFaceDefault`: the interior paint, or raw drywall on
+ * the exterior side). A dangling ref renders the face's default.
  */
 export type WallFaceChainFinish =
   | { kind: 'ref'; ref: string }
@@ -333,14 +334,119 @@ export type WallFaceChainFinish =
   | { kind: 'default'; ref: string }
 
 export function resolveWallFaceChain(
-  wall: Pick<WallNode, 'slots' | 'legacyFaceMaterials' | 'material' | 'materialPreset'>,
+  wall: Pick<WallNode, 'slots' | 'legacyFaceMaterials' | 'material' | 'materialPreset'> &
+    Partial<Pick<WallNode, 'frontSide' | 'backSide'>>,
   face: WallFace,
 ): WallFaceChainFinish {
   const ref = wall.slots?.[face]
   if (ref) return { kind: 'ref', ref }
   const spec = getEffectiveWallFaceMaterial(wall, face)
   if (spec.materialPreset || spec.material) return { kind: 'legacy', spec }
-  return { kind: 'default', ref: WALL_SLOT_DEFAULT[face] }
+  return { kind: 'default', ref: getWallFaceDefault(wall, face) }
+}
+
+export type WallFaceStretchSource = 'room_face_override' | 'room_wall_material' | 'wall_face'
+
+/** A stretch of one wall face that shows one finish. */
+export type WallFaceStretch = {
+  /** Metres from the wall's start, along its reference line. */
+  u0: number
+  u1: number
+  source: WallFaceStretchSource
+  /** The finish ref that shows; null when the wall's own finish is an inline spec naming no preset. */
+  ref: string | null
+  /** The room that gives the finish (a room source only). */
+  roomId?: string
+  roomName?: string
+  /** How the wall's own face reached `ref` (a `wall_face` source only): chosen, legacy or default. */
+  chain?: WallFaceChainFinish['kind']
+}
+
+/** A paint region on a face: it shows over the stretches it covers (`v` is metres above the face's base). */
+export type WallFacePaintRegion = {
+  id: string
+  ref: string
+  u0?: number
+  u1?: number
+  v0?: number
+  v1?: number
+}
+
+export type WallFaceFinishes = Record<
+  WallFace,
+  { stretches: WallFaceStretch[]; paintRegions: WallFacePaintRegion[] }
+>
+
+const toMillimetre = (value: number) => Math.round(value * 1000) / 1000
+
+/**
+ * What each face of a wall shows, for a reader that cannot render it: the resolution order above run
+ * along the face, with the room that gives each stretch. The renderer and the paint tool resolve a
+ * face through the same layout, so this agrees with both. Paint regions sit over the stretches and
+ * are listed apart; what is not modelled here: exterior assembly cladding, a ref that does not resolve.
+ */
+export function describeWallFaceFinishes(
+  wall: WallNode,
+  nodes: Readonly<Record<string, AnyNode | undefined>>,
+): WallFaceFinishes {
+  const layout = buildWallFinishLayout(wall, getWallLevelZones(wall, nodes))
+  const underRegions: WallFinishLayout = { ...layout, regions: { a: [], b: [] } }
+  const read = (face: WallFace) => {
+    const cuts = new Set<number>([0, layout.length])
+    for (const span of layout.spans[face])
+      for (const u of [span.u0, span.u1])
+        if (u > SPLIT_EPSILON && u < layout.length - SPLIT_EPSILON) cuts.add(u)
+    const stations = [...cuts].sort((x, y) => x - y)
+    const own = resolveWallFaceChain(wall, face)
+    const ownRef = own.kind === 'legacy' ? (own.spec.materialPreset ?? null) : own.ref
+    const stretches: WallFaceStretch[] = []
+    const push = (stretch: WallFaceStretch) => {
+      const last = stretches.at(-1)
+      if (
+        last &&
+        last.source === stretch.source &&
+        last.ref === stretch.ref &&
+        last.roomId === stretch.roomId &&
+        last.chain === stretch.chain &&
+        stretch.u0 - last.u1 < SPLIT_EPSILON
+      )
+        last.u1 = stretch.u1
+      else stretches.push(stretch)
+    }
+    for (let index = 0; index + 1 < stations.length; index += 1) {
+      const u0 = toMillimetre(stations[index]!)
+      const u1 = toMillimetre(stations[index + 1]!)
+      if (u1 - u0 < SPLIT_EPSILON) continue
+      const hit = resolveWallFinish(underRegions, face, (u0 + u1) / 2, 0)
+      if (hit.source === 'override' || hit.source === 'zone') {
+        const zone = nodes[hit.zoneId]
+        const roomName = zone?.type === 'zone' ? zone.name : undefined
+        push({
+          u0,
+          u1,
+          source: hit.source === 'override' ? 'room_face_override' : 'room_wall_material',
+          ref: hit.ref,
+          roomId: hit.zoneId,
+          ...(roomName ? { roomName } : {}),
+        })
+      } else push({ u0, u1, source: 'wall_face', ref: ownRef, chain: own.kind })
+    }
+    // A wall with no length has no stretch to read; its own face is what it would show.
+    if (stretches.length === 0)
+      stretches.push({ u0: 0, u1: 0, source: 'wall_face', ref: ownRef, chain: own.kind })
+    const paintRegions = layout.regions[face].map(
+      (region): WallFacePaintRegion => ({
+        id: region.id,
+        ref: region.finish,
+        ...(region.u0 !== undefined ? { u0: toMillimetre(region.u0) } : {}),
+        ...(region.u1 !== undefined ? { u1: toMillimetre(region.u1) } : {}),
+        ...(region.v0 !== undefined ? { v0: toMillimetre(region.v0) } : {}),
+        ...(region.v1 !== undefined ? { v1: toMillimetre(region.v1) } : {}),
+      }),
+    )
+    return { stretches, paintRegions }
+  }
+  return { a: read('a'), b: read('b') }
 }
 
 // Paint roles a wall resolves to (the paint tool offers `room:<zoneId>`):

@@ -77,6 +77,27 @@ export function getCeilingMaterials(
   }
 }
 
+/**
+ * The upper face, drawn while the viewer shows ceiling tops: the ceiling's colour, facing up, so
+ * the ceiling reads as solid from above.
+ */
+export function getCeilingCapMaterial(color: string, shading: RenderShading): Material {
+  return createMaterial(
+    {
+      preset: 'custom',
+      properties: {
+        color,
+        roughness: 0.9,
+        metalness: 0,
+        opacity: 1,
+        transparent: false,
+        side: 'front',
+      },
+    },
+    shading,
+  )
+}
+
 /** Resolve through the shared caches, without mutating another surface's material. */
 export function resolveCeilingFinish(
   finish: MaterialSchema | string | undefined,

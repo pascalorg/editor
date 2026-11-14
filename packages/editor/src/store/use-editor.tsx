@@ -10,6 +10,7 @@ import {
   type ChimneyMaterialRole,
   DEFAULT_BRUSH_SETTINGS,
   type DormerSurfaceMaterialRole,
+  isMoveLocked,
   type LevelNode,
   nodeRegistry,
   type RoofSurfaceMaterialRole,
@@ -20,6 +21,15 @@ import {
   type WallSurfaceSide,
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
+import {
+  cameraPoseStore,
+  type NavigationSyncPose,
+  type NavigationSyncPoseInput,
+  publishNavigationSyncPose,
+  type RoomKey,
+  sameRoom,
+  subscribeNavigationSyncPose,
+} from '@pascal-app/viewer/ui'
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import {
@@ -55,7 +65,6 @@ import {
   type PaintHoverInfo,
   type PaintScope,
 } from '../lib/paint-scope'
-import { type RoomKey, sameRoom } from '../lib/room-selection'
 import {
   cycleSnappingModeIn,
   defaultSnappingModeFor,
@@ -65,8 +74,6 @@ import {
   snapContextOf,
   snappingModesFor,
 } from '../lib/snapping-mode'
-import { cameraPoseStore } from './camera-pose-store'
-import { publishNavigationSyncPoseToStore } from './navigation-sync-pose-store'
 import useInteractionScope from './use-interaction-scope'
 import {
   clampViewPaneRatio,
@@ -231,18 +238,6 @@ export type CatalogCategory =
 
 export type FloorplanSelectionTool = 'click' | 'marquee'
 export type GridSnapStep = 0.5 | 0.25 | 0.1 | 0.05
-
-export type NavigationSyncSource = '2d' | '3d'
-
-export type NavigationSyncPose = {
-  source: NavigationSyncSource
-  revision: number
-  target: [number, number, number]
-  azimuth: number
-  viewWidth: number
-}
-
-export type NavigationSyncPoseInput = Omit<NavigationSyncPose, 'revision'>
 
 // Combined tool type. Known literals keep autocomplete; the `(string & {})`
 // arm lets plugin-contributed tool ids (e.g. `'trees:tree'`) typecheck without
@@ -489,12 +484,13 @@ type EditorState = {
   setViewPinned: (viewId: string, pinned: boolean) => void
   isFloorplanHovered: boolean
   setFloorplanHovered: (hovered: boolean) => void
+  /** Mirror of viewer/ui's navigation sync store, kept for plugins that read it here. */
+  navigationSyncPose: NavigationSyncPose | null
+  publishNavigationSyncPose: (pose: NavigationSyncPoseInput) => void
   // Toggleable DWV riser-diagram (plumbing isometric) overlay.
   isRiserOpen: boolean
   setRiserOpen: (open: boolean) => void
   toggleRiserOpen: () => void
-  navigationSyncPose: NavigationSyncPose | null
-  publishNavigationSyncPose: (pose: NavigationSyncPoseInput) => void
   floorplanSelectionTool: FloorplanSelectionTool
   setFloorplanSelectionTool: (tool: FloorplanSelectionTool) => void
   gridSnapStep: GridSnapStep
@@ -528,6 +524,24 @@ type EditorState = {
   setReferenceFloorOffset: (offset: number) => void
   referenceFloorOpacity: number
   setReferenceFloorOpacity: (opacity: number) => void
+  // The 2D plan's dashed outlines of the walls on the level below / above
+  // the active one. "Below" is set apart for the roof plan, where it traces
+  // the top storey's walls the roof is checked against and starts on, and the
+  // floor plans, where it starts off (`useWallsBelowSetting`). Persisted.
+  showWallsBelow: boolean
+  setShowWallsBelow: (show: boolean) => void
+  showRoofWallsBelow: boolean
+  setShowRoofWallsBelow: (show: boolean) => void
+  showWallsAbove: boolean
+  setShowWallsAbove: (show: boolean) => void
+  // Ceilings drawn solid from above as well as from below. Set apart like
+  // "Walls below": on for the roof level, where the roof is checked over closed
+  // rooms, off for the floor plans, where the camera looks into the rooms
+  // (`useCeilingsSetting`). Persisted.
+  showCeilings: boolean
+  setShowCeilings: (show: boolean) => void
+  showRoofCeilings: boolean
+  setShowRoofCeilings: (show: boolean) => void
   // Development-only camera debug flag for inspecting underside geometry
   allowUndergroundCamera: boolean
   setAllowUndergroundCamera: (enabled: boolean) => void
@@ -576,6 +590,10 @@ type EditorState = {
   // Read by the mobile layout so the viewer container can shrink to preview edits.
   mobilePanelSheetHeight: number
   setMobilePanelSheetHeight: (px: number) => void
+  // The loaded project's opening camera frame is over (framed, or the camera moved otherwise).
+  // Kept here, not in the camera controls, which preview unmounts; each load clears it.
+  openingCameraSettled: boolean
+  setOpeningCameraSettled: (settled: boolean) => void
   modelExport: ModelExport | null
   setModelExport: (modelExport: ModelExport | null) => void
 }
@@ -605,6 +623,11 @@ type PersistedEditorLayoutState = Pick<
   | 'showReferenceFloor'
   | 'referenceFloorOffset'
   | 'referenceFloorOpacity'
+  | 'showWallsBelow'
+  | 'showRoofWallsBelow'
+  | 'showWallsAbove'
+  | 'showCeilings'
+  | 'showRoofCeilings'
 >
 type PersistedEditorState = PersistedEditorUiState & PersistedEditorLayoutState
 
@@ -640,6 +663,11 @@ export const DEFAULT_PERSISTED_EDITOR_LAYOUT_STATE: PersistedEditorLayoutState =
   showReferenceFloor: false,
   referenceFloorOffset: 1,
   referenceFloorOpacity: 0.35,
+  showWallsBelow: false,
+  showRoofWallsBelow: true,
+  showWallsAbove: false,
+  showCeilings: false,
+  showRoofCeilings: true,
 }
 
 const GRID_SNAP_STEPS: GridSnapStep[] = [0.5, 0.25, 0.1, 0.05]
@@ -899,6 +927,11 @@ export function normalizePersistedEditorLayoutState(
       Number.isFinite(state.referenceFloorOpacity)
         ? Math.min(0.8, Math.max(0.1, state.referenceFloorOpacity))
         : DEFAULT_PERSISTED_EDITOR_LAYOUT_STATE.referenceFloorOpacity,
+    showWallsBelow: state?.showWallsBelow === true,
+    showRoofWallsBelow: state?.showRoofWallsBelow !== false,
+    showWallsAbove: state?.showWallsAbove === true,
+    showCeilings: state?.showCeilings === true,
+    showRoofCeilings: state?.showRoofCeilings !== false,
   }
 }
 
@@ -1223,6 +1256,10 @@ const useEditor = create<EditorState>()(
           set({ placementDragMode: false })
           return
         }
+        if (isMoveLocked(node)) {
+          set({ placementDragMode: false })
+          return
+        }
         const targetNode = node
         const isNew = Boolean((targetNode as { metadata?: { isNew?: boolean } }).metadata?.isNew)
         if (isNew) {
@@ -1500,18 +1537,11 @@ const useEditor = create<EditorState>()(
         set((state) => ({ pinnedViews: { ...state.pinnedViews, [viewId]: pinned } })),
       isFloorplanHovered: false,
       setFloorplanHovered: (hovered) => set({ isFloorplanHovered: hovered }),
+      navigationSyncPose: null,
+      publishNavigationSyncPose,
       isRiserOpen: false,
       setRiserOpen: (open) => set({ isRiserOpen: open }),
       toggleRiserOpen: () => set((state) => ({ isRiserOpen: !state.isRiserOpen })),
-      navigationSyncPose: null,
-      publishNavigationSyncPose: (pose) => {
-        const navigationSyncPose = {
-          ...pose,
-          revision: (get().navigationSyncPose?.revision ?? 0) + 1,
-        }
-        publishNavigationSyncPoseToStore(navigationSyncPose)
-        set({ navigationSyncPose })
-      },
       floorplanSelectionTool: 'click' as FloorplanSelectionTool,
       setFloorplanSelectionTool: (tool) => set({ floorplanSelectionTool: tool }),
       gridSnapStep: DEFAULT_PERSISTED_EDITOR_LAYOUT_STATE.gridSnapStep,
@@ -1568,6 +1598,16 @@ const useEditor = create<EditorState>()(
       referenceFloorOpacity: DEFAULT_PERSISTED_EDITOR_LAYOUT_STATE.referenceFloorOpacity,
       setReferenceFloorOpacity: (opacity) =>
         set({ referenceFloorOpacity: Math.min(0.8, Math.max(0.1, opacity)) }),
+      showWallsBelow: DEFAULT_PERSISTED_EDITOR_LAYOUT_STATE.showWallsBelow,
+      setShowWallsBelow: (show) => set({ showWallsBelow: show }),
+      showRoofWallsBelow: DEFAULT_PERSISTED_EDITOR_LAYOUT_STATE.showRoofWallsBelow,
+      setShowRoofWallsBelow: (show) => set({ showRoofWallsBelow: show }),
+      showWallsAbove: DEFAULT_PERSISTED_EDITOR_LAYOUT_STATE.showWallsAbove,
+      setShowWallsAbove: (show) => set({ showWallsAbove: show }),
+      showCeilings: DEFAULT_PERSISTED_EDITOR_LAYOUT_STATE.showCeilings,
+      setShowCeilings: (show) => set({ showCeilings: show }),
+      showRoofCeilings: DEFAULT_PERSISTED_EDITOR_LAYOUT_STATE.showRoofCeilings,
+      setShowRoofCeilings: (show) => set({ showRoofCeilings: show }),
       allowUndergroundCamera: false,
       setAllowUndergroundCamera: (enabled) => set({ allowUndergroundCamera: enabled }),
       show2dVoronoi: false,
@@ -1626,6 +1666,8 @@ const useEditor = create<EditorState>()(
       sidebarPanels: DEFAULT_PERSISTED_EDITOR_LAYOUT_STATE.sidebarPanels,
       mobilePanelSheetHeight: 0,
       setMobilePanelSheetHeight: (px) => set({ mobilePanelSheetHeight: Math.max(0, px) }),
+      openingCameraSettled: false,
+      setOpeningCameraSettled: (settled) => set({ openingCameraSettled: settled }),
       modelExport: null,
       setModelExport: (modelExport) => set({ modelExport }),
     }),
@@ -1672,6 +1714,11 @@ const useEditor = create<EditorState>()(
         showReferenceFloor: state.showReferenceFloor,
         referenceFloorOffset: state.referenceFloorOffset,
         referenceFloorOpacity: state.referenceFloorOpacity,
+        showWallsBelow: state.showWallsBelow,
+        showRoofWallsBelow: state.showRoofWallsBelow,
+        showWallsAbove: state.showWallsAbove,
+        showCeilings: state.showCeilings,
+        showRoofCeilings: state.showRoofCeilings,
       }),
       skipHydration: true,
     },
@@ -1809,5 +1856,8 @@ usePaintRegionMode.subscribe((state) => {
   const paintEraser = state.mode === 'erase'
   if (useEditor.getState().paintEraser !== paintEraser) useEditor.setState({ paintEraser })
 })
+
+// Published plugins read the 2D/3D navigation pose from the editor store; the shared store owns it.
+subscribeNavigationSyncPose((navigationSyncPose) => useEditor.setState({ navigationSyncPose }))
 
 export default useEditor

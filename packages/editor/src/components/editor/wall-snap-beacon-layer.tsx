@@ -16,6 +16,7 @@ import {
 } from '@pascal-app/core'
 import { useWallSnapIndicator, type WallSnapKind } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
+import { Html } from '@react-three/drei'
 import { useFrame } from '@react-three/fiber'
 import { memo, useMemo, useRef } from 'react'
 import { BoxGeometry, CircleGeometry, CylinderGeometry, type Group } from 'three'
@@ -31,10 +32,14 @@ import { EDITOR_LAYER } from '../../lib/constants'
  *
  *   endpoint (corner) → square    midpoint → triangle
  *   intersection      → ✕ cross   wall body (edge) → circle
+ *   perpendicular     → ⊥ corner  projection guide → diamond
+ *   grid length       → small +
  *
  * Subscribes to the shared `useWallSnapIndicator` store (published by the wall
  * draft + endpoint-move tools). The vertical mouse pillar and the corner
- * (endpoint) square are green; the other floor glyphs are indigo.
+ * (endpoint) square are green; the other floor glyphs are indigo. A point that
+ * carries a `label` (a wall pulled from a wall end) also names what it caught
+ * in a pill beside the foot of the pillar.
  *
  * The point carries only XZ (building-local plan coords); like the alignment
  * guides it's lifted to the active level's building-local Y each frame so it
@@ -135,6 +140,23 @@ export const WallSnapBeaconLayer = memo(function WallSnapBeaconLayer() {
         renderOrder={1002}
       />
       <SnapMarker kind={point.kind} x={point.x} z={point.z} />
+      {point.label ? (
+        <Html
+          position={[point.x, 0.05, point.z]}
+          style={{ pointerEvents: 'none', userSelect: 'none' }}
+          zIndexRange={[24, 0]}
+        >
+          <div
+            className="whitespace-nowrap rounded-[3px] px-[5px] py-[2px] font-sans font-semibold text-[11px] text-white"
+            style={{
+              backgroundColor: point.kind === 'endpoint' ? '#16a34a' : '#6366f1',
+              transform: 'translate(12px, 8px)',
+            }}
+          >
+            {point.label}
+          </div>
+        </Html>
+      ) : null}
     </group>
   )
 })
@@ -143,9 +165,10 @@ type WallTopHighlightSegment = {
   angle: number
   center: [number, number]
   length: number
+  tCenter: number
 }
 
-function getWallTopY(wall: WallNode, nodes: Readonly<Record<string, AnyNode>>) {
+function getWallTopY(wall: WallNode, nodes: Readonly<Record<string, AnyNode>>, t = 0.5): number {
   const levelId = resolveLevelId(wall, nodes as Record<string, AnyNode>)
   const support = spatialGridManager.getSlabSupportForWall(
     levelId,
@@ -159,12 +182,16 @@ function getWallTopY(wall: WallNode, nodes: Readonly<Record<string, AnyNode>>) {
     wall.justification,
   )
   return (
-    getWallTop(wall, levelId, nodes as Record<string, AnyNode>, support.elevation) +
+    getWallTop(wall, levelId, nodes as Record<string, AnyNode>, support.elevation, t) +
     WALL_TOP_HIGHLIGHT_LIFT
   )
 }
 
-function buildHighlightSegment(start: [number, number], end: [number, number]) {
+function buildHighlightSegment(
+  start: [number, number],
+  end: [number, number],
+  tCenter = 0.5,
+): WallTopHighlightSegment | null {
   const dx = end[0] - start[0]
   const dz = end[1] - start[1]
   const length = Math.hypot(dx, dz)
@@ -174,14 +201,19 @@ function buildHighlightSegment(start: [number, number], end: [number, number]) {
     angle: -Math.atan2(dz, dx),
     center: [(start[0] + end[0]) / 2, (start[1] + end[1]) / 2] as [number, number],
     length,
+    tCenter,
   }
 }
 
 function buildWallTopHighlightSegments(wall: WallNode): WallTopHighlightSegment[] {
   if (!isCurvedWall(wall)) {
-    const segment = buildHighlightSegment(wall.start, wall.end)
+    const segment = buildHighlightSegment(wall.start, wall.end, 0.5)
     return segment ? [segment] : []
   }
+
+  const dx = wall.end[0] - wall.start[0]
+  const dz = wall.end[1] - wall.start[1]
+  const chordLenSq = dx * dx + dz * dz
 
   const sampleCount = Math.max(
     8,
@@ -191,7 +223,16 @@ function buildWallTopHighlightSegments(wall: WallNode): WallTopHighlightSegment[
   let previous = getWallCurveFrameAt(wall, 0).point
   for (let index = 1; index <= sampleCount; index += 1) {
     const current = getWallCurveFrameAt(wall, index / sampleCount).point
-    const segment = buildHighlightSegment([previous.x, previous.y], [current.x, current.y])
+    const midX = (previous.x + current.x) / 2
+    const midY = (previous.y + current.y) / 2
+    const tCenter =
+      chordLenSq > 1e-12
+        ? Math.max(
+            0,
+            Math.min(1, ((midX - wall.start[0]) * dx + (midY - wall.start[1]) * dz) / chordLenSq),
+          )
+        : 0.5
+    const segment = buildHighlightSegment([previous.x, previous.y], [current.x, current.y], tCenter)
     if (segment) segments.push(segment)
     previous = current
   }
@@ -206,38 +247,40 @@ function WallTopHighlight({
   wall: WallNode
 }) {
   const segments = useMemo(() => buildWallTopHighlightSegments(wall), [wall])
-  const y = getWallTopY(wall, nodes)
   const width = Math.max(getWallThickness(wall) + WALL_TOP_HIGHLIGHT_OVERHANG, 0.24)
   const glowWidth = Math.max(getWallThickness(wall) + WALL_TOP_GLOW_OVERHANG, 0.42)
 
   return (
     <>
-      {segments.map((segment, index) => (
-        <group key={`${wall.id}:${index}`}>
-          <mesh
-            frustumCulled={false}
-            geometry={WALL_TOP_HIGHLIGHT_GEOMETRY}
-            layers={EDITOR_LAYER}
-            material={wallTopHighlightGlowMaterial}
-            position={[segment.center[0], y - 0.003, segment.center[1]]}
-            raycast={NO_RAYCAST}
-            renderOrder={1003}
-            rotation={[0, segment.angle, 0]}
-            scale={[segment.length + WALL_TOP_END_OVERHANG, WALL_TOP_GLOW_HEIGHT, glowWidth]}
-          />
-          <mesh
-            frustumCulled={false}
-            geometry={WALL_TOP_HIGHLIGHT_GEOMETRY}
-            layers={EDITOR_LAYER}
-            material={wallTopHighlightMaterial}
-            position={[segment.center[0], y + 0.002, segment.center[1]]}
-            raycast={NO_RAYCAST}
-            renderOrder={1004}
-            rotation={[0, segment.angle, 0]}
-            scale={[segment.length + WALL_TOP_END_OVERHANG, WALL_TOP_HIGHLIGHT_HEIGHT, width]}
-          />
-        </group>
-      ))}
+      {segments.map((segment, index) => {
+        const y = getWallTopY(wall, nodes, segment.tCenter)
+        return (
+          <group key={`${wall.id}:${index}`}>
+            <mesh
+              frustumCulled={false}
+              geometry={WALL_TOP_HIGHLIGHT_GEOMETRY}
+              layers={EDITOR_LAYER}
+              material={wallTopHighlightGlowMaterial}
+              position={[segment.center[0], y - 0.003, segment.center[1]]}
+              raycast={NO_RAYCAST}
+              renderOrder={1003}
+              rotation={[0, segment.angle, 0]}
+              scale={[segment.length + WALL_TOP_END_OVERHANG, WALL_TOP_GLOW_HEIGHT, glowWidth]}
+            />
+            <mesh
+              frustumCulled={false}
+              geometry={WALL_TOP_HIGHLIGHT_GEOMETRY}
+              layers={EDITOR_LAYER}
+              material={wallTopHighlightMaterial}
+              position={[segment.center[0], y + 0.002, segment.center[1]]}
+              raycast={NO_RAYCAST}
+              renderOrder={1004}
+              rotation={[0, segment.angle, 0]}
+              scale={[segment.length + WALL_TOP_END_OVERHANG, WALL_TOP_HIGHLIGHT_HEIGHT, width]}
+            />
+          </group>
+        )
+      })}
     </>
   )
 }
@@ -291,6 +334,64 @@ function SnapMarker({ kind, x, z }: { kind: WallSnapKind; x: number; z: number }
           renderOrder={1001}
           rotation={[0, -Math.PI / 4, 0]}
           scale={[MARKER * 2.6, 1, MARKER * 0.5]}
+        />
+      </>
+    )
+  }
+  if (kind === 'perpendicular') {
+    // ⊥ — a base bar with an upright from its middle.
+    return (
+      <>
+        <mesh
+          geometry={FLAT_BOX_GEOMETRY}
+          layers={EDITOR_LAYER}
+          material={beaconMaterial}
+          position={[x, y, z]}
+          renderOrder={1001}
+          scale={[MARKER * 2.6, 1, MARKER * 0.45]}
+        />
+        <mesh
+          geometry={FLAT_BOX_GEOMETRY}
+          layers={EDITOR_LAYER}
+          material={beaconMaterial}
+          position={[x, y, z - MARKER * 0.8]}
+          renderOrder={1001}
+          scale={[MARKER * 0.45, 1, MARKER * 1.6]}
+        />
+      </>
+    )
+  }
+  if (kind === 'alignment') {
+    return (
+      <mesh
+        geometry={FLAT_BOX_GEOMETRY}
+        layers={EDITOR_LAYER}
+        material={beaconMaterial}
+        position={[x, y, z]}
+        renderOrder={1001}
+        rotation={[0, Math.PI / 4, 0]}
+        scale={[MARKER * 1.4, 1, MARKER * 1.4]}
+      />
+    )
+  }
+  if (kind === 'grid') {
+    return (
+      <>
+        <mesh
+          geometry={FLAT_BOX_GEOMETRY}
+          layers={EDITOR_LAYER}
+          material={beaconMaterial}
+          position={[x, y, z]}
+          renderOrder={1001}
+          scale={[MARKER * 1.8, 1, MARKER * 0.35]}
+        />
+        <mesh
+          geometry={FLAT_BOX_GEOMETRY}
+          layers={EDITOR_LAYER}
+          material={beaconMaterial}
+          position={[x, y, z]}
+          renderOrder={1001}
+          scale={[MARKER * 0.35, 1, MARKER * 1.8]}
         />
       </>
     )

@@ -744,58 +744,79 @@ describe('scene clipboard', () => {
     }
   })
 
-  test("a room copied to another project brings its floor script's artifacts", async () => {
-    let systemClipboardText = ''
-    Object.defineProperty(navigator, 'clipboard', {
-      configurable: true,
-      value: {
-        readText: async () => systemClipboardText,
-        writeText: async (text: string) => {
-          systemClipboardText = text
+  const floorScript = {
+    kind: 'script',
+    script: 'e'.repeat(64),
+    artifact: 'f'.repeat(64),
+    inputs: 'key',
+    manifest: { bounds: { min: [0, 0, 0], max: [3, 0.01, 3] }, triangles: 2 },
+  } as const
+  const square: [number, number][] = [
+    [0, 0],
+    [3, 0],
+    [3, 3],
+    [0, 3],
+  ]
+  for (const [what, host] of [
+    [
+      "a room copied to another project brings its floor script's artifacts",
+      () =>
+        ZoneNode.parse({
+          id: 'zone_clipboard-floor-script',
+          parentId: sourceLevelId,
+          name: 'Hall',
+          polygon: square,
+          floor: { script: floorScript },
+        }),
+    ],
+    [
+      "a slab copied to another project brings its surface script's artifacts",
+      () =>
+        SlabNode.parse({
+          id: 'slab_clipboard-surface-script',
+          parentId: sourceLevelId,
+          name: 'Terrace',
+          polygon: square,
+          surfaceScript: floorScript,
+        }),
+    ],
+  ] as const) {
+    test(what, async () => {
+      let systemClipboardText = ''
+      Object.defineProperty(navigator, 'clipboard', {
+        configurable: true,
+        value: {
+          readText: async () => systemClipboardText,
+          writeText: async (text: string) => {
+            systemClipboardText = text
+          },
         },
-      },
-    })
-    const room = ZoneNode.parse({
-      id: 'zone_clipboard-floor-script',
-      parentId: sourceLevelId,
-      name: 'Hall',
-      polygon: [
-        [0, 0],
-        [3, 0],
-        [3, 3],
-        [0, 3],
-      ],
-      floor: {
-        script: {
-          kind: 'script',
-          script: 'e'.repeat(64),
-          artifact: 'f'.repeat(64),
-          inputs: 'key',
-          manifest: { bounds: { min: [0, 0, 0], max: [3, 0.01, 3] }, triangles: 2 },
+      })
+      const node = host()
+      useScene.setState((state) => ({
+        nodes: {
+          ...state.nodes,
+          [sourceLevelId]: makeLevel(sourceLevelId, [node.id]),
+          [node.id]: node,
         },
-      },
+      }))
+      useViewer.getState().setProjectId('project_clipboard-source')
+      expect(copySelectedNodesToEditorClipboard([node.id])).toBe(true)
+      useViewer.getState().setProjectId('project_clipboard-target')
+      const copyFrom = mock(async (_projectId: string, _sha256s: string[]) => [] as string[])
+      const previousStore = getArtifactStore()
+      configureArtifactStore({ ...previousStore, copyFrom })
+      try {
+        await pasteSystemEditorClipboardToLevel(targetLevelId)
+        expect(new Set(copyFrom.mock.calls[0]![1])).toEqual(
+          new Set(['e'.repeat(64), 'f'.repeat(64)]),
+        )
+      } finally {
+        configureArtifactStore(previousStore)
+        useViewer.getState().setProjectId(null)
+      }
     })
-    useScene.setState((state) => ({
-      nodes: {
-        ...state.nodes,
-        [sourceLevelId]: makeLevel(sourceLevelId, [room.id]),
-        [room.id]: room,
-      },
-    }))
-    useViewer.getState().setProjectId('project_clipboard-source')
-    expect(copySelectedNodesToEditorClipboard([room.id])).toBe(true)
-    useViewer.getState().setProjectId('project_clipboard-target')
-    const copyFrom = mock(async (_projectId: string, _sha256s: string[]) => [] as string[])
-    const previousStore = getArtifactStore()
-    configureArtifactStore({ ...previousStore, copyFrom })
-    try {
-      await pasteSystemEditorClipboardToLevel(targetLevelId)
-      expect(new Set(copyFrom.mock.calls[0]![1])).toEqual(new Set(['e'.repeat(64), 'f'.repeat(64)]))
-    } finally {
-      configureArtifactStore(previousStore)
-      useViewer.getState().setProjectId(null)
-    }
-  })
+  }
 
   test('navigation during artifact copy does not paste into the next project', async () => {
     copyScriptedWindow()

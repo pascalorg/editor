@@ -14,6 +14,7 @@ import {
   getWallThickness,
   isCurvedWall,
   isDerivedNode,
+  isNodeDuplicable,
   isRegistryMovable,
   isRegistrySelectable,
   isSplineFence,
@@ -24,11 +25,12 @@ import {
   sceneRegistry,
   summarizeSystemFor,
   useLiveNodeOverrides,
+  usePascalI18n,
   useScene,
   type WallNode,
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
-import { Html } from '@react-three/drei'
+import { LocalizedHtml as Html } from '@pascal-app/viewer/ui'
 import { useFrame } from '@react-three/fiber'
 import { useCallback, useMemo, useRef } from 'react'
 import * as THREE from 'three'
@@ -283,7 +285,7 @@ function getHeightPillDimensions(node: WallNode | FenceNode): {
 } {
   if (node.type === 'wall') {
     return {
-      height: getWallEffectiveHeightForNodes(node, useScene.getState().nodes),
+      height: getWallEffectiveHeightForNodes(node, useScene.getState().nodes, 0),
       length: getWallCurveLength(node),
       thickness: getWallThickness(node),
     }
@@ -296,6 +298,7 @@ function getHeightPillDimensions(node: WallNode | FenceNode): {
 }
 
 export function FloatingActionMenu() {
+  const i18n = usePascalI18n()
   const reducedMotion = useReducedMotion()
   const selectedIds = useViewer((s) => s.selection.selectedIds)
   const updateNode = useScene((s) => s.updateNode)
@@ -421,7 +424,7 @@ export function FloatingActionMenu() {
         | undefined
       const fallbackHeight =
         node.type === 'wall'
-          ? getWallEffectiveHeightForNodes(node, useScene.getState().nodes)
+          ? getWallEffectiveHeightForNodes(node, useScene.getState().nodes, 0)
           : FENCE_DEFAULT_HEIGHT
       const liveHeight = override?.height ?? node.height ?? fallbackHeight
       pillHeightRef.current.textContent = `H ${formatMeasurement(liveHeight, unit, metricNotation)}`
@@ -679,6 +682,7 @@ export function FloatingActionMenu() {
                 onDelete={handleDelete}
                 onDuplicate={
                   node &&
+                  isNodeDuplicable(node as AnyNode) &&
                   node.type !== 'spawn' &&
                   !DELETE_ONLY_TYPES.includes(node.type) &&
                   !HOLE_TYPES.includes(node.type)
@@ -749,16 +753,21 @@ export function FloatingActionMenu() {
                 {hasAxisCycling(node.type) ? (
                   <div className="flex items-center gap-2 whitespace-nowrap rounded-full border border-border/60 bg-background/90 px-4 py-1.5 text-xs tabular-nums shadow-sm backdrop-blur">
                     <span className="font-medium text-foreground">
-                      Axis {rotationAxis.toUpperCase()}
+                      {i18n._({ id: 'editor.floatingActionMenu.axis', message: 'Axis' })}{' '}
+                      {rotationAxis.toUpperCase()}
                     </span>
                     <span aria-hidden className="text-muted-foreground">
                       ·
                     </span>
-                    <span className="text-muted-foreground">R/T rotate</span>
+                    <span className="text-muted-foreground">
+                      {i18n._({ id: 'editor.floatingActionMenu.rTRotate', message: 'R/T rotate' })}
+                    </span>
                     <span aria-hidden className="text-muted-foreground">
                       ·
                     </span>
-                    <span className="text-muted-foreground">⌥ axis</span>
+                    <span className="text-muted-foreground">
+                      {i18n._({ id: 'editor.floatingActionMenu.axis2', message: '⌥ axis' })}
+                    </span>
                   </div>
                 ) : null}
               </div>
@@ -788,6 +797,7 @@ function SystemSummaryPill({
   nodeId: AnyNodeId
   unit: 'metric' | 'imperial'
 }) {
+  const i18n = usePascalI18n()
   const allNodes = useScene((s) => s.nodes)
   const summary = useMemo(() => summarizeSystemFor(nodeId, allNodes), [nodeId, allNodes])
   if (!summary) return null
@@ -796,7 +806,7 @@ function SystemSummaryPill({
       <span className="font-medium text-foreground">
         {summary.systems.length > 0
           ? summary.systems.map((sys) => sys[0]!.toUpperCase() + sys.slice(1)).join(' + ')
-          : 'System'}
+          : i18n._({ id: 'editor.floatingActionMenu.system', message: 'System' })}
       </span>
       {summary.runCount > 0 ? (
         <>
@@ -804,8 +814,12 @@ function SystemSummaryPill({
             ·
           </span>
           <span className="text-muted-foreground">
-            {formatMeasurement(summary.runLengthM, unit, metricNotation)} · {summary.runCount}{' '}
-            {summary.runCount === 1 ? 'run' : 'runs'}
+            {formatMeasurement(summary.runLengthM, unit, metricNotation)} ·{' '}
+            {i18n._({
+              id: 'editor.floatingActionMenu.runCount',
+              message: '{count, plural, one {{number} run} other {{number} runs}}',
+              values: { count: summary.runCount, number: String(summary.runCount) },
+            })}
           </span>
         </>
       ) : null}
@@ -815,7 +829,11 @@ function SystemSummaryPill({
             ·
           </span>
           <span className="text-muted-foreground">
-            {summary.terminalCount} {summary.terminalCount === 1 ? 'register' : 'registers'}
+            {i18n._({
+              id: 'editor.floatingActionMenu.registerCount',
+              message: '{count, plural, one {# register} other {# registers}}',
+              values: { count: summary.terminalCount },
+            })}
           </span>
         </>
       ) : null}
@@ -824,7 +842,9 @@ function SystemSummaryPill({
           <span aria-hidden className="text-muted-foreground">
             ·
           </span>
-          <span className="font-medium text-amber-500">⚠ no equipment</span>
+          <span className="font-medium text-amber-500">
+            {i18n._({ id: 'editor.floatingActionMenu.noEquipment', message: '⚠ no equipment' })}
+          </span>
         </>
       )}
     </div>

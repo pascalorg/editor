@@ -1,6 +1,8 @@
 'use client'
 
 import {
+  FLOOR_SCRIPT_LIFT,
+  floorScriptSurface,
   polygonInteriorPoint,
   useLiveNodeOverrides,
   useRegistry,
@@ -82,13 +84,15 @@ export const ZoneRenderer = ({ node }: { node: ZoneNode }) => {
   )
 }
 
-/** Over the floor plate's top, so the plate's own finish never shows through the boards. */
-const FLOOR_SCRIPT_LIFT = 0.001
-
-/** The room's floor finish its script built, in the level's frame, just over the plate. */
+/**
+ * The room's floor finish its script built: in the level's plan, its y = 0 on the floor plate's
+ * top. A room with no plate has no floor for it to stand on.
+ */
 function FloorScriptModel({ node, script }: { node: ZoneNode; script: ZoneFloorScript }) {
+  const surface = useScene((state) => floorScriptSurface(state.nodes, node.id))
+  if (surface === null) return null
   return (
-    <group position-y={FLOOR_SCRIPT_LIFT}>
+    <group position-y={surface + FLOOR_SCRIPT_LIFT}>
       <FinishScriptModel ownerId={node.id} parentId={node.parentId} script={script} />
     </group>
   )

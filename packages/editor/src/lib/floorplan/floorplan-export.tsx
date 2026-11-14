@@ -4,23 +4,28 @@ import {
   type AnyNode,
   type AnyNodeId,
   type ConstructionDrawingType,
+  FLOORPLAN_VIEW_ROTATION_DEG,
   type FloorplanGeometry,
+  type FloorplanMetricNotation,
   type FloorplanPalette,
   type FloorplanPoint,
+  type FloorplanSchedule,
+  type FloorplanWallDimensionFaces,
   getLevelDisplayName,
   isNodeKindEnabled,
   type LiveNodeOverrides,
   type NodeCategory,
   nodeRegistry,
+  readFloorplanGeometryMetadata,
   resolveBuildingForLevel,
   useScene,
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
+import { FloorplanGeometryRenderer, navigationSyncPoseStore } from '@pascal-app/viewer/ui'
 import { createElement } from 'react'
 import { flushSync } from 'react-dom'
 import { createRoot } from 'react-dom/client'
 import { resolveSvgAnnotationCollisions } from '../../components/editor-2d/renderers/floorplan-annotation-layout'
-import { FloorplanGeometryRenderer } from '../../components/editor-2d/renderers/floorplan-geometry-renderer'
 import {
   buildContext,
   collectDirectFloorplanScopeNodes,
@@ -33,7 +38,6 @@ import {
   splitFloorplanOverlay,
 } from '../../components/editor-2d/renderers/floorplan-registry-layer'
 import useDrawingView, { DRAWING_TYPE_OPTIONS } from '../../store/use-drawing-view'
-import useEditor from '../../store/use-editor'
 import useFloorplanAnnotationVisibility from '../../store/use-floorplan-annotation-visibility'
 import useFloorplanMode from '../../store/use-floorplan-mode'
 import {
@@ -41,21 +45,10 @@ import {
   filterFloorplanAnnotationGeometry,
 } from './annotation-visibility'
 import { resolveNodeForDrawingType } from './drawing-coordination'
-import {
-  type FloorplanMetricNotation,
-  type FloorplanSchedule,
-  type FloorplanWallDimensionReference,
-  getFloorplanNodeExtension,
-  readFloorplanGeometryMetadata,
-} from './floorplan-extension'
-import {
-  type FloorplanMode,
-  resolveFloorplanAnnotationVisibility,
-  resolveFloorplanWallDimensionReference,
-} from './floorplan-mode'
+import { getFloorplanNodeExtension } from './floorplan-extension'
+import { type FloorplanMode, resolveFloorplanAnnotationVisibility } from './floorplan-mode'
 import { createFloorplanPdfDocument, type FloorplanPdfDocument } from './floorplan-pdfkit-document'
 import { renderFloorplanGeometryToPdfKit } from './floorplan-pdfkit-renderer'
-import { FLOORPLAN_VIEW_ROTATION_DEG } from './geometry'
 
 /**
  * Floorplan PDF export.
@@ -131,7 +124,7 @@ const NEUTRAL_VIEW_STATE = {
 export function resolveFloorplanExportViewState(
   unit: 'metric' | 'imperial',
   metricNotation: FloorplanMetricNotation,
-  wallDimensionReference?: FloorplanWallDimensionReference,
+  wallDimensionFaces?: FloorplanWallDimensionFaces,
   automaticDimensions = true,
 ) {
   return {
@@ -139,7 +132,7 @@ export function resolveFloorplanExportViewState(
     automaticDimensions,
     unit,
     metricNotation,
-    wallDimensionReference,
+    wallDimensionFaces,
   }
 }
 
@@ -195,12 +188,9 @@ export async function exportFloorplanPdf(scope: FloorplanExportScope): Promise<v
   const annotationVisibility = resolveFloorplanExportAnnotationVisibility(
     floorplanMode,
     expertAnnotationState.visibility,
+    expertAnnotationState.showDimensions,
   )
-  const wallDimensionReference = resolveFloorplanWallDimensionReference(
-    floorplanMode,
-    expertAnnotationState.wallDimensionReference,
-  )
-  const navigationAzimuth = useEditor.getState().navigationSyncPose?.azimuth
+  const navigationAzimuth = navigationSyncPoseStore.getState().pose?.azimuth
   const drawingType = useDrawingView.getState().drawingType
   const annotationLayoutOverrides = useDrawingView.getState().annotationLayoutOverrides
   const drawingLabel =
@@ -232,7 +222,7 @@ export async function exportFloorplanPdf(scope: FloorplanExportScope): Promise<v
         metricNotation,
         annotationVisibility,
         drawingType,
-        wallDimensionReference,
+        expertAnnotationState.wallDimensionFaces,
         installedPlugins,
       )
       const schedules = collectFloorplanSchedules(nodes, level.id, unit, scope)
@@ -604,8 +594,12 @@ export function resolveFloorplanScreenUnitsPerPixel(
 export function resolveFloorplanExportAnnotationVisibility(
   mode: FloorplanMode,
   liveVisibility: FloorplanAnnotationVisibility,
+  dimensions: boolean,
 ): FloorplanAnnotationVisibility {
-  return resolveFloorplanAnnotationVisibility(mode, liveVisibility, { target: 'export' })
+  return resolveFloorplanAnnotationVisibility(mode, liveVisibility, {
+    target: 'export',
+    dimensions,
+  })
 }
 
 export function resolveFloorplanExportRotationDeg(
@@ -785,7 +779,7 @@ export function collectFloorplanGeometry(
   metricNotation: FloorplanMetricNotation,
   annotationVisibility: FloorplanAnnotationVisibility,
   drawingType: ConstructionDrawingType,
-  wallDimensionReference: FloorplanWallDimensionReference,
+  wallDimensionFaces: FloorplanWallDimensionFaces,
   /** `undefined` = legacy scene without install state: every loaded kind draws. */
   installedPlugins: readonly string[] | undefined,
 ): ExportGeometry[] {
@@ -907,7 +901,7 @@ export function collectFloorplanGeometry(
       resolveFloorplanExportViewState(
         unit,
         metricNotation,
-        wallDimensionReference,
+        wallDimensionFaces,
         annotationVisibility.automaticDimensions,
       ),
       levelData,

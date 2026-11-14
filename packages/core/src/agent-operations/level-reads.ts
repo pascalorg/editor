@@ -1,14 +1,27 @@
+import { deckBoardSettings } from '../lib/deck-boards'
 import { area } from '../lib/polygon-boolean'
+import { porchFramingSettings } from '../lib/porch-framing'
+import { porchPartOf } from '../lib/porch-framing-sync'
 import { roomFloorChoices } from '../lib/room-floor-choices'
-import type { AnyNode, AnyNodeId, ItemNode, LevelNode, WallNode, ZoneNode } from '../schema'
+import { roofFaceOf } from '../registry/roofs'
+import type {
+  AnyNode,
+  AnyNodeId,
+  ItemNode,
+  LevelNode,
+  UnitNode,
+  WallNode,
+  ZoneNode,
+} from '../schema'
 import { DEFAULT_LEVEL_HEIGHT } from '../services/level-height'
 import { getWallTop } from '../services/storey'
 import { computeWallSlabSupport } from '../systems/slab/slab-support'
 import { resolveWallFaceChain } from '../systems/wall/wall-finish'
 import { resolveWallEffectiveHeight } from '../systems/wall/wall-top'
 import { type LevelTargetInput, targetLevel } from './level-target'
-import { contentCounts, levelIdOf, levelRole, nodesOnLevel } from './scene-queries'
+import { contentCounts, levelIdOf, levelRole, nodesOnLevel, queryNodes } from './scene-queries'
 import type { AgentOperation, SceneNodes } from './types'
+import { wallTypeChoices } from './wall-type'
 
 const round2 = (value: number) => Math.round(value * 100) / 100
 
@@ -34,12 +47,15 @@ export function wallResolvedHeight(nodes: SceneNodes, wall: WallNode): number {
     nodes as Record<AnyNodeId, AnyNode>,
   )
   return (
-    getWallTop(wall, levelId, nodes as Record<AnyNodeId, AnyNode>, support.elevation) -
+    getWallTop(wall, levelId, nodes as Record<AnyNodeId, AnyNode>, support.elevation, 0) -
     support.elevation
   )
 }
 
 export function wallSummary(nodes: SceneNodes, wall: WallNode) {
+  const type = wall.assembly?.presetId
+    ? wallTypeChoices(nodes).find((entry) => entry.id === wall.assembly?.presetId)
+    : undefined
   return {
     id: wall.id,
     name: wall.name,
@@ -50,6 +66,8 @@ export function wallSummary(nodes: SceneNodes, wall: WallNode) {
     resolvedHeight: wallResolvedHeight(nodes, wall),
     heightIsExplicit: wall.height !== undefined,
     thickness: wall.thickness,
+    wallType: wall.wallType ?? 'standard',
+    type: type ? { id: type.id, label: type.label } : null,
     wallFaceChains: {
       a: resolveWallFaceChain(wall, 'a'),
       b: resolveWallFaceChain(wall, 'b'),
@@ -75,14 +93,40 @@ function zoneSize(zone: ZoneNode) {
   }
 }
 
+/** The unit a zone belongs to; none is common area. */
+const unitOf = (nodes: SceneNodes, zoneId: ZoneNode['id']) => {
+  const unit = queryNodes<UnitNode>(nodes, { type: 'unit' }).find((node) =>
+    node.members.includes(zoneId),
+  )
+  return { unitId: unit?.id ?? null, unit: unit?.name ?? null }
+}
+
+function zoneFraming(nodes: SceneNodes, zone: ZoneNode) {
+  const parts = queryNodes(nodes, { type: ['column', 'beam'], parentId: zone.parentId }).filter(
+    (node) => porchPartOf(node)?.porchOf === zone.id,
+  )
+  if (!zone.roomType && !zone.porchFraming && parts.length === 0) return null
+  return {
+    ...porchFramingSettings(zone),
+    auto: zone.porchFraming?.auto ?? (zone.roomType === 'porch' && zone.hasCeiling !== false),
+    postCount: parts.filter((node) => node.type === 'column').length,
+    beamCount: parts.filter((node) => node.type === 'beam').length,
+  }
+}
+
 const zoneSummary = (nodes: SceneNodes, zone: ZoneNode) => ({
   id: zone.id,
   name: zone.name,
   color: zone.color,
   polygon: zone.polygon,
   holes: zone.holes ?? [],
+  roomType: zone.roomType ?? 'room',
+  floor: { drop: zone.floor?.drop ?? 0 },
+  porchFraming: zoneFraming(nodes, zone),
+  ...(zone.roomType === 'deck' || zone.decking ? { decking: deckBoardSettings(zone) } : {}),
   wallMaterial: zone.wallMaterial ?? null,
   wallOverrides: zone.wallOverrides ?? [],
+  ...unitOf(nodes, zone.id),
   ...zoneSize(zone),
   floor_choices: roomFloorChoices(nodes, zone.id),
 })
@@ -162,7 +206,9 @@ function levelSummary(nodes: SceneNodes, level: LevelNode) {
     roofs: ofType(content, 'roof').map((roof) => ({
       id: roof.id,
       name: roof.name,
-      segmentCount: roof.children.length,
+      segmentCount: roof.children.filter((id) => nodes[id]?.type === 'roof-segment').length,
+      // Faces of other kinds (a plugin's roof planes) are listed in `other`.
+      faceCount: roof.children.filter((id) => roofFaceOf(nodes[id])).length,
     })),
     other: content
       .filter((node) => !SUMMARISED.has(node.type))
@@ -179,7 +225,13 @@ export const getLevelSummary: AgentOperation<LevelTargetInput> = (nodes, input, 
 export const getWalls: AgentOperation<LevelTargetInput> = (nodes, input, context) => {
   const level = targetLevel(nodes, input, context)
   const walls = ofType(nodesOnLevel(nodes, level.id), 'wall')
-  return { result: { levelId: level.id, walls: walls.map((wall) => wallSummary(nodes, wall)) } }
+  return {
+    result: {
+      levelId: level.id,
+      walls: walls.map((wall) => wallSummary(nodes, wall)),
+      wallTypes: wallTypeChoices(nodes).map(({ id, label }) => ({ id, label })),
+    },
+  }
 }
 
 /** `get_zones`. */

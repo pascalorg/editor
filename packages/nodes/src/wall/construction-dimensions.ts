@@ -47,6 +47,17 @@ export type ConstructionDimensionTier =
   | 'interior'
   | 'interior-overall'
 
+/**
+ * Which face chain a tier belongs to: the clear spans drawn inside the rooms
+ * are interior (ID); the facade strings — openings, partitions, columns, jogs
+ * and the overall sizes — are measured outside the building (OD).
+ */
+export function constructionDimensionFace(
+  tier: ConstructionDimensionTier,
+): 'interior' | 'exterior' {
+  return tier === 'interior' || tier === 'interior-overall' ? 'interior' : 'exterior'
+}
+
 const TIER_ORDER: readonly ConstructionDimensionTier[] = [
   'opening-widths',
   'openings',

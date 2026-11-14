@@ -83,6 +83,9 @@ export function createSlabDependencyTracker(initialNodes: Record<string, AnyNode
                   node.floorStepFinish,
                   node.floorStepOverrides,
                   node.floorEdgeFinish,
+                  // a deck's plate is its boards and frame (`buildDeckGeometry`)
+                  node.roomType,
+                  node.decking,
                 ]
               : null,
     )

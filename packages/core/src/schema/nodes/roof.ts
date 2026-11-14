@@ -1,5 +1,6 @@
 import dedent from 'dedent'
 import { z } from 'zod'
+import { validateRoofRelations } from '../../registry/roofs'
 import { Assembly } from '../assembly'
 import { BaseNode, nodeType, objectId } from '../base'
 import type { MaterialSchema as MaterialSchemaType } from '../material'
@@ -38,6 +39,10 @@ export const RoofNode = BaseNode.extend({
   edgeMaterialPreset: z.string().optional(),
   wallMaterial: MaterialSchema.optional(),
   wallMaterialPreset: z.string().optional(),
+  // The wall band between the top plate and the eaves (a raised heel): its own finish, under every
+  // segment that has none; absent, the walls' below it.
+  heelMaterial: MaterialSchema.optional(),
+  heelMaterialPreset: z.string().optional(),
   position: z.tuple([z.number(), z.number(), z.number()]).default([0, 0, 0]),
   // Rotation around Y axis in radians
   rotation: z.number().default(0),
@@ -47,19 +52,23 @@ export const RoofNode = BaseNode.extend({
   // Per-slot material overrides, as on walls and slabs: `layer:<id>` keys
   // (or a layer's own `slot`) paint an assembly layer.
   slots: z.record(z.string(), z.string()).optional(),
-  // Child roof segment IDs
-  children: z.array(RoofSegmentNode.shape.id).default([]),
-}).describe(
-  dedent`
-  Roof node - a container for roof segments.
-  Acts as a group that holds one or more RoofSegmentNodes.
-  When not being edited, segments are visually combined into a single solid.
+  // Its segments, and its faces of other kinds (`capabilities.roofs`: a plugin's roof planes),
+  // whose ids core cannot enumerate. The registry says which kinds a roof holds, checked against
+  // the scene (`validateRoofRelations`).
+  children: z.array(z.string()).default([]),
+})
+  .describe(
+    dedent`
+  Roof node - a container for roof segments and roof faces.
+  Acts as a group that holds one or more RoofSegmentNodes, and faces of plugin kinds that roof (capabilities.roofs).
+  When not being edited, segments are visually combined into a single solid; faces render as their own kind, in the roof's frame.
   - position: center position of the roof group
   - rotation: rotation around Y axis
   - support: custom level placement, spatial wall-top following, or a roof-surface attachment
-  - children: array of RoofSegmentNode IDs
+  - children: array of RoofSegmentNode IDs and roof face IDs
   `,
-)
+  )
+  .meta({ validateRelations: validateRoofRelations })
 
 export type RoofNode = z.infer<typeof RoofNode>
 

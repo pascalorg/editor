@@ -57,6 +57,12 @@ export const ColumnRingPlacement = z.enum(['ends', 'even', 'top', 'bottom'])
 
 export const ColumnCarvingPlacement = z.enum(['shaft', 'base', 'capital', 'all'])
 
+/**
+ * What a framing post (`role: 'post'`) stands on: straight on the floor, a steel post base
+ * holding it off the concrete, or a concrete pier above the floor or the grade.
+ */
+export const ColumnPostBase = z.enum(['none', 'post-base', 'pier'])
+
 export const ColumnSupportStyle = z.enum([
   'vertical',
   'a-frame',
@@ -81,6 +87,7 @@ export type ColumnCapitalStyle = z.infer<typeof ColumnCapitalStyle>
 export type ColumnRingPlacement = z.infer<typeof ColumnRingPlacement>
 export type ColumnCarvingPlacement = z.infer<typeof ColumnCarvingPlacement>
 export type ColumnSupportStyle = z.infer<typeof ColumnSupportStyle>
+export type ColumnPostBase = z.infer<typeof ColumnPostBase>
 
 export const ColumnNode = BaseNode.extend({
   id: objectId('column'),
@@ -165,7 +172,10 @@ export const ColumnNode = BaseNode.extend({
   braceTopSpread: z.number().min(0).default(0.12),
   bracePlateEnabled: z.boolean().default(true),
   // A declaration consumed by the selected shared support checker; old columns stay unchanged.
-  role: z.enum(['ornament']).optional(),
+  // 'post' marks a framing post (core `createFramingPost`): a square sawn post under a beam.
+  role: z.enum(['ornament', 'post']).optional(),
+  // A framing post's base, drawn by the base fields (`framingPostBasePatch` sets both).
+  postBase: ColumnPostBase.optional(),
   material: MaterialSchema.optional(),
   materialPreset: z.string().optional(),
   // Unified paint-slot refs (`scene:`/`library:` MaterialRef per slot id),
@@ -184,6 +194,8 @@ export const ColumnNode = BaseNode.extend({
   - baseHeight/capitalHeight: bottom and top block proportions
   - ring/flute/spiral/panel/lathe/carving fields: procedural detail controls
   - supportStyle/brace fields: vertical column or procedural support assembly
+  - role: 'post' for a framing post (a square sawn post carrying a beam), 'ornament' for decoration
+  - postBase: a framing post's base: none, a steel post base, or a concrete pier
 `)
 
 export const COLUMN_PRESETS = {

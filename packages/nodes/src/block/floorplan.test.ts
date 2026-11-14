@@ -2,11 +2,11 @@ import { describe, expect, test } from 'bun:test'
 import type { BlockNode, GeometryContext } from '@pascal-app/core'
 import {
   BlockNode as BlockNodeSchema,
+  createFloorplanContextExtensions,
   type FloorplanGeometry,
   type FloorplanPoint,
   pointInPolygon2D,
 } from '@pascal-app/core'
-import { createFloorplanContextExtensions } from '@pascal-app/editor'
 import { buildBlockFloorplan, isOverheadBlock, PLAN_CUT_HEIGHT } from './floorplan'
 
 /** A box block `w` × `h` × `d` with its bottom at local y = 0, placed at `y`. */

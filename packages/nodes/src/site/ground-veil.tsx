@@ -1,36 +1,18 @@
-import type { TerrainField } from '@pascal-app/core'
 import {
-  anyGroundVeiled,
   groundWindowEnabledNode,
   inGroundWindowNode,
   SITE_GROUND,
-  UNDERGROUND_RING,
-  undergroundAmbianceNode,
   useViewer,
 } from '@pascal-app/viewer'
 import { type BufferGeometry, DoubleSide, type Material } from 'three'
-import {
-  color,
-  float,
-  mix,
-  mrt,
-  output,
-  positionWorld,
-  select,
-  smoothstep,
-  vec2,
-  vec4,
-} from 'three/tsl'
+import { color, float, mrt, output, positionWorld, select, smoothstep, vec2, vec4 } from 'three/tsl'
 import { MeshBasicNodeMaterial, type Node } from 'three/webgpu'
-import { buildPatternedRibbon } from './line-ribbon'
 import { insideLotNode } from './lot-mask'
-import { buildDrapedPolyline } from './terrain-drape'
 
 // The ground over a level below grade. Wholesale (a level fully below grade, the ground on Auto)
 // the solid ground stays and a hole opens in it (`ground-hole.ts`); the veil sheets here are the
 // faint see-through ground of the ground window (a hillside in the eye's way) and of a capture
-// (which sets the solid ground aside and shows them), and the grade ring is drawn where the ground
-// meets the level below grade, in either.
+// (which sets the solid ground aside and shows them).
 
 /** Presentation-only meshes are never picked: clicks fall through to what lies under them. */
 export const noopRaycast = () => {}
@@ -88,60 +70,25 @@ export function horizonVeilMaterial(
   return veilMaterial(groundColor, select(outsideLot, fade, float(0)))
 }
 
-/** The grade ring: dark as the lot line, a little narrower, just over the ground. */
-const GRADE_RING_COLOR = '#1c1917'
-const GRADE_RING_WIDTH = 0.16
-const GRADE_RING_LIFT = 0.015
-/** One run, never broken: a ribbon pattern with no gap. */
-const UNBROKEN: readonly number[] = [Number.POSITIVE_INFINITY, 0]
-
-/** The grade ring's ribbon along one outline where the ground meets a level below grade. */
-export function gradeRingGeometry(
-  outline: ReadonlyArray<Point>,
-  field: TerrainField | null,
-): BufferGeometry {
-  const drape = buildDrapedPolyline({ points: outline, field, lift: GRADE_RING_LIFT, closed: true })
-  return buildPatternedRibbon(drape.positions, UNBROKEN, GRADE_RING_WIDTH)
-}
-
-export function gradeRingMaterial() {
-  const material = new MeshBasicNodeMaterial({ color: GRADE_RING_COLOR, side: DoubleSide })
-  // Under the ground's ambiance the ring is a light rim: a dark ring would vanish in the dark mode.
-  material.colorNode = mix(
-    color(GRADE_RING_COLOR),
-    color(UNDERGROUND_RING),
-    undergroundAmbianceNode(),
-  )
-  return material
-}
-
 /**
  * Drawn only while the ground is veiled: the veil of one solid ground surface (the same geometry
- * in the same place), or the grade ring. A direct child of the site, as the surfaces are, so the
- * captures find it (`siteGround`) and hide it with the site's other surfaces.
- *
- * `shows` says when a live view draws it: `'window'` (a sheet: only where the ground window veils
- * a hillside in the eye's way; wholesale the ground is a hole, not a sheet) or `'veiled'` (the
- * ring: wherever any ground is veiled). A capture shows both by setting `visible` itself.
+ * in the same place). A direct child of the site, as the surfaces are, so the captures find it
+ * (`siteGround`) and hide it with the site's other surfaces. A live view draws it only where the
+ * ground window veils a hillside in the eye's way (wholesale the ground is a hole, not a sheet); a
+ * capture shows it by setting `visible` itself.
  */
 export function GroundVeil({
   geometry,
   material,
   position,
   rotation,
-  shows = 'window',
 }: {
   geometry: BufferGeometry
   material: Material
   position?: [number, number, number]
   rotation?: [number, number, number]
-  shows?: 'window' | 'veiled'
 }) {
-  const veiled = useViewer((state) =>
-    shows === 'veiled'
-      ? anyGroundVeiled(state)
-      : state.groundMode === 'auto' && state.groundWindowVeiled,
-  )
+  const veiled = useViewer((state) => state.groundMode === 'auto' && state.groundWindowVeiled)
   return (
     <mesh
       geometry={geometry}

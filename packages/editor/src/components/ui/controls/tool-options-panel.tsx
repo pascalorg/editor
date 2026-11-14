@@ -34,50 +34,80 @@ function ToolOptionRow({
   return (
     <div className="flex flex-col gap-2">
       <div className="px-0.5 font-medium text-muted-foreground text-xs">{option.label}</div>
-      <div
-        className="grid gap-1.5"
-        style={{
-          gridTemplateColumns: `repeat(${Math.min(option.choices.length, 3)}, minmax(0, 1fr))`,
-        }}
-      >
-        {option.choices.map((choice) => {
-          const selected = active && choice.value === value
-          const thumbnail = getChoiceThumbnail?.(option, choice.value)
-          return (
-            <button
-              aria-pressed={selected}
-              className={cn(
-                'rounded-lg px-2 py-2 text-center font-medium text-xs transition-colors',
-                selected
-                  ? 'bg-primary/10 text-primary ring-1 ring-primary/50'
-                  : 'bg-black/4 text-muted-foreground hover:bg-black/8 hover:text-foreground dark:bg-muted/40 dark:hover:bg-muted',
-              )}
-              key={choice.value}
-              onClick={() => {
-                triggerSFX('sfx:menu-click')
-                option.set(choice.value)
-                onSelect?.(option, choice.value)
-              }}
-              onMouseEnter={() => triggerSFX('sfx:menu-hover')}
-              type="button"
-            >
-              {thumbnail && (
-                <Image
-                  alt=""
-                  className={cn(
-                    'mx-auto mb-1 size-14 object-contain',
-                    !selected && 'opacity-70 grayscale',
-                  )}
-                  height={56}
-                  src={thumbnail}
-                  width={56}
-                />
-              )}
-              {choice.label}
-            </button>
-          )
-        })}
-      </div>
+      {option.input ? (
+        <label className="flex items-center gap-2 rounded-lg border border-border px-2 py-1.5">
+          <input
+            key={value}
+            aria-label={option.label}
+            className="min-w-0 flex-1 bg-transparent text-xs outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            type="number"
+            defaultValue={value}
+            min={option.input.min}
+            max={option.input.max}
+            step={option.input.step ?? 'any'}
+            onBlur={(event) => {
+              const next = event.target.valueAsNumber
+              if (
+                Number.isFinite(next) &&
+                !event.target.validity.rangeUnderflow &&
+                !event.target.validity.rangeOverflow
+              ) {
+                option.set(String(next))
+                onSelect?.(option, String(next))
+              } else event.target.value = value
+            }}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') event.currentTarget.blur()
+            }}
+          />
+          <span className="text-xs text-muted-foreground">{option.input.unit}</span>
+        </label>
+      ) : (
+        <div
+          className="grid gap-1.5"
+          style={{
+            gridTemplateColumns: `repeat(${Math.min(option.choices.length, 3)}, minmax(0, 1fr))`,
+          }}
+        >
+          {option.choices.map((choice) => {
+            const selected = active && choice.value === value
+            const thumbnail = getChoiceThumbnail?.(option, choice.value)
+            return (
+              <button
+                aria-pressed={selected}
+                className={cn(
+                  'rounded-lg px-2 py-2 text-center font-medium text-xs transition-colors',
+                  selected
+                    ? 'bg-primary/10 text-primary ring-1 ring-primary/50'
+                    : 'bg-black/4 text-muted-foreground hover:bg-black/8 hover:text-foreground dark:bg-muted/40 dark:hover:bg-muted',
+                )}
+                key={choice.value}
+                onClick={() => {
+                  triggerSFX('sfx:menu-click')
+                  option.set(choice.value)
+                  onSelect?.(option, choice.value)
+                }}
+                onMouseEnter={() => triggerSFX('sfx:menu-hover')}
+                type="button"
+              >
+                {thumbnail && (
+                  <Image
+                    alt=""
+                    className={cn(
+                      'mx-auto mb-1 size-14 object-contain',
+                      !selected && 'opacity-70 grayscale',
+                    )}
+                    height={56}
+                    src={thumbnail}
+                    width={56}
+                  />
+                )}
+                {choice.label}
+              </button>
+            )
+          })}
+        </div>
+      )}
       {activeChoice && activeChoice.description ? (
         <p className="px-0.5 text-[11px] text-muted-foreground leading-relaxed">
           {activeChoice.description}

@@ -52,8 +52,7 @@ export function foundationWallConstruction(construction: FoundationConstruction)
  * side: a room open to the sky, as the structure kernel reads it, facing air, not earth). A wall
  * outside the outline (a well against it) is. A wall with no closed circuit around it yet (the
  * first walls of a basement, an open run) counts as the outline in the making, so a basement drawn
- * wall by wall is foundation all the way round. The outline is the one `genericFoundation` draws
- * under.
+ * wall by wall is foundation all the way round.
  */
 export function wallsAgainstGround(
   nodes: Record<AnyNodeId, AnyNode>,

@@ -2,6 +2,7 @@
 
 import {
   type AnyNodeId,
+  formatLinearMeasurement,
   getStoredLevelHeight,
   type Point,
   type SlabNode,
@@ -10,7 +11,7 @@ import {
   useScene,
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
-import { Html } from '@react-three/drei'
+import { LocalizedHtml as Html } from '@pascal-app/viewer/ui'
 import { type ThreeEvent, useFrame, useThree } from '@react-three/fiber'
 import { useRef, useState } from 'react'
 import { type Group, Plane, Vector2, Vector3 } from 'three'
@@ -21,7 +22,6 @@ import {
   THICK_FLOOR_HINT,
   thickFloorAdvice,
 } from '../../lib/floor-footprints'
-import { formatLinearMeasurement } from '../../lib/measurements'
 import { runRoomHandleDrag } from '../../lib/room-handle-drag'
 import useEditor, { isGridSnapActive } from '../../store/use-editor'
 import useInteractionScope from '../../store/use-interaction-scope'

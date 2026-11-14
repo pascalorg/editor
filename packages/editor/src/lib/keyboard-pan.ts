@@ -2,6 +2,8 @@
 // move the same way. Keys match by physical position (`event.code`): the
 // cluster stays under the left hand on any layout (Z/Q/S/D on AZERTY).
 
+import { claimsKeyboardPan } from './tool-shortcuts'
+
 export type KeyboardPanState = {
   forward: boolean
   backward: boolean
@@ -79,10 +81,15 @@ export function clearKeyboardPanKeys(state: KeyboardPanState) {
   state.right = false
 }
 
-/** Pan keys are ignored with a modifier held (shortcuts) or while typing. */
+/**
+ * Pan keys are ignored with a modifier held (shortcuts), for a Shift chord that
+ * arms a tool (Shift+W window, Shift+S stairs, Shift+D door), and while typing.
+ */
 export function acceptsKeyboardPan(event: KeyboardEvent) {
   return (
-    !(event.metaKey || event.ctrlKey || event.altKey) && !isEditableKeyboardTarget(event.target)
+    !(event.metaKey || event.ctrlKey || event.altKey) &&
+    !claimsKeyboardPan(event) &&
+    !isEditableKeyboardTarget(event.target)
   )
 }
 

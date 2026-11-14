@@ -1,17 +1,18 @@
 'use client'
 
-import { type AnyNode, type AnyNodeId, useScene } from '@pascal-app/core'
+import { type AnyNode, type AnyNodeId, nodeRegistry, useScene } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
-import { useCallback, useSyncExternalStore } from 'react'
-import { selectionEnabled } from '../lib/interaction/scope'
+import type { SelectionModifierKeys } from '@pascal-app/viewer/ui'
 import {
   type RoomKey,
   RoomSelectionIndex,
   type RoomSelectionRecord,
   resolveRoomHit,
-} from '../lib/room-selection'
+} from '@pascal-app/viewer/ui'
+import { useCallback, useSyncExternalStore } from 'react'
+import { getFloorplanNodeExtension } from '../lib/floorplan/floorplan-extension'
+import { selectionEnabled } from '../lib/interaction/scope'
 import { shouldInterceptRoom } from '../lib/room-selection-commands'
-import { type SelectionModifierKeys, selectionModifiersFromEvent } from '../lib/selection-routing'
 import useEditor from '../store/use-editor'
 import useInteractionScope from '../store/use-interaction-scope'
 
@@ -134,10 +135,18 @@ export function hoverRoomFromHit(
   return !!room
 }
 
+/**
+ * The room a plan hit picks first. A kind whose plan extension declares
+ * `planHitSelectsNode` (a wall: a thin band between two rooms whose interiors
+ * are clickable in their own right) keeps the hit: picking a room by which
+ * half of the band the pointer landed on made thin partitions take several
+ * clicks. 3D keeps them room-first, where a room's floor is often hidden
+ * behind its walls.
+ */
 export function resolvePlanRoomHit(nodeId: string | null, point: readonly [number, number]) {
   const node = nodeId ? useScene.getState().nodes[nodeId as AnyNodeId] : null
+  if (node && getFloorplanNodeExtension(nodeRegistry.get(node.type))?.planHitSelectsNode)
+    return null
   const levelId = node?.parentId ?? useViewer.getState().selection.levelId
   return levelId ? resolveEditorRoomHit(node ?? null, levelId, point, '2d') : null
 }
-
-export { selectionModifiersFromEvent }

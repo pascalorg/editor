@@ -9,7 +9,10 @@ WORKDIR /app
 # bun (/usr/local/bun-node-fallback-bin/node). Next 16's build crashes it — a
 # segfault on 1.3.14, a turbopack CommonJS wrapper error on 1.3.0 — on both arm64
 # and amd64. CI does not hit this because GitHub runners have a real node.
-RUN apk add --no-cache nodejs
+# The floor is the October 2026 Node security release as packaged for this
+# image's Alpine 3.24; a minimum rather than an exact pin, so Alpine's later
+# rebuilds still install while an older, unpatched index fails the build.
+RUN apk add --no-cache 'nodejs>=24.22.1-r0'
 
 COPY . .
 RUN bun install --frozen-lockfile

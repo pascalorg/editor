@@ -19,8 +19,36 @@ export function floorFootprintName(
   nodes: Readonly<Record<string, AnyNode>>,
   plate: SlabNode,
 ): string {
+  const naming = floorFootprintNaming(nodes, plate)
+  switch (naming.kind) {
+    case 'named':
+      return naming.name
+    case 'room':
+      return `${naming.room} floor`
+    case 'shared':
+      return 'Shared floor'
+    case 'area':
+      return 'Floor area'
+  }
+}
+
+/**
+ * How `floorFootprintName` arrives at its name, so a UI can word it in its
+ * language: `named` is the plate's own name (or a room name that already
+ * ends in "floor") and shows as is; `room` is "<room> floor".
+ */
+export type FloorFootprintNaming =
+  | { kind: 'named'; name: string }
+  | { kind: 'room'; room: string }
+  | { kind: 'shared' }
+  | { kind: 'area' }
+
+export function floorFootprintNaming(
+  nodes: Readonly<Record<string, AnyNode>>,
+  plate: SlabNode,
+): FloorFootprintNaming {
   const own = plate.name?.trim()
-  if (own && !GENERATED_NAME.test(own)) return own
+  if (own && !GENERATED_NAME.test(own)) return { kind: 'named', name: own }
   const rooms = (plate.zoneIds ?? [])
     .flatMap((id) => {
       const zone = nodes[id]
@@ -34,7 +62,7 @@ export function floorFootprintName(
     !rooms.some((room) => room.floor?.footprint) &&
     isLargestFootprint(nodes, plate)
   )
-    return 'Shared floor'
+    return { kind: 'shared' }
   const key = rooms.find((room) => room.floor?.footprint)?.floor?.footprint
   const creatorId = key && floorFootprintCreatorId(key)
   const creator = creatorId ? nodes[creatorId] : undefined
@@ -49,8 +77,9 @@ export function floorFootprintName(
       ? creator.name?.trim()
       : undefined
   const named = creatorName || rooms.map((room) => room.name?.trim()).find(Boolean)
-  if (!named) return rooms.some((room) => room.floor?.footprint) ? 'Shared floor' : 'Floor area'
-  return /\bfloor$/i.test(named) ? named : `${named} floor`
+  if (!named)
+    return rooms.some((room) => room.floor?.footprint) ? { kind: 'shared' } : { kind: 'area' }
+  return /\bfloor$/i.test(named) ? { kind: 'named', name: named } : { kind: 'room', room: named }
 }
 
 function isLargestFootprint(nodes: Readonly<Record<string, AnyNode>>, plate: SlabNode) {

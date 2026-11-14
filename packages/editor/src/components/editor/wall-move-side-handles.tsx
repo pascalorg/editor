@@ -19,7 +19,7 @@ import {
   type WallNode,
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
-import { Html } from '@react-three/drei'
+import { LocalizedHtml as Html } from '@pascal-app/viewer/ui'
 import { createPortal, type ThreeEvent, useFrame, useThree } from '@react-three/fiber'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
@@ -70,6 +70,7 @@ import {
   NO_RAYCAST,
   useInvisibleHitAreaMaterial,
 } from './node-arrow-handles'
+import { WallPullGrip } from './wall-pull-grip'
 import { WallPushArrow } from './wall-push-arrow'
 
 const HANDLE_OFFSET = 0.27
@@ -251,6 +252,9 @@ function WallMoveSideHandlesForWall({ wall }: { wall: WallNode }) {
         />
         <WallCornerLeaderHandle endpoint="start" wall={effectiveWall} />
         <WallCornerLeaderHandle endpoint="end" wall={effectiveWall} />
+        {/* Past each end, the grip that pulls the next wall out of it. */}
+        <WallPullGrip endpoint="start" wall={effectiveWall} />
+        <WallPullGrip endpoint="end" wall={effectiveWall} />
       </group>
       <WallBaseElevationHandle
         baseElevation={baseElevation}
@@ -297,7 +301,7 @@ function StructureThicknessHandle({
   const structureHeight =
     node.type === 'fence'
       ? (node.height ?? 1.8)
-      : getWallEffectiveHeightForNodes(node, useScene.getState().nodes)
+      : getWallEffectiveHeightForNodes(node, useScene.getState().nodes, 0.5)
   const outward = new Vector2(frame.normal.x * side, frame.normal.y * side)
   const faceOffset = getWallLocalFaceZ({ ...node, thickness }, side > 0 ? 'a' : 'b') * side + 0.006
   const position: [number, number, number] = [
@@ -371,7 +375,7 @@ function StructureThicknessHandle({
       const initialStructureHeight =
         initialNode.type === 'fence'
           ? (initialNode.height ?? 1.8)
-          : getWallEffectiveHeightForNodes(initialNode, useScene.getState().nodes)
+          : getWallEffectiveHeightForNodes(initialNode, useScene.getState().nodes, 0.5)
       const initialStructureThickness =
         initialNode.type === 'fence'
           ? (initialNode.thickness ?? 0.08)
@@ -574,7 +578,11 @@ function WallCornerLeaderHandle({ wall, endpoint }: { wall: WallNode; endpoint: 
   const corner = endpoint === 'start' ? wall.start : wall.end
   const x = corner[0]
   const z = corner[1]
-  const wallHeight = getWallEffectiveHeightForNodes(wall, useScene.getState().nodes)
+  const wallHeight = getWallEffectiveHeightForNodes(
+    wall,
+    useScene.getState().nodes,
+    endpoint === 'start' ? 0 : 1,
+  )
 
   const dashedGeometry = useMemo(() => buildDashedVerticalGeometry(wallHeight), [wallHeight])
   const hitGeometry = useMemo(() => createEndpointHitAreaGeometry(CORNER_HEX_RADIUS), [])
@@ -780,7 +788,7 @@ function WallBaseElevationHandle({
       levelObject.updateWorldMatrix(true, false)
       const initialBase = getWallBaseElevationForNodes(initialNode, sceneApi.nodes())
       const supportBase = initialBase - (initialNode.supportOffset ?? 0)
-      const initialHeight = getWallEffectiveHeightForNodes(initialNode, sceneApi.nodes())
+      const initialHeight = getWallEffectiveHeightForNodes(initialNode, sceneApi.nodes(), 0)
       const midpointWorld = new Vector3(midpoint[0], initialBase, midpoint[1]).applyMatrix4(
         levelObject.matrixWorld,
       )
@@ -916,7 +924,7 @@ function WallHeightArrowHandle({ wall }: { wall: WallNode }) {
   const wallAngle = Math.atan2(-dirZ, dirX)
   // `wall` is the override-merged effective wall (see
   // WallMoveSideHandlesForWall), so this height is already live during a drag.
-  const wallHeight = getWallEffectiveHeightForNodes(wall, useScene.getState().nodes)
+  const wallHeight = getWallEffectiveHeightForNodes(wall, useScene.getState().nodes, 0.5)
   const handleY = wallHeight + HEIGHT_HANDLE_OFFSET
 
   const activateHeightResize = (event: ThreeEvent<PointerEvent>) => {
@@ -969,7 +977,7 @@ function WallHeightArrowHandle({ wall }: { wall: WallNode }) {
 
     // Dragging the top makes the wall custom-height; seed from the resolved
     // effective height so a plane-bound wall's drag starts at its real top.
-    const initialHeight = getWallEffectiveHeightForNodes(wall, useScene.getState().nodes)
+    const initialHeight = getWallEffectiveHeightForNodes(wall, useScene.getState().nodes, 0)
     const wallId = wall.id as AnyNodeId
     let pendingHeight = initialHeight
     let releaseSpatialCapture: (() => void) | null = null

@@ -106,11 +106,53 @@ describe('explicit wall merge', () => {
     ).toThrow('These walls have a different height.')
   })
 
-  test('refuses anything that would change the layout', () => {
+  test('sloped walls merge when their tops continue one line, read either way', () => {
+    // Heights at the plan x of each end of the kept wall, whichever wall is kept.
+    const tops = (kept: WallNode) => ({
+      [kept.start[0]]: kept.height,
+      [kept.end[0]]: (kept.height ?? 0) + (kept.endHeightOffset ?? 0),
+    })
+    const a = wall([0, 0], [4, 0], { height: 3, endHeightOffset: -1 })
+    const b = wall([8, 0], [4, 0], { height: 1, endHeightOffset: 1 })
+    const plan = planWallMerge(map([a, b]), [a.id, b.id])
+    const kept = apply(map([a, b]), plan.changes)[plan.wallId] as WallNode
+    const heights = tops(kept)
+    expect(heights[0]).toBeCloseTo(3)
+    expect(heights[8]).toBeCloseTo(1)
+
+    const stepped = wall([4, 0], [8, 0], { height: 2.5, endHeightOffset: -1 })
+    expect(() => planWallMerge(map([a, stepped]), [a.id, stepped.id])).toThrow(
+      'These walls have a different slope.',
+    )
+    const shallower = wall([4, 0], [8, 0], { height: 2, endHeightOffset: -0.5 })
+    expect(() => planWallMerge(map([a, shallower]), [a.id, shallower.id])).toThrow(
+      'These walls have a different slope.',
+    )
+    const flat = wall([4, 0], [8, 0], { height: 2 })
+    expect(() => planWallMerge(map([a, flat]), [a.id, flat.id])).toThrow(
+      'These walls have a different slope.',
+    )
+  })
+
+  test('merges a straight run across a T: the wall meeting it stays on its body', () => {
     const a = wall([0, 0], [4, 0])
     const b = wall([4, 0], [8, 0])
     const tee = wall([4, 0], [4, 3])
-    expect(() => planWallMerge(map([a, b, tee]), [a.id, b.id])).toThrow('Another wall')
+    const { changes, wallId } = planWallMerge(map([a, b, tee]), [a.id, b.id])
+    const merged = changes.update.find((op) => op.id === wallId)!.data as Partial<WallNode>
+    expect([merged.start, merged.end]).toEqual([
+      [0, 0],
+      [8, 0],
+    ])
+    expect(changes.update.some((op) => op.id === tee.id)).toBe(false)
+    expect(changes.delete).toHaveLength(1)
+  })
+
+  test('refuses anything that would change the layout', () => {
+    const a = wall([0, 0], [4, 0])
+    const b = wall([4, 0], [8, 0])
+    const along = wall([4, 0], [6, 0])
+    expect(() => planWallMerge(map([a, b, along]), [a.id, b.id])).toThrow('Another wall')
     const corner = wall([4, 0], [4, 4])
     expect(() => planWallMerge(map([a, corner]), [a.id, corner.id])).toThrow('straight line')
     const thick = wall([4, 0], [8, 0], { thickness: 0.3 })
@@ -200,6 +242,8 @@ describe('explicit wall merge through the store', () => {
         rotation: [0, 0.25, 0],
         hingesSide: 'left',
         handleSide: 'right',
+        casingFaceA: true,
+        casingFaceB: false,
       })
       kept.children = keptWindows.map((w) => w.id)
       absorbed.children = [absorbedWindow.id, absorbedDoor.id]
@@ -212,6 +256,7 @@ describe('explicit wall merge through the store', () => {
       const moved = nodes[absorbedWindow.id] as WindowNode
       expect(moved.position[0]).toBeCloseTo(expectedX)
       expect(moved.side).toBe('back')
+      expect([moved.casingFaceA, moved.casingFaceB]).toEqual([undefined, undefined])
       // A door on the reversed wall turns with its frame — depth and yaw — while
       // its hinges and handle, hung off that yaw, keep their stored side.
       const door = nodes[absorbedDoor.id] as DoorNode
@@ -219,6 +264,8 @@ describe('explicit wall merge through the store', () => {
       expect(door.rotation[1]).toBeCloseTo(0.25 - Math.PI)
       expect(door.hingesSide).toBe('left')
       expect(door.handleSide).toBe('right')
+      // Its casing, kept per wall face, stays on the same side of the wall.
+      expect([door.casingFaceA, door.casingFaceB]).toEqual([false, true])
       // The kept wall's own openings keep their side and their world place.
       const keptFirst = nodes[keptWindows[0]!.id] as WindowNode
       expect(keptFirst.side).toBeUndefined()

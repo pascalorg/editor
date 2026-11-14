@@ -17,6 +17,10 @@ export function isFreshPlacementMetadata(metadata: unknown): boolean {
   return getPlacementMetadataRecord(metadata).isNew === true
 }
 
+export function stripPlacementMetadataFlags(
+  metadata: Record<string, unknown>,
+): Record<string, unknown>
+export function stripPlacementMetadataFlags(metadata: unknown): unknown
 export function stripPlacementMetadataFlags(metadata: unknown): unknown {
   if (typeof metadata !== 'object' || metadata === null || Array.isArray(metadata)) {
     return metadata

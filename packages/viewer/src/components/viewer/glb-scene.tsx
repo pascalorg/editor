@@ -7,33 +7,51 @@ import {
   containsPoint,
   distanceToBoundary,
   EXPLODED_GAP,
-  itemInteraction,
+  emitter,
+  type GeometryContext,
   itemPrompt,
   operateItem,
   polygonInteriorPoint,
   type SurfaceRole,
   useInteractive,
+  usePascalI18n,
 } from '@pascal-app/core'
 import {
   type EvaluatedMotion,
   operableParts,
   ProceduralMotionController,
 } from '@pascal-app/core/procedural-items'
+import { Html } from '@react-three/drei'
 import { type ThreeEvent, useFrame, useThree } from '@react-three/fiber'
-import { useCallback, useEffect, useMemo, useRef } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import * as THREE from 'three'
 import { lerp } from 'three/src/math/MathUtils.js'
 import { acceleratedRaycast, computeBoundsTree, disposeBoundsTree } from 'three-mesh-bvh'
 import { useGLTFKTX2 } from '../../hooks/use-gltf-ktx2'
+import { createDaylightGroundMaterial, DAYLIGHT_PARCEL } from '../../lib/daylight/ground'
+import { isDaylightAtmosphere } from '../../lib/daylight/look'
+import { type GlbMerge, mergeBakedStatic } from '../../lib/glb-merge'
+import { setSurfaceRaycastLayers } from '../../lib/layers'
 import { createSurfaceRoleMaterial } from '../../lib/materials'
+import {
+  attachOcclusionCuller,
+  type CullingPipeline,
+  createOcclusionCuller,
+} from '../../lib/occlusion-culler'
 import { applyShadowOnly, clearShadowOnly } from '../../lib/shadow-only'
 import useViewer from '../../store/use-viewer'
+import { OPEN_SOUNDS, openingSound } from '../../systems/interactive/callout-actions'
+import { proceduralSettled } from '../../systems/interactive/opening-settled'
 import { useClipActions } from '../../systems/interactive/scripted-clips'
 import { resolveLevelVisibility } from '../../systems/level/level-utils'
 import { GlbInteractive, type GlbInteractiveItem } from './glb-interactive'
 import { bakedLoopMechanisms } from './glb-mechanisms'
 import { GlbReferenceNodes } from './glb-reference-nodes'
 import { GlbReplaceInstances } from './glb-replace-instances'
+import { bindGlbShutters, isGlbShutterHit, toggleGlbShutters } from './glb-scene-motion'
+import { GlbSelectionCallout } from './glb-selection-callout'
+import { useSceneAtmosphere } from './scene-atmosphere'
+import type { CalloutSound } from './selection-callout'
 
 /** Baked `kind` → surface role, so monochrome can recolor by role like the
  *  parametric viewer (textures-off collapses each face to its themed clay). */
@@ -88,6 +106,7 @@ type PascalExtras = {
   pascalId?: string
   kind?: string
   label?: string
+  shutters?: boolean
   openable?: boolean
   clips?: string[]
   proceduralMotion?: {
@@ -159,6 +178,8 @@ const _camSize = new THREE.Vector3()
 const _walkPos = new THREE.Vector3()
 const _reticleNdc = new THREE.Vector2(0, 0)
 const _reticleRaycaster = new THREE.Raycaster()
+// Merged originals sit on the batched layer; the reticle still aims at them (batches never hit).
+setSurfaceRaycastLayers(_reticleRaycaster.layers)
 /** How far ahead (metres) an interactive part counts as "in view" for activation. */
 const WALK_REACH = 3
 const ZONE_FOOTPRINT_EPSILON = 0.05
@@ -215,6 +236,7 @@ export function GlbScene({
   onObjectsChange,
   onPick,
   onWalkthroughChange,
+  sceneNodes,
 }: {
   url: string
   /** Light / animation effects + controls recovered from the DB scene graph,
@@ -231,6 +253,10 @@ export function GlbScene({
   /** Clicks and hovers on the building; without it the scene is look-only. */
   onPick?: (event: GlbPickEvent) => void
   onWalkthroughChange?: (state: GlbWalkthrough) => void
+  /** Every node of the scene graph the artifact was baked from: the selection
+   *  callout says what each element is, and `replace` renderers resolve their
+   *  parent and siblings. A stable reference. */
+  sceneNodes?: Readonly<Record<string, AnyNode>>
 }) {
   const gltf = useGLTFKTX2(url) as unknown as {
     scene: THREE.Group
@@ -238,6 +264,11 @@ export function GlbScene({
   }
   const rootRef = useRef<THREE.Group>(null!)
   const actions = useClipActions(gltf.animations, rootRef)
+  const resolveNode = useMemo<GeometryContext['resolve'] | undefined>(
+    () =>
+      sceneNodes ? <N = AnyNode>(id: AnyNodeId) => sceneNodes[id] as N | undefined : undefined,
+    [sceneNodes],
+  )
   const proceduralPlayback = useMemo(() => {
     const byNode = new Map<
       string,
@@ -307,6 +338,8 @@ export function GlbScene({
         clips: Map<string, { partId: string; kind: 'finite' | 'spin'; groupId: string }>
         spinParts: string[]
         sequence: number
+        /** The commanded run whose end is still to be announced. */
+        settling: number | null
       }
     >(
       [...byNode].map(([nodeId, entry]) => {
@@ -323,6 +356,7 @@ export function GlbScene({
             clips: entry.clips,
             spinParts,
             sequence: 0,
+            settling: null,
           },
         ]
       }),
@@ -346,8 +380,14 @@ export function GlbScene({
   const camera = useThree((state) => state.camera)
   const controls = useThree((state) => state.controls) as LookAtControls | null
   const walkthroughMode = useViewer((s) => s.walkthroughMode)
+  // Doors, the reticle prompt and the room HUD belong to the walk; the drone just flies.
+  const walkingOnFoot = useViewer((s) => s.walkthroughMode && s.walkthroughMovement === 'walk')
   const textures = useViewer((s) => s.textures)
   const sceneTheme = useViewer((s) => s.sceneTheme)
+  // Static merge of the artifact (see lib/glb-merge.ts); `?merge=0` keeps every mesh separate.
+  const mergeRef = useRef<GlbMerge | null>(null)
+  const [mergeVersion, setMergeVersion] = useState(0)
+  const [mergeRebuild, setMergeRebuild] = useState(0)
 
   // Monochrome: strip the baked textures and recolor every building mesh with a
   // flat themed-clay material by surface role — mirrors the parametric viewer's
@@ -367,7 +407,36 @@ export function GlbScene({
           : createSurfaceRoleMaterial(role, 'clay', THREE.DoubleSide, sceneTheme)
       })
     })
-  }, [gltf.scene, textures, sceneTheme])
+    for (const batch of mergeRef.current?.batches ?? []) applyBatchLook(batch, textures, sceneTheme)
+  }, [gltf.scene, textures, sceneTheme, mergeVersion])
+
+  // Baked meshes take part in the sun's shadows (the bake carries no shadow flags). Transparent
+  // surfaces (glazing) don't cast, so sunlight still reaches the rooms behind them. Foliage ships
+  // opaque with cut-out textures (square dark leaves): alpha-test it.
+  useEffect(() => {
+    gltf.scene.traverse((object) => {
+      if (!(object.userData as PascalExtras).kind?.startsWith('trees:')) return
+      object.traverse((child) => {
+        const mesh = child as THREE.Mesh
+        if (!mesh.isMesh) return
+        for (const material of Array.isArray(mesh.material) ? mesh.material : [mesh.material]) {
+          const standard = material as THREE.MeshStandardMaterial
+          if (!standard.map || standard.alphaTest >= 0.5) continue
+          standard.alphaTest = 0.5
+          standard.side = THREE.DoubleSide
+          standard.transparent = false
+          standard.needsUpdate = true
+        }
+      })
+    })
+    gltf.scene.traverse((child) => {
+      const mesh = child as THREE.Mesh
+      if (!mesh.isMesh) return
+      const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material]
+      mesh.receiveShadow = true
+      mesh.castShadow = !materials.some((material) => material?.transparent)
+    })
+  }, [gltf.scene])
 
   // The baked scene isn't wrapped in <SceneBvh> (the community viewer runs with
   // useBvh={false}), so hover/pick raycasts against the baked building were
@@ -474,8 +543,6 @@ export function GlbScene({
       levelsWithZones: new Set(zoneList.map((zone) => zone.levelId)),
     }
   }, [gltf.scene])
-  // Level pascalIds bottom-to-top, for the interactive light pool's level factor.
-  const levelOrder = useMemo(() => levels.map((entry) => entry.id), [levels])
   // Loop clips no other controller plays (a plugin kind's mechanism) run on
   // click and E. As in the editor they start stopped and never persist.
   const loopMechanisms = useMemo(
@@ -544,6 +611,81 @@ export function GlbScene({
     return () => onObjectsChange?.(new Map())
   }, [identity, onObjectsChange])
 
+  // Static merge: thousands of baked meshes become a few hundred draws per pass (the enhanced
+  // viewer's batching). Rebuilt when the interactive items change, or when a merged mesh is
+  // shown or hidden on its own (a plugin taking over a baked kind, an isolation), so a batch
+  // never draws something that should be gone.
+  const mergeEnabled = useMemo(
+    () =>
+      typeof window === 'undefined' ||
+      new URLSearchParams(window.location.search).get('merge') !== '0',
+    [],
+  )
+  useEffect(() => {
+    if (!mergeEnabled) return
+    const animated = new Set<THREE.Object3D>()
+    for (const clip of gltf.animations) {
+      for (const track of clip.tracks) {
+        const { nodeName } = THREE.PropertyBinding.parseTrackName(track.name)
+        const node = THREE.PropertyBinding.findNode(gltf.scene, nodeName) as THREE.Object3D | null
+        if (node) animated.add(node)
+      }
+    }
+    const merge = mergeBakedStatic(gltf.scene, (kind) => ROLE_BY_KIND[kind ?? ''], {
+      keepIds: new Set((interactiveItems ?? []).map((item) => item.pascalId)),
+      animated,
+    })
+    const { textures: texturesNow, sceneTheme: themeNow } = useViewer.getState()
+    for (const batch of merge.batches) applyBatchLook(batch, texturesNow, themeNow)
+    mergeRef.current = merge
+    mergeSignature.current = merge.visibilitySignature()
+    setMergeVersion((version) => version + 1)
+    return () => {
+      for (const batch of merge.batches) disposeBatchLook(batch)
+      merge.dispose()
+      if (mergeRef.current === merge) mergeRef.current = null
+    }
+  }, [gltf.scene, gltf.animations, interactiveItems, mergeEnabled, mergeRebuild])
+
+  // Occlusion culling (see lib/occlusion-culler.ts): what the walls, slabs and roofs hide from
+  // the eye isn't drawn. Rebuilt with the merge, whose batches are what it mostly culls.
+  // `?occlusion=0` draws everything.
+  const rootScene = useThree((state) => state.scene)
+  const renderer = useThree((state) => state.gl)
+  const getThree = useThree((state) => state.get)
+  const occlusionEnabled = useMemo(
+    () =>
+      typeof window === 'undefined' ||
+      new URLSearchParams(window.location.search).get('occlusion') !== '0',
+    [],
+  )
+  useEffect(() => {
+    // three's drawing pipeline (WebGPU renderer) answers which objects a render skips.
+    const pipeline = (renderer as { drawingPipeline?: CullingPipeline }).drawingPipeline
+    if (!occlusionEnabled || !pipeline) return
+    const culler = createOcclusionCuller(gltf.scene)
+    const detach = attachOcclusionCuller({
+      scene: rootScene,
+      pipeline,
+      culler,
+      getCamera: () => getThree().camera,
+    })
+    return () => {
+      detach()
+      culler.dispose()
+    }
+  }, [gltf.scene, rootScene, renderer, getThree, occlusionEnabled, mergeVersion])
+  const mergeSignature = useRef(0)
+  const mergeCheck = useRef(0)
+  useFrame((_, delta) => {
+    const merge = mergeRef.current
+    if (!merge) return
+    mergeCheck.current += delta
+    if (mergeCheck.current < 0.25) return
+    mergeCheck.current = 0
+    if (merge.visibilitySignature() !== mergeSignature.current) setMergeRebuild((n) => n + 1)
+  })
+
   // Apply the viewer's level display to the baked floors each frame, by the
   // parametric LevelSystem's rule (solo, and the levels above the current one
   // hidden when the host asks). Walkthrough always shows the full stacked
@@ -603,8 +745,16 @@ export function GlbScene({
       if (command && command.sequence > entry.sequence) {
         entry.controller.command(command)
         entry.sequence = command.sequence
+        entry.settling = command.sequence
       }
       const frame = entry.controller.tick(delta)
+      if (entry.settling !== null && frame.settled) {
+        emitter.emit('procedural:motion-settled', {
+          nodeId: nodeId as AnyNodeId,
+          sequence: entry.settling,
+        })
+        entry.settling = null
+      }
       for (const [clipName, binding] of entry.clips) {
         const action = proceduralPlayback.actions.get(clipName)
         if (!action) continue
@@ -676,17 +826,6 @@ export function GlbScene({
       ),
     [interactiveItems],
   )
-  // A click opens and closes an item with an `open` clip (an authored object,
-  // a scripted window or door), like a door.
-  const toggleOpenControl = useCallback(
-    (identityNode: THREE.Object3D) => {
-      const item = toggleableItem((identityNode.userData as PascalExtras).pascalId)
-      if (!item || itemInteraction(item.interactive).kind !== 'open') return false
-      operateItem(item.pascalId, item.interactive)
-      return true
-    },
-    [toggleableItem],
-  )
   const toggleLoopMechanism = useCallback(
     (identityNode: THREE.Object3D) => {
       const id = (identityNode.userData as PascalExtras).pascalId as AnyNodeId | undefined
@@ -698,7 +837,12 @@ export function GlbScene({
     [loopMechanisms],
   )
 
+  useEffect(() => bindGlbShutters(identity, actions), [identity, actions])
+
   const openIds = useRef(new Set<string>())
+  // Bumped on every baked door or window toggle so the selection callout re-reads `openIds`.
+  const [, setOpenVersion] = useState(0)
+  const isOpen = useCallback((id: string) => openIds.current.has(id), [])
   const toggleProcedural = useCallback(
     (hit: THREE.Object3D, identityNode: THREE.Object3D) => {
       const extras = identityNode.userData as PascalExtras
@@ -741,6 +885,9 @@ export function GlbScene({
       action.play()
       if (willOpen) openIds.current.add(id)
       else openIds.current.delete(id)
+      setOpenVersion((version) => version + 1)
+      // Played backwards from where it stands, the clip lands after its current time.
+      if (!willOpen) return new Promise<void>((resolve) => setTimeout(resolve, action.time * 1000))
     },
     [actions],
   )
@@ -803,14 +950,16 @@ export function GlbScene({
   })
 
   // ── Walkthrough: first-person HUD + interaction ────────────────────────────
+  const [shuttersInView, setShuttersInView] = useState(false)
   const walkDoorRef = useRef<{ hit: THREE.Object3D; node: THREE.Object3D } | null>(null)
+  const walkPromptRef = useRef<{ isOpen: boolean; verb?: string } | null>(null)
   const lastWalkKey = useRef<string | null>(null)
 
   // Each frame in walkthrough, report the floor + room the camera stands in and
   // the openable directly ahead (a forward ray from screen centre) so the host
   // can draw the reticle prompt. Fires the callback only when the state changes.
   useFrame(() => {
-    if (!walkthroughMode) return
+    if (!walkingOnFoot) return
     camera.getWorldPosition(_walkPos)
 
     let floor: GlbLevelEntry | null = levels[0] ?? null
@@ -877,7 +1026,14 @@ export function GlbScene({
         door = { label: extras.label ?? 'Item', isOpen, verb: isOpen ? 'turn off' : 'turn on' }
       }
     }
+    if (hit && !doorNode) {
+      const node = findIdentityAncestor(hit.object)
+      if ((node?.userData as PascalExtras | undefined)?.shutters && node)
+        doorNode = { hit: hit.object, node }
+    }
+    setShuttersInView(Boolean((doorNode?.node.userData as PascalExtras | undefined)?.shutters))
     walkDoorRef.current = doorNode
+    walkPromptRef.current = door
 
     const key = `${floor?.id ?? ''}|${zone?.id ?? ''}|${door ? `${doorId}:${door.isOpen}` : ''}`
     if (key !== lastWalkKey.current) {
@@ -888,38 +1044,81 @@ export function GlbScene({
 
   // E or click activates the openable in view. The click also re-locks the
   // pointer through the walkthrough controller; no selection happens.
-  const activateWalkDoor = useCallback(() => {
-    const target = walkDoorRef.current
-    if (!target) return
-    const item = toggleableItem((target.node.userData as PascalExtras).pascalId)
-    if (item) {
-      operateItem(item.pascalId, item.interactive)
-      return
-    }
-    if (!(toggleProcedural(target.hit, target.node) || toggleLoopMechanism(target.node)))
-      toggleOpenable(target.node)
-  }, [toggleableItem, toggleLoopMechanism, toggleOpenable, toggleProcedural])
+  const activateWalkDoor = useCallback(
+    (shutterHit = false) => {
+      const target = walkDoorRef.current
+      if (!target) return
+      if (shutterHit && target.node.userData.shutters && isGlbShutterHit(target.hit, target.node)) {
+        playShutterSound(target.node)
+        toggleGlbShutters(target.node)
+        return
+      }
+      const prompt = walkPromptRef.current
+      const extras = target.node.userData as PascalExtras
+      const switches = prompt?.verb !== undefined && !['open', 'close'].includes(prompt.verb)
+      const sound = switches
+        ? OPEN_SOUNDS.switch
+        : openingSound(
+            (extras.pascalId && sceneNodes?.[extras.pascalId]) || { type: extras.kind ?? 'door' },
+          )
+      const play = (settled?: Promise<void>, as: CalloutSound = sound) => {
+        if (!prompt) return
+        // A garage door's motor runs the whole way, so it starts with the press.
+        if (!(prompt.isOpen && settled) || as === OPEN_SOUNDS.garage) {
+          emitter.emit('interaction:sound', prompt.isOpen ? as.off : as.on)
+          return
+        }
+        if (as.swing) emitter.emit('interaction:sound', as.swing)
+        void settled.then(() => emitter.emit('interaction:sound', as.off))
+      }
+      const item = toggleableItem(extras.pascalId)
+      if (item) {
+        play()
+        operateItem(item.pascalId, item.interactive)
+        return
+      }
+      if (toggleProcedural(target.hit, target.node)) {
+        // A recipe's door or lid swings, its drawer slides; both land on the motion's end.
+        const sliding = findProceduralMotionAncestor(target.hit)?.kind === 'slide'
+        if (switches) play()
+        else
+          play(
+            proceduralSettled(extras.pascalId as AnyNodeId),
+            sliding ? OPEN_SOUNDS.drawer : OPEN_SOUNDS.panel,
+          )
+      } else if (toggleLoopMechanism(target.node)) play()
+      else play(toggleOpenable(target.node))
+    },
+    [sceneNodes, toggleableItem, toggleLoopMechanism, toggleOpenable, toggleProcedural],
+  )
   useEffect(() => {
-    if (!walkthroughMode) return
+    if (!walkingOnFoot) return
     const onKey = (event: KeyboardEvent) => {
       if (event.key.toLowerCase() === 'e') activateWalkDoor()
+      const shutters = walkDoorRef.current?.node
+      if (event.key.toLowerCase() === 'f' && !event.repeat && shutters?.userData.shutters) {
+        playShutterSound(shutters)
+        toggleGlbShutters(shutters)
+      }
     }
     const canvas = document.querySelector('canvas')
     window.addEventListener('keydown', onKey)
-    canvas?.addEventListener('click', activateWalkDoor)
+    const onClick = () => activateWalkDoor(true)
+    canvas?.addEventListener('click', onClick)
     return () => {
       window.removeEventListener('keydown', onKey)
-      canvas?.removeEventListener('click', activateWalkDoor)
+      canvas?.removeEventListener('click', onClick)
     }
-  }, [walkthroughMode, activateWalkDoor])
+  }, [walkingOnFoot, activateWalkDoor])
 
-  // Clear the HUD (and stale targeting) whenever walkthrough turns off.
+  // Clear the HUD (and stale targeting) whenever the walk ends, or turns into a drone flight.
   useEffect(() => {
-    if (walkthroughMode) return
+    if (walkingOnFoot) return
+    setShuttersInView(false)
     walkDoorRef.current = null
     lastWalkKey.current = null
     onWalkthroughChange?.(null)
-  }, [walkthroughMode, onWalkthroughChange])
+  }, [walkingOnFoot, onWalkthroughChange])
 
   const lastHover = useRef<string | null>(null)
   const handlePointerMove = useCallback(
@@ -943,8 +1142,8 @@ export function GlbScene({
     onPick?.({ type: 'hover', pick: null, modifiers: NO_MODIFIERS })
   }, [onPick])
 
-  // The host's rules decide the selection; an openable the click selects (a
-  // door, a window, an item with an `open` clip, a mechanism) also plays.
+  // The host's rules decide the selection; what the element can do is offered
+  // on its selection callout, never run by the click itself.
   const handleClick = useCallback(
     (event: ThreeEvent<MouseEvent>) => {
       event.stopPropagation()
@@ -953,27 +1152,8 @@ export function GlbScene({
       if (walkthroughMode || !onPick) return
       const pick = resolveGlbPick(event.intersections, identity)
       onPick({ type: 'click', pick, modifiers: modifiersOf(event.nativeEvent) })
-      if (!pick || !useViewer.getState().selection.selectedIds.includes(pick.nodeId)) return
-      const object = identity.get(pick.nodeId)
-      if (!object) return
-      if (
-        !(
-          toggleOpenControl(object) ||
-          toggleProcedural(pick.hitObject, object) ||
-          toggleLoopMechanism(object)
-        )
-      )
-        toggleOpenable(object)
     },
-    [
-      identity,
-      onPick,
-      toggleLoopMechanism,
-      toggleOpenControl,
-      toggleOpenable,
-      toggleProcedural,
-      walkthroughMode,
-    ],
+    [identity, onPick, walkthroughMode],
   )
 
   // A click on empty space clears the room and the element (the floor stays).
@@ -999,6 +1179,7 @@ export function GlbScene({
 
   return (
     <group ref={rootRef}>
+      {walkingOnFoot && shuttersInView ? <GlbShuttersPrompt /> : null}
       <primitive
         object={gltf.scene}
         onClick={handleClick}
@@ -1008,14 +1189,16 @@ export function GlbScene({
       />
       {/* Re-light + re-animate the baked artifact from the DB scene graph,
           joined to the baked nodes by pascalId. */}
+      <GlbSelectionCallout
+        identity={identity}
+        isOpen={isOpen}
+        items={interactiveItems}
+        loopMechanisms={loopMechanisms}
+        sceneNodes={sceneNodes}
+        toggleOpen={toggleOpenable}
+      />
       {interactiveItems?.length ? (
-        <GlbInteractive
-          actions={actions}
-          identity={identity}
-          items={interactiveItems}
-          levelOrder={levelOrder}
-          zones={zoneEntries}
-        />
+        <GlbInteractive actions={actions} identity={identity} items={interactiveItems} />
       ) : null}
       {/* Scans + guides, stripped from the bake and re-added from scene data,
           anchored to their parent level's baked node. */}
@@ -1025,10 +1208,17 @@ export function GlbScene({
       {/* `bake: 'replace'` nodes (plugin trees): baked meshes hidden above, the
           live instanced render portaled per level via each kind's bakeReplaceRenderer. */}
       {replaceNodes?.length ? (
-        <GlbReplaceInstances identity={identity} nodes={replaceNodes} />
+        <GlbReplaceInstances identity={identity} nodes={replaceNodes} resolve={resolveNode} />
       ) : null}
+      <GlbDaylightGround root={gltf.scene} />
     </group>
   )
+}
+
+function playShutterSound(node: THREE.Object3D) {
+  const id = (node.userData as PascalExtras).pascalId as AnyNodeId | undefined
+  const open = id && useInteractive.getState().mechanismParts[`${id}:shutters`]
+  emitter.emit('interaction:sound', open ? OPEN_SOUNDS.shutters.off : OPEN_SOUNDS.shutters.on)
 }
 
 const NO_MODIFIERS: GlbPickEvent['modifiers'] = {
@@ -1040,4 +1230,102 @@ const NO_MODIFIERS: GlbPickEvent['modifiers'] = {
 
 function modifiersOf(event: MouseEvent): GlbPickEvent['modifiers'] {
   return { alt: event.altKey, ctrl: event.ctrlKey, meta: event.metaKey, shift: event.shiftKey }
+}
+
+const NO_RAYCAST = () => {}
+
+/** A merged batch shows its baked material, or in monochrome the themed clay of its role. */
+function applyBatchLook(
+  batch: THREE.Mesh,
+  textures: boolean,
+  sceneTheme: Parameters<typeof createSurfaceRoleMaterial>[3],
+) {
+  const { role, bakedMaterial } = batch.userData as {
+    role?: SurfaceRole
+    bakedMaterial: THREE.Material
+  }
+  disposeBatchLook(batch)
+  batch.material =
+    textures || !role
+      ? bakedMaterial
+      : createSurfaceRoleMaterial(role, 'clay', THREE.DoubleSide, sceneTheme)
+}
+
+function disposeBatchLook(batch: THREE.Mesh) {
+  const material = batch.material as THREE.Material
+  if (material !== (batch.userData as { bakedMaterial: THREE.Material }).bakedMaterial)
+    material.dispose()
+}
+
+/**
+ * The colored appearance's ground under a baked artifact (the bake strips the live horizon
+ * disc): the squared daylight ground just under the baked site fill, so the parcel keeps its own
+ * surface; the atmosphere's fog takes it to the horizon.
+ */
+function GlbDaylightGround({ root }: { root: THREE.Object3D }) {
+  const atmosphere = useSceneAtmosphere()
+  const daylight = isDaylightAtmosphere(atmosphere)
+  // The baked site fill (the site's own opaque surface) becomes the daylight parcel: a neutral,
+  // slightly lighter surface so the lot reads as its own place on the squared ground.
+  useEffect(() => {
+    if (!daylight) return
+    const parcel = createDaylightGroundMaterial(false, { color: DAYLIGHT_PARCEL })
+    const swapped: [THREE.Mesh, THREE.Material | THREE.Material[]][] = []
+    root.traverse((object) => {
+      if ((object.userData as PascalExtras).kind !== 'site') return
+      for (const child of object.children) {
+        const mesh = child as THREE.Mesh
+        const material = mesh.material as THREE.Material | undefined
+        if (!mesh.isMesh || (mesh.userData as PascalExtras).pascalId || !material) continue
+        if (Array.isArray(material) || material.transparent) continue
+        swapped.push([mesh, mesh.material])
+        mesh.material = parcel
+      }
+    })
+    return () => {
+      for (const [mesh, material] of swapped) mesh.material = material
+      parcel.dispose()
+    }
+  }, [daylight, root])
+  const solid = useViewer((state) => state.shading === 'solid')
+  const material = useMemo(() => {
+    if (!daylight) return null
+    const ground = createDaylightGroundMaterial(solid, { horizon: atmosphere?.fogRadiance })
+    ground.polygonOffset = true
+    ground.polygonOffsetFactor = 2
+    ground.polygonOffsetUnits = 4
+    return ground
+  }, [atmosphere, daylight, solid])
+  useEffect(() => () => material?.dispose(), [material])
+  if (!material) return null
+  return (
+    <mesh
+      material={material}
+      position={[0, -0.07, 0]}
+      raycast={NO_RAYCAST}
+      receiveShadow
+      rotation={[-Math.PI / 2, 0, 0]}
+    >
+      <planeGeometry args={[12_000, 12_000]} />
+    </mesh>
+  )
+}
+
+/** Match the walkthrough HUD's secondary key prompt, without requiring host wiring. */
+function GlbShuttersPrompt() {
+  const i18n = usePascalI18n()
+  return (
+    <Html fullscreen style={{ pointerEvents: 'none' }}>
+      <div className="dark pointer-events-none absolute top-1/2 left-1/2 mt-16 -translate-x-1/2 whitespace-nowrap text-foreground">
+        <div className="corner-smooth flex items-center gap-1.5 rounded-full border border-border/40 bg-background/80 px-3 py-1 text-xs shadow-elevation-3 backdrop-blur-xl">
+          <kbd className="rounded border border-border/60 bg-white/10 px-1.5 py-0.5 font-mono text-[10px]">
+            F
+          </kbd>
+          <span className="font-medium">
+            {i18n._({ id: 'viewer.walkthrough.shutters', message: 'Shutters' })}
+          </span>
+        </div>
+      </div>
+    </Html>
+  )
 }

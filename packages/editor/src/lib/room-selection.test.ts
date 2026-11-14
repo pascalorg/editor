@@ -24,6 +24,12 @@ import {
 } from '@pascal-app/core'
 import { migrateCeilingRoomLinks, migrateRoomZones } from '@pascal-app/core/scene-migrations'
 import { useViewer } from '@pascal-app/viewer'
+import {
+  type RoomKey,
+  RoomSelectionIndex,
+  resolveRoomHit,
+  shouldSelectRoom,
+} from '@pascal-app/viewer/ui'
 import { _roots, act } from '@react-three/fiber'
 import { createElement } from 'react'
 import { Group, type LineSegments } from 'three'
@@ -37,12 +43,6 @@ import useSessionGroups from '../store/use-session-groups'
 import { withSelectionHarness } from '../test-utils/selection-harness'
 import { startRoomDivide } from './room-divide-session'
 import { runRoomHandleDrag } from './room-handle-drag'
-import {
-  type RoomKey,
-  RoomSelectionIndex,
-  resolveRoomHit,
-  shouldSelectRoom,
-} from './room-selection'
 import { selectRoom, selectRoomFromHit, shouldInterceptRoom } from './room-selection-commands'
 
 const levelId = 'level_room_selection'
@@ -868,17 +868,34 @@ describe('room drill-down state through the mounted selection manager', () => {
       expect(useViewer.getState().selection.selectedIds).toEqual(['wall_free'])
     })
   })
-  test('the 2D plan resolves walls room-first and drills on the second click', async () => {
+  test('the 2D plan gives a wall hit to the wall and a room interior to the room', async () => {
     await withRooms(async ({ left, right }) => {
-      expect(resolvePlanRoomHit('wall_west', [-0.05, 2])).toEqual(left)
+      // Without the kind's `planHitSelectsNode`, a band hit stays room-first.
       expect(resolvePlanRoomHit('wall_shared', [3.95, 2])).toEqual(left)
-      expect(resolvePlanRoomHit('wall_shared', [4.05, 2])).toEqual(right)
-      expect(resolvePlanRoomHit('wall_free', [9.95, 1])).toBeNull()
-      const hit = resolvePlanRoomHit('wall_west', [-0.05, 2])
+      // The wall definition declares it (its floor-plan extension).
+      const get = nodeRegistry.get.bind(nodeRegistry)
+      const spy = spyOn(nodeRegistry, 'get').mockImplementation(((kind: string) =>
+        kind === 'wall'
+          ? ({
+              ...get(kind),
+              extensions: { 'pascal:editor/floorplan': { planHitSelectsNode: true } },
+            } as AnyNodeDefinition)
+          : get(kind)) as typeof nodeRegistry.get)
+      try {
+        // Either half of a shared wall's band is the wall, never the room beside it.
+        expect(resolvePlanRoomHit('wall_west', [-0.05, 2])).toBeNull()
+        expect(resolvePlanRoomHit('wall_shared', [3.95, 2])).toBeNull()
+        expect(resolvePlanRoomHit('wall_shared', [4.05, 2])).toBeNull()
+        expect(resolvePlanRoomHit('wall_free', [9.95, 1])).toBeNull()
+      } finally {
+        spy.mockRestore()
+      }
+      expect(resolvePlanRoomHit(null, [2, 2])).toEqual(left)
+      expect(resolvePlanRoomHit(null, [6, 2])).toEqual(right)
       const select = async (modifiers = plain) => {
         let selected = false
         await act(async () => {
-          selected = selectRoomFromHit(hit, modifiers, 'wall_west')
+          selected = selectRoomFromHit(resolvePlanRoomHit(null, [2, 2]), modifiers, null)
         })
         return selected
       }

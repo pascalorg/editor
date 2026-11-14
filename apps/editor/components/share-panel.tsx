@@ -1,5 +1,6 @@
 'use client'
 
+import { usePascalI18n } from '@pascal-app/core'
 import { Check, Copy, ExternalLink } from 'lucide-react'
 import { type KeyboardEvent, type RefObject, useEffect, useRef, useState } from 'react'
 import { cn } from '@/lib/utils'
@@ -38,6 +39,7 @@ async function writeShared(sceneId: string, shared: boolean): Promise<boolean> {
 }
 
 export function SharePanel({ sceneId, anchorRef, onClose }: SharePanelProps) {
+  const i18n = usePascalI18n()
   // null while the current state is loading.
   const [shared, setShared] = useState<boolean | null>(null)
   const [saving, setSaving] = useState(false)
@@ -53,7 +55,12 @@ export function SharePanel({ sceneId, anchorRef, onClose }: SharePanelProps) {
       .catch(() => {
         if (cancelled) return
         setShared(false)
-        setError('Could not read the sharing state.')
+        setError(
+          i18n._({
+            id: 'app.sharePanel.couldNotReadTheSharingState',
+            message: 'Could not read the sharing state.',
+          }),
+        )
       })
     return () => {
       cancelled = true
@@ -87,7 +94,17 @@ export function SharePanel({ sceneId, anchorRef, onClose }: SharePanelProps) {
       setShared(await writeShared(sceneId, next))
     } catch {
       setShared(previous)
-      setError(next ? 'Could not turn on the public link.' : 'Could not turn off the public link.')
+      setError(
+        next
+          ? i18n._({
+              id: 'app.sharePanel.couldNotTurnOnThePublic',
+              message: 'Could not turn on the public link.',
+            })
+          : i18n._({
+              id: 'app.sharePanel.couldNotTurnOffThePublic',
+              message: 'Could not turn off the public link.',
+            }),
+      )
     } finally {
       setSaving(false)
     }
@@ -99,7 +116,7 @@ export function SharePanel({ sceneId, anchorRef, onClose }: SharePanelProps) {
   return (
     // Keystrokes in here (Delete, Cmd+A, tool keys) must not reach the editor's shortcuts.
     <div
-      aria-label="Share project"
+      aria-label={i18n._({ id: 'app.sharePanel.shareProject', message: 'Share project' })}
       className="dark absolute top-full right-0 z-50 mt-2 w-80 rounded-xl border border-border/60 bg-background p-4 text-foreground shadow-2xl [color-scheme:dark]"
       onKeyDown={(event: KeyboardEvent) => {
         if (event.key !== 'Escape') event.stopPropagation()
@@ -108,7 +125,7 @@ export function SharePanel({ sceneId, anchorRef, onClose }: SharePanelProps) {
     >
       <div className="flex items-center justify-between gap-3">
         <span className="font-medium text-sm" id="share-public-link-label">
-          Public link
+          {i18n._({ id: 'app.sharePanel.publicLink', message: 'Public link' })}
         </span>
         <Switch
           checked={shared === true}
@@ -118,7 +135,10 @@ export function SharePanel({ sceneId, anchorRef, onClose }: SharePanelProps) {
         />
       </div>
       <p className="mt-1.5 text-muted-foreground text-xs">
-        Anyone with the link can view this project. They cannot edit it.
+        {i18n._({
+          id: 'app.sharePanel.anyoneWithTheLinkCanView',
+          message: 'Anyone with the link can view this project. They cannot edit it.',
+        })}
       </p>
       {error && <p className="mt-2 text-destructive text-xs">{error}</p>}
 
@@ -127,7 +147,7 @@ export function SharePanel({ sceneId, anchorRef, onClose }: SharePanelProps) {
           <div>
             <div className="flex items-center justify-between gap-3">
               <span className="font-medium text-sm" id="share-hide-controls-label">
-                Hide controls
+                {i18n._({ id: 'app.sharePanel.hideControls', message: 'Hide controls' })}
               </span>
               <Switch
                 checked={hideControls}
@@ -136,14 +156,19 @@ export function SharePanel({ sceneId, anchorRef, onClose }: SharePanelProps) {
               />
             </div>
             <p className="mt-1.5 text-muted-foreground text-xs">
-              Only the 3D view, no header or toolbar.
+              {i18n._({
+                id: 'app.sharePanel.onlyThe3dViewNoHeader',
+                message: 'Only the 3D view, no header or toolbar.',
+              })}
             </p>
           </div>
           <div>
-            <span className="mb-1.5 block text-muted-foreground text-xs">Link</span>
+            <span className="mb-1.5 block text-muted-foreground text-xs">
+              {i18n._({ id: 'app.sharePanel.link', message: 'Link' })}
+            </span>
             <div className="flex items-center gap-1.5">
               <input
-                aria-label="Embed link"
+                aria-label={i18n._({ id: 'app.sharePanel.embedLink', message: 'Embed link' })}
                 className={FIELD}
                 onFocus={(event) => event.currentTarget.select()}
                 readOnly
@@ -158,16 +183,18 @@ export function SharePanel({ sceneId, anchorRef, onClose }: SharePanelProps) {
               target="_blank"
             >
               <ExternalLink className="h-3 w-3" />
-              Open
+              {i18n._({ id: 'app.sharePanel.open', message: 'Open' })}
             </a>
           </div>
           <div>
             <div className="mb-1.5 flex items-center justify-between">
-              <span className="text-muted-foreground text-xs">Embed code</span>
+              <span className="text-muted-foreground text-xs">
+                {i18n._({ id: 'app.sharePanel.embedCode', message: 'Embed code' })}
+              </span>
               <CopyButton text={snippet} />
             </div>
             <textarea
-              aria-label="Embed code"
+              aria-label={i18n._({ id: 'app.sharePanel.embedCode', message: 'Embed code' })}
               className={cn(FIELD, 'h-20 resize-none leading-relaxed')}
               onFocus={(event) => event.currentTarget.select()}
               readOnly
@@ -215,6 +242,7 @@ function Switch({
 }
 
 function CopyButton({ text }: { text: string }) {
+  const i18n = usePascalI18n()
   const [copied, setCopied] = useState(false)
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
@@ -240,7 +268,9 @@ function CopyButton({ text }: { text: string }) {
   return (
     <button className={SMALL_BUTTON} onClick={copy} type="button">
       {copied ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
-      {copied ? 'Copied' : 'Copy'}
+      {copied
+        ? i18n._({ id: 'app.sharePanel.copied', message: 'Copied' })
+        : i18n._({ id: 'app.sharePanel.copy', message: 'Copy' })}
     </button>
   )
 }

@@ -5,6 +5,7 @@ import {
   clampFencePicketRailProjection,
   type FenceNode,
   findLevelAncestorId,
+  formatFixed,
   getClampedWallCurveOffset,
   getFenceCenterlineLength,
   getFenceControlHandle,
@@ -18,21 +19,23 @@ import {
   nodeRegistry,
   normalizeWallCurveOffset,
   sampleFenceSpline,
+  usePascalI18n,
   useScene,
 } from '@pascal-app/core'
 import { SliderControl } from '@pascal-app/editor'
 
 export function FencePatternInfo({ node }: { node: FenceNode }) {
-  const subject =
-    node.style === 'picket'
-      ? 'pickets in each bay between posts'
-      : node.style === 'horizontal'
-        ? 'posts along the full fence'
-        : 'infill pieces between the two end posts'
+  const i18n = usePascalI18n()
   return (
     <p className="text-xs text-muted-foreground">
-      Distribution controls {subject}. Spacing is measured between centers. The available width
-      limits the count so pieces do not overlap.
+      {i18n._({
+        id: 'node.fence.inspectorEditors.distributionInfo',
+        message:
+          '{style, select, picket {Distribution controls pickets in each bay between posts.} horizontal {Distribution controls posts along the full fence.} other {Distribution controls infill pieces between the two end posts.}} Spacing is measured between centers. The available width limits the count so pieces do not overlap.',
+        values: {
+          style: node.style === 'picket' || node.style === 'horizontal' ? node.style : 'other',
+        },
+      })}
     </p>
   )
 }
@@ -44,10 +47,14 @@ export function FencePicketRailProjectionEditor({
   node: FenceNode
   onUpdate: (patch: Partial<FenceNode>) => void
 }) {
+  const i18n = usePascalI18n()
   const max = maxFencePicketRailProjection(node.postSize)
   return (
     <SliderControl
-      label="Picket rail projection"
+      label={i18n._({
+        id: 'node.fence.inspectorEditors.picketRailProjection',
+        message: 'Picket rail projection',
+      })}
       max={max}
       min={0.001}
       onChange={(value) =>
@@ -68,6 +75,7 @@ export function FenceSurfaceEditor({
   node: FenceNode
   onUpdate: (patch: Partial<FenceNode>) => void
 }) {
+  const i18n = usePascalI18n()
   const nodes = useScene((state) => state.nodes)
   const levelId = findLevelAncestorId(node.id as AnyNodeId, nodes)
   const hosts = Object.values(nodes).filter(
@@ -83,7 +91,7 @@ export function FenceSurfaceEditor({
   return (
     <div className="space-y-2 text-xs">
       <label className="flex items-center justify-between gap-2">
-        Surface behavior
+        {i18n._({ id: 'node.fence.inspectorEditors.surfaceBehavior', message: 'Surface behavior' })}
         <select
           className="rounded border bg-background p-1"
           value={node.surfaceMode}
@@ -101,16 +109,29 @@ export function FenceSurfaceEditor({
             }
           }}
         >
-          <option value="auto">Follow highest surface</option>
-          <option disabled={hosts.length === 0} value="selected">
-            Follow selected surface
+          <option value="auto">
+            {i18n._({
+              id: 'node.fence.inspectorEditors.followHighestSurface',
+              message: 'Follow highest surface',
+            })}
           </option>
-          <option value="level">Hold starting height</option>
+          <option disabled={hosts.length === 0} value="selected">
+            {i18n._({
+              id: 'node.fence.inspectorEditors.followSelectedSurface',
+              message: 'Follow selected surface',
+            })}
+          </option>
+          <option value="level">
+            {i18n._({
+              id: 'node.fence.inspectorEditors.holdStartingHeight',
+              message: 'Hold starting height',
+            })}
+          </option>
         </select>
       </label>
       {node.surfaceMode === 'selected' && (
         <label className="flex items-center justify-between gap-2">
-          Surface
+          {i18n._({ id: 'node.fence.inspectorEditors.surface', message: 'Surface' })}
           <select
             className="min-w-0 max-w-40 rounded border bg-background p-1"
             value={selectedId}
@@ -122,7 +143,12 @@ export function FenceSurfaceEditor({
               })
             }}
           >
-            <option value="">Choose a surface</option>
+            <option value="">
+              {i18n._({
+                id: 'node.fence.inspectorEditors.chooseASurface',
+                message: 'Choose a surface',
+              })}
+            </option>
             {hosts.map((host) => (
               <option key={host.id} value={host.id}>
                 {host.name || host.type} ({host.type})
@@ -132,7 +158,12 @@ export function FenceSurfaceEditor({
         </label>
       )}
       {node.surfaceMode === 'selected' && !selectedId && (
-        <p className="text-muted-foreground">Choose a slab or shaped surface on this level.</p>
+        <p className="text-muted-foreground">
+          {i18n._({
+            id: 'node.fence.inspectorEditors.chooseASlabOrShapedSurface',
+            message: 'Choose a slab or shaped surface on this level.',
+          })}
+        </p>
       )}
     </div>
   )
@@ -159,6 +190,7 @@ export function FenceLengthEditor({
   node: FenceNode
   onUpdate: (patch: Partial<FenceNode>) => void
 }) {
+  const i18n = usePascalI18n()
   const length = getWallCurveLength(node)
 
   const handleChange = (newLength: number) => {
@@ -178,7 +210,7 @@ export function FenceLengthEditor({
 
   return (
     <SliderControl
-      label="Length"
+      label={i18n._({ id: 'node.fence.inspectorEditors.length', message: 'Length' })}
       max={50}
       min={0.1}
       onChange={handleChange}
@@ -197,13 +229,14 @@ export function FenceCurveEditor({
   node: FenceNode
   onUpdate: (patch: Partial<FenceNode>) => void
 }) {
+  const i18n = usePascalI18n()
   const curveOffset = getClampedWallCurveOffset(node)
   const maxCurveOffset = getMaxWallCurveOffset(node)
 
   return (
     <div className="space-y-2">
       <SliderControl
-        label="Curve"
+        label={i18n._({ id: 'node.fence.inspectorEditors.curve', message: 'Curve' })}
         max={Math.max(0.01, maxCurveOffset)}
         min={-Math.max(0.01, maxCurveOffset)}
         onChange={(value) => onUpdate({ curveOffset: normalizeWallCurveOffset(node, value) })}
@@ -237,7 +270,7 @@ export function FenceCurveEditor({
           })
         }}
       >
-        Edit path
+        {i18n._({ id: 'node.fence.inspectorEditors.editPath', message: 'Edit path' })}
       </button>
     </div>
   )
@@ -250,6 +283,7 @@ export function FencePathEditor({
   node: FenceNode
   onUpdate: (patch: Partial<FenceNode>) => void
 }) {
+  const i18n = usePascalI18n()
   const path = node.path ?? []
   const tangents = path.map((_, i) => node.tangents?.[i] ?? null)
   const spanModes = path
@@ -268,14 +302,28 @@ export function FencePathEditor({
   return (
     <div className="space-y-2 text-xs">
       <p>
-        {path.length} points · {getFenceCenterlineLength(node).toFixed(2)} m
+        {i18n._({
+          id: 'node.fence.inspectorEditors.pathSummary',
+          message: '{count, plural, one {{number} point} other {{number} points}} · {length} m',
+          values: {
+            count: path.length,
+            number: String(path.length),
+            length: formatFixed(getFenceCenterlineLength(node), 2, i18n.getLocale()),
+          },
+        })}
       </p>
       <p className="text-muted-foreground">
-        Set each span to straight or curved, then drag its points and curve handles in either view.
+        {i18n._({
+          id: 'node.fence.inspectorEditors.setEachSpanToStraightOr',
+          message:
+            'Set each span to straight or curved, then drag its points and curve handles in either view.',
+        })}
       </p>
       {path.map((point, index) => (
         <details key={`curve-editor-${index}`} className="rounded border p-2">
-          <summary className="cursor-pointer">Point {index + 1}</summary>
+          <summary className="cursor-pointer">
+            {i18n._({ id: 'node.fence.inspectorEditors.point', message: 'Point' })} {index + 1}
+          </summary>
           <div className="mt-2 flex gap-2">
             {(['X', 'Z'] as const).map((axis, coordinate) => (
               <label key={axis} className="min-w-0 flex-1">
@@ -301,7 +349,11 @@ export function FencePathEditor({
           </div>
           {index < path.length - 1 && (
             <label className="mt-2 flex items-center justify-between">
-              Span to point {index + 2}
+              {i18n._({
+                id: 'node.fence.inspectorEditors.spanToPointNumber',
+                message: 'Span to point {number}',
+                values: { number: index + 2 },
+              })}
               <select
                 className="rounded border bg-background p-1"
                 value={spanModes[index]}
@@ -315,14 +367,18 @@ export function FencePathEditor({
                   update(path, handles, modes)
                 }}
               >
-                <option value="straight">Straight</option>
-                <option value="curve">Curved</option>
+                <option value="straight">
+                  {i18n._({ id: 'node.fence.inspectorEditors.straight', message: 'Straight' })}
+                </option>
+                <option value="curve">
+                  {i18n._({ id: 'node.fence.inspectorEditors.curved', message: 'Curved' })}
+                </option>
               </select>
             </label>
           )}
           {(spanModes[index - 1] === 'curve' || spanModes[index] === 'curve') && (
             <label className="mt-2 flex items-center justify-between">
-              Join
+              {i18n._({ id: 'node.fence.inspectorEditors.join', message: 'Join' })}
               <select
                 className="rounded border bg-background p-1"
                 value={
@@ -334,8 +390,12 @@ export function FencePathEditor({
                   update(path, handles)
                 }}
               >
-                <option value="smooth">Smooth</option>
-                <option value="corner">Corner</option>
+                <option value="smooth">
+                  {i18n._({ id: 'node.fence.inspectorEditors.smooth', message: 'Smooth' })}
+                </option>
+                <option value="corner">
+                  {i18n._({ id: 'node.fence.inspectorEditors.corner', message: 'Corner' })}
+                </option>
               </select>
             </label>
           )}
@@ -366,7 +426,10 @@ export function FencePathEditor({
                   update(points, handles, modes)
                 }}
               >
-                Add point after
+                {i18n._({
+                  id: 'node.fence.inspectorEditors.addPointAfter',
+                  message: 'Add point after',
+                })}
               </button>
             )}
             {index === path.length - 1 && (
@@ -385,7 +448,7 @@ export function FencePathEditor({
                   )
                 }}
               >
-                Extend path
+                {i18n._({ id: 'node.fence.inspectorEditors.extendPath', message: 'Extend path' })}
               </button>
             )}
             <button
@@ -411,7 +474,7 @@ export function FencePathEditor({
                 )
               }}
             >
-              Remove point
+              {i18n._({ id: 'node.fence.inspectorEditors.removePoint', message: 'Remove point' })}
             </button>
           </div>
         </details>

@@ -1,6 +1,7 @@
 # Cross-cutting changes touching packages outside `@pascal-app/mcp`
 
 Integrator review required. Each entry documents:
+
 - **What** was changed
 - **Why** (what blocked MCP without it)
 - **Impact** on existing consumers
@@ -11,6 +12,7 @@ Integrator review required. Each entry documents:
 ### What
 
 Added these subpath entries to the `"exports"` map of `@pascal-app/core`:
+
 - `./schema` → `./dist/schema/index.js`
 - `./store` → `./dist/store/use-scene.js`
 - `./material-library` → `./dist/material-library.js`
@@ -126,6 +128,7 @@ Remove the `./storage`/`./operations` entries from `exports` and update `apps/ed
 
 Introduced a shared `AssetUrl` Zod validator and replaced the bare `z.string()`
 on every URL-bearing field in core's schemas:
+
 - `scan.url` (`packages/core/src/schema/nodes/scan.ts`)
 - `guide.url` (`packages/core/src/schema/nodes/guide.ts`)
 - `item.asset.src` (`packages/core/src/schema/nodes/item.ts`)
@@ -135,8 +138,15 @@ on every URL-bearing field in core's schemas:
 
 The validator accepts `asset://…`, `blob:…`, `data:image/…`, `/…` app-relative
 paths, `https://…`, and `http://localhost|127.0.0.1/…`. Optional origin
-narrowing via `process.env.PASCAL_ALLOWED_ASSET_ORIGINS` (comma-separated).
-Rejects `javascript:`, `file:`, `ftp:`, `ws:`, `data:text/html`,
+narrowing via `process.env.PASCAL_ALLOWED_ASSET_ORIGINS` (comma-separated),
+read by core's shared parser (`parseAllowedOrigins` / `allowedOriginsFrom` in
+`@pascal-app/core/schema`), which `safeFetch` in this package uses too: each
+`http:` or `https:` entry is normalised to its origin (credentials dropped),
+other schemes and wildcard hosts are skipped, and warnings name only the entry's
+index and reason. A value with no valid entry (whitespace only included) admits
+no `https:` origin: the validator still accepts the forms that never consult the
+allowlist (`asset://`, `blob:`, `data:image/`, app-relative paths, localhost
+`http`), and `safeFetch` fetches nothing. Unset or empty means no allowlist. Rejects `javascript:`, `file:`, `ftp:`, `ws:`, `data:text/html`,
 `data:application/*`, link-local / private IPs over bare `http`, empty strings,
 and non-URL garbage.
 
@@ -203,6 +213,7 @@ scene-bridge test update is self-contained.
 
 The PR still touches the editor app and editor package, but the remaining files
 are tied to the MCP scene workflow:
+
 - `apps/editor/app/api/scenes/**`, `apps/editor/components/save-button.tsx`,
   and `apps/editor/components/scene-loader.tsx` expose saved MCP scenes in the
   web editor.

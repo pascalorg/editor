@@ -7,18 +7,20 @@ import {
 } from '@modelcontextprotocol/server'
 import {
   type HostedServiceExecutor,
+  type ProjectFileReader,
   type ProjectFileToolExecutor,
   recordMade,
   type SceneNodes,
 } from '@pascal-app/core/agent-operations'
+import { untracked } from '@pascal-app/core/runtime'
 import type { SceneBridge } from './bridge/scene-bridge'
 import { createSceneOperations, type SceneOperations } from './operations'
 import { registerPrompts } from './prompts'
 import { registerResources } from './resources'
 import type { SceneStore } from './storage/types'
 import { registerTools } from './tools'
-import type { GeometryScriptHost } from './tools/add-object'
-import { type AssetCatalog, cachedCatalog } from './tools/asset-catalog'
+import type { GeometryScriptHost, ObjectMakerHost } from './tools/add-object'
+import type { AssetCatalog } from './tools/asset-catalog'
 import { registerHostedServiceTools } from './tools/hosted-services'
 import { normalizeToolSchemaDialect } from './tools/normalize-schema-dialect'
 import { registerProjectFileTools } from './tools/project-files'
@@ -50,20 +52,26 @@ export type CreatePascalMcpServerOptions = {
    */
   executeTool?: PascalMcpToolExecutor
   /**
-   * The items search_assets, place_items and furnish_room draw from, read once per server. The
-   * hosted app passes its published library; without it, a small built-in list.
+   * The items search_assets, place_items and furnish_room draw from: a list, or a source each call
+   * reads what it needs of (the hosted app's published library); without it, a small built-in list.
    */
   catalog?: AssetCatalog
   /** Runs and stores `add_object` modules; without it the tool answers `scripts_unavailable`. */
   geometryScripts?: GeometryScriptHost
+  /** Makes `add_object`'s pieces from words with the host's models; without it they are refused. */
+  objectMakers?: ObjectMakerHost
   /** Optional authenticated hosted services; local scene tools remain usable without them. */
   services?: HostedServiceExecutor
   /** Authenticated project file catalog; absent for a local scene without hosted files. */
   files?: ProjectFileToolExecutor
+  /** Reads a project file's bytes (author_scene's payloadFile); absent without hosted files. */
+  readFile?: ProjectFileReader
   /** Asks an editor open on the project for a picture (`view_scene`); without it, refused. */
   sceneViews?: SceneViewHost
   /** Reads catalog items' pictures and surfaces before view_assets and paint. */
   assetViews?: PlanReadingHosts['assetViews']
+  /** A pause between the steps of a long call, for a host with a scene of its own per request. */
+  betweenSteps?: PlanReadingHosts['betweenSteps']
   /** Lines the host adds to what a client reads at connect (the person's own settings). */
   instructions?: string
 }
@@ -81,17 +89,20 @@ export function createPascalMcpServer(opts: CreatePascalMcpServerOptions): McpSe
     opts.operations ?? createSceneOperations({ bridge: opts.bridge, store: opts.store })
   const executeTool = recordingWhatToolsMake(operations, opts.executeTool)
   if (executeTool) installToolExecutor(server, executeTool)
-  const catalog = opts.catalog ? cachedCatalog(opts.catalog) : undefined
+  installSceneScope(server, operations)
   registerTools(server, operations, {
-    catalog,
+    catalog: opts.catalog,
     geometryScripts: opts.geometryScripts,
+    objectMakers: opts.objectMakers,
+    readFile: opts.readFile,
     sceneViews: opts.sceneViews,
     assetViews: opts.assetViews,
+    betweenSteps: opts.betweenSteps,
   })
   registerVisionTools(server, operations)
   if (opts.services) registerHostedServiceTools(server, opts.services)
   if (opts.files) registerProjectFileTools(server, opts.files)
-  registerResources(server, operations, catalog)
+  registerResources(server, operations, opts.catalog)
   registerPrompts(server, operations)
   normalizeToolSchemaDialect(server)
   answerRetiredTools(server)
@@ -140,13 +151,34 @@ function recordingWhatToolsMake(
   const recording: PascalMcpToolExecutor = (input) =>
     recordMade(
       {
-        getNodes: () => operations.getNodes() as SceneNodes,
+        // What the tool made is bookkeeping, not what it read: the scene as stored.
+        getNodes: () => untracked(operations.getNodes()) as SceneNodes,
         readSession: () => session.read(),
         keep: (keep) => session.keep(keep),
       },
       input.execute,
     )
   return outer ? (input) => outer({ ...input, execute: () => recording(input) }) : recording
+}
+
+/**
+ * Every handler starts in the scene's scope (`SceneOperations.runInScene`): ids it mints and
+ * schema defaults it fills before its first await come from the scene's allocator, so a detached
+ * scene recomputed from the same snapshot and effect mints the same ones. Work after an await
+ * re-enters the scope itself (add_object, add_column).
+ */
+function installSceneScope(server: McpServer, operations: SceneOperations): void {
+  const runInScene = operations.runInScene?.bind(operations)
+  if (!runInScene) return
+  const registerTool = server.registerTool.bind(server) as (
+    name: string,
+    config: unknown,
+    callback: RuntimeToolCallback,
+  ) => RegisteredTool
+  server.registerTool = ((name: string, config: unknown, callback: RuntimeToolCallback) =>
+    registerTool(name, config, (...args: unknown[]) =>
+      runInScene(() => Reflect.apply(callback, undefined, args)),
+    )) as McpServer['registerTool']
 }
 
 function installToolExecutor(server: McpServer, executeTool: PascalMcpToolExecutor): void {

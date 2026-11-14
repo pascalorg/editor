@@ -1,12 +1,19 @@
 import { type ParametricDescriptor, planStairRiseEdit, type StairNode } from '@pascal-app/core'
 import { StairConstructionField } from './construction-controls'
 import { StairRailingField } from './railing-controls'
+import { StairStructureField } from './structure-controls'
 
 export const stairParametrics: ParametricDescriptor<StairNode> = {
   groups: [
     {
       label: 'Construction',
       fields: [
+        {
+          key: 'structure',
+          kind: 'custom',
+          component: StairStructureField,
+          visibleIf: (node) => node.stairType === 'straight',
+        },
         {
           key: 'construction',
           kind: 'custom',

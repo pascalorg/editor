@@ -24,6 +24,7 @@ import {
   setGroundLevelTool,
 } from './levels'
 import { mergeWindowsTool } from './merge-windows'
+import { duplicateNodeTool, moveNodeTool } from './move-duplicate'
 import { deleteNodeTool, getNodeTool } from './nodes'
 import { paintTool } from './paint'
 import { placeInRoomTool } from './place-in-room'
@@ -33,10 +34,11 @@ import { ROOM_TOOL_CONTRACTS } from './room-structure'
 import { searchMaterialsTool } from './search-materials'
 import { getSiteTool, placeBuildingTool } from './site'
 import { createStairTool, fitStairTool, measureStairTool } from './stairs'
+import { UNIT_TOOL_CONTRACTS } from './units'
 import { verifySceneTool } from './verify-scene'
 import { viewSceneTool } from './view-scene'
 import { addDoorTool, addWindowTool } from './wall-openings'
-import { addWallTool } from './walls'
+import { addWallTool, setWallTypeTool } from './walls'
 
 export * from './achieved'
 export * from './add-object'
@@ -55,6 +57,7 @@ export * from './hosted-services'
 export * from './levels'
 export * from './measurement'
 export * from './merge-windows'
+export * from './move-duplicate'
 export { NodeId } from './node-id'
 export * from './nodes'
 export * from './notation-inventory'
@@ -69,6 +72,7 @@ export * from './search-materials'
 export * from './site'
 export { CATALOG_SOURCE, OTHER_SOURCES, OUTSIDE_SOURCES } from './sources'
 export * from './stairs'
+export * from './units'
 export * from './verify-scene'
 export * from './view-scene'
 export * from './wall-openings'
@@ -99,6 +103,7 @@ export const AGENT_TOOL_CONTRACTS = [
   placeDesignTool,
   validateDesignTool,
   addWallTool,
+  setWallTypeTool,
   addFenceTool,
   addCornerWindowTool,
   mergeWindowsTool,
@@ -109,6 +114,8 @@ export const AGENT_TOOL_CONTRACTS = [
   createRoofTool,
   moveRoofsToRoofLevelTool,
   deleteNodeTool,
+  moveNodeTool,
+  duplicateNodeTool,
   addObjectTool,
   authorSceneTool,
   getSourceTool,
@@ -126,6 +133,7 @@ export const AGENT_TOOL_CONTRACTS = [
   getSiteTool,
   placeBuildingTool,
   ...ROOM_TOOL_CONTRACTS,
+  ...UNIT_TOOL_CONTRACTS,
   runBatchTool,
 ] as const satisfies readonly AgentToolContract[]
 

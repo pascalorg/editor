@@ -1,5 +1,5 @@
 {
-  "source": "generateExtrudedWall at editor a7c0bb4d (pre-phase-7), plain walls, no finish layout",
+  "source": "generateExtrudedWall at editor a7c0bb4d (pre-phase-7), plain walls, no finish layout; walls with T-junctions rebaselined after their repair (same volume, bounds and per-material area)",
   "groups": {
     "tee": [
       {
@@ -289,17 +289,17 @@
   ],
   "hashes": {
     "tee:wall_host": "424bfd7497cf519c7e34171fbf3c4152e1af2328794f39ccab7b1593fcc45770",
-    "tee:wall_east": "3bf9e523d25e34c208c55fa356f1a2e0657a5ecd5bcebb95ac7ab694732fd9f4",
+    "tee:wall_east": "fbfc88eaaa220828ca6ebe54ec2927c4a7e9c330e9afdaa711e0b9f4352700dc",
     "tee:wall_north": "aa63a548bd98132f198a235453adf504754eb5912368f7f3cbbf32ac2cc9761a",
-    "tee:wall_west": "324ab313c346909b3d79849348e3128f9189957fb975aaf1087c5ba39715960c",
-    "tee:wall_partition": "0b394a067431a25d83b8a7ca0a1e952b52605acd7a2dafda39a07b1b769cd048",
-    "tee:host+door": "c382bdf2024919037b30ec235c74dfe4d721a8d4edfde4a4172e70aeb4fa2343",
-    "tee:partition+window": "1fcc46fe475a2278b3d5361837420e1de3cd4c06a722155c81731dbabc9c94a5",
-    "justified:wall_j0": "4f321f9a747b007b190dd64998c098814873b2dd2cdec00cd3d775cf8627c800",
+    "tee:wall_west": "57e8091e0d641024c54b6b227b7dd9839c48571d5ab311cd7be4db61e5f31fe1",
+    "tee:wall_partition": "61ff5c115b39544421fee131f0496ee223c03545e6b8f50fd4947d8616e87519",
+    "tee:host+door": "de147e9f37a577d7e8dfc7ce98bf2aa6b3f42a34b40cbc48c2c1ffcaba75caeb",
+    "tee:partition+window": "09c580a8d1550606dda954590763e2507553a9636cecfe16b86ca503a30df7ef",
+    "justified:wall_j0": "a69d16bee0788b29548cd3c9e2a65e050056b5e9ae1cf792bb94695dc5071bbe",
     "justified:wall_j1": "f26795be1dfb64a591f391cdc47e7199a29efb634e69bd908eaab31b6921e580",
-    "justified:wall_j2": "7bcc9e6a117df9066343c1d47ff91533112617852afb2b4b93f95217fab5491f",
+    "justified:wall_j2": "c60fc407d361228447d53a6ae3f59f210f3a9176d5aee28817a96823871b00a9",
     "justified:wall_j3": "c362f9124ff8d972058e4ad79bd7a3588650c8bb7064167a454de03fcf45172d",
-    "justified:j0+door": "6e9369f62d5f3608fac2f0fd8bf382509ea1774fbbc8f2d222ec3627b4694db9",
+    "justified:j0+door": "b72e713589e61490ec31d9c467c1f77b440d44c90cf4f8d8f42e7bb7c30971a6",
     "curved:arc": "b7fcaadd054683c3e4f5507fc623036fa3fe8d9f39f8c6e3e721cd02ea8e531c"
   }
 }

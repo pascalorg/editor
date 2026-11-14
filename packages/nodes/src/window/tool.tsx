@@ -4,6 +4,7 @@ import {
   beginSceneHistoryDraft,
   type CornerSnap,
   createSnapEaser,
+  DEFAULT_WALL_THICKNESS,
   type DormerEvent,
   type DormerNode,
   dormerWallFacePointToDormer,
@@ -11,11 +12,14 @@ import {
   evaluateCorner,
   type GridEvent,
   getEffectiveNode,
+  getWallThickness,
   holdHiddenWallPointerEvents,
   isCurvedWall,
+  isRailingWall,
   prefersReducedMotion,
   type RoofEvent,
   type RoofNode,
+  resolveOpeningFrameDepth,
   runAsSingleSceneHistoryStep,
   sceneRegistry,
   spatialGridManager,
@@ -151,11 +155,6 @@ const WindowTool: React.FC = () => {
       }),
     [fallbackPose?.side, placedType, placedStyle],
   )
-  // The frame depth is a fixed parse default (the `side` flip doesn't change
-  // it); a ref lets the facing-pose publish inside the setup effect read it
-  // without re-subscribing every event listener.
-  const frameDepthRef = useRef(ghostStub.frameDepth)
-
   useEffect(() => {
     useScene.temporal.getState().pause()
 
@@ -306,6 +305,7 @@ const WindowTool: React.FC = () => {
       cursorRotationY: number,
       valid: boolean,
       indicatorYOffset: number,
+      hostThickness: number,
     ) => {
       setFallbackPose(null)
       const group = cursorGroupRef.current
@@ -320,7 +320,10 @@ const WindowTool: React.FC = () => {
       useFacingPose.getState().set({
         position: [worldPosition[0], worldPosition[1] + indicatorYOffset, worldPosition[2]],
         rotationY: cursorRotationY,
-        depth: frameDepthRef.current,
+        depth: resolveOpeningFrameDepth(
+          { frameDepth: draftRef.current?.frameDepth },
+          hostThickness,
+        ),
       })
     }
 
@@ -423,7 +426,13 @@ const WindowTool: React.FC = () => {
         new Vector3(...worldPosition),
         getDormerWindowWorldNormal(event, target),
       )
-      updateCursor(worldPosition, getDormerWindowWorldYaw(event, target), target.valid, 0)
+      updateCursor(
+        worldPosition,
+        getDormerWindowWorldYaw(event, target),
+        target.valid,
+        0,
+        DEFAULT_WALL_THICKNESS,
+      )
     }
 
     // Sill alignment (snap + guide): a sibling sill/centre/top wins over the
@@ -487,6 +496,7 @@ const WindowTool: React.FC = () => {
       const slid = clampToWall(wall, localX, localY, width, height, nodes)
       const { clampedY } = slid
       let clampedX = slid.clampedX
+      let fits = slid.fits
       // The corner zone: the edge snaps to the corner, unless a curtain wall's margin keeps it off.
       const found = cornerSnapOn
         ? evaluateCorner(nodes, {
@@ -505,17 +515,13 @@ const WindowTool: React.FC = () => {
         if (Math.abs(settled.clampedX - snap.centreX) > 1e-6) {
           block = { reason: 'curtain', end: snap.end }
           snap = null
-        } else clampedX = snap.centreX
+        } else {
+          clampedX = snap.centreX
+          fits = settled.fits
+        }
       }
-      const valid = !hasWallChildOverlap(
-        wall.id,
-        nodes,
-        clampedX,
-        clampedY,
-        width,
-        height,
-        ignoreId,
-      )
+      const valid =
+        fits && !hasWallChildOverlap(wall.id, nodes, clampedX, clampedY, width, height, ignoreId)
       return { clampedX, clampedY, valid, snap, block }
     }
 
@@ -609,6 +615,7 @@ const WindowTool: React.FC = () => {
         cursorRotationY,
         valid,
         -clampedY,
+        getWallThickness(wall),
       )
 
       if (draftRef.current) {
@@ -670,8 +677,10 @@ const WindowTool: React.FC = () => {
         awningDirection: draft.awningDirection,
         casementStyle: draft.casementStyle,
         hingesSide: draft.hingesSide,
+        casingFaceA: draft.casingFaceA,
+        casingFaceB: draft.casingFaceB,
+        casingWidth: draft.casingWidth,
         frameThickness: draft.frameThickness,
-        frameDepth: draft.frameDepth,
         columnRatios: draft.columnRatios,
         rowRatios: draft.rowRatios,
         columnDividerThickness: draft.columnDividerThickness,
@@ -736,8 +745,10 @@ const WindowTool: React.FC = () => {
         openingCornerRadii: draft.openingCornerRadii,
         cornerRadius: draft.cornerRadius,
         archHeight: draft.archHeight,
+        casingFaceA: draft.casingFaceA,
+        casingFaceB: draft.casingFaceB,
+        casingWidth: draft.casingWidth,
         frameThickness: draft.frameThickness,
-        frameDepth: draft.frameDepth,
         columnRatios: draft.columnRatios,
         rowRatios: draft.rowRatios,
         columnDividerThickness: draft.columnDividerThickness,
@@ -763,9 +774,11 @@ const WindowTool: React.FC = () => {
     const onWallHover = (event: WallEvent) => {
       hostKind = 'wall'
       lastMeshEventTime = event.nativeEvent?.timeStamp ?? -1
+      // A railing takes no window: its openings are gaps a door leaves in the guard.
       if (
         !isValidWallSideFace(event.normal) ||
         isCurvedWall(event.node) ||
+        isRailingWall(event.node) ||
         event.node.parentId !== getLevelId()
       ) {
         destroyDraft()
@@ -808,6 +821,7 @@ const WindowTool: React.FC = () => {
       if (
         !isValidWallSideFace(event.normal) ||
         isCurvedWall(event.node) ||
+        isRailingWall(event.node) ||
         event.node.parentId !== getLevelId()
       ) {
         return
@@ -1002,7 +1016,14 @@ const WindowTool: React.FC = () => {
 
     const updateRoofCursor = (target: RoofWallOpeningTarget, roof: RoofNode) => {
       const pose = getRoofWallOpeningCursorPose(target, roof)
-      if (pose) updateCursor(pose.position, pose.rotationY, target.valid, -target.position[1])
+      if (pose)
+        updateCursor(
+          pose.position,
+          pose.rotationY,
+          target.valid,
+          -target.position[1],
+          DEFAULT_WALL_THICKNESS,
+        )
     }
 
     const onRoofHover = (event: RoofEvent) => {
@@ -1083,8 +1104,10 @@ const WindowTool: React.FC = () => {
         awningDirection: draft.awningDirection,
         casementStyle: draft.casementStyle,
         hingesSide: draft.hingesSide,
+        casingFaceA: draft.casingFaceA,
+        casingFaceB: draft.casingFaceB,
+        casingWidth: draft.casingWidth,
         frameThickness: draft.frameThickness,
-        frameDepth: draft.frameDepth,
         columnRatios: draft.columnRatios,
         rowRatios: draft.rowRatios,
         columnDividerThickness: draft.columnDividerThickness,
@@ -1246,7 +1269,11 @@ const WindowTool: React.FC = () => {
   // dispose on unmount rather than reallocating (and orphaning) an EdgesGeometry
   // on every re-render during placement.
   const edgesGeo = useMemo(() => {
-    const boxGeo = new BoxGeometry(FALLBACK_WIDTH, FALLBACK_HEIGHT, 0.07)
+    const boxGeo = new BoxGeometry(
+      FALLBACK_WIDTH,
+      FALLBACK_HEIGHT,
+      resolveOpeningFrameDepth({}, DEFAULT_WALL_THICKNESS),
+    )
     const geo = new EdgesGeometry(boxGeo)
     boxGeo.dispose()
     return geo

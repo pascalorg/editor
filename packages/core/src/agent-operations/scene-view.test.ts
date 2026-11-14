@@ -5,6 +5,7 @@ import { furnishRoomTool, isAgentRefusal, viewSceneTool } from '../agent-tools'
 import hillside from '../lib/__fixtures__/owner-hillside-grade.json'
 import { encodeTerrainField } from '../lib/terrain-codec'
 import { createTerrainField } from '../lib/terrain-field'
+import { registerRoofPlanes, roofPlane } from '../registry/__fixtures__/roof-planes'
 import {
   type AnyNode,
   BuildingNode,
@@ -1050,6 +1051,49 @@ describe('a close-up of a roof', () => {
     }
   })
 
+  test("a roof of a plugin's planes frames them, from their eave to their ridge", () => {
+    registerRoofPlanes()
+    // The architect's roof: two 6-in-12 planes meeting over the 8 m depth, at the level's origin.
+    const nodes = hipHouse()
+    const planes = [
+      roofPlane('roofplane_south', [-0.5, -0.5, 10.5, 4], 0, { parentId: 'roof_planes' }),
+      roofPlane('roofplane_north', [-0.5, 8.5, 10.5, 4], 0, { parentId: 'roof_planes' }),
+    ]
+    nodes.roof_planes = RoofNode.parse({
+      id: 'roof_planes',
+      parentId: 'level_roof',
+      children: planes.map((plane) => plane.id),
+    })
+    for (const plane of planes) nodes[plane.id] = plane
+    nodes.level_roof = { ...nodes.level_roof!, children: ['roof_planes'] } as AnyNode
+    const ridge = 2.45 + 4.5 * 0.5
+
+    const box = sceneViewBounds(nodes, 'roof_planes')
+    expect([r(box.min[0]), r(box.max[0]), r(box.min[2]), r(box.max[2])]).toEqual([
+      -0.5, 10.5, -0.5, 8.5,
+    ])
+    expect([r(box.min[1]), r(box.max[1])]).toEqual([2.45, ridge])
+    expect(r(sceneViewBounds(nodes, 'building_main').max[1])).toBe(ridge)
+  })
+
+  test("a roof's planes of a kind this runtime has not registered frame up to its level's top", () => {
+    // Without their plugin, core cannot read the planes: they frame as planes on the level did, and
+    // a look at the roof itself frames the storey it covers up to that top.
+    const nodes = hipHouse()
+    const plane = roofPlane('roofplane_south', [-0.5, -0.5, 10.5, 4], 0, { parentId: 'roof_main' })
+    const roof = nodes.roof_main as RoofNode
+    nodes.roof_main = { ...roof, children: [...roof.children, plane.id] }
+    nodes[plane.id] = plane
+    nodes.level_roof = { ...nodes.level_roof!, height: 3 } as AnyNode
+    expect(r(sceneViewBounds(nodes, 'building_main').max[1])).toBe(r(2.45 + 3))
+    for (const children of [[...roof.children, plane.id], [plane.id]]) {
+      nodes.roof_main = { ...roof, children }
+      const box = sceneViewBounds(nodes, 'roof_main')
+      expect([r(box.min[0]), r(box.max[0]), r(box.min[2]), r(box.max[2])]).toEqual([0, 10, 0, 8])
+      expect(r(box.max[1])).toBe(r(2.45 + 3))
+    }
+  })
+
   test('the picture is taken from outside the roof, centred on it', () => {
     const { pose } = sceneViewPlan(hipHouse(), {
       target: 'roof_main',
@@ -1289,6 +1333,85 @@ describe('a look from inside a room', () => {
     expect(west.position[0]).toBeLessThan(5)
     expect(east.position[0]).toBeGreaterThan(5)
     expect(standsIn(west, polygon) && standsIn(east, polygon)).toBe(true)
+  })
+
+  test('the eye never stands inside a tall piece; a low one under it does not move it', () => {
+    const polygon = rect(1, 1, 5, 5)
+    const empty = withRooms([room('zone_a', polygon)])
+    const before = sceneViewPlan(empty, { interior: { zoneId: 'zone_a' } }).pose
+    const piece = (id: string, height: number) =>
+      ItemNode.parse({
+        id,
+        parentId: 'level_0',
+        name: id,
+        position: [before.position[0], 0, before.position[2]],
+        asset: {
+          id,
+          category: 'furniture',
+          name: id,
+          thumbnail: '',
+          src: `/items/${id}/model.glb`,
+          dimensions: [1.2, height, 0.6],
+        },
+      })
+    const furnished = (item: ItemNode) =>
+      ({
+        ...empty,
+        [item.id]: item,
+        level_0: {
+          ...(empty.level_0 as LevelNode),
+          children: [...(empty.level_0 as LevelNode).children, item.id],
+        },
+      }) as Record<string, AnyNode>
+    const wardrobe = sceneViewPlan(furnished(piece('item_wardrobe', 2.1)), {
+      interior: { zoneId: 'zone_a' },
+    }).pose
+    expect(standsIn(wardrobe, polygon)).toBe(true)
+    const [dx, dz] = [
+      wardrobe.position[0] - before.position[0],
+      wardrobe.position[2] - before.position[2],
+    ]
+    // Out of the wardrobe's 1.2 × 0.6 m footprint and a step clear of its faces.
+    expect(Math.abs(dx) > 0.6 + 0.3 - 1e-9 || Math.abs(dz) > 0.3 + 0.3 - 1e-9).toBe(true)
+    const bed = sceneViewPlan(furnished(piece('item_bed', 0.5)), {
+      interior: { zoneId: 'zone_a' },
+    }).pose
+    expect(bed.position).toEqual(before.position)
+  })
+
+  test('the eye does not stand just behind a tall piece that hides the room', () => {
+    const polygon = rect(1, 1, 5, 5)
+    const empty = withRooms([room('zone_a', polygon)])
+    const before = sceneViewPlan(empty, { interior: { zoneId: 'zone_a' } }).pose
+    // A wardrobe a step ahead of where the eye stood, between it and the room's middle.
+    const ahead = (v: number) => v + (3 - v) * 0.45
+    const wardrobe = ItemNode.parse({
+      id: 'item_wardrobe',
+      parentId: 'level_0',
+      name: 'Wardrobe',
+      position: [ahead(before.position[0]), 0, ahead(before.position[2])],
+      asset: {
+        id: 'wardrobe',
+        category: 'furniture',
+        name: 'Wardrobe',
+        thumbnail: '',
+        src: '/items/wardrobe/model.glb',
+        dimensions: [1.2, 2.1, 0.6],
+      },
+    })
+    const nodes = {
+      ...empty,
+      item_wardrobe: wardrobe,
+      level_0: {
+        ...(empty.level_0 as LevelNode),
+        children: [...(empty.level_0 as LevelNode).children, wardrobe.id],
+      },
+    } as Record<string, AnyNode>
+    const { pose } = sceneViewPlan(nodes, { interior: { zoneId: 'zone_a' } })
+    expect(standsIn(pose, polygon)).toBe(true)
+    expect(
+      Math.hypot(pose.position[0] - before.position[0], pose.position[2] - before.position[2]),
+    ).toBeGreaterThan(1.5)
   })
 
   test('a target in the room is what the eye looks at', () => {

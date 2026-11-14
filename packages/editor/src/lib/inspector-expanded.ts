@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import type { InspectorCardMode } from './inspector-card-mode'
 
 // One choice for every right-side inspector panel (room, wall, item…): opened
 // expanded or folded to its header, kept per viewer until they fold it again.
@@ -26,11 +27,22 @@ function writeExpanded(expanded: boolean) {
 
 export const useInspectorExpanded = create<{
   expanded: boolean
+  /**
+   * The plugin inspector extension filling the expanded card (see `inspector-card-mode.ts`),
+   * shared so the action menu can open it. Not remembered: folding the card forgets it.
+   */
+  activeExtensionId: string | null
   setExpanded: (expanded: boolean) => void
+  applyMode: (mode: InspectorCardMode) => void
 }>((set) => ({
   expanded: readExpanded(),
+  activeExtensionId: null,
   setExpanded: (expanded) => {
     writeExpanded(expanded)
-    set({ expanded })
+    set(expanded ? { expanded } : { expanded, activeExtensionId: null })
+  },
+  applyMode: ({ collapsed, activeExtensionId }) => {
+    writeExpanded(!collapsed)
+    set({ expanded: !collapsed, activeExtensionId: collapsed ? null : activeExtensionId })
   },
 }))

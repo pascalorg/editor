@@ -7,6 +7,7 @@ import {
   type GridEvent,
   PipeFittingNode,
   PipeSegmentNode,
+  usePascalI18n,
 } from '@pascal-app/core'
 import {
   CursorSphere,
@@ -207,6 +208,7 @@ export function resolvePlacement(
  * node happens to be selected.
  */
 const PipeFittingTool = () => {
+  const i18n = usePascalI18n()
   const { activeLevelId, sceneApi, selectNode } = useRegistryToolContext()
   const [placement, setPlacement] = useState<Placement | null>(null)
   const toolDefaults = useEditor((s) => s.toolDefaults['pipe-fitting'])
@@ -426,15 +428,21 @@ const PipeFittingTool = () => {
         {/* Same pill shell as DimensionPill so the placement HUD matches
             the drawing / dragging readouts. */}
         <div className="flex items-center gap-2 whitespace-nowrap rounded-full border border-border/60 bg-background/90 px-4 py-1.5 text-xs tabular-nums shadow-sm backdrop-blur">
-          <span className="font-medium text-foreground">Axis {axis.toUpperCase()}</span>
+          <span className="font-medium text-foreground">
+            {i18n._({ id: 'node.pipeFitting.tool.axis', message: 'Axis' })} {axis.toUpperCase()}
+          </span>
           <span aria-hidden className="text-muted-foreground">
             ·
           </span>
-          <span className="text-muted-foreground">R/T rotate</span>
+          <span className="text-muted-foreground">
+            {i18n._({ id: 'node.pipeFitting.tool.rTRotate', message: 'R/T rotate' })}
+          </span>
           <span aria-hidden className="text-muted-foreground">
             ·
           </span>
-          <span className="text-muted-foreground">⌥ axis</span>
+          <span className="text-muted-foreground">
+            {i18n._({ id: 'node.pipeFitting.tool.axis2', message: '⌥ axis' })}
+          </span>
         </div>
       </Html>
       {/* Port-snap halo so the user sees the click will mate, not free-place. */}

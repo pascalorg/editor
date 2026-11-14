@@ -1,3 +1,4 @@
+import { isDeckSlab } from '../../lib/deck-framing'
 import { resolveLevelId } from '../../lib/node-ancestry'
 import { isFloorPlate } from '../../lib/plate-surface'
 import { subtractPolygonsFromPolygon } from '../../lib/polygon-union'
@@ -127,6 +128,9 @@ export function initSpatialGridSync(): () => void {
           markCoveringDependentsBelow(levelId, state.nodes, markDirty)
         }
 
+        if (node.type === 'zone' && node.floor?.script)
+          markNodesOverlappingPolygon(levelId, node.polygon, state.nodes, markDirty)
+
         // A site arriving with terrain already on it (scene load, paste,
         // imported elevation data) is the same event as a stroke: ground exists
         // where flat ground was assumed.
@@ -147,6 +151,9 @@ export function initSpatialGridSync(): () => void {
           markNodesOverlappingSlab(node as SlabNode, state.nodes, markDirty, prevState.nodes)
           markCoveringDependentsBelow(levelId, state.nodes, markDirty)
         }
+
+        if (node.type === 'zone' && node.floor?.script)
+          markNodesOverlappingPolygon(levelId, node.polygon, state.nodes, markDirty)
 
         // Deleting a sculpted site drops the ground back to the datum, so its
         // contents have to come down with it.
@@ -196,6 +203,19 @@ export function initSpatialGridSync(): () => void {
             prevState.nodes,
           )
         }
+      } else if (node.type === 'zone' && prev.type === 'zone') {
+        // A room's floor script is the surface what stands on the room rests on.
+        if (
+          (node.floor?.script || prev.floor?.script) &&
+          (node.floor?.script !== prev.floor?.script ||
+            node.polygon !== prev.polygon ||
+            node.holes !== prev.holes)
+        ) {
+          const levelId = resolveLevelId(node, state.nodes)
+          markNodesOverlappingPolygon(levelId, prev.polygon, state.nodes, markDirty)
+          if (node.polygon !== prev.polygon)
+            markNodesOverlappingPolygon(levelId, node.polygon, state.nodes, markDirty)
+        }
       } else if (node.type === 'level' && prev.type === 'level') {
         if (node.height !== prev.height) {
           markLevelHeightDependents(node as LevelNode, state.nodes, markDirty)
@@ -214,11 +234,15 @@ export function initSpatialGridSync(): () => void {
           node.end !== prev.end ||
           node.curveOffset !== prev.curveOffset ||
           node.thickness !== prev.thickness ||
-          node.justification !== prev.justification
+          node.justification !== prev.justification ||
+          node.height !== prev.height ||
+          node.endHeightOffset !== prev.endHeightOffset ||
+          node.supportSlabId !== prev.supportSlabId ||
+          node.supportOffset !== prev.supportOffset
         ) {
-          // Rendered slab polygons adopt wall bands, so a wall reshape
-          // must reach the manager to refresh its wall map and drop the
-          // level's rendered-polygon cache.
+          // Rendered slab polygons adopt wall bands, and wall height/slope
+          // queries must see the latest node state — reach the manager to
+          // refresh its wall map and drop the level's rendered-polygon cache.
           spatialGridManager.handleNodeUpdated(node, resolveLevelId(node, state.nodes))
         }
       }
@@ -408,7 +432,8 @@ export function markSlabChangeDependents(
     next.elevation !== previous.elevation ||
     next.holes !== previous.holes
 
-  if (supportChanged) {
+  // A slab's surface script is the surface what stands on the slab rests on.
+  if (supportChanged || next.surfaceScript !== previous.surfaceScript) {
     markNodesOverlappingSlab(previous, nodes, markDirty, previousNodes)
     markNodesOverlappingSlab(next, nodes, markDirty)
   }
@@ -504,6 +529,11 @@ export function markTerrainSupportDependents(
 
   for (const node of Object.values(nodes)) {
     if (node.type === 'slab') {
+      // A deck's posts run down to the ground under each, on whatever storey it stands.
+      if (isDeckSlab(node, (id) => nodes[id])) {
+        markDirty(node.id)
+        continue
+      }
       const level = nodes[resolveLevelId(node, nodes)]
       if (
         node.plateRole === 'base' &&

@@ -12,22 +12,109 @@ on:
       - server.json
       - packages/mcp/package.json
       - .github/workflows/mcp-registry.yml
-  # Run before publishing: the hosted deployment must already serve this version.
+  # Release calls this after npm has the version; dispatch it by hand to recover a missed one.
+  workflow_call:
+    inputs:
+      version:
+        description: Released @pascal-app/mcp version; checks out its release tag
+        required: true
+        type: string
+      publish:
+        required: true
+        type: boolean
+    secrets:
+      MCP_REGISTRY_PRIVATE_KEY:
+        required: false
   workflow_dispatch:
+    inputs:
+      version:
+        description: Released @pascal-app/mcp version; checks out its release tag
+        required: true
+        type: string
+      publish:
+        description: Publish server.json to the MCP Registry
+        type: boolean
+        default: false
+      check-hosted:
+        description: Check that the hosted API catalog and server card report this version
+        type: boolean
+        default: true
 
 env:
   MCP_PUBLISHER_VERSION: 1.8.1
   MCP_PUBLISHER_LINUX_AMD64_SHA256: a06c9096dcb9727c13555b6be26c7effa707b01f06a4c561ba7a3635443cf2cc
+  NAME: app.pascal/editor
+  PACKAGE: "@pascal-app/mcp"
+  REMOTE_URL: https://editor.pascal.app/api/mcp
+  # validate and publish both run these, so the two jobs apply the same rules.
+  CHECK_VERSION: |
+    case "$INPUT_VERSION" in
+      *$'\r'* | *$'\n'*)
+        echo "::error::version contains a line break"
+        exit 1
+        ;;
+    esac
+    if ! [[ "$INPUT_VERSION" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
+      echo "::error::version must be a stable semver release such as 1.2.3"
+      exit 1
+    fi
+  CHECK_MANIFEST: |
+    jq --exit-status --arg name "$NAME" --arg package "$PACKAGE" --arg version "$INPUT_VERSION" \
+      --arg remote "$REMOTE_URL" '
+      .name == $name
+      and .version == $version
+      and .packages == [{
+        "registryType": "npm",
+        "registryBaseUrl": "https://registry.npmjs.org",
+        "identifier": $package,
+        "version": $version,
+        "runtimeHint": "npx",
+        "transport": { "type": "stdio" }
+      }]
+      and .remotes == [{ "type": "streamable-http", "url": $remote }]
+    ' server.json >/dev/null || {
+      echo "::error::server.json must be $NAME@$INPUT_VERSION with only the npm package $PACKAGE@$INPUT_VERSION over stdio and only the remote $REMOTE_URL"
+      exit 1
+    }
+    jq --exit-status --arg name "$NAME" --arg package "$PACKAGE" --arg version "$INPUT_VERSION" '
+      .name == $package and .mcpName == $name and .version == $version
+    ' packages/mcp/package.json >/dev/null || {
+      echo "::error::packages/mcp/package.json must be $PACKAGE@$INPUT_VERSION with mcpName $NAME"
+      exit 1
+    }
 
 jobs:
   validate:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+    outputs:
+      commit: ${{ steps.commit.outputs.sha }}
     steps:
+      - name: Check the version input
+        if: inputs.version != ''
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+        run: bash -euo pipefail -c "$CHECK_VERSION"
+
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
+          ref: ${{ inputs.version && format('refs/tags/@pascal-app/mcp@{0}', inputs.version) || '' }}
           persist-credentials: false
+
+      # publish checks out this exact commit, not the tag.
+      - name: Resolve the release tag to its commit
+        id: commit
+        if: inputs.version != ''
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+        run: |
+          sha=$(git rev-parse --verify "refs/tags/@pascal-app/mcp@${INPUT_VERSION}^{commit}")
+          if [ "$sha" != "$(git rev-parse HEAD)" ]; then
+            echo "::error::the checkout is not the commit of @pascal-app/mcp@$INPUT_VERSION"
+            exit 1
+          fi
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
 
       - name: Install MCP Registry publisher
         run: |
@@ -38,7 +125,7 @@ jobs:
           tar -xzf "$RUNNER_TEMP/mcp-publisher.tar.gz" -C "$RUNNER_TEMP" mcp-publisher
 
       - name: Validate MCP Registry manifest
-        run: "$RUNNER_TEMP/mcp-publisher validate"
+        run: '"$RUNNER_TEMP/mcp-publisher" validate'
 
       # The registry verifies npm ownership through the published package's mcpName. A
       # prerelease tree keeps the manifest on the last stable version.
@@ -57,6 +144,12 @@ jobs:
               "transport": { "type": "stdio" }
             }]
           ' server.json
+
+      - name: Release manifest matches the expected server
+        if: inputs.version != ''
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+        run: bash -euo pipefail -c "$CHECK_MANIFEST"
 
       # OAuth is discovered from the 401 challenge, so the remote declares no headers.
       - name: Verify hosted endpoint contract
@@ -81,16 +174,143 @@ jobs:
             'resource_metadata="https://editor.pascal.app/.well-known/oauth-protected-resource"' \
             "$RUNNER_TEMP/mcp-response.headers"
 
+  # The registry reads mcpName from the npm tarball, so this waits until npm serves the
+  # version, and it fails unless the registry lists the version afterwards.
+  publish:
+    if: inputs.publish
+    needs: validate
+    runs-on: ubuntu-latest
+    # The environment's deployment rule allows only main; it holds MCP_REGISTRY_PRIVATE_KEY.
+    environment: mcp-registry
+    # GitHub keeps one running and one waiting run per group: a third queued run replaces
+    # the waiting one. That is accepted, since every run publishes a version only once.
+    concurrency:
+      group: mcp-registry-publish
+      cancel-in-progress: false
+    permissions:
+      contents: read
+    env:
+      VERSIONS_URL: https://registry.modelcontextprotocol.io/v0/servers/app.pascal%2Feditor/versions
+    steps:
+      - name: Check the version input and validated commit
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+          EXPECTED_COMMIT: ${{ needs.validate.outputs.commit }}
+        run: |
+          bash -euo pipefail -c "$CHECK_VERSION"
+          if ! [[ "$EXPECTED_COMMIT" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "::error::validate did not report the commit it checked"
+            exit 1
+          fi
+
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          ref: ${{ needs.validate.outputs.commit }}
+          persist-credentials: false
+
+      - name: Checkout is the commit validate checked
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+          EXPECTED_COMMIT: ${{ needs.validate.outputs.commit }}
+        run: |
+          if [ "$(git rev-parse HEAD)" != "$EXPECTED_COMMIT" ]; then
+            echo "::error::the checkout is not the commit validate checked ($EXPECTED_COMMIT)"
+            exit 1
+          fi
+          tag="refs/tags/@pascal-app/mcp@$INPUT_VERSION"
+          refs=$(git ls-remote origin "$tag" "$tag^{}")
+          tag_commit=$(awk -v t="$tag^{}" '$2 == t { print $1 }' <<< "$refs")
+          [ -n "$tag_commit" ] || tag_commit=$(awk -v t="$tag" '$2 == t { print $1 }' <<< "$refs")
+          if [ "$tag_commit" != "$EXPECTED_COMMIT" ]; then
+            echo "::error::@pascal-app/mcp@$INPUT_VERSION no longer points at the commit validate checked ($EXPECTED_COMMIT)"
+            exit 1
+          fi
+
+      # Later steps take the version only from this step's output.
+      - name: Release manifest matches the expected server
+        id: manifest
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+        run: |
+          bash -euo pipefail -c "$CHECK_MANIFEST"
+          echo "version=$INPUT_VERSION" >> "$GITHUB_OUTPUT"
+
+      # A fresh publish can take a few minutes to show up in `npm view`. It runs outside
+      # the checkout so the repository's .npmrc does not apply.
+      - name: Wait for npm to serve the version
+        working-directory: ${{ runner.temp }}
+        env:
+          VERSION: ${{ steps.manifest.outputs.version }}
+        run: |
+          for _ in $(seq 1 30); do
+            if [ "$(npm view --registry https://registry.npmjs.org "$PACKAGE@$VERSION" mcpName 2>/dev/null)" = "$NAME" ]; then
+              echo "$PACKAGE@$VERSION is on npm with mcpName $NAME"
+              exit 0
+            fi
+            sleep 20
+          done
+          echo "::error::$PACKAGE@$VERSION with mcpName $NAME is not on npm after 10 minutes"
+          exit 1
+
+      - name: Install MCP Registry publisher
+        run: |
+          curl --fail --location \
+            "https://github.com/modelcontextprotocol/registry/releases/download/v${MCP_PUBLISHER_VERSION}/mcp-publisher_linux_amd64.tar.gz" \
+            --output "$RUNNER_TEMP/mcp-publisher.tar.gz"
+          echo "${MCP_PUBLISHER_LINUX_AMD64_SHA256}  $RUNNER_TEMP/mcp-publisher.tar.gz" | sha256sum --check
+          tar -xzf "$RUNNER_TEMP/mcp-publisher.tar.gz" -C "$RUNNER_TEMP" mcp-publisher
+
+      # The app.pascal namespace is verified through CI's own pascal.app DNS TXT record,
+      # whose Ed25519 private key is the MCP_REGISTRY_PRIVATE_KEY environment secret.
+      - name: Publish to the MCP Registry
+        env:
+          VERSION: ${{ steps.manifest.outputs.version }}
+          MCP_REGISTRY_PRIVATE_KEY: ${{ secrets.MCP_REGISTRY_PRIVATE_KEY }}
+        run: |
+          if curl --silent --fail "$VERSIONS_URL" \
+            | jq --exit-status --arg v "$VERSION" 'any(.servers[]; .server.version == $v)' >/dev/null; then
+            echo "$NAME@$VERSION is already in the MCP Registry"
+            exit 0
+          fi
+          if [ -z "$MCP_REGISTRY_PRIVATE_KEY" ]; then
+            echo "::error::MCP_REGISTRY_PRIVATE_KEY is not set, so $NAME@$VERSION cannot be published. See wiki/npm-release.md#mcp-registry."
+            exit 1
+          fi
+          "$RUNNER_TEMP/mcp-publisher" login dns --domain pascal.app --private-key "$MCP_REGISTRY_PRIVATE_KEY"
+          "$RUNNER_TEMP/mcp-publisher" publish
+
+      # mcp-publisher 1.8.1 keeps its token in token.json; the older path is a fallback.
+      - name: Remove the registry token
+        if: always()
+        run: rm -f ~/.config/mcp-publisher/token.json ~/.mcpregistry_registry_token
+
+      - name: Registry lists the version
+        env:
+          VERSION: ${{ steps.manifest.outputs.version }}
+        run: |
+          for _ in $(seq 1 10); do
+            if curl --silent --fail "$VERSIONS_URL" \
+              | jq --exit-status --arg v "$VERSION" 'any(.servers[]; .server.version == $v)' >/dev/null; then
+              echo "$NAME@$VERSION is in the MCP Registry"
+              exit 0
+            fi
+            sleep 15
+          done
+          echo "::error::$NAME@$VERSION is not in the MCP Registry: $VERSIONS_URL"
+          exit 1
+
   # The hosted API catalog and server card are served by the hosted deployment, not
   # this repository, so they only match after that deployment picks up this version.
+  # It does not gate the registry publish.
   hosted-matches-manifest:
-    if: github.event_name == 'workflow_dispatch'
+    if: inputs.check-hosted
     runs-on: ubuntu-latest
     permissions:
       contents: read
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
+          ref: ${{ inputs.version && format('refs/tags/@pascal-app/mcp@{0}', inputs.version) || '' }}
           persist-credentials: false
 
       - name: Verify live API catalog matches manifest

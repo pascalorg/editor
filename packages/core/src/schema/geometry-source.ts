@@ -22,6 +22,27 @@ export const isGeometryScriptMimeType = (mimeType: string) =>
 const finite = z.number().finite()
 const vec3 = z.tuple([finite, finite, finite])
 
+/**
+ * A spotlight's beam: where it points (in the object's frame), its full cone in degrees and how
+ * soft its edge is (0 a hard edge, 1 fully feathered).
+ */
+export const LightSpot = z.object({
+  direction: vec3.refine((v) => Math.hypot(...v) > 1e-6, 'A spot needs a direction'),
+  angle: z.number().min(1).max(179),
+  softness: z.number().min(0).max(1),
+})
+export type LightSpot = z.infer<typeof LightSpot>
+
+/**
+ * The soft halo drawn around a lamp itself, in the light's colour: its size across in metres and
+ * its strength. It shows more the darker the scene is.
+ */
+export const LightGlow = z.object({
+  size: z.number().positive().max(5),
+  strength: z.number().nonnegative().max(10).default(1),
+})
+export type LightGlow = z.infer<typeof LightGlow>
+
 export const GeometryScriptParamValue = z.union([finite, z.boolean(), z.string()])
 export type GeometryScriptParamValue = z.infer<typeof GeometryScriptParamValue>
 
@@ -38,6 +59,28 @@ export const GeometryScriptParamSpec = z.object({
   options: z.array(z.string()).optional(),
 })
 export type GeometryScriptParamSpec = z.infer<typeof GeometryScriptParamSpec>
+
+const planPoint = z.tuple([finite, finite])
+const planRing = z.array(planPoint).min(3)
+
+/**
+ * What a build occupies in plan, height band by height band, for the usage checks (passages,
+ * pockets, clashes): `y0`..`y1` in the artifact's frame and the plan outlines (x, z) of
+ * everything it has in that band, traced from a conservative raster of its meshes, so an outline
+ * is never inside the build and at most `tolerance` metres outside it. Written by the compiler
+ * only when usage checks are on, so it is absent from older artifacts.
+ */
+export const GeometryShape = z.object({
+  tolerance: finite,
+  bands: z.array(
+    z.object({
+      y0: finite,
+      y1: finite,
+      polygons: z.array(z.object({ outer: planRing, holes: z.array(planRing).optional() })),
+    }),
+  ),
+})
+export type GeometryShape = z.infer<typeof GeometryShape>
 
 /**
  * What the compiler read from the script's output, by naming convention:
@@ -93,6 +136,9 @@ export const GeometryArtifactManifest = z.object({
         color: z.string(),
         intensity: finite,
         distance: finite.optional(),
+        spot: LightSpot.optional(),
+        shadows: z.boolean().optional(),
+        glow: LightGlow.optional(),
       }),
     )
     .default([]),
@@ -125,6 +171,7 @@ export const GeometryArtifactManifest = z.object({
     .optional(),
   cutout: z.boolean().default(false),
   collider: z.boolean().default(false),
+  shape: GeometryShape.optional(),
   triangles: z.number().int().nonnegative(),
   /**
    * Built for a room's floor or a wall face: the share of it (less its holes) the build covers,

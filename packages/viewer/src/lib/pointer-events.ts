@@ -27,7 +27,12 @@
  * The throttle is a vendored-manager policy; dev ?stockEvents uses untouched R3F.
  */
 
-import { sceneRegistry, useScene } from '@pascal-app/core'
+import {
+  isDevelopmentBuild,
+  isDevelopmentOutsideTests,
+  sceneRegistry,
+  useScene,
+} from '@pascal-app/core'
 import {
   events as createWebEvents,
   type DomEvent,
@@ -108,7 +113,7 @@ export function choosePointerEvents(
   search = typeof window !== 'undefined' ? window.location.search : '',
   onBreadcrumb?: ViewerBreadcrumbHandler,
 ): typeof createWebEvents {
-  return process.env.NODE_ENV !== 'production' && new URLSearchParams(search).has('stockEvents')
+  return isDevelopmentBuild() && new URLSearchParams(search).has('stockEvents')
     ? createWebEvents
     : (store) => createPascalPointerEvents(store, onBreadcrumb)
 }
@@ -523,7 +528,7 @@ function createEvents(store: RootStore, onBreadcrumb?: ViewerBreadcrumbHandler) 
             stats.lastFallbackReason = reason
             if (
               unsupported &&
-              process.env.NODE_ENV === 'development' &&
+              isDevelopmentOutsideTests() &&
               !warnedRaycastNames.has(reason.fnName)
             ) {
               warnedRaycastNames.add(reason.fnName)

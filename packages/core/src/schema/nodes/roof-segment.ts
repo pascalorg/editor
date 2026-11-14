@@ -1,14 +1,18 @@
 import dedent from 'dedent'
 import { z } from 'zod'
 import { BaseNode, nodeType, objectId } from '../base'
+import { RoofBuildUp } from '../build-up'
 import type { MaterialSchema as MaterialSchemaType } from '../material'
 import { MaterialSchema } from '../material'
 import { getBarrelRoofProfile } from './barrel-roof'
 import { RoofGlazing, RoofSystemType } from './roof-glazing'
-import { RoofType } from './roof-types'
+import { getRoofModuleFaces, getRoofShapeRatios } from './roof-segment-shape'
+import { RoofEaveCut, RoofType } from './roof-types'
 
-export { RoofType } from './roof-types'
+export { RoofEaveCut, RoofType } from './roof-types'
 export const MIN_ROOF_SEGMENT_TRIM_SPAN = 0.1
+export const MIN_ROOF_SEGMENT_DIMENSION = 0.5
+export const MAX_ROOF_PITCH = 85
 const DEFAULT_ROOF_SEGMENT_WIDTH = 8
 const DEFAULT_ROOF_SEGMENT_DEPTH = 6
 
@@ -133,7 +137,7 @@ export const RoofSegmentNode = BaseNode.extend({
   // For gable/hip/shed this is the only slope; for gambrel/mansard/dutch
   // it is the steep (lower) slope. The overall peak height is derived
   // from pitch + footprint + roofType via getActiveRoofHeight().
-  pitch: z.number().min(0).max(85).default(40),
+  pitch: z.number().min(0).max(MAX_ROOF_PITCH).default(40),
   // Structure thicknesses
   wallThickness: z.number().default(0.1),
   deckThickness: z.number().default(0.1),
@@ -142,6 +146,9 @@ export const RoofSegmentNode = BaseNode.extend({
   // gambrel's ends, a shed's sides). Absent, as far as the eaves reach (`overhang` is along the slope).
   gableOverhang: z.number().min(0).optional(),
   shingleThickness: z.number().default(0.05),
+  // The plane's layers, outside in. Present, `deckThickness` and `shingleThickness` are derived
+  // from it and written with it (`roofBuildUpPatch`); absent, they are the plane's own.
+  buildUp: RoofBuildUp.optional(),
   arc: z
     .object({
       centerX: z.number(),
@@ -172,20 +179,32 @@ export const RoofSegmentNode = BaseNode.extend({
   managedByParent: z.boolean().default(false),
   wallShell: z.enum(['auto', 'include', 'omit']).default('auto'),
   shedInsetEndPanels: z.boolean().default(false),
-  // Plumb 1x8 fascia and rake boards on the eaves and rakes (gable, hip,
-  // shed, flat), built from the segment itself so they follow its pitch,
-  // size, overhang and type.
+  // Fascia and rake boards on the eaves and rakes (gable, hip, shed, flat), built from the segment
+  // itself so they follow its pitch, size, overhang, layers and eave cut (core's `roofEaveProfile`).
   fascia: z.boolean().optional(),
+  // How the rafter tails are cut at the eaves, the fascia with them (`RoofEaveCut`); absent, plumb.
+  eaveCut: RoofEaveCut.optional(),
   // Shed only: the board on the high edge. Off when that edge meets a wall
   // (a porch cover on a ledger); a lean-to never has one.
   fasciaHighEdge: z.boolean().optional(),
-  // The boards' height and thickness; a 1x8 (0.184 × 0.019 m) when absent. With a height set, a
-  // flat roof's boards rise to the roof's top: a coping band over the deck and membrane edges.
+  // The boards' height and thickness; absent, a 1x as deep as the tails need (`roofEaveProfile`).
+  // With a height set, a flat roof's boards rise to the roof's top: a coping band over the deck and
+  // membrane edges.
   fasciaHeight: z.number().positive().optional(),
   fasciaDepth: z.number().positive().optional(),
   // The boards' and rakes' own finish; absent, they take the wall role's, as they always did.
   fasciaMaterial: MaterialSchema.optional(),
   fasciaMaterialPreset: z.string().optional(),
+  // The wall band between the top plate and the eaves (a raised heel) is wall, not trim: its own
+  // finish; absent, the roof's, then the walls' below it.
+  heelMaterial: MaterialSchema.optional(),
+  heelMaterialPreset: z.string().optional(),
+  // Each gable end's own finish (−x is the left, +x the right, as `getRoofSegmentWallFaces` names
+  // them); absent, the edge role's, as every gable took before they could be painted apart.
+  gableLeftMaterial: MaterialSchema.optional(),
+  gableLeftMaterialPreset: z.string().optional(),
+  gableRightMaterial: MaterialSchema.optional(),
+  gableRightMaterialPreset: z.string().optional(),
   // Shape-specific ratios. Only the pair matching `roofType` is read; the
   // rest are inert. Defined on every segment so the panel can flip
   // roofType without losing the previous shape's tuning.
@@ -257,10 +276,14 @@ export const RoofSegmentNode = BaseNode.extend({
   - overhang: eave overhang distance, along the slope
   - gableOverhang: reach past the gable-end walls in plan (gable, gambrel, shed); absent = the eaves' reach
   - shingleThickness: outer shingle layer thickness
-  - fascia: plumb fascia and rake boards on the eaves and rakes (gable, hip, shed, flat) (off when absent)
+  - buildUp: layers outside in (roofing, underlayment, sheathing, structure, insulation, finish); sets deckThickness and shingleThickness
+  - fascia: fascia and rake boards on the eaves and rakes (gable, hip, shed, flat) (off when absent)
+  - eaveCut: how the rafter tails are cut at the eaves — plumb, square (to the slope) or plumb-level (a boxed eave with a level soffit); plumb when absent
   - fasciaHighEdge: shed only — a board on the high edge (off when it meets a wall; on when absent)
-  - fasciaHeight/fasciaDepth: the boards' size (a 1x8 when absent); with a height, a flat roof's boards reach its top
+  - fasciaHeight/fasciaDepth: the boards' size (a 1x as deep as the tails need when absent); with a height, a flat roof's boards reach its top
   - fasciaMaterial/fasciaMaterialPreset: the boards' and rakes' finish (the wall role's when absent)
+  - heelMaterial/heelMaterialPreset: the wall band under the eaves (the roof's, then the walls' below, when absent)
+  - gableLeftMaterial/gableRightMaterial (+Preset): one gable end's finish (the edge role's when absent)
   - gambrelLowerWidthRatio / gambrelLowerHeightRatio: kink position on gambrel roofs
   - mansardSteepWidthRatio / mansardSteepHeightRatio: waist position on mansard roofs
   - dutchHipWidthRatio / dutchHipHeightRatio: hip-to-gable split on dutch roofs
@@ -767,7 +790,40 @@ export function getRoofSegmentSurfaceY(
   const peakY = node.wallHeight + activeRh
   if (activeRh === 0) return node.wallHeight
 
-  if (node.roofType === 'gable' || node.roofType === 'gambrel' || node.roofType === 'mansard') {
+  if (node.roofType === 'gambrel' || node.roofType === 'mansard' || node.roofType === 'hip') {
+    const faces = getRoofModuleFaces({
+      type: node.roofType,
+      w: node.width,
+      d: node.depth,
+      wh: node.wallHeight,
+      rh: activeRh,
+      baseY: node.wallHeight - 1,
+      baseW: node.width,
+      baseD: node.depth,
+      tanTheta: slopeFrame.tanTheta,
+      insets: {},
+      shapeRatios: getRoofShapeRatios(node),
+    })
+    let top: number | undefined
+    for (const face of faces) {
+      const a = face[0]
+      if (!a) continue
+      for (let i = 1; i + 1 < face.length; i++) {
+        const b = face[i]!,
+          c = face[i + 1]!
+        const determinant = (b.z - c.z) * (a.x - c.x) + (c.x - b.x) * (a.z - c.z)
+        if (Math.abs(determinant) < 1e-10) continue
+        const u = ((b.z - c.z) * (localX - c.x) + (c.x - b.x) * (localZ - c.z)) / determinant
+        const v = ((c.z - a.z) * (localX - c.x) + (a.x - c.x) * (localZ - c.z)) / determinant
+        if (u < -1e-8 || v < -1e-8 || u + v > 1 + 1e-8) continue
+        const y = u * a.y + v * b.y + (1 - u - v) * c.y
+        top = top === undefined ? y : Math.max(top, y)
+      }
+    }
+    if (top !== undefined) return top
+  }
+
+  if (node.roofType === 'gable') {
     const t = node.depth > 0 ? Math.abs(localZ) / (node.depth / 2) : 0
     return peakY - t * activeRh
   }
@@ -912,6 +968,51 @@ export function getEffectiveSegmentSurfaceMaterial(
   return parentFallback ?? { material: undefined, materialPreset: undefined }
 }
 
+/** A segment's wall-band surfaces painted apart from the edge role: the heel band and each gable. */
+export type RoofWallBand = 'heel' | 'gable-left' | 'gable-right'
+
+export const ROOF_WALL_BANDS: readonly RoofWallBand[] = ['heel', 'gable-left', 'gable-right']
+
+const WALL_BAND_FIELDS = {
+  heel: ['heelMaterial', 'heelMaterialPreset'],
+  'gable-left': ['gableLeftMaterial', 'gableLeftMaterialPreset'],
+  'gable-right': ['gableRightMaterial', 'gableRightMaterialPreset'],
+} as const
+
+/** The node fields one wall band's finish is stored in. */
+export function roofWallBandFields(band: RoofWallBand) {
+  const [material, materialPreset] = WALL_BAND_FIELDS[band]
+  return { material, materialPreset }
+}
+
+/**
+ * A wall band's own finish on a segment (or, for the heel, a roof), or null when it has none and
+ * the band follows its fallback: the heel the roof's, then the walls' below; a gable the edge role.
+ */
+export function getRoofWallBandMaterial(
+  node: Partial<
+    Pick<
+      RoofSegmentNode,
+      | 'heelMaterial'
+      | 'heelMaterialPreset'
+      | 'gableLeftMaterial'
+      | 'gableLeftMaterialPreset'
+      | 'gableRightMaterial'
+      | 'gableRightMaterialPreset'
+    >
+  >,
+  band: RoofWallBand,
+): RoofSegmentSurfaceMaterialSpec | null {
+  const fields = roofWallBandFields(band)
+  const material = node[fields.material]
+  const materialPreset = node[fields.materialPreset]
+  if (material === undefined && typeof materialPreset !== 'string') return null
+  return {
+    material,
+    materialPreset: typeof materialPreset === 'string' ? materialPreset : undefined,
+  }
+}
+
 /** The fascia and rake boards' own finish, or null when they take the wall role's. */
 export function getSegmentFasciaMaterial(
   node: RoofSegmentNode,
@@ -943,6 +1044,7 @@ export function hasSegmentMaterialOverride(node: RoofSegmentNode): boolean {
     node.wallMaterial !== undefined ||
     typeof node.wallMaterialPreset === 'string' ||
     node.fasciaMaterial !== undefined ||
-    typeof node.fasciaMaterialPreset === 'string'
+    typeof node.fasciaMaterialPreset === 'string' ||
+    ROOF_WALL_BANDS.some((band) => getRoofWallBandMaterial(node, band) !== null)
   )
 }

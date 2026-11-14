@@ -10,10 +10,14 @@ import {
   type AnyNode,
   type AnyNodeId,
   type BuildingNode,
+  floorPlateRoom,
   getRoofSegmentDeckReach,
+  isOutdoorRoomType,
   type LevelNode,
   migrateSiteMetadata,
+  type RoofNode,
   type RoofSegmentNode,
+  roofFaceShapes,
   type SceneSnapshot,
   type SiteNode,
   siteFrame,
@@ -73,7 +77,8 @@ export function findLowestLevel(
 /**
  * The roof's outline on the lot — every roof segment's plan rectangle out to
  * its deck's reach at its eaves and rakes, through the segment's, the roof's
- * and the building's turns, unioned into the outer ring(s). Dashed on the site plan: what the eye sees
+ * and the building's turns, and every face of another kind (`capabilities.roofs`)
+ * by its own outline, unioned into the outer ring(s). Dashed on the site plan: what the eye sees
  * from above is the roof, and the setback is measured to the wall under it.
  */
 export function roofOutlineRings(
@@ -91,6 +96,9 @@ export function roofOutlineRings(
   }
   if (roofs.size === 0) return []
   const rects: Pt[][] = []
+  for (const roof of roofs.values())
+    for (const face of roofFaceShapes(roof as RoofNode, scene.nodes))
+      rects.push(face.outline.map(([x, z]) => toSite(x, z)))
   for (const node of Object.values(scene.nodes)) {
     if (node.type !== 'roof-segment') continue
     const roof = roofs.get(String((node as { parentId?: unknown }).parentId))
@@ -201,7 +209,7 @@ function coveredShare(ring: readonly Pt[], covers: readonly Pt[][]): number {
 
 /**
  * The level's outdoor slabs in site metres: porches, decks, patios and
- * landings (a generator `metadata.porch`, or a deck / porch-slab floor, or a
+ * landings (a generator `metadata.porch`, an outdoor room’s plate, or a
  * slab lying outside the house's walls) and the flatwork. The house's own
  * floors (the storey slab, a raised platform, the garage pad) and a porch
  * cover's beam are not outdoor parts. `roofs` decides which are covered.
@@ -247,7 +255,8 @@ export function outdoorParts(
     // a porch cover's beam box is not a floor
     if (/beam/i.test(floor) || /beam/i.test(slab.name ?? '')) continue
     const porch = meta.porch as { policy?: string; entrance?: string } | undefined
-    const outdoorFloor = floor === 'deck' || floor === 'porch-slab'
+    const roomType = floorPlateRoom(child, (id) => scene.nodes[id])?.roomType
+    const outdoorFloor = isOutdoorRoomType(roomType)
     if (!porch && !outdoorFloor) {
       // a hand-drawn slab: the house's floor when it lies under the walls
       if (HOUSE_FLOORS.has(floor)) continue
@@ -257,7 +266,7 @@ export function outdoorParts(
       )
       if (walls.length === 0 || walls.some((w) => pointInPolygon(w, c[0], c[1]))) continue
     }
-    const wood = floor === 'deck'
+    const wood = roomType === 'deck'
     const policy = porch?.policy ?? ''
     const kind: OutdoorKind =
       policy === 'deck' || (wood && policy !== 'full' && policy !== 'entry')

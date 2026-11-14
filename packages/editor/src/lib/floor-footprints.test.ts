@@ -4,12 +4,14 @@ import {
   applySceneOperationPatch,
   BuildingNode,
   clearSceneHistory,
+  createI18n,
   createZone,
   floorFootprintName,
   generateId,
   ItemNode,
   initSpaceDetectionSync,
   LevelNode,
+  levelFootprints,
   type SceneCommit,
   type SlabNode,
   SlabNode as SlabSchema,
@@ -17,6 +19,8 @@ import {
   useScene,
   ZoneNode,
 } from '@pascal-app/core'
+import type { RoomSelectionRecord } from '@pascal-app/viewer/ui'
+import { resolveRoomAssemblyHeights } from '@pascal-app/viewer/ui'
 import { moveTogetherLabel } from '../components/ui/panels/floor-foundation-panel'
 import {
   applyFloorFoundation,
@@ -28,13 +32,11 @@ import {
   footprintsToMoveTogether,
   foundationHeight,
   isFootprintConstructionHit,
-  levelFootprints,
   presetPatch,
   roomFloorOwner,
   roomFootprint,
   roomOwnedPlateDrillTarget,
 } from './floor-footprints'
-import { resolveRoomAssemblyHeights } from './room-assembly-overlay'
 import { roomConstructionState } from './room-construction'
 import {
   addRoomConstruction,
@@ -42,7 +44,6 @@ import {
   roomRelativeFloorHeight,
   setRoomRelativeFloorHeight,
 } from './room-construction-commands'
-import type { RoomSelectionRecord } from './room-selection'
 import { applyRoomPlan } from './room-structure-commands'
 
 const LEVEL = 'level_footprints'
@@ -418,7 +419,7 @@ describe('floor footprints', () => {
     // What the notice offers instead: both footprints, together, in one step.
     const together = footprintsToMoveTogether(nodes(), house.id, patch)
     expect(together).toEqual([house.id, shed.id])
-    expect(moveTogetherLabel(together!.length, false)).toBe('Raise both')
+    expect(moveTogetherLabel(together!.length, false, createI18n())).toBe('Raise both')
     const steps = history()
     expect(applyFloorFoundation(together!, patch)).toBeNull()
     expect(history()).toBe(steps + 1)

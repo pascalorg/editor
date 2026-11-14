@@ -22,6 +22,7 @@ import {
 } from '../building/photo-elevation'
 import type { AnyNode, AnyNodeId, WallNode } from '../schema'
 import { getLevelElevations, type LevelElevation } from '../services/storey'
+import { queryNodes } from './scene-queries'
 import type { SceneNodes } from './types'
 
 type Pt = [number, number]
@@ -1028,9 +1029,7 @@ function photoPose(
   let best: { spread: number; places: ReturnType<typeof place>[] } | null = null
   if (faces.length === 1) {
     // One face: the camera stands outside the building, away from its walls' middle.
-    const walls = Object.values(nodes).filter(
-      (node): node is WallNode => node.type === 'wall' && node.parentId === faces[0]!.levelId,
-    )
+    const walls = queryNodes<WallNode>(nodes, { type: 'wall', parentId: faces[0]!.levelId })
     const middle = walls.flatMap((wall) => [wall.start, wall.end])
     const cx = mean(middle.map((p) => p[0]))
     const cz = mean(middle.map((p) => p[1]))

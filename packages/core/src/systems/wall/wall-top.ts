@@ -1,3 +1,4 @@
+import { RAILING_GUARD_HEIGHT } from '../../schema/nodes/railing-wall'
 import type { WallNode } from '../../schema/nodes/wall'
 
 /**
@@ -8,11 +9,29 @@ import type { WallNode } from '../../schema/nodes/wall'
  * would collapse below this minimum.
  */
 export const MIN_WALL_HEIGHT = 0.5
+export const MIN_WALL_END_HEIGHT = 0.01
+
+/**
+ * Clamps a wall's end-height offset so the lower end of the wall never
+ * collapses below `minEndHeight` (0.01 m by default).
+ */
+export function clampWallEndHeightOffset(
+  endHeightOffset: number | undefined,
+  bodyHeight: number,
+  minEndHeight = MIN_WALL_END_HEIGHT,
+): number {
+  if (!endHeightOffset) return 0
+  const maxNegativeOffset = -(Math.max(minEndHeight, bodyHeight) - minEndHeight)
+  const clamped = Math.max(endHeightOffset, maxNegativeOffset)
+  return clamped === 0 ? 0 : clamped
+}
 
 export function wallFollowsStorey(
-  wall: Pick<WallNode, 'height' | 'supportSlabId'>,
+  wall: Pick<WallNode, 'height' | 'supportSlabId' | 'wallType'>,
   authoredStoreyHeight: number | null,
 ): boolean {
+  // A railing is a guard as tall as itself, never the storey (36 in when it says nothing).
+  if (wall.wallType === 'railing') return false
   return (
     wall.height == null ||
     (authoredStoreyHeight !== null &&
@@ -31,16 +50,22 @@ export function wallFollowsStorey(
  * Other explicit walls stand on their elected support; ground-hosted walls
  * always retain their authored body height.
  *
- * Returns the top in level-local Y (same frame as `electedBase`).
+ * Returns the top in level-local Y (same frame as `electedBase`) at chord fraction `t`
+ * ($t = 0$ is the start, $t = 1$ the end); a sloped top differs along the wall.
  */
 export function resolveWallTop(
-  wall: Pick<WallNode, 'height' | 'supportSlabId'>,
+  wall: Pick<WallNode, 'height' | 'supportSlabId' | 'wallType' | 'endHeightOffset'>,
   storeyHeight: number,
   electedBase: number,
   authoredStoreyHeight: number | null = storeyHeight,
+  t = 0,
 ): number {
-  if (wallFollowsStorey(wall, authoredStoreyHeight)) return storeyHeight
-  return electedBase + wall.height!
+  // Only a railing reaches the fallback with no height of its own.
+  const top = wallFollowsStorey(wall, authoredStoreyHeight)
+    ? storeyHeight
+    : electedBase + (wall.height ?? RAILING_GUARD_HEIGHT)
+  if (!wall.endHeightOffset) return top
+  return top + clampWallEndHeightOffset(wall.endHeightOffset, top - electedBase) * t
 }
 
 /**
@@ -58,10 +83,11 @@ export function resolveWallTop(
  * policy.
  */
 export function resolveWallEffectiveHeight(
-  wall: Pick<WallNode, 'height' | 'supportSlabId'>,
+  wall: Pick<WallNode, 'height' | 'supportSlabId' | 'wallType' | 'endHeightOffset'>,
   storeyHeight: number,
   electedBase: number,
   authoredStoreyHeight: number | null = storeyHeight,
+  t = 0,
 ): number {
-  return resolveWallTop(wall, storeyHeight, electedBase, authoredStoreyHeight) - electedBase
+  return resolveWallTop(wall, storeyHeight, electedBase, authoredStoreyHeight, t) - electedBase
 }

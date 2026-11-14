@@ -1,4 +1,4 @@
-import { difference, type MultiPolygon, type Ring } from '@pascal-app/core/polygon-boolean'
+import { difference, type MultiPolygon, type Ring, union } from '@pascal-app/core/polygon-boolean'
 import * as THREE from 'three'
 import { Brush, Evaluator, HOLLOW_INTERSECTION, INTERSECTION } from 'three-bvh-csg'
 
@@ -30,8 +30,16 @@ const rectRing = ({ x0, y0, x1, y1 }: Rect): Ring => [
 const pieces = (rings: Ring[]): MultiPolygon => rings.map((outer) => ({ outer, holes: [] }))
 
 /**
+ * How far a face's finish stops short of each door and window, all round. The frame, its sill, a
+ * casing and the wall's reveal stand on the opening's edges: a finish cut exactly there would close
+ * with faces in their planes, and two faces in one plane flicker.
+ */
+const OPENING_MARGIN = 0.001
+
+/**
  * The region a build for these inputs is cut to: a floor's `polygon` less its `holes`, or a wall
- * face's `outline` less its `holes` (rectangles); null when the inputs describe neither.
+ * face's `outline` less its `holes` (rectangles, each grown by OPENING_MARGIN); null when the
+ * inputs describe neither.
  */
 export function hostRegion(inputs: Record<string, unknown>): HostRegion | null {
   const holes: unknown[] = Array.isArray(inputs.holes) ? inputs.holes : []
@@ -39,7 +47,14 @@ export function hostRegion(inputs: Record<string, unknown>): HostRegion | null {
     return { axis: 'y', area: difference(inputs.polygon, pieces(holes.filter(isRing))) }
   }
   if (isRect(inputs.outline)) {
-    const rings = holes.filter(isRect).map(rectRing)
+    const rings = holes.filter(isRect).map(({ x0, y0, x1, y1 }) =>
+      rectRing({
+        x0: x0 - OPENING_MARGIN,
+        y0: y0 - OPENING_MARGIN,
+        x1: x1 + OPENING_MARGIN,
+        y1: y1 + OPENING_MARGIN,
+      }),
+    )
     return { axis: 'z', area: difference(rectRing(inputs.outline), pieces(rings)) }
   }
   return null
@@ -119,8 +134,72 @@ function placement(area: MultiPolygon, span: Span): 'inside' | 'outside' | 'boun
   return regionHolds(area, [(u0 + u1) / 2, (v0 + v1) / 2]) ? 'inside' : 'outside'
 }
 
-/** The region as a closed prism spanning `extent` (plus MARGIN) along its axis, in the build's frame. */
-function regionPrism({ axis, area }: HostRegion, extent: THREE.Box3): THREE.BufferGeometry {
+/**
+ * How much farther from the cut each layer of a finish stops than the layer over it (a grout bed
+ * under its tiles, mortar behind brick slips). Cut at one edge, both would close with a face in one
+ * plane, which flickers; a step apart, the one behind closes inside the one in front. 1 mm, as a
+ * face script stands off its wall: the views resolve it.
+ */
+const LAYER_STEP = 0.001
+/** A layer deeper than this stops with the last: finishes are a few layers deep. */
+const MAX_LAYER_STEPS = 4
+/** Fronts this close are one layer: tiles laid a hair proud of their neighbours are not stacked. */
+const LAYER_TOLERANCE = 1e-4
+
+const overlaps = (a: Span, b: Span) =>
+  a.u0 < b.u1 - EDGE && b.u0 < a.u1 - EDGE && a.v0 < b.v1 - EDGE && b.v0 < a.v1 - EDGE
+
+/**
+ * How many steps back from the cut each mesh near it stops: none with nothing over it, else one
+ * more than the farthest-stopped mesh over it (their bounds overlap in the plane and its front
+ * stands farther out along the axis). A mesh away from the cut has no cut face to keep apart.
+ */
+function layerSteps(near: { mesh: THREE.Mesh; span: Span; front: number }[]) {
+  const steps = new Map<THREE.Mesh, number>()
+  const outermostFirst = [...near].sort((a, b) => b.front - a.front)
+  outermostFirst.forEach((layer, index) => {
+    let step = 0
+    for (let k = 0; k < index; k++) {
+      const over = outermostFirst[k]!
+      if (over.front > layer.front + LAYER_TOLERANCE && overlaps(over.span, layer.span)) {
+        step = Math.max(step, Math.min(MAX_LAYER_STEPS, steps.get(over.mesh)! + 1))
+      }
+    }
+    steps.set(layer.mesh, step)
+  })
+  return steps
+}
+
+/** The area less a band `by` wide inside its boundary: each edge's band, squared off past its ends. */
+function insetArea(area: MultiPolygon, by: number): MultiPolygon {
+  const bands: Ring[] = []
+  for (const { outer, holes } of area) {
+    for (const ring of [outer, ...holes]) {
+      for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+        const [au, av] = ring[j]!
+        const [bu, bv] = ring[i]!
+        const length = Math.hypot(bu - au, bv - av)
+        if (length === 0) continue
+        const tu = ((bu - au) / length) * by
+        const tv = ((bv - av) / length) * by
+        bands.push([
+          [au - tu + tv, av - tv - tu],
+          [bu + tu + tv, bv + tv - tu],
+          [bu + tu - tv, bv + tv + tu],
+          [au - tu - tv, av - tv + tu],
+        ])
+      }
+    }
+  }
+  return difference(area, union(bands))
+}
+
+/** The area as a closed prism spanning `extent` (plus MARGIN) along `axis`, in the build's frame. */
+function regionPrism(
+  axis: HostRegion['axis'],
+  area: MultiPolygon,
+  extent: THREE.Box3,
+): THREE.BufferGeometry {
   // A floor's plan v is world z; the shape is drawn at -z so turning it up (-90° about x) lands it at +z.
   const flip = axis === 'y' ? -1 : 1
   const shapes = area.map(({ outer, holes }) => {
@@ -176,24 +255,48 @@ const triangles = (geometry: THREE.BufferGeometry) =>
  * Cuts each visible mesh of a host's build to its region: whole inside, it is kept untouched;
  * whole outside or in a hole, it is dropped; across the boundary, it is intersected with the
  * region's prism (a closed mesh gains the cut faces, an open one is trimmed), keeping its
- * material, and dropped if nothing is left. `extent` is the build's visible bounds.
+ * material, and dropped if nothing is left. A mesh under another is cut to the region inset by
+ * its layer steps. `extent` is the build's visible bounds.
  */
 export function cutToRegion(meshes: THREE.Mesh[], region: HostRegion, extent: THREE.Box3) {
-  const box = new THREE.Box3()
-  let prism: THREE.BufferGeometry | undefined
-  const brushes = new Map<string, Brush>()
-  const evaluator = new Evaluator()
-  for (const mesh of meshes) {
+  const reach = LAYER_STEP * MAX_LAYER_STEPS
+  const layers = meshes.map((mesh) => {
     mesh.geometry.computeBoundingBox()
-    box.copy(mesh.geometry.boundingBox!).applyMatrix4(mesh.matrixWorld)
-    const where = placement(region.area, planeSpan(box, region.axis))
+    const box = mesh.geometry.boundingBox!.clone().applyMatrix4(mesh.matrixWorld)
+    return { mesh, span: planeSpan(box, region.axis), front: box.max[region.axis] }
+  })
+  const steps = layerSteps(
+    layers.filter(
+      ({ span }) =>
+        placement(region.area, {
+          u0: span.u0 - reach,
+          u1: span.u1 + reach,
+          v0: span.v0 - reach,
+          v1: span.v1 + reach,
+        }) === 'boundary',
+    ),
+  )
+  const cuts = new Map<
+    number,
+    { area: MultiPolygon; prism?: THREE.BufferGeometry; brushes: Map<string, Brush> }
+  >()
+  const evaluator = new Evaluator()
+  for (const { mesh, span } of layers) {
+    const step = steps.get(mesh) ?? 0
+    let cut = cuts.get(step)
+    if (!cut) {
+      const area = step ? insetArea(region.area, step * LAYER_STEP) : region.area
+      cut = { area, brushes: new Map() }
+      cuts.set(step, cut)
+    }
+    const where = placement(cut.area, span)
     if (where === 'inside') continue
     if (where === 'outside') {
       mesh.removeFromParent()
       continue
     }
-    prism ??= regionPrism(region, extent)
-    const target = prismBrush(prism, mesh.geometry, brushes)
+    cut.prism ??= regionPrism(region.axis, cut.area, extent)
+    const target = prismBrush(cut.prism, mesh.geometry, cut.brushes)
     const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material]
     target.material = materials[0]!
     const source = new Brush(mesh.geometry.clone(), mesh.material)
@@ -218,6 +321,8 @@ export function cutToRegion(meshes: THREE.Mesh[], region: HostRegion, extent: TH
       mesh.material = kept[0]!
     } else mesh.material = kept
   }
-  prism?.dispose()
-  for (const brush of brushes.values()) brush.geometry.dispose()
+  for (const { prism, brushes } of cuts.values()) {
+    prism?.dispose()
+    for (const brush of brushes.values()) brush.geometry.dispose()
+  }
 }

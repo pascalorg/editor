@@ -10,9 +10,13 @@ import {
   LevelNode,
   SlabNode,
   WallNode,
-  type ZoneNode,
+  ZoneNode,
 } from '../schema'
-import { DERIVED_WRITER_TOKEN, filterDerivedNodeWrites } from './derived-node-guard'
+import {
+  assertDerivedNodeWrites,
+  DERIVED_WRITER_TOKEN,
+  filterDerivedNodeWrites,
+} from './derived-node-guard'
 import { subscribeSceneCommits } from './history-control'
 import useScene, { applySceneOperationPatch, clearSceneHistory } from './use-scene'
 
@@ -297,6 +301,29 @@ test('the derived writer capability returns the original changes untouched', () 
   expect(
     filterDerivedNodeWrites({ [node.id]: node }, changes, { derivedWriter: DERIVED_WRITER_TOKEN }),
   ).toBe(changes)
+})
+
+test('construction arriving with the room it stands for stays derived on a level that stays', () => {
+  const level = LevelNode.parse({ id: levelId, parentId: buildingId, level: 0 })
+  const zone = ZoneNode.parse({ id: 'zone_new', name: 'Study', parentId: levelId, polygon })
+  const ceiling = CeilingNode.parse({
+    id: 'ceiling_new',
+    parentId: levelId,
+    polygon,
+    autoFromWalls: true,
+    zoneId: zone.id,
+  })
+  const nodes = { [level.id]: level }
+  // A conversion rewritten with a room more: the room, its plate and ceiling in one write.
+  const withRoom = { create: [{ node: zone }, { node: ceiling }] }
+  expect(filterDerivedNodeWrites(nodes, withRoom).create).toEqual(withRoom.create)
+  expect(() => assertDerivedNodeWrites(nodes, withRoom)).not.toThrow()
+  // Without its room it is forged: demoted by the store, refused on the bridge.
+  const alone = { create: [{ node: ceiling }] }
+  expect(filterDerivedNodeWrites(nodes, alone).create[0]!.node).not.toHaveProperty('zoneId')
+  expect(() => assertDerivedNodeWrites(nodes, alone)).toThrow(
+    'Refusing to create the derived ceiling',
+  )
 })
 
 test('warnings are once per node and field in dev and silent in tests and production', () => {

@@ -4,17 +4,19 @@ import {
   type AnyNodeId,
   BuildingNode,
   LevelNode,
+  nodeRegistry,
   RoofNode,
   RoofSegmentNode,
+  registerNode,
   useLiveNodeOverrides,
   useScene,
   WallNode,
   ZoneNode,
 } from '@pascal-app/core'
+import { useEditor, useInteractionScope } from '@pascal-app/editor'
 import { builtinPlugin } from '@pascal-app/nodes'
-
-const roofSegmentResizeAffordance = builtinPlugin.nodes.find((def) => def.kind === 'roof-segment')!
-  .floorplanAffordances!['roof-segment-resize']!
+import { roofSegmentDefinition } from './definition'
+import { roofSegmentMoveTarget, roofSegmentResizeAffordance } from './floorplan-affordances'
 
 globalThis.requestAnimationFrame ??= (callback) => {
   callback(0)
@@ -25,6 +27,7 @@ globalThis.cancelAnimationFrame ??= () => {}
 const modifiers = { shiftKey: false, altKey: false, ctrlKey: false, metaKey: false }
 
 afterEach(() => {
+  useInteractionScope.getState().end()
   useLiveNodeOverrides.getState().clearAll()
   useScene.setState({ nodes: {}, rootNodeIds: [] } as never)
 })
@@ -144,5 +147,149 @@ describe('roof-segment floor-plan resize onto the walls', () => {
     const holder = after[after[roof.id]!.parentId as AnyNodeId] as LevelNode
     expect(holder).toMatchObject({ level: 1, metadata: { role: 'roof' } })
     expect(after[segment.id]).toMatchObject({ width: 9 })
+  })
+})
+
+describe('roof-segment floor-plan move and resize onto the walls below', () => {
+  // A room just off the grid, and its roof on the Roof level above, 1 m off to the +x.
+  function scene(thickness?: number) {
+    const corners: [number, number][] = [
+      [0.2, 0],
+      [10.2, 0],
+      [10.2, 8],
+      [0.2, 8],
+    ]
+    const walls = corners.map((start, i) =>
+      WallNode.parse({
+        parentId: 'level_g',
+        start,
+        end: corners[(i + 1) % 4],
+        height: 2.7,
+        thickness,
+      }),
+    )
+    const segment = RoofSegmentNode.parse({
+      id: 'rseg_move',
+      parentId: 'roof_move',
+      width: 10,
+      depth: 8,
+    })
+    const roof = RoofNode.parse({
+      id: 'roof_move',
+      parentId: 'level_r',
+      position: [6, 0, 4],
+      children: [segment.id],
+    })
+    const ground = LevelNode.parse({
+      id: 'level_g',
+      parentId: 'building_m',
+      level: 0,
+      height: 3,
+      children: walls.map((wall) => wall.id),
+    })
+    const roofLevel = LevelNode.parse({
+      id: 'level_r',
+      parentId: 'building_m',
+      level: 1,
+      metadata: { role: 'roof' },
+      children: [roof.id],
+    })
+    const building = BuildingNode.parse({ id: 'building_m', children: [ground.id, roofLevel.id] })
+    const nodes = Object.fromEntries(
+      [building, ground, roofLevel, ...walls, roof, segment].map((node) => [
+        node.id,
+        node as AnyNode,
+      ]),
+    ) as Record<AnyNodeId, AnyNode>
+    useScene.setState({ nodes, rootNodeIds: [building.id] } as never)
+    if (!nodeRegistry.has(roofSegmentDefinition.kind)) registerNode(roofSegmentDefinition)
+    useEditor.setState((state) => ({
+      gridSnapStep: 0.5,
+      snappingModeByContext: { ...state.snappingModeByContext, polygon: 'grid' },
+    }))
+    useInteractionScope.getState().begin({
+      kind: 'moving',
+      node: segment,
+      nodeId: segment.id,
+      nodeType: segment.type,
+      view: '2d',
+    })
+    return { nodes, segment }
+  }
+
+  test('its wall line lands on the wall centres instead of the grid near them', () => {
+    const { nodes, segment } = scene()
+    const session = roofSegmentMoveTarget({ node: segment, nodes, sceneApi: {} as never })
+    session.apply({ planPoint: [6, 4], modifiers })
+    session.apply({ planPoint: [5.15, 4.1], modifiers })
+    const position = useLiveNodeOverrides.getState().get(segment.id as AnyNodeId)?.position as
+      | number[]
+      | undefined
+    // Edges at x 0.2 / 10.2 and z 0 / 8: the room's walls, not the grid's 0 / 10.
+    expect(position?.[0]).toBeCloseTo(-0.8)
+    expect(position?.[2]).toBeCloseTo(0)
+  })
+
+  test('moved onto the walls, its gable and heel walls take their thickness', () => {
+    const { nodes, segment } = scene(0.1826)
+    const session = roofSegmentMoveTarget({ node: segment, nodes, sceneApi: {} as never })
+    session.apply({ planPoint: [6, 4], modifiers })
+    session.apply({ planPoint: [5.15, 4.1], modifiers })
+    expect(useLiveNodeOverrides.getState().get(segment.id as AnyNodeId)?.wallThickness).toBeCloseTo(
+      0.1826,
+    )
+    // Off the walls again, it goes back to its own.
+    session.apply({ planPoint: [8, 6], modifiers })
+    expect(useLiveNodeOverrides.getState().get(segment.id as AnyNodeId)?.wallThickness).toBeCloseTo(
+      0.1,
+    )
+  })
+
+  test('Alt holds the raw cursor, past the walls and the grid', () => {
+    const { nodes, segment } = scene()
+    const session = roofSegmentMoveTarget({ node: segment, nodes, sceneApi: {} as never })
+    const alt = { ...modifiers, altKey: true }
+    session.apply({ planPoint: [6, 4], modifiers: alt })
+    session.apply({ planPoint: [5.15, 4.1], modifiers: alt })
+    const position = useLiveNodeOverrides.getState().get(segment.id as AnyNodeId)?.position as
+      | number[]
+      | undefined
+    expect(position?.[0]).toBeCloseTo(-0.85)
+    expect(position?.[2]).toBeCloseTo(0.1)
+  })
+
+  // Its wall line runs x 1..11: the -x arrow pulled out to 0.3, near the wall at 0.2.
+  function pullLeftSide(altKey: boolean, thickness?: number) {
+    const { nodes, segment } = scene(thickness)
+    useInteractionScope.getState().end()
+    useInteractionScope
+      .getState()
+      .begin({ kind: 'reshaping', nodeId: segment.id, reshape: 'boundary', driver: 'floorplan' })
+    const session = roofSegmentResizeAffordance.start({
+      node: segment,
+      payload: { axis: 'x', side: -1 },
+      nodes,
+      initialPlanPoint: [1, 4],
+      gridSnapStep: 0.5,
+    })
+    session.apply({ planPoint: [0.3, 4], modifiers: { ...modifiers, altKey } })
+    return useLiveNodeOverrides.getState().get(segment.id as AnyNodeId) as
+      | { width: number; position: number[]; wallThickness?: number }
+      | undefined
+  }
+
+  test('a side arrow pulled near a wall lands that side on the wall centre, not the grid', () => {
+    const live = pullLeftSide(false)
+    // Grid alone would give 10.5; the wall at x 0.2 gives 10.8, the +x side held at 11.
+    expect(live?.width).toBeCloseTo(10.8)
+    expect(live?.position[0]).toBeCloseTo(-0.4)
+  })
+
+  test('Alt pulls the side to the raw cursor', () => {
+    expect(pullLeftSide(true)?.width).toBeCloseTo(10.7)
+  })
+
+  test('a side pulled onto the walls gives its gable and heel walls their thickness', () => {
+    expect(pullLeftSide(false, 0.1826)?.wallThickness).toBeCloseTo(0.1826)
   })
 })

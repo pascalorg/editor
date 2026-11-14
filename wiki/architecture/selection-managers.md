@@ -2,12 +2,12 @@
 
 *Selection architecture: the editor's manager, one model for every viewer surface, and the bare viewer default.*
 
-Applies to: `packages/editor/src/components/editor/selection-manager.tsx`, `packages/editor/src/lib/viewer-selection.ts` (+ `components/viewer/viewer-selection-manager.tsx`, `packages/viewer/src/components/viewer/glb-scene.tsx`), `packages/viewer/src/components/viewer/selection-manager.tsx`.
+Applies to: `packages/editor/src/components/editor/selection-manager.tsx`, `packages/viewer/src/ui/lib/viewer-selection.ts` (+ `ui/components/viewer-selection-manager.tsx`, `packages/viewer/src/components/viewer/glb-scene.tsx`), `packages/viewer/src/components/viewer/selection-manager.tsx`.
 
 | Component | Location | Used by |
 |---|---|---|
 | `SelectionManager` (editor) | `packages/editor/src/components/editor/selection-manager.tsx` | The editor canvas: phase, mode, tool state |
-| Viewer selection (`lib/viewer-selection.ts`) | `packages/editor` | Every viewer surface: the published viewer (baked GLB and parametric), its `?embed=1`, the editor's Preview |
+| Viewer selection (`ui/lib/viewer-selection.ts`) | `@pascal-app/viewer/ui` | Every viewer surface: the published viewer (baked GLB and parametric), its `?embed=1`, the editor's Preview |
 | `SelectionManager` (viewer default) | `packages/viewer/src/components/viewer/selection-manager.tsx` | Bare `<Viewer>` mounts with no navigation (bake page, IFC preview, lab) |
 
 A host replaces the default with `<Viewer selectionManager="custom">` and mounts its own as a child, via the viewer-isolation pattern.
@@ -76,8 +76,9 @@ instead of gliding under reduced motion. The plan follows the framed camera; wit
 screen it answers the request itself, once the selection that came with it has rendered (so a node
 on another floor or building is placed with that building's transform), fitting the node's box to
 the pane at the current turn and aspect, or centring a saved view's target at the current zoom.
-`ViewerRooms` draws the editor's room pills (same visibility rule, same declutter) and the editor's
-room highlight for the selected or hovered room and a focused unit's rooms. `useViewerFloorDisplay`
+`ViewerRooms` (`@pascal-app/viewer/ui`) draws the room pills (the editor's selection rule and
+declutter, from the same module) and the room highlight for the selected or hovered room and a
+focused unit's rooms, with the selected room's callout. `useViewerFloorDisplay`
 hides the levels above the current floor outside the walkthrough.
 
 Preview borrows the shared store: `setPreviewMode(true)` saves the editor's `selection` and
@@ -141,7 +142,7 @@ Persisted `structure` / `furnish` values from before the merge read back as `bui
 
 Building selection first resolves a wall face or floor/ceiling hit to a detected room.
 The editor keeps its transient `{ levelId, roomId }` in `useEditor.room`; `roomKey`
-in `lib/room-selection.ts` derives identity from the sorted unique boundary ID/face pairs in `spans`, excluding
+in `packages/viewer/src/ui/lib/room-selection.ts` derives identity from the sorted unique boundary ID/face pairs in `spans`, excluding
 coordinates and interval extents so moving a boundary preserves selection. This adapter
 is the migration point for future persistent zone IDs.
 `useSelectedRoom()` exposes the clear footprint, boundary spans and matching surfaces.
@@ -168,6 +169,54 @@ In Select mode, 3D and 2D canvas selection share the same modifier vocabulary:
 - `Ctrl/Meta + right-drag` on a selected rotatable object starts direct rotation from the
   canvas. Rotation snaps to the default angle increment unless Shift is held during the
   drag.
+- In the 2D plan a wall hit selects the wall, and only a room interior selects the room
+  (the wall's floor-plan extension declares `planHitSelectsNode`, which `resolvePlanRoomHit`
+  reads). 3D stays room-first (E-012): a wall face
+  there selects its room first, then drills into the wall.
+
+### Selected-wall dimensions
+
+With a node selected in Select mode, alone or with others, and no interaction scope or room
+drag running, both views show its kind's `selectionDimensions` (floor-plan extension), unless
+Display → Dimensions is off (`useFloorplanAnnotationVisibility.showDimensions`, persisted,
+default on). `useSelectionDimensionNodes` (in `room-handles-2d.tsx`) picks the selected nodes of
+kinds that have them, on one level, in one subscription; nodes of other kinds in a mixed
+selection add none. Several selected walls each show theirs, merged by
+`mergeSelectionDimensions` (`lib/room-push-dimensions.ts`): a room width or outside size two of
+them measure shows once, owned by the first, by the same `sameRoomDimension` test the
+multi-wall move uses (the outside size is placed from the same end of its stretch whichever
+way the wall was drawn, so opposite walls draw it in one place). The wall's are the push drag's
+dimensions without dragging (`selectedWallDimensions` in
+`lib/room-handle-drag.ts`, from `wallSelectionDimensions` in `lib/room-push-dimensions.ts`):
+each room width the wall bounds, face to face, and, for a wall with rooms on one side only,
+the outside size to the far face of the farthest parallel wall it connects to. A wall between
+two rooms shows room widths only. The plan draws them in `SelectedWallDimensions2D` under the
+`data-node-id` of the wall it runs from, so `FloorplanDimensionEditOverlay` makes each one
+typeable and the typed size moves that wall; 3D labels (`SelectedWallDimensions3D`) open an
+inline input for their own wall. In a multi-selection the plan's dashed group box covers the
+walls: a press on a dimension value under it, or on a member's, is the value box's
+(`typeableDimensionAt`), not a group move or pick-up. Both commit through
+`commitDimensionValue`: a dimension perpendicular to a straight wall with one witness on it
+resolves to a `wall-offset` drive and moves the wall by `commitRoomPush`, so joined walls stay
+attached and the move is one undo step. Input parses with `parseDimensionInput`
+(`12' 6"`, `3.2 m`, bare numbers in the display unit).
+
+The wall's own length dimension in the plan measures faces, not the centerline
+(`buildWallContextualDimensions` in `nodes/src/wall/contextual-dimensions.ts`): ID along the
+room-facing face between the connected walls' inner faces, OD along the exterior face to the
+corner walls' outer faces. Display → Measure walls (Inside ID / Outside OD / Both;
+`useFloorplanAnnotationVisibility.wallDimensionFaces`, `interior` / `exterior` / `both`,
+default `both`, persisted, an unknown stored value reads as `both`) picks which show, here and
+in the temporary dimensions above, in 2D and 3D. It is the only wall-dimension setting: the
+Expert plan's automatic strings always measure finished faces, and the same choice keeps
+their interior chains (the `interior` / `interior-overall` tiers: clear spans inside the
+rooms), their facade chains (every other tier: openings, partitions, columns, jogs, overall)
+or both (`constructionDimensionFace` in `nodes/src/wall/construction-dimensions.ts`); the PDF
+export follows it. A wall with no exterior side keeps one face-to-face span whatever the
+choice. A multi-selection strips its members' handles and dimension chrome but keeps this
+length on the walls that show selection dimensions (`stripHandleChrome` keeps the
+`contextual-dimension` role). Dimensions off also hides the plan's automatic and contextual dimensions
+(`resolveFloorplanAnnotationVisibility`); drawn dimensions and measurements stay.
 
 The floating helper in `packages/editor/src/components/ui/helpers/helper-manager.tsx`
 mirrors these rules from current selection state and held modifiers. Keep that helper and
@@ -188,8 +237,8 @@ opts out. See [selection-groups](selection-groups.md).
 
 - **Never add selection logic to renderers.** Renderers spread `useNodeEvents` events and stop there. All selection decisions live in the selection manager.
 - **Never add editor phase logic to the viewer's SelectionManager.** Phase, mode, and tool awareness belong exclusively in the editor's selection manager.
-- **`useViewer.selection` is the selection of whichever surface is on screen.** The editor and its Preview take turns on it: Preview saves the editor's selection on entry and restores it on exit. Every manager writes through `setSelection` / `resetSelection` (the viewer surfaces through `lib/viewer-selection.ts`); nothing mutates `selection` directly.
-- **Viewer surfaces decide in `lib/viewer-selection.ts`, never in a renderer.** A new hit source turns its hit into a `ViewerPick` and calls `applyViewerClick` / `applyViewerHover`.
+- **`useViewer.selection` is the selection of whichever surface is on screen.** The editor and its Preview take turns on it: Preview saves the editor's selection on entry and restores it on exit. Every manager writes through `setSelection` / `resetSelection` (the viewer surfaces through `ui/lib/viewer-selection.ts`); nothing mutates `selection` directly.
+- **Viewer surfaces decide in `ui/lib/viewer-selection.ts`, never in a renderer.** A new hit source turns its hit into a `ViewerPick` and calls `applyViewerClick` / `applyViewerHover`.
 - **Outliner arrays are mutated in-place** (not replaced) for performance. Don't assign new arrays to `outliner.selectedObjects` or `outliner.hoveredObjects`.
 - **Hover is a separate scalar** (`hoveredId: string | null`), not part of `selectedIds`. Update it via `setHoveredId`.
 

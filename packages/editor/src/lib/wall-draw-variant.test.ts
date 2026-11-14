@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, test } from 'bun:test'
 import { emitter } from '@pascal-app/core'
 import useEditor from '../store/use-editor'
+import { CONTINUATION_PROFILES } from './continuation'
 import { toolHudTitle } from './hud-title'
 import {
   getWallDrawVariant,
@@ -23,9 +24,9 @@ describe('Rooms variants', () => {
     ])
   })
 
-  test('default to the chain that closes into a room', () => {
-    expect(getWallDrawVariant()).toBe('polygon')
-    expect(wallDrawVariantOf('unknown')).toBe('polygon')
+  test('default to Rectangle', () => {
+    expect(wallDrawVariantOf(CONTINUATION_PROFILES.wall.default)).toBe('rectangle')
+    expect(wallDrawVariantOf('unknown')).toBe('rectangle')
   })
 
   test('picking one sets the wall tool drawing mode, and it sticks', () => {
@@ -61,11 +62,11 @@ describe('Rooms variants', () => {
 
   test('name the HUD after the variant in hand', () => {
     expect(toolHudTitle('wall', 'rectangle')).toEqual({
-      label: 'Rectangle room',
+      label: expect.objectContaining({ message: 'Rectangle room' }),
       icon: { kind: 'url', src: '/icons/room.webp' },
       shortcut: 'B',
     })
-    expect(toolHudTitle('wall', 'room')?.label).toBe('Polygon room')
-    expect(toolHudTitle('wall', 'single')?.label).toBe('Walls')
+    expect(toolHudTitle('wall', 'room')?.label.message).toBe('Polygon room')
+    expect(toolHudTitle('wall', 'single')?.label.message).toBe('Walls')
   })
 })

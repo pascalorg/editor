@@ -70,6 +70,8 @@ export const setWallSkirting: AgentOperation<SetWallSkirtingInput> = (nodes, inp
       })
     if (wall.wallType === 'curtain')
       refuse('curtain_wall', `Wall ${id} is a curtain wall: it has no skirting.`, { target: id })
+    if (wall.wallType === 'railing')
+      refuse('railing_wall', `Wall ${id} is a railing: it has no skirting.`, { target: id })
     const faces = input.faces === undefined ? roomFaces(nodes, wall) : getWallTrimFaces(input.faces)
     const { skirting } = wallTrimPatch(wall, 'skirting', {
       enabled: input.enabled ?? true,

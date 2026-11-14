@@ -1,15 +1,27 @@
 import { describe, expect, test } from 'bun:test'
 import type { AuthorScenePayload } from '../agent-tools/author-scene'
 import { authorScenePayload } from '../agent-tools/author-scene'
+import { getDoorOpeningSize, openingHostFacing } from '../index'
+import { floorScriptInputs } from '../lib/floor-script'
+import { reconcileSceneStructure } from '../lib/structure-reconcile'
 import { cloneNodesInto } from '../registry/subtree'
 import type { AnyNode, CompiledGeometryScript, SceneMaterial } from '../schema'
 import { CEILING_DRAW_OFFSET, resolveCeilingHeight } from '../services'
+import { roofsOver, servesAsRoofLevel } from '../services/roof-level'
+import { assertDerivedNodeWrites, filterDerivedNodeWrites } from '../store/derived-node-guard'
+import { stairArrivalOpening } from '../systems/stair/stair-footprint'
+import { getWallCurveFrameAt, getWallCurveLength } from '../systems/wall/wall-curve'
 import {
   applySceneChanges,
   authorScene,
   authorSceneCeilingPoints,
+  authorSceneChecks,
   authorSceneFaceScripts,
   authorSceneFloorScripts,
+  authorSceneSlabScripts,
+  finalizeAuthorScene,
+  setRoomFloorScript,
+  verifyScene,
 } from './index'
 
 /** A site, a building and the empty level a new project starts with. */
@@ -96,6 +108,18 @@ const baseboard: CompiledGeometryScript = {
   } as unknown as CompiledGeometryScript['manifest'],
 }
 
+/** A host's compile of the flush ceiling point author_scene hangs a light from. */
+const ceilingPoint = {
+  ...bed,
+  mount: 'ceiling',
+  manifest: {
+    ...bed.manifest,
+    bounds: { min: [-0.03, -0.008, -0.03], max: [0.03, 0, 0.03] },
+    slots: [],
+  },
+} as CompiledGeometryScript
+
+/** As a host runs it: every candidate ceiling point compiled, then the payload's own modules. */
 const run = (
   payload: AuthorScenePayload,
   compiled: Record<string, CompiledGeometryScript>,
@@ -103,7 +127,15 @@ const run = (
 ) =>
   authorScene(
     scaffold(),
-    { payload, compiled },
+    {
+      payload,
+      compiled: {
+        ...Object.fromEntries(
+          authorSceneCeilingPoints(payload).map(({ id }) => [id, ceilingPoint]),
+        ),
+        ...compiled,
+      },
+    },
     { activeLevelId: 'level_0', ...(materials ? { materials } : {}) },
   )
 
@@ -189,6 +221,48 @@ describe('author_scene', () => {
       authorScene(scene, { payload, compiled: { bed, lamp: bed } }, { activeLevelId: null }),
     ).toThrow('Source id')
     expect(scene).toEqual(before)
+  })
+
+  test('a payload is the whole design: a revision removes the level it no longer names, and a second payload without replace is refused', () => {
+    const ground = bedroom.levels[0]!
+    const upper = {
+      ...ground,
+      name: 'Upper floor',
+      elevation: 2.8,
+      walls: ground.walls!.map((wall) => ({ ...wall, id: `up_${wall.id}` })),
+      items: [],
+      lights: [],
+    }
+    const whole = authorScenePayload.parse({ levels: [ground, upper] })
+    const first = authorScene(
+      scaffold(),
+      { payload: whole, compiled: { bed, lamp: bed } },
+      { activeLevelId: null },
+    )
+    const saved = applySceneChanges(scaffold(), first.changes)
+    const upperWalls = ['north', 'east', 'south', 'west'].map((id) => first.result.ids[`up_${id}`]!)
+    for (const id of upperWalls) expect(saved[id]).toBeDefined()
+
+    expect(() =>
+      authorScene(
+        saved,
+        { payload: authorScenePayload.parse({ levels: [upper] }), compiled: {} },
+        { activeLevelId: null },
+      ),
+    ).toThrow('already holds a conversion')
+
+    const revised = authorScene(
+      saved,
+      {
+        payload: authorScenePayload.parse({ levels: [ground] }),
+        compiled: { bed, lamp: bed },
+        replace: true,
+      },
+      { activeLevelId: null },
+    )
+    for (const id of upperWalls) expect(revised.changes!.delete).toContain(id)
+    const after = applySceneChanges(saved, revised.changes)
+    for (const id of upperWalls) expect(after[id]).toBeUndefined()
   })
 
   test('item ids cannot overwrite another item or a generated source mapping', () => {
@@ -302,6 +376,266 @@ describe('author_scene', () => {
     ).toThrow()
   })
 
+  test('a conversion is kept in pieces live collaboration takes: plain JSON, none past 64 KB', () => {
+    // Four storeys of the bedroom, every source id its own.
+    const storeys = structuredClone(bedroom)
+    storeys.levels = [0, 1, 2, 3].map((index) => {
+      const level = structuredClone(bedroom.levels[0]!)
+      level.name = `Storey ${index + 1}`
+      level.elevation = index * 3
+      const suffix = (id: string) => `${id}-${index}`
+      for (const wall of level.walls ?? []) wall.id = suffix(wall.id)
+      for (const item of level.items ?? []) item.id = suffix(item.id)
+      return level
+    })
+    const compiled = Object.fromEntries(
+      storeys.levels.flatMap((level) => (level.items ?? []).map((item) => [item.id, bed])),
+    )
+    const outcome = authorScene(scaffold(), { payload: storeys, compiled }, { activeLevelId: null })
+    const values = [
+      ...(outcome.changes!.create ?? []).map((entry) => entry.node),
+      ...(outcome.changes!.update ?? []).map((entry) => entry.data),
+    ]
+    for (const value of values) {
+      expect(JSON.parse(JSON.stringify(value))).toEqual(value)
+      expect(JSON.stringify(value).length).toBeLessThan(62 * 1024)
+    }
+    const building = outcome.changes!.update!.find((entry) => entry.id === 'building_1')!
+    expect(building.data.metadata?.authorSceneState).toEqual({
+      version: 2,
+      buildingId: 'building_1',
+      seed: outcome.candidate.seed,
+    })
+    // Each storey lists what it holds, and each node carries the baseline it was written as.
+    const after = applySceneChanges(scaffold(), outcome.changes)
+    const levels = Object.values(after).filter((node) => node.type === 'level')
+    expect(levels).toHaveLength(4)
+    const listed = levels.flatMap(
+      (level) =>
+        (level.metadata as { authorSceneWritten: { ids: string[] } }).authorSceneWritten.ids,
+    )
+    expect(new Set(listed)).toEqual(new Set(Object.keys(outcome.candidate.nodes)))
+    for (const id of listed) expect(after[id]?.metadata?.authorSceneBase).toBeDefined()
+  })
+
+  describe('a revision after Pascal rebuilt what it derives', () => {
+    const floor = (script: string, artifact: string): CompiledGeometryScript => ({
+      ...bed,
+      sha256: artifact.repeat(64),
+      script: script.repeat(64),
+      manifest: { ...bed.manifest, bounds: { min: [-2, 0, -2.5], max: [2, 0.01, 2.5] } },
+    })
+    /** As a host converts: the candidate's room floor compiled, then one commit. */
+    const convert = (
+      scene: Record<string, AnyNode>,
+      payload: AuthorScenePayload,
+      floorScript?: CompiledGeometryScript,
+    ) => {
+      const outcome = authorScene(
+        scene,
+        { payload, compiled: { bed, lamp: bed }, replace: true, prepareOnly: true },
+        { activeLevelId: 'level_0' },
+      )
+      let candidate = { ...scene, ...outcome.candidate.nodes }
+      const zoneId = outcome.result.ids['room/0/0']
+      if (floorScript && zoneId)
+        candidate = applySceneChanges(
+          candidate,
+          setRoomFloorScript(
+            candidate,
+            { zoneId, compiled: floorScript, inputs: floorScriptInputs(candidate, zoneId)! },
+            { activeLevelId: null },
+          ).changes,
+        )
+      outcome.candidate.nodes = Object.fromEntries(
+        Object.keys(outcome.candidate.nodes).map((id) => [id, candidate[id]!]),
+      )
+      return applySceneChanges(scene, finalizeAuthorScene(scene, outcome).changes)
+    }
+    const typed = (scene: Record<string, AnyNode>, type: string) =>
+      Object.values(scene).find((node) => node.type === type) as AnyNode & Record<string, any>
+    /** What the structure reconcile and the finish refresh write between conversions. */
+    const rebuilt = (scene: Record<string, AnyNode>) => {
+      const ceiling = typed(scene, 'ceiling')
+      const zone = typed(scene, 'zone')
+      return applySceneChanges(scene, {
+        update: [
+          {
+            id: ceiling.id,
+            data: {
+              polygon: ceiling.polygon.map(([x, z]: [number, number]) => [x * 0.99, z * 0.99]),
+              holes: [
+                [
+                  [0, 0],
+                  [0.5, 0],
+                  [0.5, 0.5],
+                ],
+              ],
+              holeMetadata: [{ source: 'floor-opening', openingId: 'floor-opening_1' }],
+              openingIds: ['floor-opening_1'],
+              children: [...ceiling.children].reverse(),
+            } as Partial<AnyNode>,
+          },
+          {
+            id: zone.id,
+            data: {
+              floor: {
+                ...zone.floor,
+                script: { ...zone.floor.script, inputs: 'rebuilt', artifact: 'c'.repeat(64) },
+              },
+            } as Partial<AnyNode>,
+          },
+        ],
+      })
+    }
+    const withFloorCode = (payload: AuthorScenePayload) => {
+      const next = structuredClone(payload)
+      next.levels[0]!.rooms[0]!.floorCode = 'export default function build() {}'
+      return next
+    }
+    const reshaped = () => {
+      const next = withFloorCode(bedroom)
+      const [north, east, , west] = next.levels[0]!.walls!
+      north!.start = [-2, -2.8]
+      north!.end = [2, -2.8]
+      east!.start = [2, -2.8]
+      west!.end = [-2, -2.7]
+      return next
+    }
+
+    /** The design with its west wall gone: no room, so no floor and no ceiling. */
+    const opened = () => {
+      const next = structuredClone(bedroom)
+      next.levels[0]!.walls!.pop()
+      next.levels[0]!.rooms = []
+      next.levels[0]!.lights = []
+      return next
+    }
+
+    test('writes the design over the rebuilt outline, holes, children order and floor compile', () => {
+      const scene = rebuilt(convert(scaffold(), withFloorCode(bedroom), floor('b', 'a')))
+      const revised = convert(scene, reshaped(), floor('d', 'e'))
+      const zone = typed(revised, 'zone')
+      expect(zone.floor.script).toMatchObject({ script: 'd'.repeat(64), artifact: 'e'.repeat(64) })
+      expect(zone.floor.script.inputs).not.toBe('rebuilt')
+      expect(typed(revised, 'ceiling').polygon).not.toEqual(typed(scene, 'ceiling').polygon)
+    })
+
+    test('removes a room whose ceiling and floor Pascal rebuilt', () => {
+      const scene = rebuilt(convert(scaffold(), withFloorCode(bedroom), floor('b', 'a')))
+      const revised = convert(scene, opened())
+      expect(typed(revised, 'zone')).toBeUndefined()
+      expect(typed(revised, 'ceiling')).toBeUndefined()
+    })
+
+    test("a person's edit still wins and still refuses an overlapping change", () => {
+      const scene = rebuilt(convert(scaffold(), withFloorCode(bedroom), floor('b', 'a')))
+      const zone = typed(scene, 'zone')
+      const ceiling = typed(scene, 'ceiling')
+      const cut = [
+        [1, 1],
+        [1.4, 1],
+        [1.4, 1.4],
+      ]
+      const edited = applySceneChanges(scene, {
+        update: [
+          {
+            id: zone.id,
+            data: {
+              floor: {
+                ...zone.floor,
+                script: { ...zone.floor.script, params: { grain: 2 } },
+              },
+            } as Partial<AnyNode>,
+          },
+          {
+            id: ceiling.id,
+            data: {
+              slots: { surface: 'library:preset-glass' },
+              holes: [...ceiling.holes, cut],
+              holeMetadata: [...ceiling.holeMetadata, { source: 'manual' }],
+            } as Partial<AnyNode>,
+          },
+        ],
+      })
+      // The floor's params against the design's new floor code.
+      expect(() => convert(edited, reshaped(), floor('d', 'e'))).toThrow('changed the script')
+      // The ceiling a person painted cannot go with its room.
+      expect(() => convert(edited, opened())).toThrow('was edited after conversion')
+      // A design that leaves the floor alone keeps the person's floor params and their cut-out.
+      const kept = convert(
+        edited,
+        { ...withFloorCode(bedroom), notes: ['Revised.'] },
+        floor('b', 'a'),
+      )
+      expect(typed(kept, 'zone').floor.script.params).toEqual({ grain: 2 })
+      expect(typed(kept, 'ceiling').holes).toContainEqual(cut)
+    })
+
+    test("a room moved inside another leaves the outer ceiling's re-cut hole to the reconciler", () => {
+      /** A living room whose walls enclose a closet, the closet `dx` metres east of centre. */
+      const nested = (dx: number) =>
+        authorScenePayload.parse({
+          levels: [
+            {
+              name: 'Ground floor',
+              walls: [
+                { id: 'n', start: [-4, -4], end: [4, -4], height: 2.7, thickness: 0.2 },
+                { id: 'e', start: [4, -4], end: [4, 4], height: 2.7, thickness: 0.2 },
+                { id: 's', start: [4, 4], end: [-4, 4], height: 2.7, thickness: 0.2 },
+                { id: 'w', start: [-4, 4], end: [-4, -4], height: 2.7, thickness: 0.2 },
+                { id: 'cn', start: [dx - 1, -1], end: [dx + 1, -1], height: 2.7, thickness: 0.1 },
+                { id: 'ce', start: [dx + 1, -1], end: [dx + 1, 1], height: 2.7, thickness: 0.1 },
+                { id: 'cs', start: [dx + 1, 1], end: [dx - 1, 1], height: 2.7, thickness: 0.1 },
+                { id: 'cw', start: [dx - 1, 1], end: [dx - 1, -1], height: 2.7, thickness: 0.1 },
+              ],
+              rooms: [
+                { name: 'Living', seed: [3, 3] },
+                { name: 'Closet', seed: [dx, 0] },
+              ],
+            },
+          ],
+        })
+      const outerCeiling = (scene: Record<string, AnyNode>) =>
+        Object.values(scene).find(
+          (node) => node.type === 'ceiling' && node.holes.length,
+        ) as AnyNode & Record<string, any>
+      // As a host keeps it between calls: the write, then its own structure reconciliation.
+      const written = applySceneChanges(
+        scaffold(),
+        authorScene(scaffold(), { payload: nested(0), compiled: {} }, { activeLevelId: 'level_0' })
+          .changes,
+      )
+      const scene = reconcileSceneStructure({
+        nodes: written,
+        previousNodes: written,
+        mintId: (kind) => `${kind}_rebuilt`,
+      }).nodes as Record<string, AnyNode>
+      expect(outerCeiling(scene).holeMetadata).toEqual([{ source: 'room' }])
+      const revised = authorScene(
+        scene,
+        { payload: nested(0.3), compiled: {}, replace: true },
+        { activeLevelId: 'level_0' },
+      )
+      // The design re-cut the hole; the write leaves it alone and the guard lets it through.
+      const update = revised.changes!.update!.find((u) => u.id === outerCeiling(scene).id)!
+      expect(update.data).not.toHaveProperty('holes')
+      expect(update.data).not.toHaveProperty('holeMetadata')
+      const changes = filterDerivedNodeWrites(scene, revised.changes!)
+      expect(() => assertDerivedNodeWrites(scene, changes)).not.toThrow()
+      const after = reconcileSceneStructure({
+        nodes: applySceneChanges(scene, changes),
+        previousNodes: scene,
+        mintId: (kind) => `${kind}_rebuilt`,
+      }).nodes as Record<string, AnyNode>
+      const [hole] = outerCeiling(after).holes
+      expect(outerCeiling(after).holeMetadata).toEqual([{ source: 'room' }])
+      expect(new Set(hole.map(([x]: [number, number]) => Math.round(x * 10) / 10))).toEqual(
+        new Set([-0.7, 1.3]),
+      )
+    })
+  })
+
   test('writes the design as native nodes and reports what it did', () => {
     const outcome = authorScene(
       scaffold(),
@@ -323,6 +657,16 @@ describe('author_scene', () => {
     expect(outcome.changes?.delete).toEqual(['level_0'])
     const created = outcome.changes!.create!.map((c) => c.node)
     const byType = (t: string) => created.filter((n) => n.type === t)
+    expect(byType('window')[0]).toMatchObject({
+      frameThickness: 0.02,
+      casingFaceA: true,
+      casingFaceB: true,
+    })
+    expect(byType('door')[0]).toMatchObject({
+      frameThickness: 0.02,
+      casingFaceA: true,
+      casingFaceB: true,
+    })
     expect(byType('level')).toHaveLength(1)
     expect(byType('wall')).toHaveLength(4)
     // Each wall knows which face looks into the room, from the plan: never both the same.
@@ -364,7 +708,7 @@ describe('author_scene', () => {
       ],
     })
     const points = authorSceneCeilingPoints(payload)
-    expect(points.map((point) => point.id)).toEqual(['light/0/0'])
+    expect(points.map((point) => point.id)).toEqual(['light/0/0', 'light/0/room/0'])
     const compiled = {
       ...bed,
       mount: 'ceiling',
@@ -407,7 +751,8 @@ describe('author_scene', () => {
         CEILING_DRAW_OFFSET,
       9,
     )
-    expect(authorSceneCeilingPoints(bedroom)).toEqual([])
+    // Fixtures hold their lights: the only candidate is the room's own, in case it has none.
+    expect(authorSceneCeilingPoints(bedroom).map((point) => point.id)).toEqual(['light/0/room/0'])
   })
 
   test('a light outside any room falls back to the nearest item on its own level and says why', () => {
@@ -450,6 +795,51 @@ describe('author_scene', () => {
     expect(outcome.result.defaults).toContain(
       'light at [0, 2, 0] has no fixture: no room contains its point; hosted on the nearest item upper (3.00 m away); moving that item moves the light',
     )
+  })
+
+  test("a spotlight keeps its aim in its fixture's frame, with its shadows and glow", () => {
+    const payload = authorScenePayload.parse({
+      levels: [
+        {
+          name: 'Ground floor',
+          items: [
+            {
+              id: 'sconce',
+              name: 'Sconce',
+              category: 'light',
+              code: '// sconce',
+              position: [0, 0, 0],
+              rotation: 90,
+            },
+          ],
+          lights: [
+            {
+              position: [1, 2, 0],
+              target: [2, 2, 0],
+              fixture: 'sconce',
+              shadows: true,
+              glow: { size: 0.2 },
+            },
+            { position: [0, 2, 0], fixture: 'sconce', angle: 30 },
+          ],
+        },
+      ],
+    })
+    const outcome = run(payload, { sconce: bed }, {})
+    expect(outcome.result.defects).toEqual([])
+    const [aimed, down] = byAuthorId(outcome, 'sconce').asset.interactive.effects
+    // The target is 1 m along +x from the bulb, as the bulb is from the fixture: both turn alike.
+    expect(aimed.spot.direction[0]).toBeCloseTo(aimed.offset[0], 4)
+    expect(aimed.spot.direction[1]).toBeCloseTo(0, 4)
+    expect(aimed.spot.direction[2]).toBeCloseTo(aimed.offset[2], 4)
+    expect(Math.abs(aimed.offset[2])).toBeCloseTo(1, 4)
+    expect(aimed).toMatchObject({
+      spot: { angle: 60, softness: 0.4 },
+      shadows: true,
+      glow: { size: 0.2, strength: 1 },
+    })
+    expect(down.spot).toEqual({ direction: [0, -1, 0], angle: 30, softness: 0.4 })
+    expect(down.shadows).toBeUndefined()
   })
 
   test('a ceiling point whose module failed is reported by the light id', () => {
@@ -541,6 +931,7 @@ describe('author_scene', () => {
                       type: 'french',
                       style: 'modern',
                       hinge: 'end',
+                      handleStyle: 'plate',
                     },
                     { kind: 'door', along: 3, width: 0.9, height: 2.1, leaves: 2 },
                   ],
@@ -581,6 +972,7 @@ describe('author_scene', () => {
     expect(french.leafCount).toBe(2)
     expect(french.hingesSide).toBe('right')
     expect(french.handleSide).toBe('left')
+    expect(french.handleStyle).toBe('plate')
     // The style's leaf over the type's: a modern French door is one flush slab.
     expect(french.segments).toHaveLength(1)
     expect(byAuthorId(outcome, 'south/1').leafCount).toBe(2)
@@ -596,6 +988,33 @@ describe('author_scene', () => {
       'window east/0: style grid dropped, a casement window draws its own sashes',
     )
     expect(r.defaults).toContain('1 window has no type: written fixed (cannot open); give type')
+  })
+
+  test("a door keeps its sill, below the floor too: a garage door down to the garage's", () => {
+    const payload = authorScenePayload.parse({
+      ...bedroom,
+      levels: [
+        {
+          ...bedroom.levels[0],
+          items: [],
+          lights: [],
+          walls: bedroom.levels[0]!.walls!.map((w) =>
+            w.id === 'south'
+              ? {
+                  ...w,
+                  openings: [
+                    { kind: 'door', along: 1.4, width: 2.4, height: 2.2, sill: -0.73 },
+                    { kind: 'passage', along: 3.4, width: 0.8, height: 2.1, sill: 0.2 },
+                  ],
+                }
+              : w,
+          ),
+        },
+      ],
+    })
+    const outcome = run(payload, {})
+    expect(byAuthorId(outcome, 'south/0').position[1]).toBeCloseTo(-0.73 + 1.1, 6)
+    expect(byAuthorId(outcome, 'south/1').position[1]).toBeCloseTo(0.2 + 1.05, 6)
   })
 
   test('an opening with code is the scripted door or window add_door writes, by its own id', () => {
@@ -622,7 +1041,11 @@ describe('author_scene', () => {
     })
     const outcome = authorScene(
       scaffold(),
-      { payload, compiled: { 'south/0': arch }, compileErrors: { 'south/1': 'Syntax error' } },
+      {
+        payload,
+        compiled: { 'south/0': arch, 'light/0/room/0': ceilingPoint },
+        compileErrors: { 'south/1': 'Syntax error' },
+      },
       { activeLevelId: 'level_0', materials: {} },
     )
     const door = byAuthorId(outcome, 'south/0')
@@ -1289,6 +1712,35 @@ describe('author_scene', () => {
     expect(authorSceneFloorScripts(bedroom, outcome.result)).toEqual([])
   })
 
+  test('slabs with a surface module are listed by their node for the host to compile', () => {
+    const decking = 'export default function build({ THREE }) { return new THREE.Group() }'
+    const terrace = {
+      polygon: [
+        [3, -2],
+        [6, -2],
+        [6, 2],
+        [3, 2],
+      ],
+    }
+    const payload = authorScenePayload.parse({
+      levels: [
+        {
+          name: 'Ground floor',
+          slabs: [{ ...terrace, name: 'Deck', surfaceCode: decking }, terrace],
+        },
+      ],
+    })
+    const outcome = run(payload, {})
+    expect(authorSceneSlabScripts(payload, outcome.result)).toEqual([
+      {
+        slabId: 'slab/0/0',
+        nodeId: outcome.result.ids['slab/0/0']!,
+        name: 'Deck',
+        code: decking,
+      },
+    ])
+  })
+
   test("wall face modules are listed by face; a room's wallCode covers the faces it looks into, a wall's own module over it", () => {
     const tiles = 'export default function build({ THREE }) { return new THREE.Group() }'
     const panels = 'export default function build({ THREE }) { return new THREE.Mesh() }'
@@ -1367,6 +1819,69 @@ describe('author_scene', () => {
     expect(authorSceneFaceScripts(payload, outcome.result, sceneOf(outcome))).toEqual([])
   })
 
+  test("a wall's faceOutside builds on the faces no room looks into, and is a no_face defect where rooms stand on both", () => {
+    const cladding = 'export default function build({ THREE }) { return new THREE.Group() }'
+    const tiles = 'export default function build({ THREE }) { return new THREE.Mesh() }'
+    const payload = authorScenePayload.parse({
+      ...bedroom,
+      levels: [
+        {
+          ...bedroom.levels[0],
+          items: [],
+          lights: [],
+          walls: [
+            ...bedroom.levels[0]!.walls!.map((w) =>
+              w.id === 'west'
+                ? { ...w, faceOutside: { code: cladding }, faceLeft: { code: tiles } }
+                : { ...w, faceOutside: { code: cladding, toHeight: 0.9 } },
+            ),
+            {
+              id: 'garden',
+              start: [4, 4],
+              end: [7, 4],
+              height: 1.2,
+              thickness: 0.2,
+              faceOutside: { code: cladding },
+            },
+            {
+              id: 'middle',
+              start: [0, -2.5],
+              end: [0, 2.5],
+              height: 2.7,
+              thickness: 0.1,
+              faceOutside: { code: cladding },
+            },
+          ],
+          rooms: [
+            { name: 'Study', seed: [-1, 0] },
+            { name: 'Nursery', seed: [1, 0] },
+          ],
+        },
+      ],
+    })
+    const outcome = run(payload, {})
+    expect(outcome.result.defects).toEqual([
+      {
+        id: 'middle/outside',
+        code: 'no_face',
+        message:
+          'Rooms look into both faces of wall middle: it has no outside face, so its faceOutside was not written.',
+      },
+    ])
+    const listed = authorSceneFaceScripts(payload, outcome.result, sceneOf(outcome))
+    // The rooms stand on each outside wall's left face (a), so its outside is b; a wall in the
+    // garden has two outsides; the west wall's tiles inside and its cladding outside both build.
+    expect(listed.map((f) => [f.wallId, f.face, f.code === cladding, f.toHeight ?? null])).toEqual([
+      ['north', 'b', true, 0.9],
+      ['east', 'b', true, 0.9],
+      ['south', 'b', true, 0.9],
+      ['west', 'a', false, null],
+      ['west', 'b', true, null],
+      ['garden', 'a', true, null],
+      ['garden', 'b', true, null],
+    ])
+  })
+
   test("two rooms on one face: the first room's wallCode builds it and the other is warned", () => {
     const [west, east] = ['export default () => 1', 'export default () => 2']
     const payload = authorScenePayload.parse({
@@ -1404,4 +1919,1454 @@ describe('author_scene', () => {
       ['middle', 'b', east],
     ])
   })
+
+  test('a ceiling item hangs from the ceiling of the room its plan point is in, and holds its light', () => {
+    const pendant: CompiledGeometryScript = {
+      ...bed,
+      mount: 'ceiling',
+      manifest: {
+        ...bed.manifest,
+        bounds: { min: [-0.2, -0.6, -0.2], max: [0.2, 0, 0.2] },
+      } as unknown as CompiledGeometryScript['manifest'],
+    }
+    const hanging = (id: string, position: number[]) => ({
+      id,
+      name: 'Pendant',
+      category: 'lamp',
+      code: '// pendant',
+      position,
+    })
+    const payload = authorScenePayload.parse({
+      ...bedroom,
+      levels: [
+        {
+          ...bedroom.levels[0],
+          items: [hanging('pendant', [0.5, 2.7, -0.75]), hanging('porch', [10, 2.7, 0])],
+          lights: [{ position: [0.5, 2.3, -0.75], fixture: 'pendant' }],
+        },
+      ],
+    })
+    const outcome = run(payload, { pendant, porch: pendant }, {})
+    expect(outcome.result.defects).toEqual([
+      {
+        id: 'porch',
+        code: 'no_ceiling',
+        message:
+          '"Pendant" hangs from a ceiling, and no room on "Ground floor" contains (10, 0): move it into a room, or build it with mount \'floor\'.',
+      },
+    ])
+    const node = byAuthorId(outcome, 'pendant')
+    const ceiling = nodesOf(outcome).find((n) => n.id === node.parentId)!
+    expect(ceiling.type).toBe('ceiling')
+    expect((ceiling as { zoneId?: string }).zoneId).toBe(outcome.result.ids['room/0/0'])
+    expect((ceiling as { children?: string[] }).children).toContain(node.id)
+    expect(node.position).toEqual([0.5, 0, -0.75])
+    expect(node.asset.attachTo).toBe('ceiling')
+    const height = resolveCeilingHeight(ceiling as never, sceneOf(outcome)) - CEILING_DRAW_OFFSET
+    expect(outcome.result.defaults).toContain(
+      `pendant: hung from the ceiling of Bedroom, ${height.toFixed(2)} m up`,
+    )
+    expect(node.asset.interactive.effects[0].offset[1]).toBeCloseTo(2.3 - height, 9)
+    expect(outcome.result.lights).toBe(1)
+  })
+
+  test('a rug lying on a room floor is furniture; the same plate outside the floors is still a slab', () => {
+    const rug: CompiledGeometryScript = {
+      ...bed,
+      manifest: {
+        ...bed.manifest,
+        bounds: { min: [-1.3, 0, -1], max: [1.3, 0.01, 1] },
+      } as unknown as CompiledGeometryScript['manifest'],
+    }
+    const lying = (id: string, x: number) => ({
+      id,
+      name: 'Wool rug',
+      category: 'rug',
+      code: '// rug',
+      position: [x, 0, 0],
+    })
+    const payload = authorScenePayload.parse({
+      ...bedroom,
+      levels: [{ ...bedroom.levels[0], items: [lying('rug', 0), lying('yard', 10)], lights: [] }],
+    })
+    const outcome = run(payload, { rug, yard: rug }, {})
+    expect(byAuthorId(outcome, 'rug').type).toBe('item')
+    expect(outcome.result.defects.map((d) => [d.id, d.code])).toEqual([['yard', 'use_slab']])
+  })
+
+  test('colorInside and colorOutside paint the faces by what they look onto; colorLeft and colorRight win', () => {
+    const payload = authorScenePayload.parse({
+      ...bedroom,
+      levels: [
+        {
+          ...bedroom.levels[0],
+          items: [],
+          lights: [],
+          walls: bedroom.levels[0]!.walls!.map((w) => ({
+            ...w,
+            color: undefined,
+            colorInside: 'library:preset-white',
+            colorOutside: 'library:siding-lap-nearblack',
+            ...(w.id === 'east' ? { colorRight: 'library:concrete-plaster' } : {}),
+          })),
+        },
+      ],
+    })
+    const outcome = run(payload, {}, {})
+    expect(outcome.result.defects).toEqual([])
+    // The walls run clockwise round the room: each one's left face looks into it.
+    expect(byAuthorId(outcome, 'north').slots).toMatchObject({
+      a: 'library:preset-white',
+      b: 'library:siding-lap-nearblack',
+    })
+    expect(byAuthorId(outcome, 'east').slots).toMatchObject({
+      a: 'library:preset-white',
+      b: 'library:concrete-plaster',
+    })
+    expect(outcome.result.defaults).toContain(
+      `colorInside / colorOutside on "Ground floor", left and right as seen from each wall's start to its end: inside is the left face of north, east, south, west`,
+    )
+  })
+
+  test('2.7 m walls under a floor at 2.9 m keep their height and the 0.2 m between is the floor above', () => {
+    const storey = (prefix: string) =>
+      bedroom.levels[0]!.walls!.map((w) => ({ ...w, id: `${prefix}${w.id}`, openings: [] }))
+    const payload = authorScenePayload.parse({
+      levels: [
+        {
+          name: 'Ground floor',
+          walls: storey(''),
+          rooms: [{ name: 'Living room', seed: [0, 0] }],
+        },
+        {
+          name: 'First floor',
+          elevation: 2.9,
+          walls: storey('up-'),
+          rooms: [{ name: 'Bedroom', seed: [0, 0] }],
+        },
+      ],
+    })
+    const outcome = run(payload, {}, {})
+    const scene = sceneOf(outcome)
+    const ground = outcome.result.ids['level/0']!
+    const first = outcome.result.ids['level/1']!
+    expect(byAuthorId(outcome, 'level/0').height).toBe(2.9)
+    // The ground walls are 2.7 m, standing on the ground floor's plate.
+    expect(byAuthorId(outcome, 'north').height).toBe(2.7)
+    const plateOf = (levelId: string) =>
+      Object.values(scene).find(
+        (n) => n.type === 'slab' && n.parentId === levelId && n.plateRole === 'base',
+      ) as AnyNode & { elevation: number; thickness: number }
+    const below = plateOf(ground)
+    const above = plateOf(first)
+    const wallTop = below.elevation + 2.7
+    // The floor above keeps its surface a storey up and reaches down to the walls' tops: 0.2 m.
+    expect(above.elevation).toBeCloseTo(below.elevation, 6)
+    expect(above.thickness).toBeCloseTo(0.2, 6)
+    expect(2.9 + above.elevation - above.thickness).toBeCloseTo(wallTop, 6)
+    // The ground room's ceiling is under that floor, at the walls' tops.
+    const ceiling = Object.values(scene).find(
+      (n) => n.type === 'ceiling' && n.parentId === ground,
+    ) as AnyNode & { type: 'ceiling' }
+    expect(resolveCeilingHeight(ceiling, scene)).toBeCloseTo(wallTop - 0.01, 6)
+    expect(outcome.result.defaults).toContain(
+      '"First floor" stands on a 0.20 m floor over the 2.70 m walls of "Ground floor": its plate reaches down to their tops',
+    )
+  })
+
+  test('the floor between storeys wears the cladding of the walls under it', () => {
+    const storey = (prefix: string, colorOutside?: string) =>
+      bedroom.levels[0]!.walls!.map((w) => ({
+        ...w,
+        id: `${prefix}${w.id}`,
+        openings: [],
+        ...(colorOutside ? { colorOutside } : {}),
+      }))
+    const payload = authorScenePayload.parse({
+      levels: [
+        {
+          name: 'Ground floor',
+          walls: storey('', 'library:siding-lap-nearblack'),
+          rooms: [{ name: 'Living room', seed: [0, 0] }],
+        },
+        { name: 'First floor', elevation: 2.9, walls: storey('up-'), rooms: [] },
+      ],
+    })
+    const outcome = run(payload, {}, {})
+    const first = outcome.result.ids['level/1']!
+    const plate = Object.values(sceneOf(outcome)).find(
+      (n) => n.type === 'slab' && n.parentId === first && n.plateRole === 'base',
+    ) as AnyNode & { slots?: Record<string, string> }
+    expect(plate.slots).toMatchObject({
+      edge: 'library:siding-lap-nearblack',
+      side: 'library:siding-lap-nearblack',
+    })
+  })
+
+  test('a wall reaching into the floor above stops under it', () => {
+    const walls = bedroom.levels[0]!.walls!.map((w) => ({ ...w, openings: [], height: 3 }))
+    const payload = authorScenePayload.parse({
+      levels: [
+        { name: 'Ground floor', walls, rooms: [{ name: 'Hall', seed: [0, 0] }] },
+        {
+          name: 'First floor',
+          elevation: 2.9,
+          walls: walls.map((w) => ({ ...w, id: `up-${w.id}`, height: 2.7 })),
+          rooms: [{ name: 'Landing', seed: [0, 0] }],
+        },
+      ],
+    })
+    const outcome = run(payload, {}, {})
+    expect(byAuthorId(outcome, 'north').height).toBeUndefined()
+    expect(outcome.result.defaults).toContain(
+      'walls of "Ground floor" given 3.00 m reach the floor of "First floor", 2.90 m up: they stop under it, following the storey',
+    )
+  })
+
+  test('a stair rises to the next level and owns the opening in its floor; on the top level it is refused', () => {
+    const storey = (prefix: string) =>
+      bedroom.levels[0]!.walls!.map((w) => ({ ...w, id: `${prefix}${w.id}`, openings: [] }))
+    const payload = authorScenePayload.parse({
+      levels: [
+        {
+          name: 'Ground floor',
+          walls: storey(''),
+          rooms: [{ name: 'Hall', seed: [0, 0] }],
+          stairs: [{ start: [-1.2, -2.3], width: 1 }],
+        },
+        {
+          name: 'First floor',
+          elevation: 3,
+          walls: storey('up-'),
+          rooms: [{ name: 'Landing', seed: [0, 0] }],
+          stairs: [{ start: [0, 0] }],
+        },
+      ],
+    })
+    const outcome = run(payload, {}, {})
+    expect(outcome.result.stairs).toBe(1)
+    expect(outcome.result.defects.map((d) => [d.id, d.code])).toEqual([
+      ['stair/1/0', 'no_level_above'],
+    ])
+    const stair = byAuthorId(outcome, 'stair/0/0')
+    expect(stair.type).toBe('stair')
+    expect(stair.fromLevelId).toBe(outcome.result.ids['level/0'])
+    expect(stair.toLevelId).toBe(outcome.result.ids['level/1'])
+    // Each storey reaches the next level's floor, the top one its walls, and the stair climbs it.
+    expect(byAuthorId(outcome, 'level/0').height).toBe(3)
+    expect(byAuthorId(outcome, 'level/1').height).toBe(2.7)
+    const rise = nodesOf(outcome)
+      .filter((n) => n.parentId === stair.id)
+      .reduce((sum, n) => sum + (n as AnyNode & { height: number }).height, 0)
+    expect(rise).toBeCloseTo(3, 6)
+    expect(outcome.result.defaults.find((d) => d.startsWith('stair/0/0: '))).toMatch(
+      /up to First floor, its floor opening cut\.$/,
+    )
+    // The floor above has a hole over the flight, and its plate is cut by it.
+    const upper = nodesOf(outcome).filter((n) => n.parentId === outcome.result.ids['level/1'])
+    expect(upper.some((n) => n.type === 'floor-opening')).toBe(true)
+    const plate = upper.find((n) => n.type === 'slab') as AnyNode & { holes: unknown[] }
+    expect(plate.holes.length).toBe(1)
+    // Its ids are the conversion's own: the same payload writes the same stair.
+    const again = run(payload, {}, {})
+    expect(
+      nodesOf(again)
+        .filter((n) => n.parentId === stair.id)
+        .map((n) => n.id),
+    ).toEqual(
+      nodesOf(outcome)
+        .filter((n) => n.parentId === stair.id)
+        .map((n) => n.id),
+    )
+  })
+  test('verify_scene reports a stair whose top a wall crosses, and one arriving outside every room', () => {
+    // A hall 8 m deep: the stair climbs 3 m from its north end and arrives halfway.
+    const box = (x0: number, x1: number, prefix: string) =>
+      (
+        [
+          ['n', [x0, -4], [x1, -4]],
+          ['e', [x1, -4], [x1, 4]],
+          ['s', [x1, 4], [x0, 4]],
+          ['w', [x0, 4], [x0, -4]],
+        ] as const
+      ).map(([id, start, end]) => ({
+        id: `${prefix}${id}`,
+        start,
+        end,
+        height: 2.7,
+        thickness: 0.12,
+      }))
+    const storey = (prefix: string) => box(-2, 2, prefix)
+    const ground = {
+      name: 'Ground floor',
+      walls: storey(''),
+      rooms: [{ name: 'Hall', seed: [0, 0] }],
+      stairs: [{ start: [-1.2, -3.8], width: 1 }],
+    }
+    const upper = {
+      name: 'First floor',
+      elevation: 3,
+      walls: storey('up-'),
+      rooms: [{ name: 'Landing', seed: [0, 0] }],
+    }
+    const first = run(authorScenePayload.parse({ levels: [ground, upper] }), {}, {})
+    const scene = sceneOf(first)
+    const stairTypes = (nodes: Record<string, AnyNode>) =>
+      (
+        verifyScene(nodes, undefined, { activeLevelId: null }).result as {
+          issues: { type: string }[]
+        }
+      ).issues
+        .map((issue) => issue.type)
+        .filter((type) => type.startsWith('stair_arriv') || type === 'stair_opening_wall')
+    expect(stairTypes(scene)).toEqual([])
+
+    const top = stairArrivalOpening(byAuthorId(first, 'stair/0/0') as never, scene)
+    const [a, b] = [top[0]!, top[1]!]
+    const mid = (i: 0 | 1) => (a[i] + b[i] + top[2]![i] + top[3]![i]) / 4
+    const across = {
+      id: 'up-across',
+      start: [mid(0) + (a[0] - b[0]) * 0.4, mid(1) + (a[1] - b[1]) * 0.4],
+      end: [mid(0) - (a[0] - b[0]) * 0.4, mid(1) - (a[1] - b[1]) * 0.4],
+      height: 2.7,
+      thickness: 0.1,
+    }
+    const blocked = run(
+      authorScenePayload.parse({ levels: [ground, { ...upper, walls: [...upper.walls, across] }] }),
+      {},
+      {},
+    )
+    expect(stairTypes(sceneOf(blocked))).toContain('stair_arrival_blocked')
+
+    // The upper room covers only the east half: the stair arrives in the west.
+    const east = box(0.5, 2, 'up-')
+    const outside = run(
+      authorScenePayload.parse({
+        levels: [ground, { ...upper, walls: east, rooms: [{ name: 'Landing', seed: [1.2, 0] }] }],
+      }),
+      {},
+      {},
+    )
+    expect(stairTypes(sceneOf(outside))).toContain('stair_arrives_outside_room')
+  })
+
+  test('seeds sharing one enclosure name one open-plan room, joined in the order given', () => {
+    const payload = authorScenePayload.parse({
+      ...bedroom,
+      levels: [
+        {
+          ...bedroom.levels[0]!,
+          items: [],
+          lights: [],
+          rooms: [
+            { name: 'Living room', seed: [0, 0], floor: '#a07850' },
+            { name: 'Kitchen', seed: [1, 1], floor: '#dddddd' },
+            { name: 'WC', seed: [-1, -1] },
+          ],
+        },
+      ],
+    })
+    const outcome = run(payload, {}, {})
+    expect(outcome.result.defects).toEqual([])
+    const zone = byAuthorId(outcome, 'room/0/0')
+    expect(zone.name).toBe('Living room, kitchen and WC')
+    expect(outcome.result.rooms).toBe(1)
+    expect(outcome.result.roomsNamed).toBe(3)
+    expect(outcome.result.defaults).toContain(
+      '"Living room", "Kitchen", "WC" are one enclosure, no wall between them: one open-plan room, "Living room, kitchen and WC", with the floor of "Living room"',
+    )
+  })
+
+  test('a named room with no light of its own gets one plain ceiling light, once per room', () => {
+    const payload = authorScenePayload.parse({
+      ...bedroom,
+      levels: [
+        {
+          ...bedroom.levels[0]!,
+          items: [],
+          lights: [],
+          rooms: [
+            { name: 'Living room', seed: [0, 0] },
+            { name: 'Kitchen', seed: [1, 1] },
+          ],
+        },
+      ],
+    })
+    const outcome = run(payload, {}, {})
+    expect(outcome.result.defects).toEqual([])
+    expect(outcome.result.lights).toBe(1)
+    expect(outcome.result.defaults).toContain(
+      'Living room and kitchen had no light: a ceiling light at its centre',
+    )
+    const point = byAuthorId(outcome, 'light/0/room/0')
+    expect(nodesOf(outcome).find((n) => n.id === point.parentId)?.type).toBe('ceiling')
+    expect(point.asset.interactive.effects).toHaveLength(1)
+
+    // A lamp that carries its own light lights its room: nothing is added.
+    const lamp = {
+      ...bed,
+      manifest: {
+        ...bed.manifest,
+        lights: [{ id: 'bulb', position: [0, 1.5, 0], color: '#ffe2b8', intensity: 1 }],
+      },
+    } as unknown as CompiledGeometryScript
+    const lit = run(
+      authorScenePayload.parse({
+        ...payload,
+        levels: [
+          {
+            ...payload.levels[0]!,
+            items: [
+              {
+                id: 'lamp',
+                name: 'Floor lamp',
+                category: 'lamp',
+                code: 'export default function build() {}',
+                position: [0.5, 0, 0.5],
+              },
+            ],
+          },
+        ],
+      }),
+      { lamp },
+      {},
+    )
+    expect(lit.result.defects).toEqual([])
+    expect(lit.result.lights).toBe(0)
+    expect(lit.result.ids['light/0/room/0']).toBeUndefined()
+  })
+
+  test("the roof stands on the building's roof level above the top storey: segments native, the rest roof items", () => {
+    const storey = (prefix: string) =>
+      bedroom.levels[0]!.walls!.map((w) => ({ ...w, id: `${prefix}${w.id}`, openings: [] }))
+    const payload = authorScenePayload.parse({
+      levels: [
+        { name: 'Ground floor', walls: storey(''), rooms: [{ name: 'Hall', seed: [0, 0] }] },
+        {
+          name: 'First floor',
+          elevation: 3,
+          walls: storey('up-'),
+          rooms: [{ name: 'Landing', seed: [0, 0] }],
+        },
+      ],
+      roof: {
+        segments: [{ center: [0, 0], rotation: 90, width: 5, depth: 4, pitch: 35, overhang: 0.4 }],
+        color: '#3a4044',
+        wallColor: '#e8e2d6',
+        items: [
+          {
+            id: 'chimney',
+            name: 'Chimney',
+            category: 'chimney',
+            code: 'export default function build() {}',
+            position: [1, 2.5, -1],
+          },
+        ],
+      },
+    })
+    const outcome = run(payload, { chimney: bed }, {})
+    expect(outcome.result.defects).toEqual([])
+    expect(outcome.result.roofSegments).toBe(1)
+    const scene = sceneOf(outcome) as Record<string, AnyNode>
+    const roofLevel = byAuthorId(outcome, 'level/roof')
+    expect(roofLevel).toMatchObject({
+      type: 'level',
+      name: 'Roof',
+      level: 2,
+      metadata: { role: 'roof' },
+    })
+    expect(servesAsRoofLevel(scene, roofLevel as never)).toBe(true)
+    // It caps the top storey, standing on its walls, as create_roof's roof does.
+    const roof = byAuthorId(outcome, 'roof')
+    expect(roof).toMatchObject({ type: 'roof', parentId: roofLevel.id, support: { kind: 'walls' } })
+    expect(roofsOver(scene, outcome.result.ids['level/1']!).map((r) => r.id)).toEqual([roof.id])
+    const segment = nodesOf(outcome).find((n) => n.parentId === roof.id) as AnyNode &
+      Record<string, any>
+    expect(segment).toMatchObject({ type: 'roof-segment', roofType: 'gable', width: 5, depth: 4 })
+    expect(segment.rotation).toBeCloseTo(Math.PI / 2, 6)
+    expect(segment.overhang).toBeCloseTo(0.4 / Math.cos((35 * Math.PI) / 180), 6)
+    expect(roofLevel.height).toBeGreaterThan(1)
+    // Its covering and its gable ends each wear their own exact colour.
+    const names = new Map((outcome.changes!.materials ?? []).map((m) => [m.id, m.name]))
+    expect(
+      [roof.topMaterialPreset, roof.wallMaterialPreset].map((ref) =>
+        names.get(ref?.replace(/^scene:/, '')),
+      ),
+    ).toEqual(['#3a4044', '#e8e2d6'])
+    // The chimney goes up with the roof: on the roof level, as high as it stood on the top storey.
+    const chimney = byAuthorId(outcome, 'chimney')
+    expect(chimney).toMatchObject({ parentId: roofLevel.id, metadata: { role: 'roof' } })
+    const storeyHeight = byAuthorId(outcome, 'level/1').height as number
+    expect(chimney.position[1]).toBeCloseTo(2.5 - storeyHeight, 1)
+    // The same payload writes the same roof.
+    const again = run(payload, { chimney: bed }, {})
+    expect(again.result.ids.roof).toBe(roof.id)
+    expect(again.result.ids['level/roof']).toBe(roofLevel.id)
+  })
+
+  test('a roof of its own shape is roof items, a flat one too, never refused as a slab', () => {
+    const slab: CompiledGeometryScript = {
+      ...bed,
+      manifest: {
+        ...bed.manifest,
+        bounds: { min: [-2.5, 0, -3], max: [2.5, 0.2, 3] },
+      } as unknown as CompiledGeometryScript['manifest'],
+    }
+    const payload = authorScenePayload.parse({
+      ...bedroom,
+      levels: [{ ...bedroom.levels[0]!, items: [], lights: [] }],
+      roof: {
+        items: [
+          {
+            id: 'flat-roof',
+            name: 'Flat roof',
+            category: 'roof',
+            code: 'export default function build() {}',
+            position: [0, 2.7, 0],
+          },
+        ],
+      },
+    })
+    const outcome = run(payload, { 'flat-roof': slab }, {})
+    expect(outcome.result.defects).toEqual([])
+    expect(outcome.result.roofSegments).toBe(0)
+    const roofLevel = byAuthorId(outcome, 'level/roof')
+    expect(byAuthorId(outcome, 'flat-roof')).toMatchObject({
+      parentId: roofLevel.id,
+      metadata: { role: 'roof' },
+    })
+    expect(roofLevel.height).toBeCloseTo(0.2, 1)
+  })
+
+  test('an L stair turns where its risers say; a straight one is refused a landing', () => {
+    const storey = (prefix: string) =>
+      bedroom.levels[0]!.walls!.map((w) => ({ ...w, id: `${prefix}${w.id}`, openings: [] }))
+    const payload = authorScenePayload.parse({
+      levels: [
+        {
+          name: 'Ground floor',
+          walls: storey(''),
+          stairs: [
+            { start: [-1.2, -2.3], layout: 'l', turn: 'right', steps: 17, lowerSteps: 5 },
+            { start: [1, -2.3], lowerSteps: 5 },
+          ],
+        },
+        { name: 'First floor', elevation: 3, walls: storey('up-') },
+      ],
+    })
+    const outcome = run(payload, {}, {})
+    expect(outcome.result.defects.map((d) => [d.id, d.code])).toEqual([
+      ['stair/0/1', 'stair_layout_required'],
+    ])
+    const stair = byAuthorId(outcome, 'stair/0/0')
+    const flights = (stair.children as string[])
+      .map(
+        (id) =>
+          nodesOf(outcome).find((n) => n.id === id) as AnyNode & {
+            segmentType: string
+            stepCount: number
+          },
+      )
+      .filter((segment) => segment.segmentType === 'stair')
+      .map((segment) => segment.stepCount)
+    expect(flights).toEqual([5, 12])
+  })
+  test('a curved outside wall with a window is one curved wall, the window along its arc, and its room derives from the arc', () => {
+    const wall = (id: string, start: number[], end: number[], extra = {}) => ({
+      id,
+      start,
+      end,
+      height: 2.7,
+      thickness: 0.2,
+      colorInside: '#f1ece4',
+      colorOutside: '#2e5a4b',
+      ...extra,
+    })
+    const payload = authorScenePayload.parse({
+      levels: [
+        {
+          name: 'Ground floor',
+          walls: [
+            wall('north', [0, 0], [6, 0]),
+            wall('east', [6, 0], [6, 4]),
+            // Bulges 1.2 m out of the room, through (3, 5.2).
+            wall('bay', [6, 4], [0, 4], {
+              through: [3, 5.2],
+              skirting: { height: 0.12 },
+              openings: [{ kind: 'window', along: 3.5, width: 1.2, height: 1.4, sill: 0.8 }],
+            }),
+            wall('west', [0, 4], [0, 0]),
+            // Stops 20 cm short of the arc: the join rule meets the curve, not the chord.
+            wall('partition', [3, 0], [3, 5], { thickness: 0.1 }),
+          ],
+          rooms: [
+            { name: 'Salon', seed: [4.5, 4.6] },
+            { name: 'Library', seed: [1.5, 2] },
+          ],
+          items: [
+            {
+              id: 'mirror',
+              name: 'Mirror',
+              category: 'art',
+              code: 'export default function build() {}',
+              position: [3, 1.2, 5],
+              host: 'bay',
+            },
+          ],
+        },
+      ],
+    })
+    const outcome = run(payload, { mirror: baseboard }, {})
+    const bay = byAuthorId(outcome, 'bay')
+    expect(bay.curveOffset).toBeCloseTo(1.2, 9)
+    // The window sits along the arc, 3.5 m of curve from the wall's start.
+    const window = byAuthorId(outcome, 'bay/0')
+    expect(window.parentId).toBe(bay.id)
+    expect(window.position[0]).toBeCloseTo(3.5, 6)
+    expect(window.position[1]).toBeCloseTo(0.8 + 0.7, 6)
+    // The partition's end met the arc's middle, 1.2 m past the chord.
+    const partition = byAuthorId(outcome, 'partition')
+    const middle = getWallCurveFrameAt(bay, 0.5).point
+    expect(partition.end[0]).toBeCloseTo(middle.x, 2)
+    expect(partition.end[1]).toBeCloseTo(middle.y, 2)
+    expect(outcome.result.snapped).toContainEqual(
+      expect.objectContaining({ id: 'partition', end: 'end' }),
+    )
+    // Each room reaches into the bay: its outline follows the curve past the chord at z = 4.
+    expect(outcome.result.defects.filter((d) => d.id !== 'mirror')).toEqual([])
+    expect(outcome.result.roomsNamed).toBe(2)
+    const salon = byAuthorId(outcome, 'room/0/0')
+    expect(salon.name).toBe('Salon')
+    expect(Math.max(...salon.polygon.map(([, z]: number[]) => z))).toBeGreaterThan(5)
+    // Inside is the arc's left face, painted, with its skirting; outside the cladding.
+    const scene = sceneOf(outcome)
+    const materialOf = (ref: string) =>
+      outcome.changes!.materials!.find((m) => `scene:${m.id}` === ref)?.name
+    expect(materialOf(bay.slots.a)).toBe('#f1ece4')
+    expect(materialOf(bay.slots.b)).toBe('#2e5a4b')
+    expect((scene[bay.id] as AnyNode & { skirting?: unknown }).skirting).toBeDefined()
+    // Nothing hangs on a curved wall, as in the editor.
+    expect(outcome.result.defects).toEqual([
+      expect.objectContaining({ id: 'mirror', code: 'curved_host' }),
+    ])
+    expect(getWallCurveLength(bay)).toBeGreaterThan(6.5)
+  })
+
+  test('a flat opening too wide for its arc is warned with the widest that fits; a curve past a half circle is clamped', () => {
+    const payload = authorScenePayload.parse({
+      levels: [
+        {
+          name: 'Ground floor',
+          walls: [
+            {
+              id: 'apse',
+              start: [0, 0],
+              end: [4, 0],
+              height: 2.7,
+              thickness: 0.2,
+              through: [2, -3],
+              openings: [{ kind: 'window', along: 3, width: 2.4, height: 1.4, sill: 0.8 }],
+            },
+          ],
+        },
+      ],
+    })
+    const outcome = run(payload, {}, {})
+    expect(byAuthorId(outcome, 'apse').curveOffset).toBe(2)
+    expect(outcome.result.defaults).toContain(
+      'wall apse: its through point stands 3.00 m off the straight line, more than half its 4.00 m span: written as a half circle, 2.00 m out',
+    )
+    expect(outcome.result.warnings).toEqual([
+      expect.objectContaining({ id: 'apse/0', code: 'flat_on_arc' }),
+    ])
+    expect(outcome.result.warnings[0]!.message).toMatch(/at most 1\.25 m wide\.$/)
+  })
+
+  test('a void in the floor above opens that floor and the ceiling under it, with a railing on its open edge', () => {
+    const storey = (prefix: string) =>
+      bedroom.levels[0]!.walls!.map(({ color: _, ...w }) => ({
+        ...w,
+        id: `${prefix}${w.id}`,
+        openings: [],
+        colorInside: '#efe6d8',
+        colorOutside: '#2e5a4b',
+      }))
+    const code = 'export default function build() {}'
+    const payload = authorScenePayload.parse({
+      levels: [
+        {
+          name: 'Ground floor',
+          walls: storey(''),
+          rooms: [{ name: 'Living room', seed: [0, 0] }],
+          items: [
+            // Under the void: it hangs from the ceiling of the gallery above, the double height.
+            {
+              id: 'chandelier',
+              name: 'Chandelier',
+              category: 'lamp',
+              code,
+              position: [0, 2.5, -1.2],
+            },
+            { id: 'pendant', name: 'Pendant', category: 'lamp', code, position: [0, 2.5, 1.5] },
+          ],
+        },
+        {
+          name: 'First floor',
+          elevation: 3,
+          walls: storey('up-'),
+          rooms: [{ name: 'Gallery', seed: [0, 1] }],
+          // Drawn to the centerlines: the cut stops at the faces of the walls.
+          voids: [
+            {
+              name: 'Double height',
+              polygon: [
+                [-2, -2.5],
+                [2, -2.5],
+                [2, 0],
+                [-2, 0],
+              ],
+            },
+          ],
+          items: [{ id: 'chair', name: 'Chair', category: 'chair', code, position: [0, 0, -1] }],
+        },
+      ],
+    })
+    const ceilingLamp = { ...bed, mount: 'ceiling' as const }
+    const outcome = run(payload, { chandelier: ceilingLamp, pendant: ceilingLamp, chair: bed }, {})
+    expect(outcome.result.voids).toBe(1)
+    expect(outcome.result.defects).toEqual([])
+    const ground = outcome.result.ids['level/0']!
+    const first = outcome.result.ids['level/1']!
+    const opening = byAuthorId(outcome, 'void/1/0')
+    expect(opening).toMatchObject({ type: 'floor-opening', parentId: first, name: 'Double height' })
+    expect(opening.cutsAdjacent).toBe(true)
+    const xs = opening.polygon.map(([x]: number[]) => x)
+    const zs = opening.polygon.map(([, z]: number[]) => z)
+    expect([Math.min(...xs), Math.max(...xs), Math.min(...zs), Math.max(...zs)]).toEqual([
+      -1.94, 1.94, -2.44, 0,
+    ])
+    // The floor above and the ceiling under it both have the hole.
+    const scene = sceneOf(outcome)
+    const plate = Object.values(scene).find(
+      (n) => n.type === 'slab' && n.parentId === first && n.plateRole === 'base',
+    ) as AnyNode & { holes: unknown[]; id: string }
+    expect(plate.holes.length).toBe(1)
+    // The floor's edge round the void wears the walls' inside paint; its facade edge the cladding.
+    const named = (hex: string) =>
+      `scene:${outcome.changes!.materials!.find((m) => m.name === hex)!.id}`
+    expect((plate as AnyNode & { slots: Record<string, string> }).slots.edge).toBe(named('#2e5a4b'))
+    expect(byAuthorId(outcome, 'room/1/0').floorEdgeFinish).toBe(named('#efe6d8'))
+    const ceiling = Object.values(scene).find(
+      (n) => n.type === 'ceiling' && n.parentId === ground,
+    ) as AnyNode & { holes: unknown[] }
+    expect(ceiling.holes.length).toBe(1)
+    // One railing, on the open edge only: the other three are walls.
+    const railings = nodesOf(outcome).filter((n) => n.type === 'fence') as (AnyNode &
+      Record<string, any>)[]
+    expect(railings.length).toBe(1)
+    expect(railings[0]).toMatchObject({ parentId: first, height: 1.1, style: 'rail' })
+    expect(railings[0]!.supportSlabId).toBe(plate.id)
+    expect(railings[0]!.start[1]).toBeCloseTo(0, 6)
+    expect(Math.abs(railings[0]!.end[0] - railings[0]!.start[0])).toBeCloseTo(3.87, 2)
+    // The chandelier hangs from the gallery's ceiling; the pendant away from the void from its own.
+    const upperCeiling = Object.values(scene).find(
+      (n) => n.type === 'ceiling' && n.parentId === first,
+    )!
+    expect(byAuthorId(outcome, 'chandelier').parentId).toBe(upperCeiling.id)
+    expect(byAuthorId(outcome, 'pendant').parentId).toBe(ceiling.id)
+    expect(outcome.result.warnings).toEqual([
+      expect.objectContaining({ id: 'chair', code: 'over_void' }),
+    ])
+    expect(outcome.result.defaults).toEqual(
+      expect.arrayContaining([
+        'void/1/0: the floor of "First floor" opened over 9.5 m², and the ceiling of "Ground floor" under it',
+        'void/1/0: a 1.10 m railing along 3.87 m of its edges',
+      ]),
+    )
+  })
+
+  test('a void drawn past a curved outside wall opens only the floor inside it', () => {
+    const storey = (prefix: string) =>
+      bedroom.levels[0]!.walls!.map((w) => ({
+        ...w,
+        id: `${prefix}${w.id}`,
+        openings: [],
+        // The west wall bows 1.5 m out of the building.
+        ...(w.id === 'west' ? { through: [-3.5, 0] } : {}),
+      }))
+    const payload = authorScenePayload.parse({
+      levels: [
+        { name: 'Ground floor', walls: storey(''), rooms: [{ name: 'Salon', seed: [0, 0] }] },
+        {
+          name: 'First floor',
+          elevation: 3,
+          walls: storey('up-'),
+          rooms: [{ name: 'Gallery', seed: [1, 1.5] }],
+          voids: [
+            {
+              polygon: [
+                [-5, -2.5],
+                [0, -2.5],
+                [0, 2.5],
+                [-5, 2.5],
+              ],
+            },
+          ],
+        },
+      ],
+    })
+    const outcome = run(payload, {}, {})
+    expect(outcome.result.defects).toEqual([])
+    const openings = nodesOf(outcome).filter(
+      (n) => n.type === 'floor-opening' && n.metadata?.authorScene,
+    )
+    expect(openings.length).toBe(1)
+    const xs = (openings[0] as AnyNode & { polygon: number[][] }).polygon.map(([x]) => x!)
+    // Inside the arc's inner face, which stands 1.5 m out less half the 12 cm wall.
+    expect(Math.min(...xs)).toBeGreaterThan(-3.5 + 0.06 - 0.01)
+    // The one railing is the open edge across the floor, at x = 0.
+    const railings = nodesOf(outcome).filter((n) => n.type === 'fence') as (AnyNode &
+      Record<string, any>)[]
+    expect(railings.map((r) => [r.start[0], r.end[0]])).toEqual([[0, 0]])
+  })
+
+  test('a void on the first level, over no floor, or without a railing is reported by its id', () => {
+    const storey = (prefix: string) =>
+      bedroom.levels[0]!.walls!.map((w) => ({ ...w, id: `${prefix}${w.id}`, openings: [] }))
+    const square = (x: number) => [
+      [x, -1],
+      [x + 1, -1],
+      [x + 1, 0],
+      [x, 0],
+    ]
+    const payload = authorScenePayload.parse({
+      levels: [
+        {
+          name: 'Ground floor',
+          walls: storey(''),
+          rooms: [{ name: 'Hall', seed: [0, 0] }],
+          voids: [{ polygon: square(-0.5) }],
+        },
+        {
+          name: 'First floor',
+          elevation: 3,
+          walls: storey('up-'),
+          rooms: [{ name: 'Landing', seed: [0, 1] }],
+          voids: [
+            { name: 'Lightwell', polygon: square(-0.5), railing: null },
+            { polygon: square(8) },
+          ],
+        },
+      ],
+    })
+    const outcome = run(payload, {}, {})
+    expect(outcome.result.defects.map((d) => [d.id, d.code])).toEqual([
+      ['void/0/0', 'no_level_below'],
+      ['void/1/1', 'no_floor'],
+    ])
+    expect(outcome.result.voids).toBe(1)
+    expect(byAuthorId(outcome, 'void/1/0').type).toBe('floor-opening')
+    expect(nodesOf(outcome).some((n) => n.type === 'fence')).toBe(false)
+  })
+
+  test('a curtain wall is glass between mullions, a passage a doorway with no leaf, an arch its outline, a column round', () => {
+    const payload = authorScenePayload.parse({
+      levels: [
+        {
+          name: 'Ground floor',
+          walls: [
+            ...bedroom.levels[0]!.walls!.slice(0, 2).map((w) => ({ ...w, openings: [] })),
+            {
+              id: 'glass',
+              start: [2, 2.5],
+              end: [-2, 2.5],
+              height: 2.7,
+              thickness: 0.12,
+              through: [0, 3.3],
+              color: '#ffffff',
+              curtain: { spacing: 1.2, frameColor: '#1c1a19' },
+              openings: [{ kind: 'door', along: 2, width: 0.9, height: 2.1, type: 'sliding' }],
+            },
+            {
+              id: 'west',
+              start: [-2, 2.5],
+              end: [-2, -2.5],
+              height: 2.7,
+              thickness: 0.12,
+              openings: [
+                {
+                  kind: 'passage',
+                  along: 2.5,
+                  width: 1.2,
+                  height: 2.4,
+                  shape: 'arch',
+                  hinge: 'end',
+                },
+                {
+                  kind: 'window',
+                  along: 1,
+                  width: 0.8,
+                  height: 1.2,
+                  sill: 1,
+                  shape: 'arch',
+                  archHeight: 0.3,
+                },
+              ],
+            },
+          ],
+          rooms: [{ name: 'Winter garden', seed: [0, 0] }],
+          columns: [{ position: [0, 0], shape: 'round', width: 0.3, height: 2.7 }],
+        },
+      ],
+    })
+    const outcome = run(payload, {}, {})
+    expect(outcome.result.defects).toEqual([])
+    expect(outcome.result.roomsNamed).toBe(1)
+    const glass = byAuthorId(outcome, 'glass')
+    expect(glass.wallType).toBe('curtain')
+    expect(glass.curveOffset).toBeCloseTo(0.8, 9)
+    expect(glass.curtainWall.columns).toMatchObject({ layout: 'maximum-spacing', spacing: 1.2 })
+    expect(byAuthorId(outcome, 'glass/0').type).toBe('door')
+    expect(outcome.result.defaults).toContain(
+      'wall glass: a curtain wall has no faces to paint, its color ignored; curtain.frameColor colours its frame',
+    )
+    const passage = byAuthorId(outcome, 'west/0')
+    expect(passage).toMatchObject({
+      type: 'door',
+      frameThickness: 0.02,
+      openingKind: 'opening',
+      openingShape: 'arch',
+    })
+    expect(outcome.result.passages).toBe(1)
+    expect(outcome.result.defaults).toContain('passage west/0: it has no leaf, its hinge ignored')
+    expect(byAuthorId(outcome, 'west/1')).toMatchObject({ openingShape: 'arch', archHeight: 0.3 })
+    expect(byAuthorId(outcome, 'column/0/0')).toMatchObject({
+      crossSection: 'round',
+      radius: 0.15,
+      width: 0.3,
+    })
+  })
+
+  test('a column takes its colour exactly on every surface, its rotation, or its own module and its colours', () => {
+    const post: CompiledGeometryScript = {
+      ...bed,
+      manifest: {
+        ...bed.manifest,
+        bounds: { min: [-0.1, 0, -0.15], max: [0.1, 2.6, 0.15] },
+        slots: [{ id: 'timber', color: '#6b4a2f' }],
+      } as unknown as CompiledGeometryScript['manifest'],
+    }
+    const payload = authorScenePayload.parse({
+      levels: [
+        {
+          name: 'Ground floor',
+          columns: [
+            { position: [0, 0], width: 0.3, height: 2.7, color: '#b85c38', rotation: 90 },
+            {
+              position: [2, 0],
+              width: 0.3,
+              height: 2.7,
+              code: 'export default () => {}',
+              color: '#ffffff',
+            },
+          ],
+        },
+      ],
+    })
+    const outcome = run(payload, { 'column/0/1': post }, {})
+    expect(outcome.result.defects).toEqual([])
+    const terracotta = outcome.changes!.materials!.find((m) => m.name === '#b85c38')!
+    const plain = byAuthorId(outcome, 'column/0/0')
+    expect(plain.rotation).toBeCloseTo(Math.PI / 2, 9)
+    expect(Object.keys(plain.slots).sort()).toEqual(['base', 'capital', 'shaft'])
+    for (const ref of Object.values(plain.slots)) expect(ref).toBe(`scene:${terracotta.id}`)
+    const scripted = byAuthorId(outcome, 'column/0/1')
+    expect(scripted.source.manifest.slots).toEqual([{ id: 'timber', color: '#6b4a2f' }])
+    expect([scripted.width, scripted.height, scripted.depth]).toEqual([0.2, 2.6, 0.3])
+    const timber = outcome.changes!.materials!.find((m) => m.name.startsWith('#6b4a2f'))!
+    expect(scripted.slots).toEqual({ timber: `scene:${timber.id}` })
+    expect(outcome.result.defaults).toContain(
+      'column column/0/1: built by its module, which keeps its own colours; color ignored',
+    )
+    // A module that did not compile is a defect, by the column's id.
+    expect(run(payload, {}, {}).result.defects.map((d) => [d.id, d.code])).toEqual([
+      ['column/0/1', 'compile_failed'],
+    ])
+  })
+
+  test("a slab's railing stands on it at its own height and in its own colour", () => {
+    const payload = authorScenePayload.parse({
+      levels: [
+        {
+          name: 'Ground floor',
+          slabs: [
+            {
+              name: 'Deck',
+              polygon: [
+                [0, 0],
+                [4, 0],
+                [4, 3],
+                [0, 3],
+              ],
+              top: 0.6,
+              thickness: 0.3,
+              railing: [{ start: [0, 3], end: [4, 3], height: 0.9, color: '#20262b' }],
+            },
+          ],
+        },
+      ],
+    })
+    const outcome = run(payload, {}, {})
+    expect(outcome.result.defects).toEqual([])
+    const slab = byAuthorId(outcome, 'slab/0/0')
+    expect(slab.railing).toBeUndefined()
+    const fence = nodesOf(outcome).find((n) => n.type === 'fence') as AnyNode & Record<string, any>
+    expect(fence).toMatchObject({ start: [0, 3], end: [4, 3], height: 0.9, supportSlabId: slab.id })
+    const iron = outcome.changes!.materials!.find((m) => m.name === '#20262b')!
+    expect(Object.values(fence.slots).length).toBeGreaterThan(0)
+    for (const ref of Object.values(fence.slots)) expect(ref).toBe(`scene:${iron.id}`)
+  })
+
+  test("a stair takes its railing sides and style, and its flight's, treads' and railings' finishes", () => {
+    const storey = (prefix: string) =>
+      bedroom.levels[0]!.walls!.map((w) => ({ ...w, id: `${prefix}${w.id}`, openings: [] }))
+    const payload = authorScenePayload.parse({
+      levels: [
+        {
+          name: 'Ground floor',
+          walls: storey(''),
+          rooms: [{ name: 'Hall', seed: [0, 0] }],
+          stairs: [
+            {
+              start: [-1.2, -2.3],
+              width: 1,
+              railing: 'right',
+              railingStyle: 'glass',
+              color: '#f4f1ea',
+              treads: 'library:wood-woodplank48',
+              railingColor: '#111111',
+            },
+          ],
+        },
+        {
+          name: 'First floor',
+          elevation: 3,
+          walls: storey('up-'),
+          rooms: [{ name: 'Landing', seed: [0, 0] }],
+        },
+      ],
+    })
+    const outcome = run(payload, {}, {})
+    expect(outcome.result.defects).toEqual([])
+    const stair = byAuthorId(outcome, 'stair/0/0')
+    expect(stair).toMatchObject({ railingMode: 'right', railingStyle: 'glass' })
+    const named = (name: string) =>
+      `scene:${outcome.changes!.materials!.find((m) => m.name === name)!.id}`
+    expect(stair.slots).toMatchObject({
+      body: named('#f4f1ea'),
+      treads: 'library:wood-woodplank48',
+      railing: named('#111111'),
+    })
+    // No railing: its colour has nothing to paint, and is said.
+    const bare = authorScenePayload.parse({
+      ...payload,
+      levels: [
+        { ...payload.levels[0]!, stairs: [{ ...payload.levels[0]!.stairs![0]!, railing: 'none' }] },
+        payload.levels[1]!,
+      ],
+    })
+    expect(run(bare, {}, {}).result.defaults).toContain(
+      'stair/0/0: it has no railing, its railingColor ignored',
+    )
+  })
 })
+
+describe('author_scene units', () => {
+  const box = (prefix: string, openings = true) => [
+    { id: `${prefix}-north`, start: [-4, -2.5], end: [4, -2.5], height: 2.7, thickness: 0.12 },
+    { id: `${prefix}-east`, start: [4, -2.5], end: [4, 2.5], height: 2.7, thickness: 0.12 },
+    {
+      id: `${prefix}-south`,
+      start: [4, 2.5],
+      end: [-4, 2.5],
+      height: 2.7,
+      thickness: 0.12,
+      openings: openings
+        ? [{ kind: 'door', along: 2, width: 0.9, height: 2.1, hinge: 'start', swing: 'front' }]
+        : [],
+    },
+    { id: `${prefix}-west`, start: [-4, 2.5], end: [-4, -2.5], height: 2.7, thickness: 0.12 },
+  ]
+  /** Two rooms side by side, a partition between them at x = 0; `rooms` seeds them. */
+  const twoRooms = (prefix: string, name: string, elevation: number, rooms: unknown[]) => ({
+    name,
+    elevation,
+    walls: [
+      ...box(prefix),
+      { id: `${prefix}-mid`, start: [0, -2.5], end: [0, 2.5], height: 2.7, thickness: 0.12 },
+    ],
+    rooms,
+  })
+  const flats = (units?: unknown[]) =>
+    authorScenePayload.parse({
+      levels: [
+        twoRooms('g', 'Ground floor', 0, [
+          { name: 'Living A', seed: [-2, 0], unit: 'Apartment A' },
+          { name: 'Living B', seed: [2, 0], unit: 'Apartment B' },
+        ]),
+      ],
+      ...(units ? { units } : {}),
+    })
+  const unitOf = (outcome: ReturnType<typeof authorScene>, name: string) =>
+    byAuthorId(outcome, `unit/${name}`) as AnyNode & { type: 'unit' }
+
+  test('one unit per name, under the building, holding the zones of the rooms that name it; the payload types and colours one', () => {
+    const outcome = run(flats([{ name: 'Apartment B', kind: 'hotel-room', color: '#123456' }]), {})
+    expect(outcome.result.units).toBe(2)
+    expect(outcome.result.defects).toEqual([])
+    const a = unitOf(outcome, 'Apartment A')
+    const b = unitOf(outcome, 'Apartment B')
+    expect(a).toMatchObject({
+      type: 'unit',
+      parentId: 'building_1',
+      name: 'Apartment A',
+      kind: 'apartment',
+      members: [outcome.result.ids['room/0/0']],
+    })
+    expect(b).toMatchObject({
+      kind: 'hotel-room',
+      color: '#123456',
+      members: [outcome.result.ids['room/0/1']],
+    })
+    expect(outcome.changes!.create!.find((c) => c.node.id === a.id)?.parentId).toBe('building_1')
+    const applied = applySceneChanges(scaffold(), outcome.changes)
+    expect((applied.building_1 as AnyNode & { children: string[] }).children).toContain(a.id)
+    const checks = authorSceneChecks({
+      payload: flats(),
+      report: outcome.result,
+      pending: [],
+      issues: [],
+    })
+    expect(checks.find((check) => check.id === 'rooms_in_units')).toMatchObject({ passed: true })
+  })
+
+  test('a duplex spans two levels; a landing in no unit is common area and the check passes', () => {
+    const payload = authorScenePayload.parse({
+      levels: [
+        twoRooms('g', 'Ground floor', 0, [
+          { name: 'Living', seed: [-2, 0], unit: 'Duplex 1' },
+          { name: 'Entrance hall', seed: [2, 0] },
+        ]),
+        twoRooms('u', 'Upper floor', 2.9, [
+          { name: 'Bedroom', seed: [-2, 0], unit: 'Duplex 1' },
+          { name: 'Landing', seed: [2, 0] },
+        ]),
+      ],
+    })
+    const outcome = run(payload, {})
+    expect(outcome.result.units).toBe(1)
+    expect(unitOf(outcome, 'Duplex 1').members).toEqual([
+      outcome.result.ids['room/0/0'],
+      outcome.result.ids['room/1/0'],
+    ])
+    const check = authorSceneChecks({
+      payload,
+      report: outcome.result,
+      pending: [],
+      issues: [],
+    }).find((check) => check.id === 'rooms_in_units')
+    expect(check).toMatchObject({ passed: true })
+    expect(check!.detail).toContain('1 unit')
+  })
+
+  test('a revision keeps an unchanged unit’s id, removes a unit the payload no longer names and makes the new one', () => {
+    const first = run(flats(), {})
+    const saved = applySceneChanges(scaffold(), first.changes)
+    const a = first.result.ids['unit/Apartment A']!
+    const b = first.result.ids['unit/Apartment B']!
+    expect(saved[a]).toBeDefined()
+    const renamed = flats()
+    renamed.levels[0]!.rooms[1]!.unit = 'Apartment C'
+    const second = authorScene(
+      saved,
+      { payload: renamed, compiled: {}, replace: true },
+      { activeLevelId: null },
+    )
+    expect(second.result.ids['unit/Apartment A']).toBe(a)
+    expect(second.result.ids['unit/Apartment B']).toBeUndefined()
+    const c = second.result.ids['unit/Apartment C']!
+    expect(c).not.toBe(b)
+    expect(second.changes!.delete).toContain(b)
+    const after = applySceneChanges(saved, second.changes)
+    expect(after[b]).toBeUndefined()
+    expect(after[c]).toMatchObject({
+      type: 'unit',
+      name: 'Apartment C',
+      members: [second.result.ids['room/0/1']],
+    })
+    expect((after.building_1 as AnyNode & { children: string[] }).children).not.toContain(b)
+  })
+
+  test('seeds of one enclosure naming different units are a defect, and the room is in no unit', () => {
+    const payload = authorScenePayload.parse({
+      levels: [
+        {
+          name: 'Ground floor',
+          walls: box('g'),
+          rooms: [
+            { name: 'Living', seed: [-2, 0], unit: 'Apartment A' },
+            { name: 'Kitchen', seed: [2, 0], unit: 'Apartment B' },
+          ],
+        },
+      ],
+      units: [{ name: 'Apartment B' }],
+    })
+    const outcome = run(payload, {})
+    expect(outcome.result.defects).toEqual([
+      {
+        id: 'room/0/0',
+        code: 'unit_split_room',
+        message: expect.stringContaining('"Living", "Kitchen" are one open-plan room'),
+      },
+    ])
+    // The declared unit stands, empty; the one named only by a seed of the split room is not made.
+    expect(outcome.result.units).toBe(1)
+    expect(unitOf(outcome, 'Apartment B').members).toEqual([])
+    expect(outcome.result.ids['unit/Apartment A']).toBeUndefined()
+    expect(outcome.result.warnings).toContainEqual(
+      expect.objectContaining({ id: 'unit/Apartment B', code: 'unit_no_rooms' }),
+    )
+    const checks = authorSceneChecks({
+      payload,
+      report: outcome.result,
+      pending: [],
+      issues: [],
+    })
+    const check = checks.find((check) => check.id === 'rooms_in_units')
+    expect(check).toMatchObject({ passed: false })
+    expect(check!.detail).toContain('"Living", "Kitchen"')
+    // A unit defect is the units check's alone: the floor of the split room is covered.
+    expect(checks.find((check) => check.id === 'floors')).toMatchObject({ passed: true })
+  })
+
+  test('the check names rooms in no unit that are not common area, on levels with units only', () => {
+    const payload = authorScenePayload.parse({
+      levels: [
+        twoRooms('g', 'Ground floor', 0, [
+          { name: 'Living', seed: [-2, 0], unit: 'Apartment 1' },
+          { name: 'Hall bedroom', seed: [2, 0] },
+        ]),
+        twoRooms('u', 'Upper floor', 2.9, [
+          { name: 'Bedroom', seed: [-2, 0], unit: 'Apartment 1' },
+          { name: 'Stair landing 2', seed: [2, 0] },
+        ]),
+      ],
+    })
+    const outcome = run(payload, {})
+    const check = authorSceneChecks({
+      payload,
+      report: outcome.result,
+      pending: [],
+      issues: [],
+    }).find((check) => check.id === 'rooms_in_units')
+    expect(check).toMatchObject({ passed: false })
+    // Common area is named by common-area words alone: a bedroom off the hall is a room.
+    expect(check!.detail).toContain('"Hall bedroom"')
+    expect(check!.detail).not.toContain('Stair landing')
+    const house = authorSceneChecks({
+      payload: bedroom,
+      report: run(bedroom, { bed, lamp: bed }).result,
+      pending: [],
+      issues: [],
+    }).find((check) => check.id === 'rooms_in_units')
+    expect(house).toMatchObject({ passed: true, detail: 'The design names no units.' })
+  })
+})
+
+test.each(['casement', 'double-hung', 'fixed', 'tilt-turn'] as const)(
+  'author_scene writes %s window divisions and exterior details',
+  (type) => {
+    const details = {
+      windowHandle: false,
+      sillInterior: true,
+      shutters: 'board-batten' as const,
+      shutterWidth: 0.4,
+      openingDirection: 'inward' as const,
+      tiltTurnMode: 'turn' as const,
+      shutterOpen: 0.25,
+      shutterSides: 'right' as const,
+      rollerShutter: 'concealed' as const,
+      rollerShutterBoxHeight: 0.27,
+      rollerShutterOpen: 0.5,
+      sillOverhang: 0.12,
+      sillInteriorDepth: 0.09,
+      sillInteriorThickness: 0.04,
+      sillInteriorOverhang: 0.02,
+      hingesSide: 'right' as const,
+    }
+    const payload = structuredClone(bedroom)
+    payload.levels[0]!.walls![1]!.openings = [
+      {
+        kind: 'window',
+        along: 2.5,
+        width: 1.4,
+        height: 1.3,
+        sill: 0.9,
+        type,
+        columns: 3,
+        rows: 2,
+        ...details,
+      },
+    ]
+    const outcome = authorScene(
+      scaffold(),
+      { payload: authorScenePayload.parse(payload), compiled: { bed, lamp: bed } },
+      { activeLevelId: 'level_0' },
+    )
+    const window = nodesOf(outcome).find((node) => node.type === 'window')!
+    expect(window).toMatchObject({
+      type: 'window',
+      windowType: type,
+      columnRatios: [1 / 3, 1 / 3, 1 / 3],
+      rowRatios: [0.5, 0.5],
+      ...details,
+    })
+    expect((window as AnyNode & { sashGrid?: boolean }).sashGrid).toBe(
+      type === 'fixed' ? undefined : true,
+    )
+  },
+)
+
+test('author_scene writes native entry lights and the chosen folding panel count', () => {
+  const payload = authorScenePayload.parse({
+    levels: [
+      {
+        name: 'Entry',
+        walls: [
+          {
+            id: 'front',
+            start: [0, 0],
+            end: [10, 0],
+            height: 3,
+            thickness: 0.2,
+            openings: [
+              {
+                kind: 'door',
+                along: 2,
+                width: 1,
+                height: 2.1,
+                sidelightLeft: 0.3,
+                sidelightRight: 0.5,
+                transomHeight: 0.4,
+              },
+              {
+                kind: 'door',
+                along: 7,
+                width: 3,
+                height: 2.1,
+                type: 'folding',
+                leaves: 8,
+                style: 'modern',
+                slideDirection: 'right',
+              },
+            ],
+          },
+        ],
+      },
+    ],
+  })
+  const result = run(payload, {})
+  const doors =
+    result.changes?.create?.map(({ node }) => node).filter((node) => node.type === 'door') ?? []
+  expect(doors).toHaveLength(2)
+  expect(doors[0]).toMatchObject({
+    width: 1,
+    height: 2.1,
+    sidelightLeft: 0.3,
+    sidelightRight: 0.5,
+    transomHeight: 0.4,
+  })
+  expect(doors[1]).toMatchObject({ doorType: 'folding', leafCount: 8, slideDirection: 'right' })
+  const folded = doors[1]
+  expect(folded?.type === 'door' && folded.segments.some((s) => s.type === 'glass')).toBe(false)
+})
+
+for (const sill of [0, 0.2]) {
+  test(`author_scene refuses a transom above its wall at sill ${sill}`, () => {
+    const payload = authorScenePayload.parse({
+      levels: [
+        {
+          name: 'Entry',
+          walls: [
+            {
+              id: 'front',
+              start: [0, 0],
+              end: [4, 0],
+              height: 2.5,
+              thickness: 0.2,
+              openings: [
+                { kind: 'door', along: 2, width: 1, height: 2.1, sill, transomHeight: 0.5 },
+              ],
+            },
+          ],
+        },
+      ],
+    })
+    const outcome = run(payload, {})
+    expect(outcome.result.defects).toContainEqual(expect.objectContaining({ code: 'wall_too_low' }))
+    expect(outcome.changes?.create?.some(({ node }) => node.type === 'door')).toBe(false)
+  })
+}
+
+for (const reversed of [false, true]) {
+  test(`author_scene keeps an asymmetric entry cutout centred when facing outside (${reversed})`, () => {
+    const polygon: [number, number][] = [
+      [0, 0],
+      [4, 0],
+      [4, 4],
+      [0, 4],
+    ]
+    if (reversed) polygon.reverse()
+    const outcome = run(
+      authorScenePayload.parse({
+        levels: [
+          {
+            name: 'Entry',
+            walls: polygon.map((start, i) => ({
+              id: `edge${i}`,
+              start,
+              end: polygon[(i + 1) % polygon.length],
+              height: 3,
+              thickness: 0.2,
+              openings:
+                i === 0
+                  ? [
+                      {
+                        kind: 'door',
+                        along: 1.4,
+                        width: 0.9,
+                        height: 2.1,
+                        sidelightLeft: 0.2,
+                        sidelightRight: 0.6,
+                      },
+                    ]
+                  : [],
+            })),
+          },
+        ],
+      }),
+      {},
+    )
+    const nodes = outcome.changes?.create?.map(({ node }) => node) ?? []
+    const door = nodes.find((node) => node.type === 'door')
+    expect(door?.type).toBe('door')
+    if (door?.type !== 'door') return
+    const wall = nodes.find((node) => node.id === door.parentId)
+    expect(wall?.type).toBe('wall')
+    if (wall?.type !== 'wall') return
+    expect(door.side).toBe(wall.frontSide === 'exterior' ? 'front' : 'back')
+    expect(
+      door.position[0] - getDoorOpeningSize(door).leafOffsetX * openingHostFacing(door),
+    ).toBeCloseTo(1.4)
+  })
+}

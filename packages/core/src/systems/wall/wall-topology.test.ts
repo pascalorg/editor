@@ -474,6 +474,53 @@ describe('planWallInsertion', () => {
   })
 })
 
+describe('splitting a sloped wall', () => {
+  const hostPieces = (nodes: Record<AnyNodeId, AnyNode>) => {
+    const result = planWallInsertion(nodes, {
+      levelId: LEVEL_ID,
+      start: [5, -2],
+      end: [5, 2],
+      joinRadius: 0.05,
+    })
+    if (!result.ok) throw new Error('expected a plan')
+    return result.plan.changes.create
+      .map(({ node }) => node as WallNode)
+      .filter((wall) => wall.start[1] === 0 && wall.end[1] === 0)
+      .sort((a, b) => a.start[0] - b.start[0])
+  }
+
+  test('a crossing wall splits the top into one continuous line, not a sawtooth', () => {
+    const host = WallNode.parse({
+      parentId: LEVEL_ID,
+      start: [0, 0],
+      end: [10, 0],
+      height: 3,
+      endHeightOffset: -2,
+    })
+    const [first, second] = hostPieces(nodeMap([host]))
+    expect(first).toMatchObject({ start: [0, 0], end: [5, 0], height: 3 })
+    expect(first!.endHeightOffset).toBeCloseTo(-1)
+    expect(second).toMatchObject({ start: [5, 0], end: [10, 0] })
+    expect(second!.height).toBeCloseTo(2)
+    expect(second!.endHeightOffset).toBeCloseTo(-1)
+  })
+
+  test('a storey-bound wall keeps its start on the storey; later pieces take explicit heights', () => {
+    const level = LevelNode.parse({ id: LEVEL_ID, height: 3 })
+    const host = WallNode.parse({
+      parentId: LEVEL_ID,
+      start: [0, 0],
+      end: [10, 0],
+      endHeightOffset: 1,
+    })
+    const [first, second] = hostPieces(nodeMap([level, host]))
+    expect(first!.height).toBeUndefined()
+    expect(first!.endHeightOffset).toBeCloseTo(0.5)
+    expect(second!.height).toBeCloseTo(3.5)
+    expect(second!.endHeightOffset).toBeCloseTo(0.5)
+  })
+})
+
 describe('planWallSplitAtPoint', () => {
   test('plans an endpoint host split without mutating the input scene', () => {
     const host = WallNode.parse({
@@ -1029,5 +1076,51 @@ describe('planJoinOpenWallEnd', () => {
     expect(
       checkOpeningWithinWall(after[door.id] as ReturnType<typeof DoorNode.parse>, repaired, 3),
     ).toEqual([])
+  })
+})
+
+describe('a wall started in a corner block', () => {
+  // Two 0.18 walls turn a corner at the origin.
+  const across = WallNode.parse({
+    id: 'wall_across',
+    parentId: LEVEL_ID,
+    start: [-3, 0],
+    end: [0, 0],
+    thickness: 0.18,
+  })
+  const down = WallNode.parse({
+    id: 'wall_down',
+    parentId: LEVEL_ID,
+    start: [0, 0],
+    end: [0, 3],
+    thickness: 0.18,
+  })
+
+  test('joins the corner instead of splitting a stub off the wall', () => {
+    // 8 cm short of the corner, inside the other wall's body.
+    const result = planWallInsertion(nodeMap([across, down]), {
+      levelId: LEVEL_ID,
+      start: [-0.08, 0],
+      end: [3, 0],
+      joinRadius: 0.05,
+    })
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    expect(result.plan.resolvedStart).toEqual([0, 0])
+    expect(result.plan.changes.delete).toEqual([])
+    expect(result.plan.insertedWalls).toHaveLength(1)
+  })
+
+  test('past the corner block it still T-joins the wall', () => {
+    const result = planWallInsertion(nodeMap([across, down]), {
+      levelId: LEVEL_ID,
+      start: [-0.5, 0],
+      end: [-0.5, -2],
+      joinRadius: 0.05,
+    })
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    expect(result.plan.resolvedStart).toEqual([-0.5, 0])
+    expect(result.plan.changes.delete).toEqual(['wall_across'])
   })
 })

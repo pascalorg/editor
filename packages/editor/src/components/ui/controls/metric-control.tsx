@@ -1,6 +1,6 @@
 'use client'
 
-import { useScene } from '@pascal-app/core'
+import { formatNumber, parseLocalizedNumber, useLocale, useScene } from '@pascal-app/core'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { lingoUnitSpec, measurementHint, parseMeasurement } from '../../../lib/measurement-parser'
 import { useLinearDisplay } from '../../../lib/use-linear-display'
@@ -20,6 +20,45 @@ interface MetricControlProps {
   restoreOnCommit?: boolean
 }
 
+export function parseMetricInput(
+  text: string,
+  unit: string,
+  options: { isImperial: boolean; locale: string; parseUnit?: string },
+): number | null {
+  const spec = lingoUnitSpec(unit)
+  return spec
+    ? parseMeasurement(text, spec, {
+        bareUnit: options.parseUnit ?? spec.unitId,
+        locale: options.locale,
+        system: options.isImperial ? 'us' : 'metric',
+      })
+    : parseLocalizedNumber(text, options.locale)
+}
+
+export function formatMetricInputValue(
+  value: number,
+  precision: number,
+  locale: string,
+): string {
+  return formatNumber(roundMetricValueForDisplay(value, precision), {
+    locale,
+    min: precision,
+    max: precision,
+  })
+}
+
+export function roundMetricValueForDisplay(value: number, precision: number): number {
+  const rounded = Number(
+    formatNumber(value, {
+      locale: 'en',
+      min: precision,
+      max: precision,
+      useGrouping: false,
+    }),
+  )
+  return Number.isFinite(rounded) ? rounded : value
+}
+
 export function MetricControl({
   label,
   value,
@@ -33,6 +72,7 @@ export function MetricControl({
   unit = '',
   restoreOnCommit = true,
 }: MetricControlProps) {
+  const locale = useLocale()
   const {
     isImperial,
     displayUnit,
@@ -51,16 +91,20 @@ export function MetricControl({
   )
   const roundStoredValueForDisplayPrecision = useCallback(
     (storedValue: number) =>
-      clamp(toStoredValue(Number.parseFloat(toDisplayValue(storedValue).toFixed(precision)))),
+      clamp(toStoredValue(roundMetricValueForDisplay(toDisplayValue(storedValue), precision))),
     [clamp, precision, toDisplayValue, toStoredValue],
   )
 
   const displayValue = toDisplayValue(value)
+  const formatDisplayValue = useCallback(
+    (nextValue: number) => formatMetricInputValue(nextValue, precision, locale),
+    [locale, precision],
+  )
 
   const [isEditing, setIsEditing] = useState(false)
   const [isDragging, setIsDragging] = useState(false)
   const [isHovered, setIsHovered] = useState(false)
-  const [inputValue, setInputValue] = useState(displayValue.toFixed(precision))
+  const [inputValue, setInputValue] = useState(() => formatDisplayValue(displayValue))
   const startXRef = useRef(0)
   const startValueRef = useRef(0)
   const containerRef = useRef<HTMLDivElement>(null)
@@ -81,9 +125,9 @@ export function MetricControl({
 
   useEffect(() => {
     if (!isEditing) {
-      setInputValue(displayValue.toFixed(precision))
+      setInputValue(formatDisplayValue(displayValue))
     }
-  }, [displayValue, precision, isEditing])
+  }, [displayValue, formatDisplayValue, isEditing])
 
   useEffect(() => {
     const container = containerRef.current
@@ -221,8 +265,8 @@ export function MetricControl({
 
   const handleValueClick = useCallback(() => {
     setIsEditing(true)
-    setInputValue(toDisplayValue(value).toFixed(precision))
-  }, [value, toDisplayValue, precision])
+    setInputValue(formatDisplayValue(toDisplayValue(value)))
+  }, [formatDisplayValue, value, toDisplayValue])
 
   const handleInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     setInputValue(e.target.value)
@@ -230,18 +274,10 @@ export function MetricControl({
 
   const submitValue = useCallback(() => {
     const spec = lingoUnitSpec(unit)
-    let stored = spec
-      ? parseMeasurement(inputValue, spec, {
-          bareUnit: parseUnit ?? spec.unitId,
-          system: isImperial ? 'us' : 'metric',
-        })
-      : null
+    const parsed = parseMetricInput(inputValue, unit, { isImperial, locale, parseUnit })
+    const stored = parsed === null ? null : spec ? parsed : toStoredValue(parsed)
     if (stored === null) {
-      const numValue = Number.parseFloat(inputValue)
-      stored = Number.isFinite(numValue) ? toStoredValue(numValue) : null
-    }
-    if (stored === null) {
-      setInputValue(toDisplayValue(value).toFixed(precision))
+      setInputValue(formatDisplayValue(toDisplayValue(value)))
     } else {
       applyCommittedValue(clamp(stored))
     }
@@ -249,13 +285,14 @@ export function MetricControl({
   }, [
     inputValue,
     unit,
+    locale,
     isImperial,
     parseUnit,
     applyCommittedValue,
     clamp,
     toStoredValue,
     value,
-    precision,
+    formatDisplayValue,
     toDisplayValue,
   ])
 
@@ -265,6 +302,7 @@ export function MetricControl({
       ? measurementHint(inputValue, spec, {
           bareUnit: parseUnit ?? spec.unitId,
           system: isImperial ? 'us' : 'metric',
+          locale,
           displayUnit: parseUnit ?? spec.unitId,
           precision,
           clamp,
@@ -280,25 +318,25 @@ export function MetricControl({
       if (e.key === 'Enter') {
         submitValue()
       } else if (e.key === 'Escape') {
-        setInputValue(toDisplayValue(value).toFixed(precision))
+        setInputValue(formatDisplayValue(toDisplayValue(value)))
         setIsEditing(false)
       } else if (e.key === 'ArrowUp') {
         e.preventDefault()
         const newV = clamp(value + toStoredValue(step))
         applyCommittedValue(newV)
-        setInputValue(toDisplayValue(newV).toFixed(precision))
+        setInputValue(formatDisplayValue(toDisplayValue(newV)))
       } else if (e.key === 'ArrowDown') {
         e.preventDefault()
         const newV = clamp(value - toStoredValue(step))
         applyCommittedValue(newV)
-        setInputValue(toDisplayValue(newV).toFixed(precision))
+        setInputValue(formatDisplayValue(toDisplayValue(newV)))
       }
     },
     [
       submitValue,
       value,
       toDisplayValue,
-      precision,
+      formatDisplayValue,
       step,
       clamp,
       applyCommittedValue,
@@ -363,7 +401,7 @@ export function MetricControl({
             onClick={handleValueClick}
           >
             <span className="font-mono tabular-nums tracking-tight">
-              {Number(displayValue.toFixed(precision)).toFixed(precision)}
+              {formatDisplayValue(displayValue)}
             </span>
             {displayUnit && <span className="ml-[1px] text-muted-foreground">{displayUnit}</span>}
           </div>

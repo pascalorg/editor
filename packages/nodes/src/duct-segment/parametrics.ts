@@ -3,7 +3,7 @@ import { Vector3 } from 'three'
 import { getDuctFittingPorts } from '../duct-fitting/ports'
 import { findAutomaticRunEndCapIds } from '../shared/automatic-run-end-cap'
 import { fittingDeletionPlansForRun } from '../shared/fitting-deletion-cleanup'
-import { rollToContinueAcrossElbow } from './geometry'
+import { rollToContinueAcrossElbow } from './profile'
 import type { DuctSegmentNode } from './schema'
 
 /** A run endpoint sitting this close to a collar counts as mated. */
@@ -112,7 +112,7 @@ export const ductSegmentParametrics: ParametricDescriptor<DuctSegmentNode> = {
       plan.deleteFitting ? [plan.fittingId, ...plan.cascadeDeleteIds] : [],
     ),
   ],
-  trailingSection: () => import('../shared/run-hanger-inspector'),
+  trailingSection: () => import('./edit-inspector'),
   groups: [
     {
       label: 'Hangers',
@@ -156,39 +156,6 @@ export const ductSegmentParametrics: ParametricDescriptor<DuctSegmentNode> = {
           kind: 'enum',
           options: ['supply', 'return'],
           display: 'segmented',
-        },
-        {
-          key: 'shape',
-          kind: 'enum',
-          options: ['round', 'rect', 'oval'],
-          display: 'segmented',
-        },
-        {
-          key: 'diameter',
-          kind: 'number',
-          unit: 'in',
-          min: 4,
-          max: 24,
-          step: 1,
-          visibleIf: (n) => n.shape === 'round',
-        },
-        {
-          key: 'width',
-          kind: 'number',
-          unit: 'in',
-          min: 4,
-          max: 60,
-          step: 1,
-          visibleIf: (n) => n.shape !== 'round',
-        },
-        {
-          key: 'height',
-          kind: 'number',
-          unit: 'in',
-          min: 3,
-          max: 40,
-          step: 1,
-          visibleIf: (n) => n.shape !== 'round',
         },
       ],
     },

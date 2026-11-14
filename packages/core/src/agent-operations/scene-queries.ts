@@ -1,6 +1,9 @@
+import { queryNodes } from '../runtime/node-queries'
 import type { AnyNode } from '../schema'
 import { isCeilingGeometry, isRoofGeometry, servesAsRoofLevel } from '../services/roof-level'
 import type { SceneNodes } from './types'
+
+export { orderedChildIds, queryNodes } from '../runtime/node-queries'
 
 export type LevelRole = 'occupied' | 'roof' | 'support'
 export type ContentCounts = {
@@ -22,9 +25,9 @@ const metadataString = (node: AnyNode, key: string) => {
 
 /** Every level, in floor order (ties by id). */
 export function levelsOf(nodes: SceneNodes): (AnyNode & { type: 'level' })[] {
-  return Object.values(nodes)
-    .filter((node): node is AnyNode & { type: 'level' } => node.type === 'level')
-    .sort((a, b) => a.level - b.level || a.id.localeCompare(b.id))
+  return queryNodes<AnyNode & { type: 'level' }>(nodes, { type: 'level' }).sort(
+    (a, b) => a.level - b.level || a.id.localeCompare(b.id),
+  )
 }
 
 /** The level a node sits on, walking up its parents (a level resolves to itself). */

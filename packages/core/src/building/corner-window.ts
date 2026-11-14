@@ -129,6 +129,7 @@ const SHARED = [
   'sill',
   'sillDepth',
   'sillThickness',
+  'casingWidth',
 ] as const
 
 /** The partner's update for a change to one side of a corner window; null when nothing shared changed. */
@@ -153,8 +154,8 @@ export function cornerPartnerUpdates(
  * The editor's Wrap the corner: a window within `CORNER_REACH_M` of a corner where exactly one other
  * wall ends is slid to the corner and joined to the window waiting there on that wall, adopted
  * (`mergeWindows`); with none waiting, it gets a partner on that wall, of its width (as far as the
- * wall allows), height, sill and type. `create` is the partner to add, if any; `updates` are the
- * windows that change, by id.
+ * wall allows), height, sill, type and casing, each face's casing on its side of the corner.
+ * `create` is the partner to add, if any; `updates` are the windows that change, by id.
  */
 export function wrapCorner(
   nodes: Nodes,
@@ -210,11 +211,19 @@ export function wrapCorner(
   }).node as WindowNode
   const post = fusesAtCorner(window) ? 'none' : 'post'
   const slidTo = end === 'start' ? window.width / 2 : wallLengthOf(wall) - window.width / 2
+  // Casing is kept per wall face. A wall running into the corner and one running on out of it
+  // have their `a` faces on the same side of it; two meeting end to end or start to start have
+  // them on opposite sides, so the partner takes the window's faces the other way round.
+  const swapFaces = end === otherEnd
   return {
     create: {
       ...partner,
+      frameThickness: window.frameThickness,
       columnRatios: window.columnRatios,
       rowRatios: window.rowRatios,
+      casingWidth: window.casingWidth,
+      casingFaceA: swapFaces ? window.casingFaceB : window.casingFaceA,
+      casingFaceB: swapFaces ? window.casingFaceA : window.casingFaceB,
       corner: { end: otherEnd, partnerId: window.id, post },
     } as WindowNode,
     updates: {

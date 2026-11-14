@@ -5,6 +5,7 @@ import { z } from 'zod'
 import { BaseNode, nodeType, objectId } from '../base'
 import { SitePresentation } from '../site-presentation'
 import { TerrainData } from '../terrain'
+import { WallTypeDefinition } from '../wall-type'
 import { SiteAddress, SiteParcel, SiteSetbacks } from './site-facts'
 
 // 2D Polygon
@@ -143,6 +144,11 @@ export const SiteNode = BaseNode.extend({
       ),
     })
     .optional(),
+  /**
+   * The project's own wall types (`WallTypeDefinition`), listed beside the presets where walls
+   * are drafted. Absent = none, the state every scene that predates them loads in.
+   */
+  wallTypes: z.array(WallTypeDefinition).max(64).optional(),
   children: z.array(z.string()).default([]),
 }).describe(
   dedent`
@@ -155,6 +161,7 @@ export const SiteNode = BaseNode.extend({
   - setbacks: required yards in metres; setbacksSource / zone cite them
   - frontEdge: index of the street-facing polygon edge
   - northRotation: true north offset from plan up, radians
+  - wallTypes: the project's own wall types: { id: 'custom-…', label, assembly } with the layers listed from the exterior face around one core
   - children: array of child node ids (buildings, items)
   `,
 )

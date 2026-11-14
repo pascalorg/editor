@@ -15,6 +15,7 @@ import {
   getLevelElevations,
   getWallCoveringSlabUnderside,
   getWallTop,
+  getWallTopOver,
 } from '../services/storey'
 import {
   automaticFloorHeight,
@@ -242,32 +243,52 @@ export function floorIntentConflicts(
     return []
   })
   if (groundOnly.length) return groundOnly
-  const draft = { ...nodes }
-  for (const id of deleted) delete draft[id]
-  for (const node of created) {
-    draft[node.id] = node
+  // The edit as an overlay of the ids it touches: reading the whole scene is left to an edit that
+  // reaches a level (below), so an unrelated edit reads only what it names.
+  const overlay = new Map<string, AnyNode | undefined>()
+  const at = (id: string) => (overlay.has(id) ? overlay.get(id) : nodes[id])
+  for (const id of deleted) overlay.set(id, undefined)
+  for (const node of created) overlay.set(node.id, node)
+  for (const { id, data } of updates) {
+    const node = at(id)
+    if (node) overlay.set(id, { ...node, ...data } as AnyNode)
   }
-  for (const { id, data } of updates)
-    if (draft[id]) draft[id] = { ...draft[id], ...data } as AnyNode
   for (const node of created) {
-    const parent = node.parentId && draft[node.parentId]
+    const parent = node.parentId ? at(node.parentId) : undefined
     if (parent && 'children' in parent)
-      draft[parent.id] = {
+      overlay.set(parent.id, {
         ...parent,
         children: [...new Set([...parent.children, node.id])],
-      } as AnyNode
+      } as AnyNode)
   }
   for (const { id, data } of updates) {
-    const plate = draft[id]
+    const plate = at(id)
     if (
       plate?.type === 'slab' &&
       plate.plateRole === 'base' &&
       Object.hasOwn(data, 'floorHeight') &&
       !Object.hasOwn(data, 'elevation')
     )
-      draft[id] = { ...plate, elevation: plate.floorHeight ?? automaticFloorHeight(nodes, plate) }
+      overlay.set(id, {
+        ...plate,
+        elevation: plate.floorHeight ?? automaticFloorHeight(nodes, plate),
+      })
   }
-  const changedDisplacements = changedLevelConstructionDisplacements(nodes, draft)
+  let whole: Record<string, AnyNode> | undefined
+  const draft = () => {
+    if (whole) return whole
+    whole = { ...nodes }
+    for (const [id, node] of overlay)
+      if (node) whole[id] = node
+      else delete whole[id]
+    return whole
+  }
+  // Only slabs displace a level's construction.
+  const changedDisplacements = [...overlay].some(
+    ([id, node]) => node?.type === 'slab' || nodes[id]?.type === 'slab',
+  )
+    ? changedLevelConstructionDisplacements(nodes, draft())
+    : new Set<string>()
   const baseHeightChanges = updates.filter(
     ({ id, data }) =>
       nodes[id]?.type === 'slab' &&
@@ -407,12 +428,12 @@ export function floorIntentConflicts(
       ...created.map((node) => ({ id: node.id, data: node })),
     ]) {
       if (!relevant.some((key) => Object.hasOwn(data, key))) continue
-      for (const graph of [nodes, draft]) {
-        let node = graph[id]
+      for (const read of [(id: string) => nodes[id], at]) {
+        let node = read(id)
         const visited = new Set<string>()
         while (node && node.type !== 'level' && !visited.has(node.id)) {
           visited.add(node.id)
-          node = node.parentId ? graph[node.parentId] : undefined!
+          node = node.parentId ? read(node.parentId) : undefined!
         }
         if (node?.type === 'level') levels.add(node.id)
       }
@@ -421,7 +442,7 @@ export function floorIntentConflicts(
   if (!baseOnly) for (const id of changedDisplacements) levels.add(id)
   if (
     updates.some(({ id, data }) => {
-      const plate = nodes[id] ?? draft[id]
+      const plate = nodes[id] ?? at(id)
       return (
         plate?.type === 'slab' &&
         plate.plateRole === 'base' &&
@@ -429,7 +450,7 @@ export function floorIntentConflicts(
       )
     })
   ) {
-    for (const graph of [nodes, draft]) {
+    for (const graph of [nodes, draft()]) {
       const elevations = getLevelElevations(graph)
       for (const { id, data } of updates) {
         const plate = graph[id]
@@ -448,15 +469,17 @@ export function floorIntentConflicts(
       }
     }
   }
-  if (baseOnly && !levels.size) return []
+  // Every conflict below stands on a level the edit reaches.
+  if (!levels.size) return []
+  const drafted = draft()
   const edited = new Set([...updates.map((u) => u.id), ...created.map((n) => n.id)])
-  const zoneOnly = [...edited].every((id) => draft[id]?.type === 'zone')
+  const zoneOnly = [...edited].every((id) => drafted[id]?.type === 'zone')
   const affectedWalls = new Set<string>()
   const spans = (graph: Readonly<Record<string, AnyNode>>, zone: ZoneNode) =>
     roomFace(graph, zone, floorRoomFaces(boundaries(graph, zone.parentId!)))?.spans ?? []
   if (zoneOnly)
     for (const id of edited)
-      for (const graph of [nodes, draft]) {
+      for (const graph of [nodes, drafted]) {
         const zone = graph[id]
         if (zone?.type === 'zone') {
           if (zone.boundaryWallIds?.length)
@@ -464,24 +487,24 @@ export function floorIntentConflicts(
           else for (const span of spans(graph, zone)) affectedWalls.add(span.boundaryId)
         }
       }
-  const ids = Object.values(draft).flatMap((node) =>
+  const ids = Object.values(drafted).flatMap((node) =>
     node.type === 'zone' &&
     levels.has(node.parentId!) &&
-    (!baseOnly || verticalBases.some(({ plate }) => footprintSupportsNode(plate, node, draft))) &&
+    (!baseOnly || verticalBases.some(({ plate }) => footprintSupportsNode(plate, node, drafted))) &&
     (!zoneOnly ||
       edited.has(node.id) ||
       (node.boundaryWallIds?.some((id) => affectedWalls.has(id)) ??
-        spans(draft, node).some((span) => affectedWalls.has(span.boundaryId))))
+        spans(drafted, node).some((span) => affectedWalls.has(span.boundaryId))))
       ? [node.id]
       : [],
   )
 
   const conflicts = [...ids].flatMap((id) => {
-    const zone = draft[id] as ZoneNode
+    const zone = drafted[id] as ZoneNode
     if (zone.floor?.support === 'open' || zone.spaceRole !== 'room' || zone.hasFloor === false)
       return []
-    const elevation = zone.floor?.elevation ?? getRoomBaseElevation(draft, zone.id)
-    const check = checkRoomFloor(draft, id, elevation)
+    const elevation = zone.floor?.elevation ?? getRoomBaseElevation(drafted, zone.id)
+    const check = checkRoomFloor(drafted, id, elevation)
     const previous = nodes[id]
     const oldElevation =
       previous?.type === 'zone'
@@ -500,13 +523,14 @@ export function floorIntentConflicts(
         ),
     )
   })
-  for (const node of Object.values(draft)) {
+  for (const node of Object.values(drafted)) {
     if (node.type !== 'door' && node.type !== 'window') continue
-    const wall = draft[node.parentId!]
+    const wall = drafted[node.parentId!]
     if (
       wall?.type !== 'wall' ||
       !levels.has(wall.parentId!) ||
-      (baseOnly && !verticalBases.some(({ plate }) => footprintSupportsNode(plate, wall, draft))) ||
+      (baseOnly &&
+        !verticalBases.some(({ plate }) => footprintSupportsNode(plate, wall, drafted))) ||
       (zoneOnly && !affectedWalls.has(wall.id))
     )
       continue
@@ -517,11 +541,18 @@ export function floorIntentConflicts(
         getOpeningFloorTarget(host, opening, graph) +
         opening.position[1] +
         opening.height / 2 -
-        getWallTop(host, host.parentId!, graph, wallSupportForNodes(host, graph).elevation)
+        getWallTopOver(
+          host,
+          host.parentId!,
+          graph,
+          wallSupportForNodes(host, graph).elevation,
+          opening.position[0] - opening.width / 2,
+          opening.position[0] + opening.width / 2,
+        )
       )
     }
-    const after = excess(draft, node)
-    const previous = nodes[node.id] ?? copiedOpening(nodes, draft, node)
+    const after = excess(drafted, node)
+    const previous = nodes[node.id] ?? copiedOpening(nodes, drafted, node)
     const before =
       previous?.type === 'door' || previous?.type === 'window' ? excess(nodes, previous) : -Infinity
     if (
@@ -537,18 +568,24 @@ export function floorIntentConflicts(
         message: `The ${node.type} does not fit: it exceeds its wall top by ${roundFloorElevation(after)} m.`,
       })
   }
-  for (const node of Object.values(draft)) {
+  for (const node of Object.values(drafted)) {
     if (
       node.type !== 'wall' ||
       node.height === undefined ||
       !levels.has(node.parentId!) ||
-      !loweringPlates.some(({ plate }) => footprintSupportsNode(plate, node, draft))
+      !loweringPlates.some(({ plate }) => footprintSupportsNode(plate, node, drafted))
     )
       continue
-    const excess = (graph: Readonly<Record<string, AnyNode>>, wall: typeof node) =>
-      getWallTop(wall, wall.parentId!, graph, wallSupportForNodes(wall, graph).elevation) -
-      (getWallCoveringSlabUnderside(wall, wall.parentId!, graph) ?? Infinity)
-    const after = excess(draft, node)
+    const excess = (graph: Readonly<Record<string, AnyNode>>, wall: typeof node) => {
+      const base = wallSupportForNodes(wall, graph).elevation
+      return (
+        Math.max(
+          getWallTop(wall, wall.parentId!, graph, base, 0),
+          getWallTop(wall, wall.parentId!, graph, base, 1),
+        ) - (getWallCoveringSlabUnderside(wall, wall.parentId!, graph) ?? Infinity)
+      )
+    }
+    const after = excess(drafted, node)
     const previous = nodes[node.id]
     const before = previous?.type === 'wall' ? excess(nodes, previous) : -Infinity
     if (after > 1e-6 && after > before + 1e-6)

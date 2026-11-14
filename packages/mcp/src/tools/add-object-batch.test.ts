@@ -124,6 +124,55 @@ describe('add_object in run_batch over MCP', () => {
       (node) => node.type === 'item' && names.includes(node.name ?? ''),
     )
 
+  test('an open-source refusal leaves the authored objects standing in one undo step', async () => {
+    const brief = bridge.agentSession.read().designBrief
+    if (!brief) throw new Error('Expected the fixture brief')
+    bridge.agentSession.keep({ designBrief: { ...brief, source: 'open' } })
+    bridge.clearHistory()
+    const before = structuredClone(bridge.getNodes())
+    await connect(host)
+    const result = (await client.callTool({
+      name: 'run_batch',
+      arguments: {
+        onRefusal: 'skip',
+        calls: [
+          object('Oak table'),
+          { tool: 'place_in_room', input: { assetId: 'bench', zoneId: 'zone_x' } },
+          object('Side table'),
+        ],
+      },
+    })) as Result
+    const text = result.content[0]?.text
+    if (!text) throw new Error('Expected a batch report')
+    expect(JSON.parse(text)).toMatchObject({
+      applied: 2,
+      refused: 1,
+      calls: [{ status: 'ok' }, { status: 'refused', code: 'brief_source_open' }, { status: 'ok' }],
+    })
+    expect(compiles).toHaveLength(2)
+    expect(itemsNamed('Oak table', 'Side table')).toHaveLength(2)
+    expect(bridge.getHistory()).toEqual({ pastCount: 1, futureCount: 0 })
+    bridge.undo()
+    expect(bridge.getNodes()).toEqual(before)
+  })
+
+  test('a missing brief refuses an independent object before compilation and still runs the other calls', async () => {
+    bridge.agentSession.replace({ checkpoints: {}, made: [] })
+    await connect(host)
+    const result = (await client.callTool({
+      name: 'run_batch',
+      arguments: { calls: [object('Oak table'), { tool: 'list_levels' }], onRefusal: 'skip' },
+    })) as Result
+    const text = result.content[0]?.text
+    if (!text) throw new Error('Expected a batch report')
+    expect(JSON.parse(text)).toMatchObject({
+      applied: 1,
+      refused: 1,
+      calls: [{ status: 'refused', code: 'design_brief_required' }, { status: 'ok' }],
+    })
+    expect(compiles).toHaveLength(0)
+  })
+
   test('three objects, one failing: two are placed, the third reports its own error', async () => {
     await connect(host)
     const result = (await client.callTool({

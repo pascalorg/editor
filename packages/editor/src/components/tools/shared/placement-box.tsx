@@ -2,17 +2,13 @@
 
 import '../../../three-types'
 
-import { Html } from '@react-three/drei'
+import { formatLinearMeasurement, type LinearUnit, type MetricNotation } from '@pascal-app/core'
+import { LocalizedHtml as Html } from '@pascal-app/viewer/ui'
 import { useEffect, useMemo } from 'react'
 import { PlaneGeometry } from 'three'
 import { distance, smoothstep, uv, vec2 } from 'three/tsl'
 import { LineBasicNodeMaterial, MeshBasicNodeMaterial } from 'three/webgpu'
 import { EDITOR_LAYER } from '../../../lib/constants'
-import {
-  formatLinearMeasurement,
-  type LinearUnit,
-  type MetricNotation,
-} from '../../../lib/measurements'
 import { createLineGeometry, getBoxEdgePoints } from './placement-box-geometry'
 
 const VALID_COLOR = 0x22_c5_5e // green-500

@@ -1,5 +1,4 @@
 import { describe, expect, test } from 'bun:test'
-import { measurementHint, parseMeasurement } from '../index'
 import {
   buildMeasurementAngleArcPoints,
   cubicMetersToVolumeUnit,
@@ -11,15 +10,19 @@ import {
   getVolumeUnitLabel,
   linearControlValueToMeters,
   linearUnitToMeters,
+  metersToLinearUnit,
+  parseLinearMeasurementInput,
+  squareMetersToAreaUnit,
+} from '@pascal-app/core'
+import {
   MEASUREMENT_ACTIVE_COLOR,
   MEASUREMENT_DANGLING_COLOR,
   MEASUREMENT_FLOORPLAN_COLOR,
   MEASUREMENT_PERSISTENT_COLOR,
   measurementFloorplanPresentationColor,
   measurementPresentationColor,
-  metersToLinearUnit,
-  squareMetersToAreaUnit,
-} from './measurements'
+} from '@pascal-app/viewer'
+import { measurementHint, parseMeasurement } from '../index'
 
 describe('measurement presentation', () => {
   test('uses black at rest, indigo while active, and red for dangling references', () => {
@@ -129,6 +132,11 @@ describe('linear measurements', () => {
     expect(linearControlValueToMeters(3.5, 'metric')).toBe(3.5)
   })
 
+  test('parses floor-plan measurement input with the scoped locale', () => {
+    expect(parseLinearMeasurementInput('2,75', 'metric', 'fr')).toBe(2.75)
+    expect(parseLinearMeasurementInput('2,75', 'metric', 'en')).toBeNull()
+  })
+
   test('clamps numeric control input after converting to meters', () => {
     expect(linearControlValueToMeters(0.1, 'imperial', { minMeters: 0.1 })).toBe(0.1)
     expect(linearControlValueToMeters(0.3, 'imperial', { minMeters: 0.1 })).toBe(0.1)
@@ -211,5 +219,16 @@ describe('typed measurement fields', () => {
     }
     expect(measurementHint('180cm', length)).toBe('= 1.80 m')
     expect(measurementHint('6', length)).toBeNull()
+  })
+
+  test('only treats the active locale decimal separator as a plain decimal', () => {
+    const length = { kind: 'length', unitId: 'm' } as const
+
+    expect(measurementHint('1,000', length, { locale: 'en' })).not.toBeNull()
+    expect(measurementHint('-1,000', length, { locale: 'en' })).not.toBeNull()
+    expect(measurementHint('1,5', length, { locale: 'en' })).not.toBeNull()
+
+    expect(measurementHint('1,5', length, { locale: 'fr' })).toBeNull()
+    expect(parseMeasurement('2,75 m', length, { locale: 'fr' })).toBe(2.75)
   })
 })

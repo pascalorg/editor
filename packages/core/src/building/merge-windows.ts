@@ -12,7 +12,7 @@ import {
   windowEndGap,
 } from '../lib/corner-pair'
 import type { AnyNode, AnyNodeId, WallNode, WindowNode } from '../schema'
-import { findWallChildOverlap, resolveWallOpeningCeiling } from './wall-openings'
+import { findWallChildOverlap, wallOpeningCeilingOver } from './wall-openings'
 
 /**
  * Two windows that exist become one: the one operation behind the editor's Merge windows button,
@@ -40,6 +40,7 @@ const SHARED = [
   'sill',
   'sillDepth',
   'sillThickness',
+  'casingWidth',
 ] as const
 
 export type WindowMerge = {
@@ -231,7 +232,15 @@ function mergeAtCorner(nodes: Nodes, first: Side, second: Side): WindowMerge {
       )
   }
 
-  const ceiling = resolveWallOpeningCeiling(second.wall, nodes as Record<AnyNodeId, AnyNode>)
+  const centreAt = (window: WindowNode, wall: WallNode, end: WallEnd) =>
+    end === 'start' ? window.width / 2 : wallLengthOf(wall) - window.width / 2
+  const secondCentre = centreAt(b, second.wall, joint.endB)
+  const ceiling = wallOpeningCeilingOver(
+    second.wall,
+    nodes as Record<AnyNodeId, AnyNode>,
+    secondCentre - b.width / 2,
+    secondCentre + b.width / 2,
+  )
   if (headOf(a) > ceiling + 1e-6)
     refuse(
       'height_exceeds_wall',
@@ -241,8 +250,6 @@ function mergeAtCorner(nodes: Nodes, first: Side, second: Side): WindowMerge {
 
   // Each side slides to the corner, keeping its width, if no other opening is in the way.
   const post = fusesAtCorner(a) ? 'none' : 'post'
-  const centreAt = (window: WindowNode, wall: WallNode, end: WallEnd) =>
-    end === 'start' ? window.width / 2 : wallLengthOf(wall) - window.width / 2
   const placed = sides.map(({ window, wall, end }, index) => {
     const x = centreAt(window, wall, end)
     const y = a.position[1]

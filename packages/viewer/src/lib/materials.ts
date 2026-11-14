@@ -14,7 +14,7 @@ import {
 } from '@pascal-app/core'
 import { addAfterEffect, invalidate } from '@react-three/fiber'
 import * as THREE from 'three'
-import { float, mix, positionViewDirection, transformedNormalView } from 'three/tsl'
+import { float, mix, normalView, positionViewDirection } from 'three/tsl'
 import { MeshLambertNodeMaterial, MeshStandardNodeMaterial } from 'three/webgpu'
 
 import { resolveCdnUrl } from './asset-url'
@@ -236,36 +236,50 @@ export function resolveTextureRepeat(repeat: unknown, scale: unknown): [number, 
   return [fallback, fallback]
 }
 
+type MaterialTexture = NonNullable<MaterialSchema['texture']>
+
+function textureOffset(texture: MaterialTexture): [number, number] {
+  return texture.offset ?? [0, 0]
+}
+
+function getPlacementKey(texture: MaterialTexture): string {
+  const [repeatX, repeatY] = resolveTextureRepeat(texture.repeat, texture.scale)
+  const [offsetX, offsetY] = textureOffset(texture)
+  return `${repeatX}x${repeatY}+${offsetX},${offsetY}`
+}
+
 export function getTextureKey(material?: MaterialSchema): string {
   const texture = material?.texture
   if (!texture) return 'none'
-  const [repeatX, repeatY] = resolveTextureRepeat(texture.repeat, texture.scale)
-  return `${texture.url}-${repeatX}x${repeatY}`
+  const normal = texture.normalMap ? `-n:${texture.normalMap}*${texture.normalScale ?? 1}` : ''
+  const bump = texture.bumpMap ? `-b:${texture.bumpMap}*${texture.bumpScale ?? 1}` : ''
+  return `${texture.url}-${getPlacementKey(texture)}${normal}${bump}`
 }
 
-function getTexture(material?: MaterialSchema): THREE.Texture | undefined {
-  const textureConfig = material?.texture
-  if (!textureConfig?.url) return undefined
-
-  const cacheKey = getTextureKey(material)
+/** One map of a native material's texture; every map shares the albedo's repeat and offset. */
+function getTexture(
+  textureConfig: MaterialTexture,
+  url: string,
+  slot: 'map' | 'normalMap' | 'bumpMap',
+): THREE.Texture {
+  const cacheKey = `${url}-${getPlacementKey(textureConfig)}-${slot}`
   const cached = textureCache.get(cacheKey)
   if (cached) return cached
 
-  const resolvedUrl = /^(?:asset|blob|data):/.test(textureConfig.url)
-    ? textureConfig.url
-    : (resolveCdnUrl(textureConfig.url) ?? textureConfig.url)
+  const resolvedUrl = /^(?:asset|blob|data):/.test(url) ? url : (resolveCdnUrl(url) ?? url)
   const texture = loadTexture(resolvedUrl, cacheKey)
   texture.wrapS = THREE.RepeatWrapping
   texture.wrapT = THREE.RepeatWrapping
 
   const [repeatX, repeatY] = resolveTextureRepeat(textureConfig.repeat, textureConfig.scale)
   texture.repeat.set(repeatX, repeatY)
+  texture.offset.set(...textureOffset(textureConfig))
   texture.updateMatrix()
-  texture.colorSpace = THREE.SRGBColorSpace
+  texture.colorSpace = slot === 'map' ? THREE.SRGBColorSpace : THREE.NoColorSpace
   stampPascalTextureRef(texture, {
     kind: 'project-asset',
     src: resolvedUrl,
-    slot: 'map',
+    slot,
   })
 
   textureCache.set(cacheKey, texture)
@@ -379,11 +393,16 @@ async function loadPresetTexture(
   // materials can be created while a capture canvas's renderer is still
   // initializing, and failing here would cache the material permanently
   // texture-less (white).
-  const load = isKtx2Url(resolvedPath)
-    ? whenKtx2Ready().then(() =>
-        (ktx2Loader as unknown as THREE.TextureLoader).loadAsync(resolvedPath),
-      )
-    : textureLoader.loadAsync(resolvedPath)
+  const loadFrom = (url: string) =>
+    isKtx2Url(url)
+      ? whenKtx2Ready().then(() => (ktx2Loader as unknown as THREE.TextureLoader).loadAsync(url))
+      : textureLoader.loadAsync(url)
+  // A catalog map ships in the app's public folder before the asset CDN has it
+  // (a branch, a deploy ahead of the CDN): a CDN miss retries the app's own copy.
+  const load =
+    resolvedPath !== path && path.startsWith('/')
+      ? loadFrom(resolvedPath).catch(() => loadFrom(path))
+      : loadFrom(resolvedPath)
 
   const promise = load
     .then((texture) => {
@@ -517,7 +536,9 @@ export function materialCastsShadow(material: THREE.Material | THREE.Material[])
  * This is what makes glass read as a surface instead of a flat blue tint.
  */
 function applyGlassFresnel(material: MeshStandardNodeMaterial) {
-  const facing = transformedNormalView.dot(positionViewDirection).clamp(0, 1)
+  // The daylight look swaps in its tuned glass for flagged materials (lib/daylight/material-hooks).
+  material.userData.isGlass = true
+  const facing = normalView.dot(positionViewDirection).clamp(0, 1)
   const fresnel = facing.oneMinus().pow(3)
   material.opacityNode = mix(float(material.opacity), float(0.92), fresnel)
   material.envMapIntensity = 1.4
@@ -612,7 +633,7 @@ export function createMaterial(
     return materialCache.get(cacheKey)!
   }
 
-  const map = getTexture(material)
+  const texture = material?.texture?.url ? material.texture : undefined
   const materialParams: {
     color: string
     map?: THREE.Texture
@@ -626,16 +647,28 @@ export function createMaterial(
     side: sideMap[props.side],
   }
 
-  if (map) materialParams.map = map
+  if (texture) materialParams.map = getTexture(texture, texture.url, 'map')
 
-  const threeMaterial =
-    shading === 'solid'
-      ? new MeshLambertNodeMaterial(materialParams)
-      : new MeshStandardNodeMaterial({
-          ...materialParams,
-          roughness: props.roughness,
-          metalness: props.metalness,
-        })
+  let threeMaterial: MeshLambertNodeMaterial | MeshStandardNodeMaterial
+  if (shading === 'solid') {
+    threeMaterial = new MeshLambertNodeMaterial(materialParams)
+  } else {
+    const standard = new MeshStandardNodeMaterial({
+      ...materialParams,
+      roughness: props.roughness,
+      metalness: props.metalness,
+    })
+    if (texture?.normalMap) {
+      standard.normalMap = getTexture(texture, texture.normalMap, 'normalMap')
+      const normalScale = texture.normalScale ?? 1
+      standard.normalScale.set(normalScale, normalScale)
+    }
+    if (texture?.bumpMap) {
+      standard.bumpMap = getTexture(texture, texture.bumpMap, 'bumpMap')
+      standard.bumpScale = texture.bumpScale ?? 1
+    }
+    threeMaterial = standard
+  }
 
   // Explicit source transparency keeps its opacity; the glass preset owns this styling.
   if (glassPreset) maybeApplyGlassFresnel(threeMaterial)

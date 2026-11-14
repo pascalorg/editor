@@ -1,4 +1,4 @@
-import { type AnyNodeId, useScene, type WallNode } from '@pascal-app/core'
+import { type AnyNodeId, useScene, usePascalI18n, type WallNode } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import Image from 'next/image'
 import { memo, useCallback, useEffect, useRef, useState } from 'react'
@@ -6,6 +6,7 @@ import { useShallow } from 'zustand/react/shallow'
 import { InlineRenameInput } from './inline-rename-input'
 import { focusTreeNode, handleTreeSelection, TreeNode, TreeNodeWrapper } from './tree-node'
 import { TreeNodeActions } from './tree-node-actions'
+import { nodeLabelDescriptor } from '../../../../../i18n/node-messages'
 
 interface WallTreeNodeProps {
   nodeId: AnyNodeId
@@ -18,6 +19,7 @@ export const WallTreeNode = memo(function WallTreeNode({
   depth,
   isLast,
 }: WallTreeNodeProps) {
+  const i18n = usePascalI18n()
   const [expanded, setExpanded] = useState(false)
   const [isEditing, setIsEditing] = useState(false)
   const isVisible = useScene((s) => s.nodes[nodeId as AnyNodeId]?.visible !== false)
@@ -83,7 +85,7 @@ export const WallTreeNode = memo(function WallTreeNode({
       isVisible={isVisible}
       label={
         <InlineRenameInput
-          defaultName="Wall"
+          defaultName={i18n._(nodeLabelDescriptor('wall', 'Wall'))}
           isEditing={isEditing}
           nodeId={nodeId as AnyNodeId}
           onStartEditing={handleStartEditing}

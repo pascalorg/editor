@@ -23,7 +23,7 @@ import {
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import { acceleratedRaycast, computeBoundsTree, disposeBoundsTree } from 'three-mesh-bvh'
 import { useGLTFKTX2 } from '../../hooks/use-gltf-ktx2'
-import { SCENE_LAYER } from '../../lib/layers'
+import { BATCHED_LAYER, SCENE_LAYER } from '../../lib/layers'
 import useViewer from '../../store/use-viewer'
 import BVHEcctrl, { type BVHEcctrlApi, type MovementInput } from './bvh-ecctrl'
 import { applyWalkthroughCameraClipping } from './viewer-camera'
@@ -34,8 +34,7 @@ import { applyWalkthroughCameraClipping } from './viewer-camera'
 // walkthrough controllers read this and restore the orbit FOV on exit.
 export const WALKTHROUGH_FOV = 60
 
-// Eye/capsule geometry mirrors the editor's first-person controller so the
-// baked walkthrough feels identical. The capsule centre sits below the eye; the
+// Shared with the live walkthrough so baked and parametric scenes feel identical. The capsule centre sits below the eye; the
 // camera rides the capsule with a small offset and the controller floats it to
 // the ground.
 const CAMERA_EYE_OFFSET = 0.45
@@ -145,7 +144,7 @@ function boxFloorGeometry(
 // Fallback ground so the player never falls into the void: a single large
 // ground plane at the lowest level (level 0). Upper levels rely on their own
 // baked slabs — a slab-less upper floor lets you fall down to the ground, which
-// the ground plane catches. (Mirrors the editor walkthrough's site ground.)
+// the ground plane catches. (Mirrors the live walkthrough's site ground.)
 function addFallbackFloors(scene: Object3D, geometries: BufferGeometry[]) {
   const sceneBounds = new Box3()
   for (const geometry of geometries) {
@@ -178,8 +177,10 @@ function buildGlbColliderWorld(scene: Object3D): GlbColliderWorld | null {
   scene.traverse((object) => {
     const mesh = object as Mesh
     if (!mesh.isMesh) return
-    // Zone fills live on a separate layer (and never collide).
-    if (!mesh.layers.isEnabled(SCENE_LAYER)) return
+    // Zone fills live on a separate layer (and never collide). Merged originals sit on the
+    // batched layer and still collide; their batches don't (each original keeps its kind rules).
+    if (mesh.userData.glbBatch) return
+    if (!mesh.layers.isEnabled(SCENE_LAYER) && !mesh.layers.isEnabled(BATCHED_LAYER)) return
     if (!isEffectivelyVisible(mesh)) return
     let ancestor: Object3D | null = mesh
     while (ancestor && !ancestor.userData.proceduralMotion) ancestor = ancestor.parent
@@ -255,7 +256,7 @@ function resolveGlbSpawn(
 }
 
 /**
- * First-person walkthrough controller for the baked GLB. Reuses the editor's
+ * First-person walkthrough controller for the baked GLB. Uses the shared
  * `BVHEcctrl` capsule character controller (gravity, jump, sprint, ground-float,
  * mesh collision) fed a collider built from the artifact's own geometry — so the
  * baked viewer walks the building with the same physics as the editor, without

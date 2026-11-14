@@ -6,13 +6,20 @@ import {
   DEFAULT_LEVEL_HEIGHT,
   deleteZone,
   emitter,
+  formatLinearMeasurement,
   type Point,
+  roomFloorElevation,
   type StructureNodes,
   sceneRegistry,
   useScene,
 } from '@pascal-app/core'
-import { getSceneTheme, setSurfaceRaycastLayers, useViewer } from '@pascal-app/viewer'
-import { Html } from '@react-three/drei'
+import {
+  getSceneTheme,
+  isTypingTarget,
+  setSurfaceRaycastLayers,
+  useViewer,
+} from '@pascal-app/viewer'
+import { LocalizedHtml as Html, type RoomSelectionRecord } from '@pascal-app/viewer/ui'
 import { useFrame, useThree } from '@react-three/fiber'
 import { SquareSplitHorizontal } from 'lucide-react'
 import Image from 'next/image'
@@ -36,7 +43,6 @@ import { getRoomSelectionIndex } from '../../hooks/use-selected-room'
 import { EDITOR_LAYER } from '../../lib/constants'
 import { getFloatingMenuScale } from '../../lib/floating-menu-scale'
 import { clientToPlan } from '../../lib/floorplan/plan-coords'
-import { formatLinearMeasurement } from '../../lib/measurements'
 import { addMezzanineStairs } from '../../lib/mezzanine-stairs'
 import {
   cancelRoomDivide,
@@ -47,8 +53,7 @@ import {
   roomDivideContains,
   startRoomDivide,
 } from '../../lib/room-divide-session'
-import { roomFloorElevation, useRoomHandleDrag } from '../../lib/room-handle-drag'
-import type { RoomSelectionRecord } from '../../lib/room-selection'
+import { useRoomHandleDrag } from '../../lib/room-handle-drag'
 import { requestRoomDeletion } from '../../lib/room-structure-commands'
 import {
   type RoomTransformKind,
@@ -57,7 +62,6 @@ import {
   startRoomTransform,
   useRoomTransform,
 } from '../../lib/room-transform-session'
-import { isTypingTarget } from '../../lib/typing-target'
 import useEditor from '../../store/use-editor'
 import useInteractionScope from '../../store/use-interaction-scope'
 import { isViewVisible, VIEW_2D } from '../../store/view-layout'

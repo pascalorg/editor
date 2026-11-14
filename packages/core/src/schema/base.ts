@@ -10,8 +10,29 @@ const customId = customAlphabet('0123456789abcdefghijklmnopqrstuvwxyz', 16)
  * @example 'white', 'brick', 'wood', 'glass', 'preview-valid'
  */
 export const Material = z.string().optional()
-export const generateId = <T extends string>(prefix: T): `${T}_${string}` =>
-  `${prefix}_${customId()}` as `${T}_${string}`
+/** Mints the id of a new entity from its prefix: `wall` → `wall_…`. */
+export type IdAllocator = (prefix: string) => string
+
+const idAllocators: IdAllocator[] = []
+
+/**
+ * Runs `run` with `ids` minting every id it asks `generateId` (and so every schema default) for,
+ * synchronously: a detached scene allocates deterministic ids this way (`effectIds`). Outside a
+ * scope, ids are random.
+ */
+export function withIdAllocator<T>(ids: IdAllocator, run: () => T): T {
+  idAllocators.push(ids)
+  try {
+    return run()
+  } finally {
+    idAllocators.pop()
+  }
+}
+
+export const generateId = <T extends string>(prefix: T): `${T}_${string}` => {
+  const allocate = idAllocators.at(-1)
+  return (allocate ? allocate(prefix) : `${prefix}_${customId()}`) as `${T}_${string}`
+}
 export const objectId = <T extends string>(prefix: T) => {
   const schema = z.templateLiteral([`${prefix}_`, z.string()])
 

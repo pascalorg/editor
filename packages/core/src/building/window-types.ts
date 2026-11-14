@@ -1,6 +1,9 @@
 import type { WindowNode } from '../schema'
 import type { WindowType } from '../schema/nodes/opening-types'
 
+// The schema keeps 0.05 m for saved windows that omit the field (E-003).
+export const NEW_WINDOW_FRAME_THICKNESS = 0.02
+
 /** The window types whose top takes a shape (rounded, arch); the others are rectangular. */
 export const SHAPED_WINDOW_TYPES: ReadonlySet<WindowType> = new Set([
   'fixed',
@@ -22,6 +25,7 @@ export function windowTakesStyle(type: WindowType): boolean {
 export function windowTypeFields(type: WindowType): Partial<WindowNode> {
   return {
     windowType: type,
+    ...(type === 'casement' || type === 'awning' ? { openingDirection: 'outward' as const } : {}),
     ...(SHAPED_WINDOW_TYPES.has(type) ? {} : { openingShape: 'rectangle' as const }),
     ...(SILLLESS_WINDOW_TYPES.has(type) ? { sill: false } : {}),
   }

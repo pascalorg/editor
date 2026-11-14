@@ -18,9 +18,9 @@ const round = (value: number) => Math.round(value * 1000) / 1000
 /**
  * `setRoomFloorScript`: a room's floor finish built by a three.js module, or the module taken off.
  * The host reads the room's floor (`floorScriptInputs`), compiles the module for it (geometry-script
- * `inputs`: the module reads `params.polygon`, `params.holes`, `params.elevation`, in level
- * coordinates) and stores the artifacts; this writes the result on the zone, with the key of the
- * floor it was built for. When the structure re-derives the room's floor the script is stale and
+ * `inputs`: the module reads `params.polygon` and `params.holes` in the level's plan x/z, and lays
+ * its finish from y = 0, the floor's surface) and stores the artifacts; this writes the result on
+ * the zone, with the key of the floor it was built for, and the renderer stands it on the plate. When the structure re-derives the room's floor the script is stale and
  * `refreshFinishScripts` runs it again. The script owns the floor's colours: paint on that floor is
  * refused while it is there.
  */

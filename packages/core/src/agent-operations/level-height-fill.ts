@@ -1,3 +1,4 @@
+import { draftOf } from '../runtime/reader'
 import type { AnyNode, AnyNodeId } from '../schema'
 import { deriveLegacyLevelHeight } from '../services/level-height'
 import type { NodeWrite } from './types'
@@ -16,7 +17,16 @@ export function fillLevelHeights(
   ops: NodeWrite[],
   scene: Readonly<Record<string, AnyNode>>,
 ): string[] {
-  const after: Record<string, AnyNode> = { ...scene }
+  // Only a level written without a height reads the scene as the write leaves it.
+  if (
+    !ops.some((op) =>
+      op.op === 'create'
+        ? op.node.type === 'level' && (op.node as { height?: unknown }).height == null
+        : op.op === 'update' && 'height' in op.data && op.data.height == null,
+    )
+  )
+    return []
+  const after = draftOf(scene as Record<string, AnyNode>)
   for (const op of ops) {
     // A create's own parentId wins over its node's, as the write applies it.
     if (op.op === 'create')

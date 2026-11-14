@@ -1,3 +1,4 @@
+import { orderedChildIds } from '../../runtime/node-queries'
 import type { AnyNode, AnyNodeId, StairNode, StairSegmentNode } from '../../schema'
 import { StairDesignTargets } from '../../schema/nodes/stair'
 import { measureStairHeadroom } from './stair-clearance'
@@ -11,6 +12,7 @@ import {
 import { resolveStairArcDimensions } from './stair-layout'
 import { resolveStairRailPaths } from './stair-rail-path'
 import { resolveStairTotalRise } from './stair-rise-query'
+import { stairStructureDiagnostics } from './stair-structure'
 import { resolveStairWinder } from './stair-winder'
 
 export const DEFAULT_STAIR_DESIGN_TARGETS = StairDesignTargets.parse({})
@@ -113,7 +115,8 @@ export function measureStair(stair: StairNode, nodes: Record<string, AnyNode>) {
       stair.id,
       'Landing depth exceeds a full circle at the walking line; the visible landing is limited to one circle.',
     )
-  const segments = stair.children
+  // Riser counts are shared out in flight order: the order is read, not only the members.
+  const segments = orderedChildIds(nodes, stair.id)
     .map((id) => nodes[id])
     .filter((node): node is StairSegmentNode => node?.type === 'stair-segment')
   const segmentsById = new Map(segments.map((segment) => [segment.id as string, segment]))
@@ -239,6 +242,12 @@ export function measureStair(stair: StairNode, nodes: Record<string, AnyNode>) {
     )
   else if (headroom.obstructions.length)
     report('headroom-target', stair.id, 'Overhead surfaces leave less than the target headroom.')
+  // a stair with a structure owes the code's numbers too (IRC R311.7 / R312, DCA 6)
+  for (const issue of stairStructureDiagnostics(stair, measurements, {
+    totalRise,
+    headroom: headroom.status === 'unresolved' ? null : headroom.minimum,
+  }))
+    report(issue.code, issue.nodeId, issue.message, issue.severity)
   return {
     totalRise,
     targets,

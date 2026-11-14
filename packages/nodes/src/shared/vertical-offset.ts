@@ -8,7 +8,7 @@ import type { ScenePort } from '@pascal-app/editor/distribution'
 import { Vector3 } from 'three'
 import { fittingLegLength, getDuctFittingPorts } from '../duct-fitting/ports'
 import type { DuctFittingNode } from '../duct-fitting/schema'
-import { rollToContinueAcrossElbow } from '../duct-segment/geometry'
+import { rollToContinueAcrossElbow } from '../duct-segment/profile'
 import {
   type DuctProfile,
   type ElbowJointPlan,

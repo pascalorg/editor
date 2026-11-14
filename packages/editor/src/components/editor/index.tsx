@@ -3,12 +3,19 @@
 import { Icon } from '@iconify/react'
 import {
   acquireSceneReadOnlyLease,
+  computeSceneBoundsXZ,
+  createI18n,
+  emitter,
   getCatalogMaterialById,
   getLibraryMaterialIdFromRef,
+  getMaterialSwatch,
   getSceneMaterialIdFromRef,
   initSpaceDetectionSync,
   initSpatialGridSync,
+  type MessageDescriptor,
+  PascalI18nProvider,
   spatialGridManager,
+  usePascalI18n,
   useScene,
 } from '@pascal-app/core'
 import {
@@ -23,6 +30,24 @@ import {
   type ViewerImmersiveSession,
   ViewerPresentations,
 } from '@pascal-app/viewer'
+import { useViewerUiSounds } from '@pascal-app/viewer/sfx'
+import {
+  type ActionMenuPlacement,
+  ParametricViewerRooms,
+  SceneLoader,
+  SceneLoadFailed,
+  SKY_DOCK_HEIGHT,
+  SkyControl,
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+  useIsMobile,
+  useViewerFloorDisplay,
+  ViewerHoverLabel,
+  ViewerSelectionManager,
+  ViewerStage,
+  type ViewerStageMode,
+} from '@pascal-app/viewer/ui'
 import {
   type CSSProperties,
   memo,
@@ -32,15 +57,18 @@ import {
   useCallback,
   useEffect,
   useLayoutEffect,
+  useMemo,
   useRef,
   useState,
 } from 'react'
 import { ViewerOverlay } from '../../components/viewer-overlay'
 import { ViewerZoneSystem } from '../../components/viewer-zone-system'
+import { useAutoFrame } from '../../hooks/use-auto-frame'
 import { type SaveStatus, useAutoSave } from '../../hooks/use-auto-save'
 import { useKeyboard } from '../../hooks/use-keyboard'
-import { useIsMobile } from '../../hooks/use-mobile'
 import { useSaveShortcut } from '../../hooks/use-save-shortcut'
+import { useSceneLoader } from '../../hooks/use-scene-loader'
+import { type HINT_KEY_NAMES, toolHintKey, toolHintKeyDescriptor } from '../../i18n/node-messages'
 import { useCeilingEditSessionOwner } from '../../lib/ceiling-edit-session'
 import { showsWholeBuilding, useEditorLevelDisplay } from '../../lib/editor-level-display'
 import { isSceneView } from '../../lib/editor-views'
@@ -63,15 +91,15 @@ import {
 import { disposeSFXBus, initSFXBus } from '../../lib/sfx-bus'
 import { useUnitFocusRules } from '../../lib/units'
 import { cn } from '../../lib/utils'
-import { useViewerFloorDisplay } from '../../lib/viewer-selection'
 import { type CameraHintAction, useCameraHintFocus } from '../../store/use-camera-hint-focus'
 import useEditor from '../../store/use-editor'
 import useFloorplanMode from '../../store/use-floorplan-mode'
 import useSessionGroups from '../../store/use-session-groups'
 import { paneOfView, VIEW_2D, VIEW_3D, type ViewPaneIndex } from '../../store/view-layout'
+import { FloorplanDimensionHitsGate } from '../editor-2d/renderers/floorplan-dimension-edit-overlay'
 import { PointAskLayer } from '../point-ask/point-ask-layer'
 import { CeilingSelectionAffordanceSystem } from '../systems/ceiling/ceiling-selection-affordance-system'
-import { CeilingSystem } from '../systems/ceiling/ceiling-system'
+import { CeilingSystem, CeilingTopsSync } from '../systems/ceiling/ceiling-system'
 import { RoofEditSystem } from '../systems/roof/roof-edit-system'
 import { SelectionAffordanceManager } from '../systems/selection-affordance-manager'
 import { StairEditSystem } from '../systems/stair/stair-edit-system'
@@ -79,7 +107,7 @@ import { ZoneSystem } from '../systems/zone/zone-system'
 import { BoxSelectTool } from '../tools/select/box-select-tool'
 import { ToolManager } from '../tools/tool-manager'
 import { ActionMenu } from '../ui/action-menu'
-import { type ActionMenuPlacement, TOP_MENU_CLEARANCE } from '../ui/action-menu/placement'
+import { TOP_MENU_CLEARANCE } from '../ui/action-menu/placement'
 import { CommandPalette, type CommandPaletteEmptyAction } from '../ui/command-palette'
 import { EditorCommands } from '../ui/command-palette/editor-commands'
 import { FloatingLevelSelector } from '../ui/floating-level-selector'
@@ -87,20 +115,14 @@ import { HelperManager } from '../ui/helpers/helper-manager'
 import { PanelManager } from '../ui/panels/panel-manager'
 import { ErrorBoundary } from '../ui/primitives/error-boundary'
 import { useSidebarStore } from '../ui/primitives/sidebar'
-import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/primitives/tooltip'
 import { RightStack } from '../ui/right-stack'
-import { SceneLoader, SceneLoadFailed } from '../ui/scene-loader'
 import { AppSidebar } from '../ui/sidebar/app-sidebar'
 import type { ExtraPanel } from '../ui/sidebar/icon-rail'
 import { SettingsPanel, type SettingsPanelProps } from '../ui/sidebar/panels/settings-panel'
 import { SitePanel, type SitePanelProps } from '../ui/sidebar/panels/site-panel'
+import { PluginsMenuPanel } from '../ui/sidebar/plugins-menu-panel'
 import type { SidebarTab } from '../ui/sidebar/tab-bar'
-import { useHostPanels } from '../ui/sidebar/use-plugin-panels'
-import { ViewerHoverLabel } from '../viewer/viewer-hover-label'
-import { ParametricViewerRooms } from '../viewer/viewer-rooms'
-import { ViewerSelectionManager } from '../viewer/viewer-selection-manager'
-import { ViewerStage } from '../viewer/viewer-stage'
-import type { ViewerStageMode } from '../viewer/viewer-stage-modes'
+import { PLUGINS_MANAGER_PANEL_ID, useHostPanels } from '../ui/sidebar/use-plugin-panels'
 import { CaptureCameraRig } from './capture-camera-rig'
 import { CustomCameraControls } from './custom-camera-controls'
 import { DeleteConfirmationDialog } from './delete-confirmation-dialog'
@@ -149,7 +171,6 @@ const PAINT_CURSOR_BADGE_DISABLED_COLOR = '#94a3b8'
 const ERASE_CURSOR_BADGE_COLOR = '#e4e4e7'
 const PAINT_CURSOR_BADGE_OFFSET_X = 14
 const PAINT_CURSOR_BADGE_OFFSET_Y = 14
-const SCENE_READY_FALLBACK_MS = 8000
 const PRESENTATION_PROJECT_NOT_RESTORED = Symbol('presentation-project-not-restored')
 const useClientLayoutEffect = typeof window === 'undefined' ? useEffect : useLayoutEffect
 // `aim`: a region sub-mode off what it draws on — the HUD says where to go; no
@@ -202,6 +223,8 @@ function initializeEditorRuntime(): () => void {
   }
 }
 export interface EditorProps {
+  /** UI locale. Hosts may also call `setLocale` before mounting. */
+  locale?: string
   // Layout version — 'v1' (default) or 'v2' (navbar + two-column)
   layoutVersion?: 'v1' | 'v2'
   // Viewport edge the tool menu docks to (desktop only; mobile stays at the bottom)
@@ -214,6 +237,20 @@ export interface EditorProps {
   // UI slots (v2)
   navbarSlot?: ReactNode
   sidebarTabs?: (SidebarTab & { component: React.ComponentType })[]
+  /**
+   * The tab (one of `sidebarTabs`) shown on desktop in the column beside the
+   * side menu whenever no tool panel is open: a tool panel takes its place
+   * there, and closing the tool brings it back.
+   */
+  columnTabId?: string
+  /** Listed after the side menu's entries (v2 desktop), e.g. recent chats. */
+  sideMenuFooter?: ReactNode
+  /**
+   * The v2 side menu heading the one Plugins entry joins, e.g. the host's
+   * "Project". The project's plugins open from that entry instead of each
+   * having its own. Defaults to a Plugins heading of its own.
+   */
+  pluginsMenuSection?: string
   viewerToolbarLeft?: ReactNode
   viewerToolbarRight?: ReactNode
   /**
@@ -315,12 +352,22 @@ export interface EditorProps {
 }
 
 function EditorSceneCrashFallback() {
+  const i18n = usePascalI18n()
   return (
     <div className="fixed inset-0 z-80 flex items-center justify-center bg-background/95 p-4 text-foreground">
       <div className="w-full max-w-md rounded-2xl border border-border/60 bg-background p-6 shadow-xl">
-        <h2 className="font-semibold text-lg">The editor scene failed to render</h2>
+        <h2 className="font-semibold text-lg">
+          {i18n._({
+            id: 'editor.theEditorSceneFailedToRender',
+            message: 'The editor scene failed to render',
+          })}
+        </h2>
         <p className="mt-2 text-muted-foreground text-sm">
-          You can retry the scene or return home without reloading the whole app shell.
+          {i18n._({
+            id: 'editor.youCanRetryTheSceneOr',
+            message:
+              'You can retry the scene or return home without reloading the whole app shell.',
+          })}
         </p>
         <div className="mt-4 flex items-center gap-2">
           <button
@@ -328,13 +375,13 @@ function EditorSceneCrashFallback() {
             onClick={() => window.location.reload()}
             type="button"
           >
-            Reload editor
+            {i18n._({ id: 'editor.reloadEditor', message: 'Reload editor' })}
           </button>
           <a
             className="rounded-md border border-border bg-background px-3 py-2 font-medium text-sm hover:bg-accent/40"
             href="/"
           >
-            Back to home
+            {i18n._({ id: 'editor.backToHome', message: 'Back to home' })}
           </a>
         </div>
       </div>
@@ -345,6 +392,7 @@ function EditorSceneCrashFallback() {
 // ── Sidebar slot: in-flow, resizable, collapses to a grab strip ──────────────
 
 function SidebarSlot({ children }: { children: ReactNode }) {
+  const i18n = usePascalI18n()
   const width = useSidebarStore((s) => s.width)
   const isCollapsed = useSidebarStore((s) => s.isCollapsed)
   const setIsCollapsed = useSidebarStore((s) => s.setIsCollapsed)
@@ -416,7 +464,7 @@ function SidebarSlot({ children }: { children: ReactNode }) {
           <div
             className="absolute inset-0 z-10 cursor-col-resize transition-colors hover:bg-primary/20"
             onPointerDown={handleGrabDown}
-            title="Expand sidebar"
+            title={i18n._({ id: 'editor.expandSidebar', message: 'Expand sidebar' })}
           />
         ) : (
           children
@@ -494,26 +542,29 @@ const CAMERA_CONTROL_HINTS: CameraControlHint[] = [
   { action: 'Zoom', keys: [{ value: 'Scroll' }] },
 ]
 
-const CAMERA_SHORTCUT_KEY_META: Record<string, { icon?: string; label: string; text?: string }> = {
+const CAMERA_SHORTCUT_KEY_META: Record<
+  string,
+  { icon?: string; label: MessageDescriptor; text?: string }
+> = {
   'Left click': {
     icon: 'ph:mouse-left-click-fill',
-    label: 'Left click',
+    label: hintKeyName('Left click'),
   },
   'Middle click': {
     icon: 'qlementine-icons:mouse-middle-button-16',
-    label: 'Middle click',
+    label: hintKeyName('Middle click'),
   },
   'Right click': {
     icon: 'ph:mouse-right-click-fill',
-    label: 'Right click',
+    label: hintKeyName('Right click'),
   },
   Scroll: {
     icon: 'qlementine-icons:mouse-middle-button-16',
-    label: 'Scroll wheel',
+    label: hintKeyName('Scroll wheel'),
   },
   Space: {
     icon: 'lucide:space',
-    label: 'Space',
+    label: hintKeyName('Space'),
   },
 }
 
@@ -544,8 +595,21 @@ function writeCameraControlsHintDismissed(dismissed: boolean) {
   } catch {}
 }
 
+/** Key names shared with the tool HUD (`editor.toolHint.key.*`). */
+function hintKeyName(key: (typeof HINT_KEY_NAMES)[number]): MessageDescriptor {
+  return toolHintKeyDescriptor(key) ?? { id: key, message: key }
+}
+
+const CAMERA_HINT_ACTION_LABELS: Record<CameraHintAction, MessageDescriptor> = {
+  Pan: /* i18n */ { id: 'editor.cameraHint.pan', message: 'Pan' },
+  Rotate: /* i18n */ { id: 'editor.cameraHint.rotate', message: 'Rotate' },
+  Zoom: /* i18n */ { id: 'editor.cameraHint.zoom', message: 'Zoom' },
+}
+
 function InlineShortcutKey({ shortcutKey }: { shortcutKey: ShortcutKey }) {
-  const meta = CAMERA_SHORTCUT_KEY_META[shortcutKey.value]
+  const i18n = usePascalI18n()
+  const entry = CAMERA_SHORTCUT_KEY_META[shortcutKey.value]
+  const meta = entry ? { ...entry, label: i18n._(entry.label) } : undefined
 
   if (meta?.icon) {
     return (
@@ -563,7 +627,7 @@ function InlineShortcutKey({ shortcutKey }: { shortcutKey: ShortcutKey }) {
 
   return (
     <span className="font-medium text-[11px] text-foreground/90">
-      {meta?.text ?? shortcutKey.value}
+      {meta?.text ?? toolHintKey(shortcutKey.value, i18n)}
     </span>
   )
 }
@@ -582,10 +646,11 @@ function ShortcutSequence({ keys }: { keys: ShortcutKey[] }) {
 }
 
 function CameraControlHintItem({ hint }: { hint: CameraControlHint }) {
+  const i18n = usePascalI18n()
   return (
     <div className="flex min-w-0 flex-col items-center gap-1.5 px-4 text-center first:pl-0 last:pr-0">
       <span className="font-medium text-[10px] text-muted-foreground/60 tracking-[0.03em]">
-        {hint.action}
+        {i18n._(CAMERA_HINT_ACTION_LABELS[hint.action])}
       </span>
       <div className="flex flex-wrap items-center justify-center gap-1.5">
         <ShortcutSequence keys={hint.keys} />
@@ -607,6 +672,7 @@ function ViewerCanvasControlsHint({
   belowTopMenu?: boolean
   onDismiss: () => void
 }) {
+  const i18n = usePascalI18n()
   const all = CAMERA_CONTROL_HINTS
   // A host teaching one gesture at a time narrows this to the one it is asking
   // for, and to nothing once it is done. Null — the default — is all of them.
@@ -626,7 +692,7 @@ function ViewerCanvasControlsHint({
       style={belowTopMenu ? { top: TOP_MENU_CLEARANCE } : undefined}
     >
       <section
-        aria-label="Camera controls hint"
+        aria-label={i18n._({ id: 'editor.cameraControlsHint', message: 'Camera controls hint' })}
         className="pointer-events-auto flex items-start gap-3 rounded-2xl border border-border/35 bg-background/90 px-3.5 py-2.5 shadow-elevation-4 backdrop-blur-xl"
       >
         <div
@@ -640,7 +706,10 @@ function ViewerCanvasControlsHint({
         <Tooltip>
           <TooltipTrigger asChild>
             <button
-              aria-label="Dismiss camera controls hint"
+              aria-label={i18n._({
+                id: 'editor.dismissCameraControlsHint',
+                message: 'Dismiss camera controls hint',
+              })}
               className="flex h-5 shrink-0 items-center justify-center self-center border-border/18 border-l pl-3 text-muted-foreground/70 transition-colors hover:text-foreground"
               onClick={onDismiss}
               type="button"
@@ -655,7 +724,7 @@ function ViewerCanvasControlsHint({
             </button>
           </TooltipTrigger>
           <TooltipContent side="bottom" sideOffset={8}>
-            Dismiss
+            {i18n._({ id: 'editor.dismiss', message: 'Dismiss' })}
           </TooltipContent>
         </Tooltip>
       </section>
@@ -733,7 +802,17 @@ function getActivePaintMaterialSwatchImageUrl(
   const catalogId =
     getLibraryMaterialIdFromRef(material?.materialPreset) ?? material?.material?.id ?? undefined
   const catalogMaterial = getCatalogMaterialById(catalogId)
-  return catalogMaterial?.previewThumbnailUrl ?? catalogMaterial?.preset.maps.albedoMap
+  return catalogMaterial ? (getMaterialSwatch(catalogMaterial).imageUrl ?? undefined) : undefined
+}
+
+/** Whether the badge's image is a white albedo its colour tints (a siding's profile). */
+function isActivePaintMaterialSwatchTinted(material: ActivePaintMaterial | null) {
+  if (material?.material?.texture?.url || getSceneMaterialIdFromRef(material?.materialPreset))
+    return false
+  const catalogId =
+    getLibraryMaterialIdFromRef(material?.materialPreset) ?? material?.material?.id ?? undefined
+  const catalogMaterial = getCatalogMaterialById(catalogId)
+  return catalogMaterial ? getMaterialSwatch(catalogMaterial).tinted : false
 }
 
 function PaintCursorBadge({
@@ -741,6 +820,7 @@ function PaintCursorBadge({
   state,
   swatchColor,
   swatchImageUrl,
+  swatchTinted = false,
   isEraser,
   isPicker = false,
 }: {
@@ -748,6 +828,8 @@ function PaintCursorBadge({
   state: PaintCursorBadgeState
   swatchColor: string
   swatchImageUrl?: string
+  /** Multiply the image by the colour (a tinted albedo). */
+  swatchTinted?: boolean
   isEraser: boolean
   /** The eyedropper: the swatch is what a click would take. */
   isPicker?: boolean
@@ -821,6 +903,7 @@ function PaintCursorBadge({
                 backgroundImage: swatchImageUrl
                   ? `url(${JSON.stringify(swatchImageUrl)})`
                   : undefined,
+                backgroundBlendMode: swatchImageUrl && swatchTinted ? 'multiply' : undefined,
                 opacity: state === 'aim' ? 0.55 : 1,
               }}
             />
@@ -912,7 +995,7 @@ const ViewerSceneContent = memo(function ViewerSceneContent({
       {!(isLoading || noEditing) && <ToolManager />}
       {isFirstPersonMode && <FirstPersonControls />}
       {isCaptureMode && !isXRMode && <CaptureCameraRig />}
-      {!isXRMode && <CustomCameraControls />}
+      {!isXRMode && <CustomCameraControls sceneReady={!isLoading} />}
       {!isXRMode && <FollowPascal />}
       {!isXRMode && <ThumbnailGenerator onThumbnailCapture={onThumbnailCapture} />}
       {!isXRMode && <VectorEdgeExtractor />}
@@ -1084,6 +1167,7 @@ function PaintCursorLayer({
   const swatchMaterial = picking ? picked : activePaintMaterial
   const swatchColor = getActivePaintMaterialSwatchColor(swatchMaterial, sceneMaterials)
   const swatchImageUrl = getActivePaintMaterialSwatchImageUrl(swatchMaterial, sceneMaterials)
+  const swatchTinted = isActivePaintMaterialSwatchTinted(swatchMaterial)
 
   if (!active || !position) return null
 
@@ -1099,7 +1183,28 @@ function PaintCursorLayer({
         state={badgeState}
         swatchColor={swatchColor}
         swatchImageUrl={swatchImageUrl}
+        swatchTinted={swatchTinted}
       />
+    </div>
+  )
+}
+
+// The loader's fallback can take it down while the scene data is still
+// loading; until then the scene is read-only, so say why edits are refused.
+function SceneDataPendingNotice() {
+  const i18n = usePascalI18n()
+  return (
+    <div className="pointer-events-none absolute inset-x-0 top-3 z-40 flex justify-center">
+      <div
+        className="flex items-center gap-2 rounded-full border border-border bg-background/90 px-3 py-1.5 text-muted-foreground text-xs shadow-sm backdrop-blur-md"
+        role="status"
+      >
+        <span className="size-1.5 animate-pulse rounded-full bg-amber-500" />
+        {i18n._({
+          id: 'editor.sceneData.pending',
+          message: 'Still loading the project. Editing is paused until it finishes.',
+        })}
+      </div>
     </div>
   )
 }
@@ -1121,6 +1226,7 @@ const ViewerCanvas = memo(function ViewerCanvas({
   onThumbnailCapture,
   onViewerBreadcrumb,
   presentationsReady,
+  sceneDataPending,
   viewerSceneSlot,
   floorplanSceneSlot,
   disablePostFx = false,
@@ -1140,6 +1246,7 @@ const ViewerCanvas = memo(function ViewerCanvas({
   onThumbnailCapture?: (blob: Blob, cameraData: SnapshotCameraData) => void
   onViewerBreadcrumb?: ViewerBreadcrumbHandler
   presentationsReady: boolean
+  sceneDataPending: boolean
   viewerSceneSlot?: ReactNode
   floorplanSceneSlot?: ReactNode
   disablePostFx?: boolean
@@ -1150,6 +1257,9 @@ const ViewerCanvas = memo(function ViewerCanvas({
   const views = useEditorViews()
   const isPreviewMode = useEditor((s) => s.isPreviewMode)
   const isCaptureMode = useEditor((s) => s.isCaptureMode)
+  const textures = useViewer((s) => s.textures)
+  const isMobile = useIsMobile()
+  const planOnRight = layout.split && layout.panes[1] === VIEW_2D
   useUnitFocusRules()
   const wholeBuilding = useEditor((s) =>
     showsWholeBuilding({
@@ -1235,6 +1345,7 @@ const ViewerCanvas = memo(function ViewerCanvas({
       {/* `relative` so the floorplan compass (portaled here to stay visible in
           every layout) can anchor to this container's bottom-left. */}
       <div className="relative h-full" ref={setViewerAreaNode}>
+        {sceneDataPending ? <SceneDataPendingNotice /> : null}
         <QuickMeasurementHud />
         <DeleteConfirmationDialog />
         <div
@@ -1319,6 +1430,22 @@ const ViewerCanvas = memo(function ViewerCanvas({
                   viewerSceneSlot={viewerSceneSlot}
                 />
               </Viewer>
+              {!showLoader &&
+              textures &&
+              !isMobile &&
+              !(
+                isFirstPersonMode ||
+                isStudioMode ||
+                isVersionPreviewMode ||
+                isCaptureMode ||
+                isPreviewMode
+              ) ? (
+                // Beside the compass (which moves to the plan's corner when the plan is on the right).
+                <SkyControl
+                  height={SKY_DOCK_HEIGHT.editor}
+                  style={{ left: planOnRight ? 12 : 52 }}
+                />
+              ) : null}
             </div>
             {showLoader && loadingOverlay}
           </div>
@@ -1327,6 +1454,7 @@ const ViewerCanvas = memo(function ViewerCanvas({
             const viewId = layout.panes[pane]
             return (
               <div
+                aria-busy={isSceneDataLoading}
                 className="relative min-w-0 overflow-hidden"
                 data-view-pane={pane}
                 key={viewId}
@@ -1335,6 +1463,9 @@ const ViewerCanvas = memo(function ViewerCanvas({
                 style={paneStyle(pane)}
               >
                 <HostView key={viewId} view={views.find((view) => view.id === viewId)} />
+                {/* A restored pane's plugin is known only once the project has loaded: until
+                    then it would read "This view isn't available". */}
+                {isSceneDataLoading && loadingOverlay}
               </div>
             )
           })}
@@ -1384,6 +1515,7 @@ function PreviewStage({
   )
 
   useViewerFloorDisplay()
+  useViewerUiSounds()
   const stageMode = isFirstPersonMode || !hasFloorplan ? '3d' : mode
   const stageModes = hasFloorplan && !isFirstPersonMode ? undefined : (['3d'] as const)
 
@@ -1424,6 +1556,9 @@ function EditorContent({
   sidebarTop,
   navbarSlot,
   sidebarTabs,
+  columnTabId,
+  sideMenuFooter,
+  pluginsMenuSection,
   viewerToolbarLeft,
   viewerToolbarRight,
   stageOverlay,
@@ -1456,6 +1591,7 @@ function EditorContent({
   extraSidebarPanels,
   commandPaletteEmptyAction,
 }: EditorProps) {
+  const i18n = usePascalI18n()
   const isMobile = useIsMobile()
   // A top-docked menu sits at the top of the scene panes on desktop (layout v2).
   const dockMenuOnTop = actionMenuPlacement === 'top' && !isMobile
@@ -1487,6 +1623,8 @@ function EditorContent({
   useKeyboard({ isVersionPreviewMode, disabled: isFirstPersonMode || isStudioMode })
   useGestureLifecycleOwner()
 
+  useAutoFrame()
+
   const { beginSceneLoad, completeSceneLoad, saveNow } = useAutoSave({
     guardAgainstSceneWipe,
     onSave,
@@ -1503,12 +1641,16 @@ function EditorContent({
 
   const [isSceneLoading, setIsSceneLoading] = useState(false)
   const [hasLoadedInitialScene, setHasLoadedInitialScene] = useState(false)
+  // The `onLoad` the store's graph came from: a new one is pending from the
+  // render that receives it, before the load effect resets the flags above.
+  const [loadedFrom, setLoadedFrom] = useState<{ onLoad: typeof onLoad } | null>(null)
   // A failed `onLoad` is shown as an error with a retry, never as an empty
   // scene: an editor that renders the default scaffold after a failed load
   // autosaves that scaffold over the real project.
   const [sceneLoadError, setSceneLoadError] = useState<unknown>(null)
   const [sceneLoadAttempt, setSceneLoadAttempt] = useState(0)
   const [sceneReadyKey, setSceneReadyKey] = useState(0)
+  const [sceneLoadGeneration, setSceneLoadGeneration] = useState(0)
   const [isViewerSceneReady, setIsViewerSceneReady] = useState(false)
   const [previewStageMode, setPreviewStageMode] = useState<ViewerStageMode>('3d')
   const isPreviewMode = useEditor((s) => s.isPreviewMode)
@@ -1540,6 +1682,29 @@ function EditorContent({
     void useSidebarStore.persist.rehydrate()
   }, [])
 
+  // A project opens on the column's tab (the chat) as it starts loading: once the saved layout
+  // is restored (the effect above), once per project, and not again when preview hands the
+  // layout back.
+  const openedOnColumnRef = useRef<string | null>(null)
+  useEffect(() => {
+    if (layoutVersion !== 'v2' || !columnTabId) return
+    const project = projectId ?? ''
+    if (openedOnColumnRef.current === project) return
+    // A project opened on a phone has had its opening: widening the window later keeps the tab
+    // and tool in use.
+    if (isMobile) {
+      openedOnColumnRef.current = project
+      return
+    }
+    const open = () => {
+      openedOnColumnRef.current = project
+      useEditor.getState().setActiveSidebarPanel(columnTabId)
+    }
+    // The restore may still be running; switching before it ends would be overwritten by it.
+    if (useEditor.persist.hasHydrated()) open()
+    else return useEditor.persist.onFinishHydration(open)
+  }, [projectId, layoutVersion, columnTabId, isMobile])
+
   useEffect(() => {
     useViewer.getState().setProjectId(projectId ?? null)
     useFloorplanMode.getState().setProjectId(projectId ?? null)
@@ -1561,6 +1726,7 @@ function EditorContent({
 
     async function load(attempt: number) {
       beginSceneLoad()
+      setSceneLoadGeneration((generation) => generation + 1)
       setSceneLoadError(null)
       setHasLoadedInitialScene(false)
       setIsViewerSceneReady(false)
@@ -1579,6 +1745,9 @@ function EditorContent({
           // The store holds the loaded graph: autosave resumes now, not on a
           // frame — a tab loaded while hidden never gets one.
           completeSceneLoad()
+          setLoadedFrom({ onLoad })
+          // A new project gets its own opening camera frame.
+          useEditor.getState().setOpeningCameraSettled(false)
           setIsViewerSceneReady(false)
           setSceneReadyKey((key) => key + 1)
         }
@@ -1645,21 +1814,33 @@ function EditorContent({
     setIsViewerSceneReady(ready)
   }, [])
 
+  const isEditorSceneLoading =
+    isSceneLoading || !hasLoadedInitialScene || loadedFrom === null || loadedFrom.onLoad !== onLoad
+  const isSceneDataLoading = isLoading || isEditorSceneLoading
+  const { showLoader, sceneData } = useSceneLoader({
+    isHostLoading: isLoading,
+    isSceneDataLoading: isEditorSceneLoading,
+    isViewerSceneReady,
+    hasLoadError: sceneLoadError != null,
+    loadKey: `${sceneLoadGeneration}:${sceneReadyKey}`,
+  })
+
+  // The useAutoFrame emit can be clobbered by the level-follow effect's
+  // first-run pivot rest on fast (client-side navigation) loads. Re-emitting
+  // here is the last word after every load-driven camera effect has run.
+  // Once per load: a remounted viewer reports ready again, but only a new
+  // load reframes; remounted controls rest their own pivot on the level.
+  // A readiness fallback that took the loader down counts as ready here.
+  const framedSceneReadyKeyRef = useRef<number | null>(null)
   useEffect(() => {
-    if (isLoading || isSceneLoading || !hasLoadedInitialScene || isViewerSceneReady) return
+    if (showLoader || framedSceneReadyKeyRef.current === sceneReadyKey) return
+    framedSceneReadyKeyRef.current = sceneReadyKey
+    const nodes = useScene.getState().nodes
+    if (Object.keys(nodes).length === 0) return
+    const bounds = computeSceneBoundsXZ(nodes)
+    emitter.emit('camera-controls:fit-scene', bounds ? { bounds } : {})
+  }, [showLoader, sceneReadyKey])
 
-    const timer = window.setTimeout(() => {
-      console.warn('[editor] viewer scene readiness timed out; showing editor shell anyway', {
-        sceneReadyKey,
-      })
-      setIsViewerSceneReady(true)
-    }, SCENE_READY_FALLBACK_MS)
-
-    return () => window.clearTimeout(timer)
-  }, [hasLoadedInitialScene, isLoading, isSceneLoading, isViewerSceneReady, sceneReadyKey])
-
-  const isSceneDataLoading = isLoading || isSceneLoading || !hasLoadedInitialScene
-  const showLoader = isSceneDataLoading || !isViewerSceneReady
   const visibleLoader =
     showLoader &&
     !(
@@ -1714,6 +1895,13 @@ function EditorContent({
     }
   }, [isFirstPersonMode, isPreviewMode])
 
+  // The viewer's walkthrough says how the first-person camera moves, for the
+  // viewer-side consumers that tell a walk from a drone flight.
+  const firstPersonMovementMode = useEditor((s) => s.firstPersonMovementMode)
+  useEffect(() => {
+    if (isFirstPersonMode) useViewer.getState().setWalkthroughMovement(firstPersonMovementMode)
+  }, [isFirstPersonMode, firstPersonMovementMode])
+
   const previewViewerContent = (
     <Viewer
       defaultRender={EDITOR_DEFAULT_RENDER}
@@ -1763,6 +1951,7 @@ function EditorContent({
       onThumbnailCapture={onThumbnailCapture}
       onViewerBreadcrumb={onViewerBreadcrumb}
       presentationsReady={presentationsReady}
+      sceneDataPending={!showLoader && sceneData === 'loading'}
       sceneReadyKey={sceneReadyKey}
       showLoader={showLoader}
       viewerSceneSlot={viewerSceneSlot}
@@ -1784,7 +1973,20 @@ function EditorContent({
       }
     }
 
+    // The project's plugins fold into the one Plugins entry, whose panel lists them.
+    const hasPluginsEntry = hostRailPanels.some((p) => p.id === PLUGINS_MANAGER_PANEL_ID)
+    const pluginsHeading = i18n._({ id: 'editor.sidebar.sideMenu.plugins', message: 'Plugins' })
+    // A plugin that names a section of its own keeps its own entry there.
+    const isListedPlugin = (p: (typeof hostRailPanels)[number]) =>
+      hasPluginsEntry && p.pluginId !== undefined && p.section === pluginsHeading
+    const listedPlugins = hostRailPanels
+      .filter(isListedPlugin)
+      .map((p) => ({ id: p.id, label: p.label, icon: p.icon }))
+
     const renderTabContent = (tabId: string) => {
+      if (tabId === PLUGINS_MANAGER_PANEL_ID) {
+        return <PluginsMenuPanel plugins={listedPlugins} />
+      }
       // Built-in panels
       if (tabId === 'site') {
         return <SitePanel {...sitePanelProps} />
@@ -1800,32 +2002,51 @@ function EditorContent({
     }
 
     const tabBarTabs = [
-      ...(sidebarTabs?.map(({ id, label, mobileDefaultSnap, mobileIcon, icon, noPanel }) => ({
-        id,
-        label,
-        mobileDefaultSnap,
-        mobileIcon,
-        icon,
-        noPanel,
-      })) ?? []),
+      ...(sidebarTabs?.map(
+        ({ id, label, mobileDefaultSnap, mobileIcon, icon, noPanel, section }) => ({
+          id,
+          label,
+          mobileDefaultSnap,
+          mobileIcon,
+          icon,
+          noPanel,
+          section,
+        }),
+      ) ?? []),
       // Host panels appear after the explicit tabs in the rail. The icon
       // doubles as the mobile icon; a half-height sheet is a sensible default.
-      ...hostRailPanels.map((p) => ({
-        id: p.id,
-        label: p.label,
-        mobileDefaultSnap: 0.5,
-        mobileIcon: p.icon,
-        icon: p.icon,
-        noPanel: p.noPanel,
-        onSelect: p.onSelect,
-        stageActive: p.stageActive,
-        onDeselect: p.onDeselect,
-      })),
+      // Plugins is one entry: a panel listing the project's plugins and the
+      // directory, so the menu keeps its room for the host's footer.
+      ...hostRailPanels.map((p) =>
+        p.id === PLUGINS_MANAGER_PANEL_ID
+          ? {
+              id: p.id,
+              label: p.label,
+              section: pluginsMenuSection ?? p.section,
+              mobileDefaultSnap: 0.5,
+              mobileIcon: p.icon,
+              icon: p.icon,
+            }
+          : {
+              id: p.id,
+              label: p.label,
+              section: p.section,
+              menuParent: isListedPlugin(p) ? PLUGINS_MANAGER_PANEL_ID : undefined,
+              mobileDefaultSnap: 0.5,
+              mobileIcon: p.icon,
+              icon: p.icon,
+              noPanel: p.noPanel,
+              onSelect: p.onSelect,
+              stageActive: p.stageActive,
+              onDeselect: p.onDeselect,
+            },
+      ),
     ]
 
     return (
       <>
         <FloorplanModeCoordinator />
+        <CeilingTopsSync />
         {!isLoading && isPreviewMode ? (
           <PreviewStage
             isFirstPersonMode={isFirstPersonMode}
@@ -1888,6 +2109,8 @@ function EditorContent({
               }
               renderTabContent={renderTabContent}
               sidebarOverlay={sidebarOverlay}
+              columnTabId={columnTabId}
+              sideMenuFooter={sideMenuFooter}
               sidebarTabs={tabBarTabs}
               stageOverlay={stageOverlay}
               viewBar={viewBar}
@@ -1912,6 +2135,7 @@ function EditorContent({
   return (
     <div className="flex h-full w-full gap-3 bg-neutral-100 p-3 text-foreground">
       <FloorplanModeCoordinator />
+      <CeilingTopsSync />
       {!isLoading && isPreviewMode ? (
         <PreviewStage
           isFirstPersonMode={isFirstPersonMode}
@@ -1960,10 +2184,30 @@ function EditorContent({
   )
 }
 
-export default function Editor(props: EditorProps) {
+function EditorFrame(props: EditorProps) {
   return (
     <Profiler id="editor" onRender={recordEditorRender}>
-      <EditorContent {...props} />
+      <FloorplanDimensionHitsGate>
+        <EditorContent {...props} />
+      </FloorplanDimensionHitsGate>
     </Profiler>
+  )
+}
+
+function LocalizedEditor(props: EditorProps & { locale: string }) {
+  const i18n = useMemo(() => createI18n({ locale: props.locale }), [props.locale])
+
+  return (
+    <PascalI18nProvider i18n={i18n}>
+      <EditorFrame {...props} />
+    </PascalI18nProvider>
+  )
+}
+
+export default function Editor(props: EditorProps) {
+  return props.locale ? (
+    <LocalizedEditor {...props} locale={props.locale} />
+  ) : (
+    <EditorFrame {...props} />
   )
 }

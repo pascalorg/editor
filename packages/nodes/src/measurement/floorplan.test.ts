@@ -1,10 +1,11 @@
 import { describe, expect, test } from 'bun:test'
-import { type FloorplanGeometry, type GeometryContext, MeasurementNode } from '@pascal-app/core'
 import {
   createFloorplanContextExtensions,
-  MEASUREMENT_ACTIVE_COLOR,
-  MEASUREMENT_FLOORPLAN_COLOR,
-} from '@pascal-app/editor'
+  type FloorplanGeometry,
+  type GeometryContext,
+  MeasurementNode,
+} from '@pascal-app/core'
+import { MEASUREMENT_ACTIVE_COLOR, MEASUREMENT_FLOORPLAN_COLOR } from '@pascal-app/viewer'
 import { buildMeasurementFloorplan } from './floorplan'
 
 const palette = {

@@ -18,7 +18,13 @@ export type {
   TapActionHandle,
   TranslateHandle,
 } from './handles'
-export { nodeMechanism, toggleMechanism, toggleNodeMechanism } from './mechanism'
+export {
+  nodeMechanism,
+  nodeMechanismParts,
+  toggleMechanism,
+  toggleMechanismPart,
+  toggleNodeMechanism,
+} from './mechanism'
 export {
   bakePolicyOf,
   discoverPlugins,
@@ -32,6 +38,7 @@ export {
   hasRegistry3DMoveTool,
   isDrawnViaTool,
   isDrawnViaToolKind,
+  isNodeDuplicable,
   isNodeKindEnabled,
   isPresettable,
   isPresettableKind,
@@ -55,6 +62,7 @@ export {
   collectDescendants,
   type SpatialQuery,
 } from './relations-resolver'
+export { type RoofFaceShape, roofFaceOf, roofFaceShapes, validateRoofRelations } from './roofs'
 export { createSceneApi, type SceneStoreLike, type SceneToolHost } from './scene-api'
 export {
   type CloneNodesIntoOptions,
@@ -132,6 +140,7 @@ export type {
   MeasurementFeatureGeometry,
   MeasurementSnapKind,
   MechanismCapability,
+  MechanismPart,
   Modifiers,
   MovableConfig,
   MovableParentFrame,
@@ -149,6 +158,8 @@ export type {
   PaintPatchArgs,
   PaintPreviewArgs,
   PaintResolveArgs,
+  PaintScopeId,
+  PaintSurfaceScopes,
   ParamAction,
   ParametricDescriptor,
   ParamField,
@@ -178,6 +189,7 @@ export type {
   RevealPlanPoint,
   RevealStyle,
   RoofAccessoryConfig,
+  RoofsCapability,
   RotatableConfig,
   ScalableConfig,
   SceneActionCapability,

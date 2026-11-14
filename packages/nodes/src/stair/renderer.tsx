@@ -14,6 +14,7 @@ import {
   type StairSegmentNode,
   type StairSlotId,
   stairArcSliceCount,
+  stairStructureConstructionOf,
   useLiveNodeOverrides,
   useRegistry,
   useScene,
@@ -115,7 +116,7 @@ export const StairRenderer = ({ node: rawNode }: { node: StairNode }) => {
   const { segments, totalRise } = renderData
   useLayoutEffect(() => {
     for (const id of node.children) useScene.getState().markDirty(id)
-  }, [node.children, node.construction])
+  }, [node.children, node.construction, node.structure])
   const detail = useMemo(() => measureStairDetail(node, segments), [node, segments])
   const mergedMaterials = useMemo(
     () =>
@@ -262,16 +263,20 @@ function StairSurfaceTransition({
     (flight as StairSegmentNode | undefined)?.length ??
     0
   const segment = flight as StairSegmentNode | undefined
-  const fillToFloor =
-    (flightOverride?.fillToFloor as boolean | undefined) ??
-    segment?.fillToFloor ??
-    stair.fillToFloor ??
-    true
-  const thickness =
-    (flightOverride?.thickness as number | undefined) ??
-    segment?.thickness ??
-    stair.thickness ??
-    0.25
+  // a structure fills to the floor when it is poured, and is a tread thick when it is framed
+  const structureBody = stair.construction ? null : stairStructureConstructionOf(stair)
+  const fillToFloor = structureBody
+    ? structureBody.mode === 'solid'
+    : ((flightOverride?.fillToFloor as boolean | undefined) ??
+      segment?.fillToFloor ??
+      stair.fillToFloor ??
+      true)
+  const thickness = structureBody
+    ? structureBody.treadThickness + structureBody.finishThickness
+    : ((flightOverride?.thickness as number | undefined) ??
+      segment?.thickness ??
+      stair.thickness ??
+      0.25)
   const segmentHeight = (flightOverride?.height as number | undefined) ?? segment?.height ?? 0
   const profile = useMemo(
     () =>

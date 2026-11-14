@@ -10,6 +10,7 @@ import { levelGradeStanding } from '../lib/grade-standing'
 import { buildingGroundBox, levelGroundBox, terrainBetweenEyeAndBox } from '../lib/ground-window'
 import { distanceToSegment } from '../lib/room-topology-index'
 import { buildingStreet } from '../lib/site-placement'
+import { roofFaceOf, roofFaceShapes } from '../registry/roofs'
 import type {
   AnyNode,
   AnyNodeId,
@@ -23,10 +24,13 @@ import type {
   WallNode,
 } from '../schema'
 import { getActiveRoofHeight } from '../schema'
-import { isCeilingGeometry, isRoofGeometry } from '../services/roof-level'
+import { coveredStoreyId, isCeilingGeometry, isRoofGeometry } from '../services/roof-level'
 import { EXPLODED_GAP, getLevelElevations } from '../services/storey'
+import { stairFootprintAABB } from '../systems/stair/stair-footprint'
 import { resolveWallExteriorSide } from '../systems/wall/wall-assembly'
+import { itemLevelHeightRange, itemPlanAabbInLevel } from './item-space'
 import { pointInPolygon } from './plan-geometry'
+import { queryNodes } from './scene-queries'
 
 /**
  * Where `view_scene` looks from, the same on every surface; the picture is the host's: the chat's
@@ -160,6 +164,7 @@ export function sceneViewInterior(
         target: node.id,
       })
   }
+  // biome-ignore lint/plugin: a view hides every level but its own, and what covers it
   const hiddenIds = Object.values(nodes)
     .filter((node) =>
       node.type === 'level'
@@ -298,7 +303,7 @@ function streetDirection(
  */
 function framedBuilding(nodes: Readonly<Record<string, AnyNode>>, lookedAt: AnyNode | undefined) {
   if (lookedAt) return ancestry(nodes, lookedAt).find((node) => node.type === 'building') ?? null
-  const buildings = Object.values(nodes).filter((node) => node.type === 'building')
+  const buildings = queryNodes(nodes, { type: 'building' })
   const sites = new Set(buildings.map((building) => building.parentId ?? null))
   if (sites.size > 1)
     refuse(
@@ -473,8 +478,9 @@ function siteBox(node: AnyNode, baseY: number): SceneViewBox | null {
 }
 
 /**
- * A roof's box: its segments' footprints in the plan, from the roof's seat to the highest peak. A
- * roof holds no wall, so a roof, or the roof level it stands on, framed nothing.
+ * A roof's box: its segments' footprints and its faces' outlines (`capabilities.roofs`) in the
+ * plan, from the roof's seat (its faces' lowest eave, theirs being their own heights) to the
+ * highest peak. A roof holds no wall, so a roof, or the roof level it stands on, framed nothing.
  */
 function roofBox(
   nodes: Readonly<Record<string, AnyNode>>,
@@ -487,10 +493,17 @@ function roofBox(
     x * Math.sin(angle) + z * Math.cos(angle),
   ]
   const points: Pt[] = []
-  let peak = seat
+  let floor = Number.POSITIVE_INFINITY
+  let peak = Number.NEGATIVE_INFINITY
+  for (const face of roofFaceShapes(roof, nodes)) {
+    points.push(...face.outline)
+    floor = Math.min(floor, baseY + face.low)
+    peak = Math.max(peak, baseY + face.high)
+  }
   for (const id of roof.children ?? []) {
     const segment = nodes[id]
     if (segment?.type !== 'roof-segment') continue
+    floor = Math.min(floor, seat)
     for (const [sx, sz] of [
       [-1, -1],
       [1, -1],
@@ -505,13 +518,14 @@ function roofBox(
     }
     peak = Math.max(
       peak,
+      seat,
       seat + segment.position[1] + segment.wallHeight + getActiveRoofHeight(segment),
     )
   }
   if (!points.length) return null
   return tall(
     {
-      min: [Math.min(...points.map((p) => p[0])), seat, Math.min(...points.map((p) => p[1]))],
+      min: [Math.min(...points.map((p) => p[0])), floor, Math.min(...points.map((p) => p[1]))],
       max: [Math.max(...points.map((p) => p[0])), peak, Math.max(...points.map((p) => p[1]))],
     },
     0.3,
@@ -660,19 +674,36 @@ export function sceneViewBounds(
     const pose = itemLevelPose(nodes, target, (id) => elevations.get(id)?.height ?? 2.5)
     if (pose) return placed(hostedItemBox(target, pose, baseOf(pose.levelId)), pose.levelId)
   }
+  const unreadFace = (id: string) => {
+    const child = nodes[id]
+    return !!child?.type.includes(':') && !roofFaceOf(child)
+  }
+  // A roof holding faces this runtime cannot read (their plugin not registered here) frames the
+  // storey it covers as well, up to its own level's top.
+  const coveredByTarget =
+    target?.type === 'roof' && ((target as RoofNode).children ?? []).some(unreadFace)
+      ? coveredStoreyId(nodes, target as RoofNode)
+      : null
   const site =
     target && nodes[target.parentId ?? '']?.type === 'level'
       ? levelChildBox(nodes, target, baseOf(target.parentId))
       : null
-  if (site) return placed(site, target!.parentId)
+  if (site && !coveredByTarget) return placed(site, target!.parentId)
   const levelOf = (node: AnyNode) => (node.parentId ? nodes[node.parentId] : undefined)
   const outlines: { points: Pt[]; levelId: string }[] = []
   // With no walls yet, what the level holds frames it: furniture placed from a plan before the
   // walls are built, a site with its paving and fences. The roofs frame with the walls, and so does
-  // a plugin's node (a roof plane), whose shape core cannot read: up to its storey's top.
+  // a plugin's node (a roof plane), whose shape core cannot read: up to its storey's top. A roof's
+  // faces are read through their kind (`capabilities.roofs`); a plugin's this runtime has not
+  // registered frames as one on the level would.
   const held: SceneViewBox[] = []
   const roofs: SceneViewBox[] = []
   let pluginTop = Number.NEGATIVE_INFINITY
+  const upToStoreyTop = (levelId: string, at: { y: number }) => {
+    const storey = elevations.get(levelId)
+    if (storey) pluginTop = Math.max(pluginTop, baseOf(levelId) + storey.height + at.y)
+  }
+  // biome-ignore lint/plugin: a view frames whatever the level holds
   for (const node of Object.values(nodes)) {
     const level = levelOf(node)
     if (level?.type !== 'level') continue
@@ -680,6 +711,7 @@ export function sceneViewBounds(
       !target ||
       target.id === node.id ||
       target.id === level.id ||
+      level.id === coveredByTarget ||
       (target.type === 'building' && level.parentId === target.id)
     if (!inTarget) continue
     const at = standingOf(nodes, level.id)
@@ -695,12 +727,12 @@ export function sceneViewBounds(
       })
     else if (node.type === 'item')
       (isRoofGeometry(node) ? roofs : held).push(placedBox(itemBox(node, baseOf(level.id)), at))
-    else if (node.type.includes(':')) {
-      const storey = elevations.get(level.id)
-      if (storey) pluginTop = Math.max(pluginTop, baseOf(level.id) + storey.height + at.y)
-    } else {
+    else if (node.type.includes(':')) upToStoreyTop(level.id, at)
+    else {
       const box = levelChildBox(nodes, node, baseOf(level.id))
       if (box) (node.type === 'roof' ? roofs : held).push(placedBox(box, at))
+      if (node.type === 'roof' && ((node as RoofNode).children ?? []).some(unreadFace))
+        upToStoreyTop(level.id, at)
     }
   }
   const upTo = (box: SceneViewBox): SceneViewBox =>
@@ -1002,10 +1034,62 @@ function roomMiddle(outline: Pt[], inRoom: (point: Pt) => boolean): Pt {
   return best
 }
 
+/** How far the eye keeps from a tall piece, so it never stands inside one or against its face. */
+const EYE_ITEM_CLEARANCE = 0.3
+
+/**
+ * The footprints, on the site and grown by EYE_ITEM_CLEARANCE, of what stands on a floor through a
+ * person's eye height (a wardrobe, a fridge, a bookcase, a stair): an eye inside one, or just behind
+ * one, sees a single flat panel. A bed or a counter under the eye does not block it. Pieces hosted
+ * by a wall or hung from a ceiling keep their own frames and are not read.
+ */
+function eyeObstacles(
+  nodes: Readonly<Record<string, AnyNode>>,
+  levelId: string,
+  eyeHeight: number,
+): Pt[][] {
+  const items = queryNodes(nodes, { type: 'item' })
+  const level = nodes[levelId as AnyNodeId]
+  // An item stands on the level through other items only: what the walk below can reach.
+  const byId = new Map<string, AnyNode>(
+    [...items, ...(level ? [level] : [])].map((node) => [node.id, node]),
+  )
+  const at = standingOf(nodes, levelId)
+  const m = EYE_ITEM_CLEARANCE
+  return [...queryNodes(nodes, { type: 'stair', parentId: levelId }), ...items].flatMap((node) => {
+    let box: { minX: number; maxX: number; minZ: number; maxZ: number } | null = null
+    if (node.type === 'stair') box = stairFootprintAABB(node, nodes)
+    else if (node.type === 'item') {
+      let parent = byId.get(node.parentId ?? '')
+      while (parent?.type === 'item') parent = byId.get(parent.parentId ?? '')
+      if (parent?.id !== levelId) return []
+      const height = itemLevelHeightRange(node, byId)
+      if (!height || height.max < eyeHeight - 0.4 || height.min > eyeHeight + 0.2) return []
+      box = itemPlanAabbInLevel(node, byId)
+    }
+    if (!box) return []
+    return [
+      (
+        [
+          [box.minX - m, box.minZ - m],
+          [box.maxX + m, box.minZ - m],
+          [box.maxX + m, box.maxZ + m],
+          [box.minX - m, box.maxZ + m],
+        ] as Pt[]
+      ).map((corner) => onSite(corner, at)),
+    ]
+  })
+}
+
+/** How far ahead the eye's line toward what it looks at must clear every tall piece. */
+const EYE_SIGHT_REACH = 2
+
 /**
  * A person standing in a room, looking across it: the eye a step in from the corner farthest from
  * what it looks at (or, given a side, from the corner on that side), at eye height, aimed at the
- * room's middle or at the target. Everything is on the site, in metres.
+ * room's middle or at the target. A step that lands in a tall piece (`blocked`) goes further in,
+ * else another corner is taken; a corner whose first EYE_SIGHT_REACH metres toward what it looks at
+ * cross one is taken only when no other sees past them. Everything is on the site, in metres.
  */
 function roomEyeView(
   outline: Pt[],
@@ -1016,29 +1100,51 @@ function roomEyeView(
     side,
     eyeHeight = ROOM_EYE_HEIGHT,
     fov = ROOM_FOV,
-  }: { aim?: V3; side?: Pt; eyeHeight?: number; fov?: number },
+    blocked = [],
+  }: { aim?: V3; side?: Pt; eyeHeight?: number; fov?: number; blocked?: Pt[][] },
 ): SceneViewPose {
   const inRoom = (point: Pt) =>
     pointInPolygon(point, outline, false) && !holes.some((hole) => pointInPolygon(point, hole))
+  const clear = (point: Pt) => !blocked.some((footprint) => pointInPolygon(point, footprint))
   const distance = (a: Pt, b: Pt) => Math.hypot(a[0] - b[0], a[1] - b[1])
   const middle = roomMiddle(outline, inRoom)
   const looksAt: Pt = aim ? [aim[0], aim[2]] : middle
-  let eye: Pt | undefined
-  let bestScore = Number.NEGATIVE_INFINITY
-  for (const corner of outline) {
-    const toMiddle = distance(corner, middle) || 1
-    const inward: Pt = [(middle[0] - corner[0]) / toMiddle, (middle[1] - corner[1]) / toMiddle]
-    // A step in from the corner, further in a room too narrow to hold the first.
-    const standing = [0.6, 1, 1.6]
-      .filter((step) => step <= toMiddle * 0.8)
-      .map((step): Pt => [corner[0] + inward[0] * step, corner[1] + inward[1] * step])
-      .find((point) => inRoom(point) && clearanceOf(outline, point) >= 0.25)
-    if (!standing) continue
-    const score = side
-      ? ((corner[0] - middle[0]) * side[0] + (corner[1] - middle[1]) * side[1]) / toMiddle
-      : distance(standing, looksAt)
-    if (score > bestScore) [eye, bestScore] = [standing, score]
+  const seesPast = (point: Pt) => {
+    const reach = Math.min(EYE_SIGHT_REACH, distance(point, looksAt))
+    const length = distance(point, looksAt) || 1
+    for (let r = 0.1; r <= reach; r += 0.1) {
+      const t = r / length
+      if (!clear([point[0] + (looksAt[0] - point[0]) * t, point[1] + (looksAt[1] - point[1]) * t]))
+        return false
+    }
+    return true
   }
+  const stand = (sighted: boolean) => {
+    let found: Pt | undefined
+    let bestScore = Number.NEGATIVE_INFINITY
+    for (const corner of outline) {
+      const toMiddle = distance(corner, middle) || 1
+      const inward: Pt = [(middle[0] - corner[0]) / toMiddle, (middle[1] - corner[1]) / toMiddle]
+      // A step in from the corner, further in a room too narrow to hold the first.
+      const standing = [0.6, 1, 1.6, 2.2, 3]
+        .filter((step) => step <= toMiddle * 0.8)
+        .map((step): Pt => [corner[0] + inward[0] * step, corner[1] + inward[1] * step])
+        .find(
+          (point) =>
+            inRoom(point) &&
+            clearanceOf(outline, point) >= 0.25 &&
+            clear(point) &&
+            (!sighted || seesPast(point)),
+        )
+      if (!standing) continue
+      const score = side
+        ? ((corner[0] - middle[0]) * side[0] + (corner[1] - middle[1]) * side[1]) / toMiddle
+        : distance(standing, looksAt)
+      if (score > bestScore) [found, bestScore] = [standing, score]
+    }
+    return found
+  }
+  const eye = stand(true) ?? stand(false)
   if (!eye) {
     // A room too small for a corner to stand in: from its middle, toward its farthest corner.
     const far = outline.reduce((a, b) => (distance(b, middle) > distance(a, middle) ? b : a))
@@ -1195,6 +1301,7 @@ export function sceneViewPlan(
         side: typeof from === 'string' ? (from === 'above' ? undefined : COMPASS[from]) : from,
         eyeHeight,
         fov,
+        blocked: eyeObstacles(nodes, room.parentId!, eyeHeight ?? ROOM_EYE_HEIGHT),
       }),
       size: sized(VIEW_SIZE.w, VIEW_SIZE.h, input.maxPx),
       ...extras,

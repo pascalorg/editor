@@ -20,17 +20,23 @@ function fieldValuesEqual(a: unknown, b: unknown): boolean {
   return false
 }
 
+/**
+ * The value every node holds for `key`, or mixed. `fallback` is what a node
+ * that omits the key shows (the field's default), so an absent value and an
+ * explicit default read as the same.
+ */
 export function reduceFieldValue(
   nodeIds: readonly string[],
   key: string,
   nodes: Readonly<Record<string, AnyNode | undefined>>,
+  fallback?: unknown,
 ): ReducedFieldValue {
   let seen = false
   let shared: unknown
   for (const id of nodeIds) {
     const node = nodes[id]
     if (!node) continue
-    const value = (node as Record<string, unknown>)[key]
+    const value = (node as Record<string, unknown>)[key] ?? fallback
     if (!seen) {
       seen = true
       shared = value
@@ -76,6 +82,19 @@ export function fieldVisibleForAll(
     if (!node || !visibleIf(node)) return false
   }
   return true
+}
+
+/** The selected nodes a field edits: every one, unless it names those it `appliesTo`. */
+export function fieldTargetIds<T extends string>(
+  nodeIds: readonly T[],
+  appliesTo: ((node: AnyNode) => boolean) | undefined,
+  nodes: Readonly<Record<string, AnyNode | undefined>>,
+): T[] {
+  if (!appliesTo) return [...nodeIds]
+  return nodeIds.filter((id) => {
+    const node = nodes[id]
+    return node ? appliesTo(node) : false
+  })
 }
 
 export function firstNumericFieldValue(

@@ -111,6 +111,13 @@ test('modifier chords stay shortcuts, and typing in a field never pans', () => {
   expect(acceptsKeyboardPan(key({ target: new Input() }))).toBe(false)
 })
 
+test('Shift with W, S or D arms a tool instead of panning; Shift with A still pans', () => {
+  for (const code of ['KeyW', 'KeyS', 'KeyD'])
+    expect(acceptsKeyboardPan(key({ code, shiftKey: true }))).toBe(false)
+  expect(acceptsKeyboardPan(key({ code: 'KeyA', shiftKey: true }))).toBe(true)
+  expect(acceptsKeyboardPan(key({ code: 'KeyD' }))).toBe(true)
+})
+
 test('cruise speed scales with the visible width within fixed bounds', () => {
   expect(keyboardPanSpeed(0)).toBe(0.5)
   expect(keyboardPanSpeed(20)).toBeCloseTo(6)

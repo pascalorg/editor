@@ -16,6 +16,7 @@ Canonical rules for code that touches `packages/core`, `packages/viewer`, `packa
 | [plugin-authoring](plugin-authoring.md) | Public contract for external plugins — `Plugin` shape, `setPluginDiscovery`, lifecycle, what's in and out of v1 |
 | [tools](tools.md) | Editor tools structure, 2D↔3D behavioral parity, manipulation constraints, and the snapping rule (Shift taps cycle the mode, Alt hold forces) |
 | [agent-surfaces](agent-surfaces.md) | MCP ↔ hosted AI chat ↔ published skill parity: shared contracts and operations, knowledge parity, tells of drift |
+| [scene-runtime](scene-runtime.md) | Detached scenes: per-store history environments, tracked reads, deterministic ids, complete reconciliation, field patches, `applyPatchWithDependencies` |
 | [authored-objects](authored-objects.md) | Items an agent writes as three.js: script source, artifacts, naming conventions, surfaces, clips, compile hosts |
 | [measurements](measurements.md) | Persistent measurement data, 2D/3D draft ownership, snapping, units, and visibility |
 | [point-and-ask](point-and-ask.md) | Point and ask: the mode that lets a person point at the scene and ask the agent about it: the `pointing` scope, hover picks, the anchored bubble, the pin, the context shape, and the scene/chat boundary |

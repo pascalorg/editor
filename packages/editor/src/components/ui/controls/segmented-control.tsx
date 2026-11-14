@@ -39,7 +39,10 @@ export function SegmentedControl<T extends string>({
             aria-disabled={option.disabled || undefined}
             aria-pressed={isSelected}
             className={cn(
-              'relative flex min-h-7 min-w-0 flex-1 items-center justify-center rounded-md px-1.5 py-1 font-medium text-xs leading-4 transition-colors duration-200',
+              // Every chip stretches to the row's height (the row is `items-stretch`), so a label that wraps
+              // to two lines grows the whole row evenly instead of one tall chip. The tighter line-height
+              // keeps a wrapped label reading as one unit and leaves single-line rows at min-h-7.
+              'relative flex min-h-7 min-w-0 flex-1 items-center justify-center rounded-md px-1.5 py-1 font-medium text-xs leading-3.5 transition-colors duration-200',
               isSelected
                 ? 'bg-white dark:bg-[#3e3e3e] text-foreground shadow-sm ring-1 ring-border/50'
                 : 'text-muted-foreground hover:bg-black/4 dark:hover:bg-white/5 hover:text-foreground',
@@ -54,7 +57,7 @@ export function SegmentedControl<T extends string>({
             }}
             type="button"
           >
-            <span className="relative z-10 flex min-w-0 items-center justify-center gap-1.5 whitespace-normal text-center [&>svg]:shrink-0">
+            <span className="relative z-10 flex min-w-0 items-center justify-center gap-1.5 whitespace-normal text-balance text-center [overflow-wrap:anywhere] [&>svg]:shrink-0">
               {option.label}
             </span>
           </button>

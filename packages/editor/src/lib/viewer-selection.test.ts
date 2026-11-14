@@ -9,6 +9,8 @@ import {
   ItemNode,
   LevelNode,
   type NodeEvent,
+  RoofNode,
+  RoofSegmentNode,
   SlabNode,
   sceneRegistry,
   UnitNode,
@@ -18,25 +20,29 @@ import {
 } from '@pascal-app/core'
 import { migrateRoomZones } from '@pascal-app/core/scene-migrations'
 import { resolveGlbPick, useViewer } from '@pascal-app/viewer'
-import { CameraControlsImpl } from '@react-three/drei'
-import { createElement } from 'react'
-import * as THREE from 'three'
-import { Group, Vector3 } from 'three'
-import { viewerHoverLabel } from '../components/viewer/viewer-hover-label'
-import { ViewerSelectionManager } from '../components/viewer/viewer-selection-manager'
-import { publishCameraPose } from '../store/camera-pose-store'
-import useEditor, { takePreviewCameraRestore } from '../store/use-editor'
-import { withSelectionHarness } from '../test-utils/selection-harness'
 import {
   frameViewerCamera,
+  publishCameraPose,
   resolveViewerClick,
   resolveViewerHover,
   selectViewerRoom,
   type ViewerSelection,
+  ViewerSelectionManager,
   viewerBreadcrumb,
+  viewerHoverLabel,
   viewerPickFromNodeEvent,
   viewerSidebarSections,
-} from './viewer-selection'
+} from '@pascal-app/viewer/ui'
+import { CameraControlsImpl } from '@react-three/drei'
+import { createElement } from 'react'
+import * as THREE from 'three'
+import { Group, Vector3 } from 'three'
+import useEditor, { takePreviewCameraRestore } from '../store/use-editor'
+import { withSelectionHarness } from '../test-utils/selection-harness'
+
+const english = {
+  _: (descriptor: { id: string; message?: string }) => descriptor.message ?? descriptor.id,
+}
 
 const buildingId = 'building_viewer'
 const levelId = 'level_viewer'
@@ -160,6 +166,32 @@ describe('viewer selection rules', () => {
     }
   })
 
+  test("a roof's segment or its face of another kind selects the whole roof", () => {
+    const segment = RoofSegmentNode.parse({ id: 'rseg_main', parentId: 'roof_main' })
+    // A plugin's roof plane (`capabilities.roofs`): the click picks its roof as a segment's does.
+    const plane = {
+      object: 'node',
+      id: 'roofplane_south',
+      type: 'test:roof-plane',
+      parentId: 'roof_main',
+      visible: true,
+      metadata: {},
+    } as unknown as AnyNode
+    const roof = RoofNode.parse({
+      id: 'roof_main',
+      parentId: levelId,
+      children: [segment.id, plane.id],
+    })
+    const { nodes } = scene([roof])
+    nodes[segment.id] = segment
+    nodes[plane.id] = plane
+    for (const nodeId of [segment.id, plane.id])
+      expect(resolveViewerClick(nothing, { nodeId, point: [2, 2] }, nodes)).toMatchObject({
+        levelId,
+        selectedIds: [roof.id],
+      })
+  })
+
   test('empty space clears the room and the element and keeps the floor', () => {
     const { nodes, kitchen } = scene()
     const drilled: ViewerSelection = {
@@ -251,10 +283,10 @@ describe('viewer rooms by name', () => {
 
   test('the hover pill names what a click would select', () => {
     const { nodes, kitchen } = scene()
-    expect(viewerHoverLabel(sofa.id, nodes)).toBe('Sofa')
-    expect(viewerHoverLabel(kitchen, nodes)).toBe('Kitchen')
-    expect(viewerHoverLabel('wall_shared', nodes)).toBe('Wall')
-    expect(viewerHoverLabel(null, nodes)).toBeNull()
+    expect(viewerHoverLabel(sofa.id, nodes, english)).toBe('Sofa')
+    expect(viewerHoverLabel(kitchen, nodes, english)).toBe('Kitchen')
+    expect(viewerHoverLabel('wall_shared', nodes, english)).toBe('Wall')
+    expect(viewerHoverLabel(null, nodes, english)).toBeNull()
   })
 })
 
@@ -262,7 +294,7 @@ describe('viewer breadcrumb', () => {
   test('an item reads floor › room › item; the room is shown, not selected', () => {
     const { nodes, kitchen } = scene()
     const selection = { buildingId, levelId, zoneId: null, selectedIds: [sofa.id] }
-    const crumbs = viewerBreadcrumb(selection as ViewerSelection, null, nodes, (id) =>
+    const crumbs = viewerBreadcrumb(selection as ViewerSelection, null, nodes, english, (id) =>
       id === sofa.id ? kitchen : null,
     )
     expect(crumbs.map((crumb) => [crumb.kind, crumb.label])).toEqual([
@@ -277,18 +309,20 @@ describe('viewer breadcrumb', () => {
     const unit = UnitNode.parse({ id: 'unit_a', name: 'Apartment A', parentId: buildingId })
     const { nodes, living } = scene([unit])
     const room = { buildingId, levelId, zoneId: living, selectedIds: [] } as ViewerSelection
-    expect(viewerBreadcrumb(room, null, nodes).map((crumb) => crumb.label)).toEqual([
+    expect(viewerBreadcrumb(room, null, nodes, english).map((crumb) => crumb.label)).toEqual([
       'House',
       'Ground floor',
       'Living',
     ])
     const floor = { ...room, zoneId: null }
-    expect(viewerBreadcrumb(floor, 'unit_a', nodes).map((crumb) => crumb.label)).toEqual([
+    expect(viewerBreadcrumb(floor, 'unit_a', nodes, english).map((crumb) => crumb.label)).toEqual([
       'House',
       'Ground floor',
       'Apartment A',
     ])
-    expect(viewerBreadcrumb(nothing, null, nodes).map((crumb) => crumb.kind)).toEqual(['building'])
+    expect(viewerBreadcrumb(nothing, null, nodes, english).map((crumb) => crumb.kind)).toEqual([
+      'building',
+    ])
   })
 })
 
@@ -305,25 +339,21 @@ describe('viewer sidebar', () => {
       ],
     })
     const plain = scene([terrace])
-    expect(viewerSidebarSections(levelId, plain.nodes).map((section) => section.kind)).toEqual([
-      'rooms',
-      'zones',
-    ])
-    expect(viewerSidebarSections(levelId, plain.nodes)[0]!.rows.map((row) => row.label)).toEqual([
-      'Kitchen',
-      'Living',
-    ])
-    expect(viewerSidebarSections(upperId, plain.nodes)).toEqual([])
+    expect(
+      viewerSidebarSections(levelId, plain.nodes, english).map((section) => section.kind),
+    ).toEqual(['rooms', 'zones'])
+    expect(
+      viewerSidebarSections(levelId, plain.nodes, english)[0]!.rows.map((row) => row.label),
+    ).toEqual(['Kitchen', 'Living'])
+    expect(viewerSidebarSections(upperId, plain.nodes, english)).toEqual([])
 
     const unit = UnitNode.parse({ id: 'unit_a', name: 'Apartment A', parentId: buildingId })
     const withUnit = scene([unit, terrace])
     withUnit.nodes.unit_a = { ...unit, members: [withUnit.kitchen as ZoneNode['id']] }
-    expect(viewerSidebarSections(levelId, withUnit.nodes).map((section) => section.kind)).toEqual([
-      'units',
-      'rooms',
-      'zones',
-    ])
-    expect(viewerSidebarSections(upperId, withUnit.nodes)).toEqual([])
+    expect(
+      viewerSidebarSections(levelId, withUnit.nodes, english).map((section) => section.kind),
+    ).toEqual(['units', 'rooms', 'zones'])
+    expect(viewerSidebarSections(upperId, withUnit.nodes, english)).toEqual([])
   })
 })
 
@@ -546,7 +576,9 @@ test('baked and parametric picks agree for room faces, mezzanine plates, doors, 
   const baked = resolveGlbPick([{ object: foreign, point: new Vector3() }], identity)
   expect(resolveViewerClick(nothing, baked, nodes)).toEqual(nothing)
   expect(
-    viewerBreadcrumb(nothing, null, nodes).some((crumb) => crumb.label === 'Unpublished name'),
+    viewerBreadcrumb(nothing, null, nodes, english).some(
+      (crumb) => crumb.label === 'Unpublished name',
+    ),
   ).toBe(false)
 })
 

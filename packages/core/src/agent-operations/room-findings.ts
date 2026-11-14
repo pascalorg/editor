@@ -4,7 +4,15 @@ import { distanceToSegment } from '../lib/room-topology-index'
 import { detectSpacesForLevel } from '../lib/space-detection'
 import type { AnyNode } from '../schema'
 import { nodesOnLevel } from './scene-queries'
+import { type StairNode, stairFootprintPolygons } from './stair-plan-footprint'
 import type { SceneNodes } from './types'
+import {
+  type FloorUnclaimedIssue,
+  floorUnclaimedIssues,
+  wallBodies,
+  type ZonesOverlapIssue,
+  zonesOverlapIssues,
+} from './zone-coverage'
 
 /** A space the walls and separators enclose, where a finding about it places it. */
 type SpacePlace = {
@@ -19,11 +27,16 @@ type SpacePlace = {
 /**
  * A level's rooms against the spaces its walls and separators enclose (the editor's detected
  * spaces): a space no zone covers, a space several zones split, a room the walls do not close, a
- * room with no name.
+ * room with no name, two rooms on the same floor, floor in a covered space that no zone claims.
  */
 export type RoomFinding =
-  | ({ type: 'space_no_room'; message: string } & SpacePlace)
-  | ({ type: 'space_many_rooms'; message: string; zoneIds: string[] } & SpacePlace)
+  | ({ type: 'space_no_room'; message: string; severity?: undefined } & SpacePlace)
+  | ({
+      type: 'space_many_rooms'
+      message: string
+      severity?: undefined
+      zoneIds: string[]
+    } & SpacePlace)
   | {
       type: 'room_not_enclosed'
       message: string
@@ -33,6 +46,8 @@ export type RoomFinding =
       zoneId: string
     }
   | { type: 'room_unnamed'; message: string; severity: 'info'; levelId: string; zoneId: string }
+  | ZonesOverlapIssue
+  | FloorUnclaimedIssue
 
 type Zone = AnyNode & { type: 'zone' }
 type Wall = AnyNode & { type: 'wall' }
@@ -142,6 +157,10 @@ export function roomFindings(
   const roomWalls = walls.filter((wall) => (wall.height ?? ROOM_WALL_HEIGHT) >= ROOM_WALL_HEIGHT)
   const rooms = zones.map((zone) => zone.spaceRole === 'room' || walled(zone, roomWalls) >= HALF)
   const issues: RoomFinding[] = []
+  /** The rooms each `space_many_rooms` names, which `zones_overlap` leaves to it. */
+  const splitSpaces: ReadonlySet<string>[] = []
+  /** The spaces zones cover past half: floor left over in them is a finding, a bare space is `space_no_room`. */
+  const coveredSpaces: typeof spaces = []
 
   spaces.forEach((space, index) => {
     const shape = spaceShapes[index]!
@@ -152,6 +171,7 @@ export function roomFindings(
         rooms[z] && zone.floor?.support !== 'open' && covered(zoneShapes[z]!, [shape]) >= HALF,
     )
     const noRoom = covered(shape, zoneShapes) < HALF
+    if (!noRoom) coveredSpaces.push(space)
     if (!noRoom && inside.length < 2) return
     const spaceArea = round(shape.area)
     const [x, z] = polygonInteriorPoint(space, true).map(round) as [number, number]
@@ -161,6 +181,7 @@ export function roomFindings(
       at: [x, z] as [number, number],
       wallIds: space.wallIds,
     }
+    if (!noRoom) splitSpaces.push(new Set(inside.map((zone) => zone.id)))
     const where = `On ${levelName}, walls ${space.wallIds.join(', ')} enclose a ${spaceArea.toFixed(1)} m² space at (${x.toFixed(2)}, ${z.toFixed(2)})`
     issues.push(
       noRoom
@@ -206,6 +227,32 @@ export function roomFindings(
         zoneId: zone.id,
       })
   })
+
+  const floored = zones.filter(
+    (zone, index) => rooms[index] && zone.floor?.support !== 'open' && zone.hasFloor !== false,
+  )
+  // walls whose bodies cannot be read leave the floor unmeasured: neither rule says anything on this level
+  const bodies = wallBodies(walls)
+  if (bodies)
+    issues.push(
+      ...zonesOverlapIssues({
+        levelId,
+        levelName,
+        rooms: floored,
+        bodies,
+        skip: (a, b) => splitSpaces.some((ids) => ids.has(a.id) && ids.has(b.id)),
+      }),
+      ...floorUnclaimedIssues({
+        levelId,
+        levelName,
+        spaces: coveredSpaces,
+        zones,
+        bodies,
+        stairs: onLevel
+          .filter((node): node is StairNode => node.type === 'stair')
+          .flatMap((stair) => stairFootprintPolygons(nodes, stair)),
+      }),
+    )
 
   return { spaces: spaces.length, issues }
 }

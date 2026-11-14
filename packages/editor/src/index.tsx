@@ -2,11 +2,30 @@
 // own shells on top of `@pascal-app/editor` (community-app, embedders)
 // don't have to learn three separate package imports. The canonical
 // definitions still live in `@pascal-app/core` / `@pascal-app/viewer`.
+import { registerCompiledMessages as registerEditorMessages } from '@pascal-app/core'
+import { messages as editorEnglishMessages } from './i18n/locales/en/messages'
+
+// Published-package consumers need compiled English too: Lingui cannot
+// interpolate a raw fallback literal in production. Other bundled locales
+// remain explicitly host-registered through `@pascal-app/editor/locales`.
+registerEditorMessages('en', '', editorEnglishMessages)
+
 export {
   type ApplySceneSnapshotOptions,
   acquireSceneReadOnlyLease,
   applyScenePatch,
   applySceneSnapshot,
+  buildMeasurementAngleArcPoints,
+  buildSvgAnnularSectorPath,
+  buildSvgArcPath,
+  buildSvgArrowHeadPoints,
+  type CompiledTranslationMessages,
+  clampPlanValue,
+  closeDoorOpenState,
+  closeWindowOpenState,
+  createFloorplanContextExtensions,
+  createI18n,
+  cubicMetersToVolumeUnit,
   DEFAULT_CURVED_STAIR_INNER_RADIUS,
   DEFAULT_CURVED_STAIR_SWEEP_ANGLE,
   DEFAULT_SPIRAL_SHOW_CENTER_COLUMN,
@@ -22,6 +41,60 @@ export {
   DEFAULT_STAIR_THICKNESS,
   DEFAULT_STAIR_TYPE,
   DEFAULT_STAIR_WIDTH,
+  defaultI18n,
+  FLOORPLAN_CONTEXT_EXTENSION_KEY,
+  FLOORPLAN_GEOMETRY_METADATA_KEY,
+  type FloorplanAnnotationRole,
+  type FloorplanMetricNotation,
+  type FloorplanRenderPurpose,
+  type FloorplanSchedule,
+  type FloorplanWallDimensionFaces,
+  floorplanGeometryMetadata,
+  formatAngleRadians,
+  formatAreaLabel,
+  formatLength,
+  formatLinearMeasurement,
+  formatNumber,
+  formatVolumeLabel,
+  getArcPlanPoint,
+  getAreaUnitLabel,
+  getDisplayedDoorValue,
+  getDisplayedWindowShutterValue,
+  getDisplayedWindowValue,
+  getLinearUnitLabel,
+  getLocale,
+  getPlanPointDistance,
+  getThickPlanLinePolygon,
+  getVolumeUnitLabel,
+  interpolatePlanPoint,
+  isOperableWindowType,
+  type LinearUnit,
+  linearControlValueToMeters,
+  linearUnitToMeters,
+  type MarkResolution,
+  metersToLinearUnit,
+  movePlanPointTowards,
+  normalizeDecimalInput,
+  type OpeningMarkKind,
+  openDoorOpenState,
+  openWindowOpenState,
+  orderedOpenings,
+  type PascalI18n,
+  PascalI18nProvider,
+  parseLinearMeasurementInput,
+  parseLocalizedNumber,
+  persistResolvedMarks,
+  readFloorplanContext,
+  readFloorplanGeometryMetadata,
+  readFloorplanMetricNotationOverride,
+  registerCompiledMessages,
+  registerMessages,
+  resolveElevatorNodeSupportY,
+  resolveElevatorSupportLevelId,
+  resolveElevatorSupportY,
+  resolveMarkDetail,
+  resolveMarks,
+  rotatePlanVector,
   type SceneCommit,
   type SceneCommitListener,
   type SceneCommitOrigin,
@@ -29,10 +102,111 @@ export {
   type SceneNodePatch,
   type ScenePatch,
   type SceneSnapshot,
+  separatorFloorElevation,
+  setLocale,
+  setWindowShuttersOpenState,
+  squareMetersToAreaUnit,
+  subscribe,
   subscribeSceneCommits,
+  type TranslationMessage,
+  type TranslationMessages,
+  type TranslationParams,
+  translate,
+  useLocale,
+  usePascalI18n,
   useScene,
+  WALL_PULL_AFFORDANCE,
+  WALL_PULL_GRIP_TITLE,
+  WALL_PUSH_AFFORDANCE,
+  type WallPullGripPayload,
+  type WallPushArrowPayload,
+  type WindowOpenAnimationOptions,
+  type WindowShutterField,
+  wallPullSeed,
+  withFloorplanGeometryMetadata,
 } from '@pascal-app/core'
-export { useViewer } from '@pascal-app/viewer'
+export {
+  isTypingTarget,
+  MEASUREMENT_ACTIVE_COLOR,
+  MEASUREMENT_DANGLING_COLOR,
+  MEASUREMENT_FLOORPLAN_COLOR,
+  MEASUREMENT_PERSISTENT_COLOR,
+  measurementFloorplanPresentationColor,
+  measurementPolygonLabelAnchor,
+  measurementPresentationColor,
+  triangulateMeasurementPolygon,
+  useViewer,
+} from '@pascal-app/viewer'
+export { useAudioSettings as useAudio, useViewerUiSounds } from '@pascal-app/viewer/sfx'
+export type { ActionMenuPlacement, RoomKey, RoomSelectionRecord } from '@pascal-app/viewer/ui'
+export {
+  applyViewerClick,
+  applyViewerHover,
+  DaylightMenu,
+  DroneHud,
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
+  DropdownMenuTrigger,
+  displayRoomName,
+  EdgesToggleItem,
+  type FirstPersonHudState,
+  FloorplanCompassButton,
+  type FloorplanCompassButtonProps,
+  FloorplanDimensionRenderer,
+  FloorplanGeometryRenderer,
+  FloorplanPreview,
+  type FloorplanPreviewProps,
+  type FloorplanPreviewScene,
+  framedLookAt,
+  frameViewerCamera,
+  frameViewerNode,
+  LocalizedHtml,
+  localizedLevelName,
+  normalizeViewerStageModes,
+  openSkyPanel,
+  ParametricViewerRooms,
+  QualityMenu,
+  resolveMobileViewerStageMode,
+  resolveViewerStageMode,
+  SceneLoader,
+  SkyControl,
+  sceneThemeName,
+  subscribeCameraPose,
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+  useFirstPersonHud,
+  useFollowPascal,
+  useSkyPanel,
+  useViewerCameraNavigationSync,
+  useViewerFloorDisplay,
+  VIEWER_STAGE_MODES,
+  ViewerControlsBar,
+  type ViewerControlsBarProps,
+  ViewerHoverLabel,
+  type ViewerPick,
+  ViewerRooms,
+  ViewerSceneHeader,
+  type ViewerSceneHeaderProps,
+  ViewerSelectionManager,
+  type ViewerSource,
+  ViewerStage,
+  type ViewerStageMode,
+  type ViewerStageProps,
+  ViewerStageSwitcher,
+  type ViewerStageSwitcherProps,
+  viewerStageIncludes3D,
+  WalkthroughHud,
+  type WalkthroughHudProps,
+  type WalkthroughInteract,
+} from '@pascal-app/viewer/ui'
 export type { EditorProps } from './components/editor'
 export { default as Editor } from './components/editor'
 export { ActionMenuButton } from './components/editor/action-menu-button'
@@ -98,19 +272,20 @@ export {
 } from './components/editor/node-arrow-handles'
 export { QuickMeasurementCard } from './components/editor/quick-measurement-card'
 export { SelectionManager } from './components/editor/selection-manager'
+export { SeparatorEndGrip } from './components/editor/separator-end-grip'
 export {
   type SnapshotCameraData,
   ThumbnailGenerator,
 } from './components/editor/thumbnail-generator'
 export { PLUGINS_VIEW_ID } from './components/editor/views/use-editor-views'
 export { WallMoveSideHandles } from './components/editor/wall-move-side-handles'
+export { WallPushArrow } from './components/editor/wall-push-arrow'
+export { useWallsBelowSetting } from './components/editor-2d/floorplan-adjacent-walls-layer'
 export { useFloorplanRender } from './components/editor-2d/floorplan-render-context'
-export { FloorplanDimensionRenderer } from './components/editor-2d/renderers/floorplan-dimension-renderer'
 export {
   type DraftMeasurement,
   FloorplanDraftMeasurement,
 } from './components/editor-2d/renderers/floorplan-draft-measurement'
-export { FloorplanGeometryRenderer } from './components/editor-2d/renderers/floorplan-geometry-renderer'
 export {
   FloorplanNodePreview,
   type FloorplanNodePreviewProps,
@@ -118,12 +293,7 @@ export {
 // SVG path builders for arc / annular-sector / arrow-head shapes —
 // inlined into `kind: 'path'` / `kind: 'polygon'` primitives by curved
 // stair rendering in `nodes/src/stair/floorplan.ts`.
-export {
-  buildSvgAnnularSectorPath,
-  buildSvgArcPath,
-  buildSvgArrowHeadPoints,
-  getArcPlanPoint,
-} from './components/editor-2d/svg-paths'
+export { useCeilingsSetting } from './components/systems/ceiling/ceiling-system'
 export type {
   SelectionAffordanceHistoryApi,
   SelectionAffordanceInteractionApi,
@@ -154,7 +324,11 @@ export {
   usePlacementCoordinator,
 } from './components/tools/item/use-placement-coordinator'
 export { MoveRegistryNodeTool } from './components/tools/registry/move-registry-node-tool'
-export { useRegistryToolContext } from './components/tools/registry-tool-context'
+export {
+  type RegistryToolContextValue,
+  RegistryToolProvider,
+  useRegistryToolContext,
+} from './components/tools/registry-tool-context'
 export { CursorSphere } from './components/tools/shared/cursor-sphere'
 export {
   DRAFT_LABEL_Y_OFFSET,
@@ -171,6 +345,7 @@ export {
   resolveLevelConstructionPlane,
 } from './components/tools/shared/horizontal-construction-plane'
 export { PlacementBox } from './components/tools/shared/placement-box'
+export { PlacementCoordinateInput } from './components/tools/shared/placement-coordinate-input'
 export { PlacementDimensionGuides } from './components/tools/shared/placement-dimension-guides'
 // Pointer-decided support surface (deck top vs floor underneath) — the
 // draw tools (wall / fence) ride their grid plane and commit cap on it.
@@ -186,7 +361,6 @@ export {
   type PolygonEditorProps,
 } from './components/tools/shared/polygon-editor'
 export {
-  formatAngleRadians,
   getAngleArcToSegmentReference,
   getAngleToSegmentReference,
   getSegmentAngleReferenceAtPoint,
@@ -195,6 +369,7 @@ export {
 export { preloadRegistryToolModules, ToolManager } from './components/tools/tool-manager'
 export {
   chainEndJoinsExistingWall,
+  createInvisibleWallOnCurrentLevel,
   createWallOnCurrentLevel,
   findWallSnapTarget,
   getSegmentGridStep,
@@ -212,6 +387,26 @@ export {
   type WallPlanPoint,
   type WallSnapRadii,
 } from './components/tools/wall/wall-drafting'
+export {
+  lockWallPullDirection,
+  snapWallPullPoint,
+  WALL_PULL_ANGLE_STEP,
+  WALL_PULL_LOCK_TOLERANCE,
+  WALL_PULL_SNAP_LABELS,
+  WALL_PULL_SNAP_RADII,
+  type WallPullDirectionLock,
+  type WallPullGuide,
+  type WallPullGuideKind,
+  type WallPullSnapInput,
+  type WallPullSnapKind,
+  type WallPullSnapRadii,
+  type WallPullSnapResult,
+} from './components/tools/wall/wall-pull-snap'
+export {
+  formatWallDraftHeading,
+  resolveTypedWallEnd,
+  wallDraftHeadingDegrees,
+} from './components/tools/wall/wall-typed-entry'
 // `ToolbarLeft` / `ToolbarRight` alias `ViewerToolbarLeft` / `ViewerToolbarRight`
 // (same components) under the names headless hosts compose their toolbars with.
 export {
@@ -219,7 +414,6 @@ export {
   CameraActions as ViewerToolbarRight,
 } from './components/ui/action-menu/camera-actions'
 export { furnishTools } from './components/ui/action-menu/furnish-tools'
-export type { ActionMenuPlacement } from './components/ui/action-menu/placement'
 export {
   ViewToggles as ToolbarLeft,
   ViewToggles as ViewerToolbarLeft,
@@ -234,6 +428,8 @@ export {
 } from './components/ui/build-panel/build-panel'
 export { useCommandPalette } from './components/ui/command-palette'
 export { ActionButton, ActionGroup } from './components/ui/controls/action-button'
+// A finish row in a node panel: the paint tool's picker and its write for one paint role.
+export { FinishSwatch } from './components/ui/controls/finish-swatch'
 export {
   MaterialPaintPanel,
   type MaterialPaintPanelProps,
@@ -275,27 +471,17 @@ export { applyMultiHeightMode } from './components/ui/panels/multi-height-mode'
 // a kind-owned panel and need PanelWrapper for the chrome.
 export { PanelWrapper } from './components/ui/panels/panel-wrapper'
 export { ParametricInspector as Inspector } from './components/ui/panels/parametric-inspector'
+// A floor's script (a room's, a slab's): its code to read and a way to take it off.
+export { ScriptedFinishRow } from './components/ui/panels/room-panel'
 export { ShapeChoice } from './components/ui/panels/shape-choice'
 export { WallPaintRegionList } from './components/ui/panels/wall-region-list'
 export { PALETTE_COLORS } from './components/ui/primitives/color-dot'
-export {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuSub,
-  DropdownMenuSubContent,
-  DropdownMenuSubTrigger,
-  DropdownMenuTrigger,
-} from './components/ui/primitives/dropdown-menu'
 export {
   ShortcutToken,
   shortcutDisplayValue,
 } from './components/ui/primitives/shortcut-token'
 export { useSidebarStore } from './components/ui/primitives/sidebar'
 export { Slider } from './components/ui/primitives/slider'
-export { Tooltip, TooltipContent, TooltipTrigger } from './components/ui/primitives/tooltip'
-export { SceneLoader } from './components/ui/scene-loader'
 export type { ExtraPanel } from './components/ui/sidebar/icon-rail'
 export { ItemsPanel } from './components/ui/sidebar/panels/items-panel'
 export type { FunctionTreeNode } from './components/ui/sidebar/panels/items-panel/function-tree-panel'
@@ -316,45 +502,8 @@ export {
   SnapTargetBadge,
   SnapTargetIcon,
 } from './components/ui/snap-target-badge'
-export {
-  FloorplanCompassButton,
-  type FloorplanCompassButtonProps,
-} from './components/viewer/floorplan-compass-button'
-export {
-  FloorplanPreview,
-  type FloorplanPreviewProps,
-  type FloorplanPreviewScene,
-} from './components/viewer/floorplan-preview'
-export { useViewerCameraNavigationSync } from './components/viewer/use-viewer-camera-navigation-sync'
-export {
-  ViewerControlsBar,
-  type ViewerControlsBarProps,
-} from './components/viewer/viewer-controls-bar'
-export { ViewerHoverLabel } from './components/viewer/viewer-hover-label'
-export { ParametricViewerRooms, ViewerRooms } from './components/viewer/viewer-rooms'
-export {
-  ViewerSceneHeader,
-  type ViewerSceneHeaderProps,
-} from './components/viewer/viewer-scene-header'
-export { ViewerSelectionManager } from './components/viewer/viewer-selection-manager'
-export { ViewerStage, type ViewerStageProps } from './components/viewer/viewer-stage'
-export {
-  normalizeViewerStageModes,
-  resolveMobileViewerStageMode,
-  resolveViewerStageMode,
-  VIEWER_STAGE_MODES,
-  viewerStageIncludes3D,
-} from './components/viewer/viewer-stage-modes'
-export {
-  type ViewerStageMode,
-  ViewerStageSwitcher,
-  type ViewerStageSwitcherProps,
-} from './components/viewer/viewer-stage-switcher'
-export {
-  WalkthroughHud,
-  type WalkthroughHudProps,
-  type WalkthroughInteract,
-} from './components/walkthrough-hud'
+// A wall's project wall types: new, edit, duplicate (the wall panel's Assembly).
+export { WallTypeMenu } from './components/ui/wall-type/wall-type-menu'
 export type { SaveStatus } from './hooks/use-auto-save'
 // useDragAction is the React-side glue for the registry's DragAction
 // primitive. Public so registry-driven kinds (Phase 5+ Stage D ports)
@@ -366,6 +515,16 @@ export { usePlacementNotice } from './hooks/use-placement-notice'
 export { useReducedMotion } from './hooks/use-reduced-motion'
 export { useSelectedRoom } from './hooks/use-selected-room'
 export { type Selection, useSelection } from './hooks/use-selection'
+export {
+  messageSlug,
+  nodeDescriptionDescriptor,
+  nodeLabel,
+  nodeLabelDescriptor,
+  toolHintChipLabel,
+  toolHintDescriptor,
+  toolHintKey,
+  toolHintLabel,
+} from './i18n/node-messages'
 export {
   clearPlacementSurface,
   getPlacementSurface,
@@ -396,7 +555,12 @@ export {
   resolveCeilingPlanPointSnap,
 } from './lib/ceiling-plan-snap'
 export { EDITOR_LAYER } from './lib/constants'
-export type { ContextualShortcutHint } from './lib/contextual-help'
+export {
+  AXIS_MOVE_DRAG_LABEL,
+  type ContextualShortcutHint,
+  PATH_POINT_DRAG_LABEL,
+  ROTATE_HANDLE_DRAG_LABEL,
+} from './lib/contextual-help'
 export {
   CONTEXTUAL_HELP_NODE_EXTENSION_KEY,
   type ContextualHelpNodeExtension,
@@ -411,11 +575,6 @@ export {
   nextContinuation,
 } from './lib/continuation'
 export { canDirectMoveNode } from './lib/direct-manipulation'
-export {
-  closeDoorOpenState,
-  getDisplayedDoorValue,
-  openDoorOpenState,
-} from './lib/door-interaction'
 export { downloadProjectFile } from './lib/download-project-file'
 export { createEditorApi } from './lib/editor-api'
 export {
@@ -437,28 +596,17 @@ export {
   resolveElevationSnapMatch,
   resolveStructuralElevationSnap,
 } from './lib/elevation-guides'
-export {
-  resolveCurrentBuildingId,
-  resolveElevatorNodeSupportY,
-  resolveElevatorSupportLevelId,
-  resolveElevatorSupportY,
-} from './lib/elevator-support'
+export { resolveCurrentBuildingId } from './lib/elevator-support'
 export type { ExportTextureUtils } from './lib/export-texture-utils'
 export { getFloatingMenuScale } from './lib/floating-menu-scale'
 export { startOpeningDraft } from './lib/floor-opening-draft'
 export {
   alignFloorplanDraftPoint,
   applyFloorplanAlignment,
-  clampPlanValue,
   FLOORPLAN_ALIGNMENT_THRESHOLD_M,
   FLOORPLAN_DRAFT_ALIGN_ID,
   type FloorplanAlignmentResult,
   getFloorplanWallThickness,
-  getPlanPointDistance,
-  getThickPlanLinePolygon,
-  interpolatePlanPoint,
-  movePlanPointTowards,
-  rotatePlanVector,
 } from './lib/floorplan'
 export type {
   FloorplanAnnotationCategory,
@@ -480,23 +628,11 @@ export {
   type FloorplanExportScope,
 } from './lib/floorplan/floorplan-export'
 export {
-  createFloorplanContextExtensions,
-  FLOORPLAN_CONTEXT_EXTENSION_KEY,
-  FLOORPLAN_GEOMETRY_METADATA_KEY,
   FLOORPLAN_NODE_EXTENSION_KEY,
-  type FloorplanAnnotationRole,
-  type FloorplanMetricNotation,
   type FloorplanNodeExtension,
-  type FloorplanRenderPurpose,
-  type FloorplanSchedule,
   type FloorplanToolContext,
   type FloorplanToolMode,
-  floorplanGeometryMetadata,
   getFloorplanNodeExtension,
-  readFloorplanContext,
-  readFloorplanGeometryMetadata,
-  readFloorplanMetricNotationOverride,
-  withFloorplanGeometryMetadata,
 } from './lib/floorplan/floorplan-extension'
 export {
   DEFAULT_FLOORPLAN_MODE,
@@ -504,14 +640,6 @@ export {
   type FloorplanMode,
   isFloorplanToolAvailableInMode,
 } from './lib/floorplan/floorplan-mode'
-export {
-  type MarkResolution,
-  type OpeningMarkKind,
-  orderedOpenings,
-  persistResolvedMarks,
-  resolveMarkDetail,
-  resolveMarks,
-} from './lib/floorplan/marks'
 export { clientToPlan } from './lib/floorplan/plan-coords'
 export {
   doorSchedule,
@@ -584,6 +712,11 @@ export {
   editorFinishScriptHost,
   finishScriptCode,
 } from './lib/geometry-script/finish-scripts'
+export {
+  beginGesture,
+  type GestureCancelReason,
+  type GestureHandle,
+} from './lib/gesture-lifecycle'
 export { exportSceneToGlb, type GlbExportOptions } from './lib/glb-export'
 export {
   type EditorGridEvent,
@@ -620,6 +753,11 @@ export {
   scopeNodeId,
 } from './lib/interaction/scope'
 export { isEditableKeyboardTarget } from './lib/keyboard-pan'
+export {
+  formatLayerDepth,
+  formatLayerThickness,
+  parseLayerThickness,
+} from './lib/layer-thickness'
 export { selectPlacedNode } from './lib/level-selection'
 // Lot drop-in — address → parcel → streets → front edge → setbacks, on the
 // site node, through the parcel provider the host sets.
@@ -665,10 +803,6 @@ export {
   normalizeCreatableMeasurementKind,
 } from './lib/measurement-kind'
 export {
-  measurementPolygonLabelAnchor,
-  triangulateMeasurementPolygon,
-} from './lib/measurement-label'
-export {
   type LingoUnitSpec,
   lingoUnitSpec,
   type MeasurementHintOptions,
@@ -676,27 +810,6 @@ export {
   type ParseMeasurementOptions,
   parseMeasurement,
 } from './lib/measurement-parser'
-export {
-  buildMeasurementAngleArcPoints,
-  cubicMetersToVolumeUnit,
-  formatAreaLabel,
-  formatLinearMeasurement,
-  formatVolumeLabel,
-  getAreaUnitLabel,
-  getLinearUnitLabel,
-  getVolumeUnitLabel,
-  type LinearUnit,
-  linearControlValueToMeters,
-  linearUnitToMeters,
-  MEASUREMENT_ACTIVE_COLOR,
-  MEASUREMENT_DANGLING_COLOR,
-  MEASUREMENT_FLOORPLAN_COLOR,
-  MEASUREMENT_PERSISTENT_COLOR,
-  measurementFloorplanPresentationColor,
-  measurementPresentationColor,
-  metersToLinearUnit,
-  squareMetersToAreaUnit,
-} from './lib/measurements'
 export type {
   ModelExport,
   ModelExportArtifact,
@@ -713,6 +826,7 @@ export {
 } from './lib/paint-scope'
 export {
   getNodePanelModel,
+  type MultiPanelControl,
   type NodePanelModel,
   PANEL_MODEL_EXTENSION,
   type PanelAction,
@@ -773,8 +887,7 @@ export { clearRoofDuplicateMetadata, duplicateRoofSubtree } from './lib/roof-dup
 // kind-owned door / window tools in `@pascal-app/nodes` and the item
 // placement coordinator's roof-wall strategy.
 export { hasRoofFaceChildOverlap, type RoofWallHit, resolveRoofWallHit } from './lib/roof-wall-hit'
-export { WALL_PUSH_AFFORDANCE, type WallPushArrowPayload } from './lib/room-handle-drag'
-export type { RoomKey, RoomSelectionRecord } from './lib/room-selection'
+export { selectedWallDimensions, separatorPushHandles } from './lib/room-handle-drag'
 export { popRoomSelection, selectRoom } from './lib/room-selection-commands'
 export {
   captureElementActionOrigin,
@@ -790,8 +903,13 @@ export {
   remapSceneMaterialRefs,
   sceneMaterialUsageCounts,
 } from './lib/scene-material-refs'
+export {
+  beginSeparatorEndDrag,
+  runSeparatorEndDrag,
+  type SeparatorEndDrag,
+} from './lib/separator-edit'
 export { movementSfxStepKey } from './lib/sfx/movement-tick'
-export { emitDeleteSFX, triggerSFX } from './lib/sfx-bus'
+export { emitDeleteSFX, initSFXBus, triggerSFX } from './lib/sfx-bus'
 export { playSFX, type SFXName, type SFXPlaybackOptions } from './lib/sfx-player'
 export { showSidebarPanel } from './lib/sidebar-panel'
 export {
@@ -848,7 +966,7 @@ export {
   sculptFieldForSite,
   terrainPointInsideSite,
 } from './lib/terrain-sculpt'
-export { isTypingTarget } from './lib/typing-target'
+export { withToolShortcut } from './lib/tool-shortcuts'
 export { enterUnitFocus } from './lib/units'
 export { exportSceneToUsdz, type UsdzExportOptions } from './lib/usdz-export'
 export { useLinearDisplay } from './lib/use-linear-display'
@@ -857,21 +975,28 @@ export { useLinearDisplay } from './lib/use-linear-display'
 // dependency.
 export { cn } from './lib/utils'
 export {
-  applyViewerClick,
-  applyViewerHover,
-  framedLookAt,
-  frameViewerCamera,
-  frameViewerNode,
-  useViewerFloorDisplay,
-  type ViewerPick,
-  type ViewerSource,
-} from './lib/viewer-selection'
-export {
   getWallDrawVariant,
+  getWallLineKind,
+  INVISIBLE_WALL_DRAFT_THICKNESS,
+  invisibleWallDraftSnapLines,
   selectWallDrawVariant,
+  selectWallKind,
+  useWallDraftThickness,
   useWallDrawVariant,
+  useWallKind,
+  WALL_KINDS,
   type WallDrawVariant,
+  type WallKind,
+  type WallLineKind,
 } from './lib/wall-draw-variant'
+export {
+  nearestWallParallelTarget,
+  nudgeWallPosition,
+  publishWallParallelGuide,
+  WALL_PARALLEL_SNAP_RADIUS,
+  type WallParallelTarget,
+  wallParallelTargets,
+} from './lib/wall-parallel-snap'
 export {
   createWallPointerTracker,
   wallPointerInParent,
@@ -884,13 +1009,29 @@ export {
   startWallPolygonDraft,
   wallPolygonDraftWalls,
 } from './lib/wall-polygon-draft'
-export { writeWindowChanges } from './lib/window-changes'
 export {
-  closeWindowOpenState,
-  getDisplayedWindowValue,
-  isOperableWindowType,
-  openWindowOpenState,
-} from './lib/window-interaction'
+  endWallPullRun,
+  releaseWallPullDrag,
+  startWallPull,
+  useWallPullRun,
+  type WallPullRun,
+  wallDraftIsRun,
+  wallPullTypePatch,
+} from './lib/wall-pull'
+export {
+  isWallRunFree,
+  publishWallRunFeedback,
+  snapWallRunDraftPoint,
+  wallRunDirection,
+} from './lib/wall-run-snap'
+export {
+  deleteProjectWallType,
+  saveProjectWallType,
+  useProjectWallTypes,
+  type WallTypePlacement,
+  wallTypePlacementOf,
+} from './lib/wall-type'
+export { writeWindowChanges } from './lib/window-changes'
 export {
   getActiveBuildingPose,
   projectAlignmentGuidesWorldToActiveBuildingLocal,
@@ -899,9 +1040,11 @@ export {
   snapBuildingLocalToWorldGrid,
   snapWorldXZForActiveBuilding,
 } from './lib/world-grid-snap'
-export { subscribeCameraPose } from './store/camera-pose-store'
-export { default as useAlignmentGuides } from './store/use-alignment-guides'
-export { default as useAudio } from './store/use-audio'
+export {
+  type DraftGuideLine,
+  type DraftGuides,
+  default as useAlignmentGuides,
+} from './store/use-alignment-guides'
 export { type CameraHintAction, useCameraHintFocus } from './store/use-camera-hint-focus'
 export { type CommandAction, useCommandRegistry } from './store/use-command-registry'
 export {
@@ -956,11 +1099,9 @@ export {
 } from './store/use-editor'
 export { default as useFacingPose, type FacingPose } from './store/use-facing-pose'
 export { default as useFenceCurveDraft } from './store/use-fence-curve-draft'
-export { type FirstPersonHudState, useFirstPersonHud } from './store/use-first-person-hud'
 export { default as useFloorplanAnnotationVisibility } from './store/use-floorplan-annotation-visibility'
 export { useFloorplanDraftPreview } from './store/use-floorplan-draft-preview'
 export { default as useFloorplanMode } from './store/use-floorplan-mode'
-export { default as useFollowPascal } from './store/use-follow-pascal'
 export {
   default as useInteractionScope,
   getEditingHole,
@@ -1009,6 +1150,22 @@ export {
   default as usePlacementPreview,
   type PlacementPreviewDimension,
 } from './store/use-placement-preview'
+export {
+  isPlacementTypingKey,
+  isPlacementTypingStartKey,
+  PLACEMENT_TYPING_DISTANCE_OFFSET,
+  PLACEMENT_TYPING_LENGTH_ANGLE,
+  type PlacementTypingField,
+  type PlacementTypingKeyOptions,
+  type PlacementTypingKeyOutcome,
+  type PlacementTypingProjection,
+  type PlacementTypingSession,
+  type PlacementTypingState,
+  type PlacementTypingValues,
+  placementTypingLengthOptions,
+  routePlacementTypingKey,
+  usePlacementTyping,
+} from './store/use-placement-typing'
 export { usePointAsk } from './store/use-point-ask'
 export {
   activateQuickMeasurementHudSource,

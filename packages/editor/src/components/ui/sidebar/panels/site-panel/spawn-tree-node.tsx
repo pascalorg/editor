@@ -1,12 +1,13 @@
 'use client'
 
-import { type SpawnNode, useScene } from '@pascal-app/core'
+import { type SpawnNode, useScene, usePascalI18n } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import Image from 'next/image'
 import { memo, useCallback, useState } from 'react'
 import { InlineRenameInput } from './inline-rename-input'
 import { focusTreeNode, handleTreeSelection, TreeNodeWrapper } from './tree-node'
 import { TreeNodeActions } from './tree-node-actions'
+import { nodeLabelDescriptor } from '../../../../../i18n/node-messages'
 
 interface SpawnTreeNodeProps {
   nodeId: SpawnNode['id']
@@ -19,6 +20,7 @@ export const SpawnTreeNode = memo(function SpawnTreeNode({
   depth,
   isLast,
 }: SpawnTreeNodeProps) {
+  const i18n = usePascalI18n()
   const [isEditing, setIsEditing] = useState(false)
   const isVisible = useScene((s) => s.nodes[nodeId]?.visible !== false)
   const isSelected = useViewer((state) => state.selection.selectedIds.includes(nodeId))
@@ -60,7 +62,7 @@ export const SpawnTreeNode = memo(function SpawnTreeNode({
       isVisible={isVisible}
       label={
         <InlineRenameInput
-          defaultName="Spawn Point"
+          defaultName={i18n._(nodeLabelDescriptor('spawn', 'Spawn Point'))}
           isEditing={isEditing}
           nodeId={nodeId}
           onStartEditing={() => setIsEditing(true)}

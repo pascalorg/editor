@@ -11,6 +11,8 @@ import {
   type DormerNode,
   type ElevatorNode,
   type FenceNode,
+  isMoveLocked,
+  isNodeDuplicable,
   type ItemNode,
   type RoofNode,
   type RoofSegmentNode,
@@ -19,14 +21,14 @@ import {
   type StairSegmentNode,
   useScene,
   type WallNode,
-  type WindowNode,
+  type WindowNode, usePascalI18n,
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useSelectedRoom, useZoneRoom } from '../../../hooks/use-selected-room'
 import { FloorOpeningPanel } from './floor-opening-panel'
 import { OpenRoomPanel, RoomPanel } from './room-panel'
-import { useIsMobile } from '../../../hooks/use-mobile'
+import { useIsMobile } from '@pascal-app/viewer/ui'
 import { shouldShowEditingControls } from '../../../lib/interaction/overlay-policy'
 import { captureElementActionOrigin, completeElementAction } from '../../../lib/room-zone-routing'
 import { sfxEmitter } from '../../../lib/sfx-bus'
@@ -107,6 +109,7 @@ function MobilePanelLayer({
   panel: React.ReactNode
   isReference: boolean
 }) {
+  const i18n = usePascalI18n()
   const setSelection = useViewer((s) => s.setSelection)
   const setSelectedReferenceId = useEditor((s) => s.setSelectedReferenceId)
   const setMovingNode = useEditor((s) => s.setMovingNode)
@@ -146,7 +149,7 @@ function MobilePanelLayer({
 
   if (!(node || isReference)) return null
 
-  const display = getNodeDisplay(node)
+  const display = getNodeDisplay(node, i18n)
 
   return (
     <>
@@ -154,9 +157,9 @@ function MobilePanelLayer({
         <MobileSelectionBar
           node={node}
           onDelete={handleDelete}
-          onDuplicate={handleDuplicate}
+          onDuplicate={isNodeDuplicable(node) ? handleDuplicate : undefined}
           onEdit={() => setIsSheetOpen((v) => !v)}
-          onMove={handleMove}
+          onMove={isMoveLocked(node) ? undefined : handleMove}
         />
       )}
       <MobilePanelSheet
@@ -180,8 +183,9 @@ function MobileMultiPanelLayer({
   panel: React.ReactNode
   type: string | null
 }) {
+  const i18n = usePascalI18n()
   const [isSheetOpen, setIsSheetOpen] = useState(false)
-  const display = type ? getTypeDisplay(type) : { icon: '/icons/select.webp', label: 'Selection' }
+  const display = type ? getTypeDisplay(type, i18n) : { icon: '/icons/select.webp', label: i18n._({ id: 'editor.panels.panelManager.selection', message: 'Selection' }) }
   const title = breakdown || display.label
 
   useEffect(() => {

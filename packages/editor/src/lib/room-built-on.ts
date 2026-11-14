@@ -1,11 +1,12 @@
 import {
   type AnyNode,
   roomFloorChoices as coreRoomFloorChoices,
+  levelFootprints,
+  type PascalI18n,
   roomDrawnFloor,
   type SlabNode,
   type ZoneNode,
 } from '@pascal-app/core'
-import { levelFootprints } from './floor-footprints'
 
 // "Built on": which floor a room stands on. By default a room is part of its
 // connected footprint's shared floor (`floor.footprint` absent); a floor key
@@ -58,20 +59,6 @@ export function roomFloorChoices(nodes: Nodes, zoneId: string): PlateChoice[] {
   return coreRoomFloorChoices(nodes, zoneId)
     .filter((choice) => !choice.drawn && !choice.mezzanine)
     .map(({ key, plateId, name }) => ({ key, plateId, name }))
-}
-
-/**
- * The plate a room on a separate floor stands on alone: its height is that
- * plate's floor height (nothing else stands on it). Null for a room on the
- * shared floor or sharing its separate floor with other rooms.
- */
-export function roomOwnPlate(nodes: Nodes, zoneId: string): SlabNode | null {
-  const zone = nodes[zoneId]
-  if (!isRoom(zone) || !zone.floor?.footprint || zone.floor.support === 'open') return null
-  const plate = listingPlate(nodes, zone)
-  if (!plate) return null
-  const alone = !(plate.zoneIds ?? []).some((id) => id !== zoneId && isGroundRoom(nodes[id]))
-  return alone ? plate : null
 }
 
 /**
@@ -130,9 +117,26 @@ export function roomBuiltOn(nodes: Nodes, zoneId: string): RoomBuiltOnModel | nu
 export function separateFloorSummary(
   model: { current: { name: string }; shared: { name: string } | null; offset: number | null },
   length: (meters: number) => string,
+  i18n: PascalI18n,
 ): string {
   const { current, shared, offset } = model
   if (!shared || offset === null) return current.name
-  if (Math.abs(offset) < 0.005) return `${current.name} · level with ${shared.name}`
-  return `${current.name} · ${length(Math.abs(offset))} ${offset > 0 ? 'above' : 'below'} ${shared.name}`
+  const values = { current: current.name, shared: shared.name, distance: length(Math.abs(offset)) }
+  if (Math.abs(offset) < 0.005)
+    return i18n._({
+      id: 'editor.room.builtOn.levelWith',
+      message: '{current} · level with {shared}',
+      values,
+    })
+  return offset > 0
+    ? i18n._({
+        id: 'editor.room.builtOn.above',
+        message: '{current} · {distance} above {shared}',
+        values,
+      })
+    : i18n._({
+        id: 'editor.room.builtOn.below',
+        message: '{current} · {distance} below {shared}',
+        values,
+      })
 }

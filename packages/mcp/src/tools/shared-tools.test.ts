@@ -1,15 +1,30 @@
 import { beforeEach, describe, expect, test } from 'bun:test'
 import { Client } from '@modelcontextprotocol/client'
 import { InMemoryTransport, McpServer } from '@modelcontextprotocol/server'
-import type { AgentOperations } from '@pascal-app/core/agent-operations'
+import { scriptSource } from '@pascal-app/core'
+import {
+  type AgentOperations,
+  type AssetCatalogSource,
+  assetCatalogSource,
+} from '@pascal-app/core/agent-operations'
 import { type PluginAgentTools, refuse } from '@pascal-app/core/agent-tools'
-import { type AnyNodeId, BuildingNode, type Collection, LevelNode } from '@pascal-app/core/schema'
+import {
+  type AnyNodeId,
+  BuildingNode,
+  type Collection,
+  GeometryArtifactManifest,
+  LevelNode,
+} from '@pascal-app/core/schema'
 import { createPascalMcpServer } from '@pascal-app/mcp/server'
 import { z } from 'zod'
-import { AGENT_TOOL_CASES } from '../../../core/src/agent-operations/__fixtures__/cases'
+import {
+  AGENT_TOOL_CASES,
+  type AgentToolCase,
+} from '../../../core/src/agent-operations/__fixtures__/cases'
 import { CATALOG_BRIEF } from '../../../core/src/agent-operations/__fixtures__/design-brief-cases'
 import { SceneBridge } from '../bridge/scene-bridge'
 import { createSceneOperations } from '../operations'
+import { registerAddColumn } from './add-column'
 import { ADDITIVE_TOOL_ANNOTATIONS } from './annotations'
 import { type AssetCatalog, builtInCatalog } from './asset-catalog'
 import { type PlanReadingHosts, registerOperationTool, registerSharedTools } from './shared-tools'
@@ -75,91 +90,158 @@ test('hosted file tools work through MCP without loading a scene and preserve ac
 describe('shared tools over MCP', () => {
   let bridge: SceneBridge
   let client: Client
-  // The host's library for the case at hand: its own, else the server's built-in list.
-  let catalog: AssetCatalog = builtInCatalog
   // The floor the host's person views for the case at hand; none, as on the remote MCP.
   let viewed: string | null = null
   const hosts: PlanReadingHosts = {}
 
-  beforeEach(async () => {
+  /** A server on the host's library for the case at hand: its own, else the built-in list. */
+  async function connect(catalog: AssetCatalog) {
     bridge = new SceneBridge()
     const server = new McpServer({ name: 'test', version: '0.0.0' })
+    registerAddColumn(server, createSceneOperations({ bridge, activeLevelId: () => viewed }))
     registerSharedTools(
       server,
       createSceneOperations({ bridge, activeLevelId: () => viewed }),
-      () => catalog(),
+      catalog,
       hosts,
     )
     const [serverTransport, clientTransport] = InMemoryTransport.createLinkedPair()
     client = new Client({ name: 'test-client', version: '0.0.0' })
     await Promise.all([server.connect(serverTransport), client.connect(clientTransport)])
     await client.listTools()
-  })
+  }
 
   for (const c of AGENT_TOOL_CASES) {
     if (c.surfaces && !c.surfaces.includes('mcp')) continue
-    test(`${c.tool}: ${c.name}`, async () => {
-      const { nodes, rootNodeIds } = c.scene()
-      bridge.setScene(nodes as never, rootNodeIds as never)
-      const designBrief =
-        c.context?.designBrief === undefined ? CATALOG_BRIEF : (c.context.designBrief ?? undefined)
-      bridge.agentSession.replace({
-        ...(c.context?.session?.() ?? { checkpoints: {}, made: [] }),
-        ...(designBrief ? { designBrief } : {}),
+    // A library is a list held whole, or a source each call reads what it needs of.
+    const own = c.context?.catalog
+    for (const source of own ? [false, true] : [false])
+      test(`${c.tool}: ${c.name}${source ? ' (catalog source)' : ''}`, async () => {
+        await connect(own ? (source ? assetCatalogSource(own) : own) : builtInCatalog)
+        await runCase(c)
       })
-      const own = c.context?.catalog
-      catalog = own ? async () => own : builtInCatalog
-      // Catalog facts supplied by each shared case; nothing is fetched.
-      hosts.assetViews = async () => c.context?.assetViews ?? {}
-      viewed = c.context?.activeLevelId ?? null
-      const result = (await client.callTool({ name: c.tool, arguments: c.input })) as Result
-      const payload =
-        result.structuredContent ?? (JSON.parse(result.content[0]!.text) as Record<string, unknown>)
-      if ('refusal' in c.expect) {
-        expect(result.isError).toBe(true)
-        expect(payload.code).toBe(c.expect.refusal)
-        for (const text of c.expect.mentions ?? []) expect(String(payload.error)).toContain(text)
-        return
-      }
-      expect(result.isError).toBeFalsy()
-      expect(c.expect.session?.(bridge.agentSession.read()) ?? []).toEqual([])
-      expect(payload).toMatchObject(c.expect.result)
-      for (const id of c.expect.present ?? []) expect(bridge.getNode(id as AnyNodeId)).toBeTruthy()
-      for (const id of c.expect.absent ?? []) expect(bridge.getNode(id as AnyNodeId)).toBeFalsy()
-      for (const [id, fields] of Object.entries(c.expect.after ?? {}))
-        expect(bridge.getNode(id as AnyNodeId)).toMatchObject(fields)
-      for (const [key, entries] of Object.entries(c.expect.contains ?? {}))
-        for (const entry of entries)
-          expect((payload as Record<string, unknown[]>)[key]).toContainEqual(
-            expect.objectContaining(entry),
-          )
-      for (const [key, entries] of Object.entries(c.expect.lacks ?? {}))
-        for (const entry of entries)
-          expect((payload as Record<string, unknown[]>)[key]).not.toContainEqual(
-            expect.objectContaining(entry),
-          )
-      for (const text of c.expect.mentions ?? []) expect(JSON.stringify(payload)).toContain(text)
-      expect(c.expect.check?.(payload, bridge.getNodes()) ?? []).toEqual([])
+  }
+
+  async function runCase(c: AgentToolCase) {
+    const { nodes, rootNodeIds } = c.scene()
+    bridge.setScene(nodes as never, rootNodeIds as never)
+    const designBrief =
+      c.context?.designBrief === undefined ? CATALOG_BRIEF : (c.context.designBrief ?? undefined)
+    bridge.agentSession.replace({
+      ...(c.context?.session?.() ?? { checkpoints: {}, made: [] }),
+      ...(designBrief ? { designBrief } : {}),
     })
+    // Catalog facts supplied by each shared case; nothing is fetched.
+    hosts.assetViews = async () => c.context?.assetViews ?? {}
+    viewed = c.context?.activeLevelId ?? null
+    const result = (await client.callTool({ name: c.tool, arguments: c.input })) as Result
+    const payload =
+      result.structuredContent ?? (JSON.parse(result.content[0]!.text) as Record<string, unknown>)
+    if ('refusal' in c.expect) {
+      expect(result.isError).toBe(true)
+      expect(payload.code).toBe(c.expect.refusal)
+      for (const text of c.expect.mentions ?? []) expect(String(payload.error)).toContain(text)
+      return
+    }
+    expect(result.isError).toBeFalsy()
+    expect(c.expect.session?.(bridge.agentSession.read()) ?? []).toEqual([])
+    expect(payload).toMatchObject(c.expect.result)
+    for (const id of c.expect.present ?? []) expect(bridge.getNode(id as AnyNodeId)).toBeTruthy()
+    for (const id of c.expect.absent ?? []) expect(bridge.getNode(id as AnyNodeId)).toBeFalsy()
+    for (const [id, fields] of Object.entries(c.expect.after ?? {}))
+      expect(bridge.getNode(id as AnyNodeId)).toMatchObject(fields)
+    for (const [key, entries] of Object.entries(c.expect.contains ?? {}))
+      for (const entry of entries)
+        expect((payload as Record<string, unknown[]>)[key]).toContainEqual(
+          expect.objectContaining(entry),
+        )
+    for (const [key, entries] of Object.entries(c.expect.lacks ?? {}))
+      for (const entry of entries)
+        expect((payload as Record<string, unknown[]>)[key]).not.toContainEqual(
+          expect.objectContaining(entry),
+        )
+    for (const text of c.expect.mentions ?? []) expect(JSON.stringify(payload)).toContain(text)
+    expect(c.expect.check?.(payload, bridge.getNodes()) ?? []).toEqual([])
   }
 })
 
 // The hosted MCP searched 23 built-in items, no light or plant,
 // while the chat searched the app's library; the agent found no wall light and left them out.
 describe("search_assets over MCP reads the host's catalog", () => {
-  async function search(query: string, catalog?: AssetCatalog) {
+  async function call(query: string, catalog?: AssetCatalog) {
     const server = new McpServer({ name: 'test', version: '0.0.0' })
     registerSharedTools(server, new SceneBridge(), catalog)
     const [serverTransport, clientTransport] = InMemoryTransport.createLinkedPair()
     const client = new Client({ name: 'test-client', version: '0.0.0' })
     await Promise.all([server.connect(serverTransport), client.connect(clientTransport)])
-    const result = (await client.callTool({
+    return (await client.callTool({
       name: 'search_assets',
       arguments: { queries: [{ query }] },
     })) as Result
-    const payload = JSON.parse(result.content[0]!.text)
+  }
+
+  async function search(query: string, catalog?: AssetCatalog) {
+    const payload = JSON.parse((await call(query, catalog)).content[0]!.text)
     return payload.groups[0].results.map((item: { id: string }) => item.id) as string[]
   }
+
+  test('the model reads ids, names and placement facts; the structured result keeps the rest', async () => {
+    const lamps = Array.from({ length: 30 }, (_, index) => ({
+      id: `lamp-${index}`,
+      category: 'lighting',
+      name: `Lamp ${index}`,
+      thumbnail: '',
+      src: `asset://lamp-${index}`,
+      dimensions: [0.3, 0.5, 0.3] as [number, number, number],
+      ...(index === 0 && { attachTo: 'wall' as const }),
+    }))
+    const result = await call('lamp', lamps)
+    const text = JSON.parse(result.content[0]!.text)
+    const structured = result.structuredContent as typeof text
+    expect(text.groups[0]).toMatchObject({ total: 30, truncated: true })
+    expect(text.groups[0].results).toHaveLength(24)
+    expect(text.groups[0].results[0]).toEqual({
+      id: 'lamp-0',
+      name: 'Lamp 0',
+      dimensions: [0.3, 0.5, 0.3],
+      attachTo: 'wall',
+    })
+    expect(text.groups[0].results[1]).toEqual({
+      id: 'lamp-1',
+      name: 'Lamp 1',
+      dimensions: [0.3, 0.5, 0.3],
+    })
+    expect(text.hint).toContain('"lamp" matches 30 items')
+    expect(structured.groups[0].results).toHaveLength(24)
+    expect(structured.groups[0].results[1]).toMatchObject({ category: 'lighting', attachTo: null })
+  })
+
+  test('the model reads the params of an item built from a script', async () => {
+    const sofa = {
+      id: 'scripted-sofa',
+      category: 'sofa',
+      name: 'Scripted sofa',
+      thumbnail: '',
+      src: `artifact://${'a'.repeat(64)}`,
+      dimensions: [2.2, 0.8, 0.9] as [number, number, number],
+      script: scriptSource({
+        sha256: 'a'.repeat(64),
+        script: 'b'.repeat(64),
+        language: 'three',
+        mount: 'floor',
+        params: { width: 2.2 },
+        manifest: GeometryArtifactManifest.parse({
+          bounds: { min: [-1.1, 0, -0.45], max: [1.1, 0.8, 0.45] },
+          triangles: 12,
+          params: [{ id: 'width', kind: 'number', default: 2, min: 1.6, max: 3, unit: 'm' }],
+        }),
+      }),
+    }
+    const text = JSON.parse((await call('sofa', [sofa])).content[0]!.text)
+    expect(text.groups[0].results[0].params).toEqual([
+      { id: 'width', kind: 'number', default: 2, min: 1.6, max: 3, unit: 'm', value: 2.2 },
+    ])
+  })
 
   test('a standalone server searches its built-in list', async () => {
     expect(await search('sofa')).toContain('sofa')
@@ -175,8 +257,25 @@ describe("search_assets over MCP reads the host's catalog", () => {
       src: 'asset://palm',
       dimensions: [1.5, 3, 1.5] as [number, number, number],
     }
-    expect(await search('plant', async () => [palm])).toEqual(['palm'])
-    expect(await search('sofa', async () => [palm])).toEqual([])
+    expect(await search('plant', [palm])).toEqual(['palm'])
+    expect(await search('sofa', [palm])).toEqual([])
+  })
+
+  test("a host's source answers the search in its own order, and nothing else of it is read", async () => {
+    const asked: unknown[] = []
+    const item = (id: string) => ({ id, category: 'plants', name: id, thumbnail: '', src: '' })
+    const source: AssetCatalogSource = {
+      search: async (query) => {
+        asked.push(query)
+        return { items: [item('olive-tree'), item('palm')], total: 2 }
+      },
+      byId: async (ids) => {
+        asked.push(ids)
+        return []
+      },
+    }
+    expect(await search('plant', source)).toEqual(['olive-tree', 'palm'])
+    expect(asked).toEqual([{ text: 'plant', limit: 24 }])
   })
 })
 

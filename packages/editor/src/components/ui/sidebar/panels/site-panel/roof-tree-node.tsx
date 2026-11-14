@@ -1,4 +1,12 @@
-import { type AnyNodeId, type RoofNode, type RoofSegmentNode, useScene } from '@pascal-app/core'
+import {
+  type AnyNodeId,
+  type RoofNode,
+  type RoofSegmentNode,
+  roofFaceOf,
+  useRegistryVersion,
+  useScene,
+  usePascalI18n,
+} from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { AnimatePresence } from 'motion/react'
 import Image from 'next/image'
@@ -9,6 +17,8 @@ import { InlineRenameInput } from './inline-rename-input'
 import { focusTreeNode, handleTreeSelection, TreeNode, TreeNodeWrapper } from './tree-node'
 import { TreeNodeActions } from './tree-node-actions'
 import { DropIndicatorLine, useTreeNodeDrag } from './tree-node-drag'
+import { roofDefaultName, roofSegmentDefaultName } from './default-names'
+import { nodeLabelDescriptor } from '../../../../../i18n/node-messages'
 
 interface RoofTreeNodeProps {
   nodeId: AnyNodeId
@@ -21,6 +31,7 @@ export const RoofTreeNode = memo(function RoofTreeNode({
   depth,
   isLast,
 }: RoofTreeNodeProps) {
+  const i18n = usePascalI18n()
   const [isEditing, setIsEditing] = useState(false)
   const [expanded, setExpanded] = useState(false)
   const isVisible = useScene((s) => s.nodes[nodeId]?.visible !== false)
@@ -40,10 +51,23 @@ export const RoofTreeNode = memo(function RoofTreeNode({
         .filter((n): n is RoofSegmentNode => n?.type === 'roof-segment')
     }),
   )
+  // Its faces of other kinds (`capabilities.roofs`: a plugin's roof planes), listed after its
+  // segments as the rows their kinds draw. A plugin registers its kinds after the first mount.
+  useRegistryVersion()
+  const faceIds = useScene(
+    useShallow(
+      (s) =>
+        ((s.nodes[nodeId] as RoofNode | undefined)?.children ?? []).filter((childId) =>
+          roofFaceOf(s.nodes[childId as AnyNodeId]),
+        ) as AnyNodeId[],
+    ),
+  )
 
-  // Targeted selector — only re-renders when a segment of THIS roof is selected/deselected
-  const hasSelectedChild = useViewer((state) =>
-    segments.some((seg) => state.selection.selectedIds.includes(seg.id)),
+  // Targeted selector — only re-renders when a segment or face of THIS roof is selected/deselected
+  const hasSelectedChild = useViewer(
+    (state) =>
+      segments.some((seg) => state.selection.selectedIds.includes(seg.id)) ||
+      faceIds.some((id) => state.selection.selectedIds.includes(id)),
   )
 
   const handleClick = useCallback(
@@ -84,7 +108,11 @@ export const RoofTreeNode = memo(function RoofTreeNode({
   }, [isDropTarget, expanded])
 
   const segmentCount = segments.length
-  const defaultName = `Roof (${segmentCount} segment${segmentCount !== 1 ? 's' : ''})`
+  // A roof of faces alone reads as a roof, not as one of no segments.
+  const defaultName =
+    segmentCount === 0 && faceIds.length > 0
+      ? i18n._(nodeLabelDescriptor('roof', 'Roof'))
+      : roofDefaultName(i18n, segmentCount)
 
   // Hide the dragged segment from every roof while dragging
   const visibleSegments = drag ? segments.filter((seg) => seg.id !== drag.nodeId) : segments
@@ -97,7 +125,7 @@ export const RoofTreeNode = memo(function RoofTreeNode({
         actions={<TreeNodeActions nodeId={nodeId} />}
         depth={depth}
         expanded={expanded}
-        hasChildren={segments.length > 0}
+        hasChildren={segments.length + faceIds.length > 0}
         icon={
           <Image alt="" className="object-contain" height={14} src="/icons/roof.webp" width={14} />
         }
@@ -137,7 +165,12 @@ export const RoofTreeNode = memo(function RoofTreeNode({
               </AnimatePresence>
               <RoofSegmentTreeNode
                 depth={depth + 1}
-                isLast={isLast && i === visibleSegments.length - 1 && !showIndicatorAfter}
+                isLast={
+                  isLast &&
+                  faceIds.length === 0 &&
+                  i === visibleSegments.length - 1 &&
+                  !showIndicatorAfter
+                }
                 node={seg}
               />
               <AnimatePresence>
@@ -149,6 +182,14 @@ export const RoofTreeNode = memo(function RoofTreeNode({
         <AnimatePresence>
           {isDropTarget && visibleSegments.length === 0 && <DropIndicatorLine />}
         </AnimatePresence>
+        {faceIds.map((faceId, index) => (
+          <TreeNode
+            depth={depth + 1}
+            isLast={isLast && index === faceIds.length - 1}
+            key={faceId}
+            nodeId={faceId}
+          />
+        ))}
       </TreeNodeWrapper>
     </div>
   )
@@ -163,6 +204,7 @@ function RoofSegmentTreeNode({
   depth: number
   isLast?: boolean
 }) {
+  const i18n = usePascalI18n()
   const [isEditing, setIsEditing] = useState(false)
   const [expanded, setExpanded] = useState(true)
   const accessoryIds = useScene(
@@ -206,16 +248,16 @@ function RoofSegmentTreeNode({
   const handlePointerDown = useCallback(
     (e: React.PointerEvent) => {
       if (e.button !== 0) return
-      const label = `${node.roofType.charAt(0).toUpperCase() + node.roofType.slice(1)} (${node.width.toFixed(1)}×${node.depth.toFixed(1)}m)`
+      const label = roofSegmentDefaultName(i18n, node.roofType, node.width, node.depth)
       startDrag(node.id, node.type, node.parentId as string, label, e.clientX, e.clientY)
     },
-    [node.id, node.type, node.parentId, node.roofType, node.width, node.depth, startDrag],
+    [node.id, node.type, node.parentId, node.roofType, node.width, node.depth, startDrag, i18n],
   )
 
   const handleStartEditing = useCallback(() => setIsEditing(true), [])
   const handleStopEditing = useCallback(() => setIsEditing(false), [])
 
-  const defaultName = `${node.roofType.charAt(0).toUpperCase() + node.roofType.slice(1)} (${node.width.toFixed(1)}x${node.depth.toFixed(1)}m)`
+  const defaultName = roofSegmentDefaultName(i18n, node.roofType, node.width, node.depth)
 
   const hasAccessories = accessoryIds.length > 0
 

@@ -7,6 +7,7 @@ import {
   type Cursor,
   type DuctFittingNode,
   DuctSegmentNode,
+  findLevelAncestorId,
   nodeRegistry,
   type PortConnectivity,
   pauseSceneHistory,
@@ -17,10 +18,13 @@ import {
   useScene,
 } from '@pascal-app/core'
 import {
+  AXIS_MOVE_DRAG_LABEL,
   clearPlacementSurface,
   DimensionPill,
   isAngleSnapActive,
   isGridSnapActive,
+  PATH_POINT_DRAG_LABEL,
+  ROTATE_HANDLE_DRAG_LABEL,
   swallowNextClick,
   triggerSFX,
   useEditor,
@@ -55,18 +59,16 @@ import {
   type FittingEndpoint,
   planFittingEndpointReaim,
 } from '../shared/fitting-endpoint-reaim'
+import { useHandleDragScope } from '../shared/handle-drag-scope'
 import { DuctSegmentGhost, FittingGhost } from '../shared/mep-ghost'
 import { DUCT_PORT_SYSTEMS } from '../shared/port-systems'
 import { planRunTranslationOffsets } from '../shared/run-translation-offset'
 import { ContinuePlusHandle, HandleCube, MoveChevron, RotateArc } from '../shared/selection-handles'
 import { planVerticalOffsets, type VerticalOffsetResult } from '../shared/vertical-offset'
 import { refreshWallRunAttachment } from '../shared/wall-run-move'
-import {
-  activateDuctContinuation,
-  type DuctEndpoint,
-  ductContinuationHandlePlan,
-} from './continuation'
-import { INCHES_TO_METERS } from './geometry'
+import { activateDuctContinuation } from './continuation'
+import { type DuctEndpoint, ductContinuationHandlePlan } from './continuation-handle'
+import { INCHES_TO_METERS } from './profile'
 
 /** Port-snap radius for dragged run endpoints (meters, XZ). */
 const PORT_SNAP_RADIUS_M = 0.4
@@ -231,6 +233,7 @@ const DuctPointHandles = ({ duct, target }: { duct: DuctSegmentNode; target: Obj
   })
   const unit = useViewer((s) => s.unit)
   const [draggingIndex, setDraggingIndex] = useState<number | null>(null)
+  const claimHandleDrag = useHandleDragScope()
   const [rolling, setRolling] = useState(false)
   const [runMoving, setRunMoving] = useState(false)
   // Auto-routed offset preview shown while the run-center cube's ±Y arrows
@@ -446,9 +449,11 @@ const DuctPointHandles = ({ duct, target }: { duct: DuctSegmentNode; target: Obj
       ])
     }
     const path = drag.initialPath.map((p, i) => (i === drag.index ? next : p)) as Point[]
+    const followers = detached ? [] : connectivityUpdatesForPath(drag.connectivity, path)
+    if (!followers) return null
     const updates = [
       { id: duct.id as AnyNodeId, data: { path, wallAttachment: attachmentFor(path) } },
-      ...(detached ? [] : connectivityUpdatesForPath(drag.connectivity, path)),
+      ...followers,
     ]
     return detached ? updates : withEndCapFollow(path, updates)
   }
@@ -463,15 +468,18 @@ const DuctPointHandles = ({ duct, target }: { duct: DuctSegmentNode; target: Obj
 
   // Follow-updates for fittings / ducts mated to this run's endpoints, given
   // the run's live path. Endpoints whose position didn't change resolve to a
-  // zero delta, so only the dragged endpoint's partner actually moves.
+  // zero delta, so only the dragged endpoint's partner actually moves. Null
+  // when the mated joints cannot follow the path.
   const connectivityUpdatesForPath = (
     connectivity: PortConnectivity | null,
     path: Point[],
-  ): { id: AnyNodeId; data: Partial<AnyNode> }[] => {
+  ): { id: AnyNodeId; data: Partial<AnyNode> }[] | null => {
     if (!connectivity) return []
     const preview = { ...(duct as Record<string, unknown>), path } as AnyNode
-    return resolveConnectivityUpdates(connectivity, preview).filter(
-      (u) => useScene.getState().nodes[u.id],
+    return (
+      resolveConnectivityUpdates(connectivity, preview)?.filter(
+        (u) => useScene.getState().nodes[u.id],
+      ) ?? null
     )
   }
 
@@ -488,10 +496,18 @@ const DuctPointHandles = ({ duct, target }: { duct: DuctSegmentNode; target: Obj
     const livePreviewIds = new Set<AnyNodeId>()
     const publishLivePreview = (updates: { id: AnyNodeId; data: Partial<AnyNode> }[]) => {
       const scene = useScene.getState()
+      const overrides = useLiveNodeOverrides.getState()
       const entries = updates
         .filter((update) => scene.nodes[update.id])
         .map((update) => [update.id, update.data as Record<string, unknown>] as const)
-      useLiveNodeOverrides.getState().setMany(entries)
+      const previewed = new Set(entries.map(([id]) => id))
+      for (const id of livePreviewIds) {
+        if (previewed.has(id)) continue
+        overrides.clear(id)
+        if (scene.nodes[id]) scene.markDirty(id)
+        livePreviewIds.delete(id)
+      }
+      overrides.setMany(entries)
       for (const [id] of entries) {
         livePreviewIds.add(id)
         scene.markDirty(id)
@@ -508,6 +524,10 @@ const DuctPointHandles = ({ duct, target }: { duct: DuctSegmentNode; target: Obj
     useViewer.getState().setInputDragging(true)
     document.body.style.cursor = kind.axis === 'y' ? 'ns-resize' : 'grabbing'
     setDraggingIndex(index)
+    const releaseScope = claimHandleDrag(duct.id, PATH_POINT_DRAG_LABEL, () => {
+      swallowNextClick()
+      finish(false)
+    })
 
     const isEndpoint = index === 0 || index === initialPath.length - 1
 
@@ -601,6 +621,9 @@ const DuctPointHandles = ({ duct, target }: { duct: DuctSegmentNode; target: Obj
           [next[0], next[1], next[2]],
           collectScenePorts({
             excludeNodeId: duct.id,
+            levelId: (findLevelAncestorId(duct.id, useScene.getState().nodes) ?? undefined) as
+              | AnyNodeId
+              | undefined,
             systems: DUCT_PORT_SYSTEMS,
           }),
           PORT_SNAP_RADIUS_M,
@@ -620,15 +643,9 @@ const DuctPointHandles = ({ duct, target }: { duct: DuctSegmentNode; target: Obj
       publishLivePreview(batch)
     }
 
-    const onUp = () => {
+    const finish = (commit: boolean) => {
       const drag = dragRef.current
       if (!drag) return
-      // Swallow the trailing synthetic click so it doesn't reach the
-      // background-click deselect handler — `cleanup()` drops `inputDragging`
-      // synchronously here, so without this the click that fires after
-      // pointerup would land with the drag gate already down and clear the
-      // selection. Mirrors `useHandleDrag`'s onUp.
-      swallowNextClick()
       drag.cleanup()
       dragRef.current = null
       setDraggingIndex(null)
@@ -639,7 +656,7 @@ const DuctPointHandles = ({ duct, target }: { duct: DuctSegmentNode; target: Obj
       // detached — just the duct path).
       const detached = drag.detached
       const moved = drag.current.some((v, axis) => v !== drag.initialPath[drag.index]![axis])
-      const finalBatch = buildDragBatch(drag, drag.current, detached)
+      const finalBatch = commit ? buildDragBatch(drag, drag.current, detached) : null
       resumeSceneHistory(useScene)
       if (moved && finalBatch) {
         // A manual corner edit invalidates any stored auto-offset base (the
@@ -660,10 +677,23 @@ const DuctPointHandles = ({ duct, target }: { duct: DuctSegmentNode; target: Obj
       }
     }
 
+    const onUp = () => {
+      if (!dragRef.current) return
+      // Swallow the trailing synthetic click so it doesn't reach the
+      // background-click deselect handler — `cleanup()` drops `inputDragging`
+      // synchronously here, so without this the click that fires after
+      // pointerup would land with the drag gate already down and clear the
+      // selection. Mirrors `useHandleDrag`'s onUp.
+      swallowNextClick()
+      finish(true)
+    }
+    const onCancel = () => finish(false)
+
     const cleanup = () => {
       window.removeEventListener('pointermove', onMove)
       window.removeEventListener('pointerup', onUp)
-      window.removeEventListener('pointercancel', onUp)
+      window.removeEventListener('pointercancel', onCancel)
+      releaseScope()
       useViewer.getState().setInputDragging(false)
       document.body.style.cursor = ''
     }
@@ -683,7 +713,7 @@ const DuctPointHandles = ({ duct, target }: { duct: DuctSegmentNode; target: Obj
     }
     window.addEventListener('pointermove', onMove)
     window.addEventListener('pointerup', onUp)
-    window.addEventListener('pointercancel', onUp)
+    window.addEventListener('pointercancel', onCancel)
   }
 
   // Roll: spin the rect / oval cross-section about the run (length) axis. The
@@ -723,6 +753,10 @@ const DuctPointHandles = ({ duct, target }: { duct: DuctSegmentNode; target: Obj
     useViewer.getState().setInputDragging(true)
     document.body.style.cursor = 'grabbing'
     setRolling(true)
+    const releaseScope = claimHandleDrag(duct.id, ROTATE_HANDLE_DRAG_LABEL, () => {
+      swallowNextClick()
+      finish(false)
+    })
     let current = startRoll
     let lastStep = Number.NaN
 
@@ -730,14 +764,15 @@ const DuctPointHandles = ({ duct, target }: { duct: DuctSegmentNode; target: Obj
       if (startBearing === null) return
       const b = bearing(event.clientX, event.clientY)
       if (b === null) return
-      // Snap the roll to 45° steps only in the active angle mode.
+      // Snap the roll to 45° steps only in the active angle mode; held Alt rolls freely.
       const raw = b - startBearing
-      const delta = isAngleSnapActive() ? Math.round(raw / ROLL_STEP_RAD) * ROLL_STEP_RAD : raw
+      const snapped = !event.altKey && isAngleSnapActive()
+      const delta = snapped ? Math.round(raw / ROLL_STEP_RAD) * ROLL_STEP_RAD : raw
       const next = startRoll + delta
       if (next === current) return
       current = next
       // Tick the rotate SFX each time a fresh snapped step is crossed.
-      if (isAngleSnapActive()) {
+      if (snapped) {
         const step = Math.round(raw / ROLL_STEP_RAD)
         if (step !== lastStep) {
           lastStep = step
@@ -748,11 +783,11 @@ const DuctPointHandles = ({ duct, target }: { duct: DuctSegmentNode; target: Obj
       useScene.getState().markDirty(duct.id)
     }
 
-    const onUp = () => {
-      swallowNextClick()
+    const finish = (commit: boolean) => {
       window.removeEventListener('pointermove', onMove)
       window.removeEventListener('pointerup', onUp)
-      window.removeEventListener('pointercancel', onUp)
+      window.removeEventListener('pointercancel', onCancel)
+      releaseScope()
       useViewer.getState().setInputDragging(false)
       clearPlacementSurface()
       document.body.style.cursor = ''
@@ -760,7 +795,7 @@ const DuctPointHandles = ({ duct, target }: { duct: DuctSegmentNode; target: Obj
       useLiveNodeOverrides.getState().clear(duct.id)
       useScene.getState().markDirty(duct.id)
       resumeSceneHistory(useScene)
-      if (current !== startRoll) {
+      if (commit && current !== startRoll) {
         useScene.getState().updateNode(duct.id, {
           roll: current,
           ...(readAutoOffsetTag(duct) ? { metadata: withoutAutoOffsetTag(duct.metadata) } : {}),
@@ -768,9 +803,15 @@ const DuctPointHandles = ({ duct, target }: { duct: DuctSegmentNode; target: Obj
       }
     }
 
+    const onUp = () => {
+      swallowNextClick()
+      finish(true)
+    }
+    const onCancel = () => finish(false)
+
     window.addEventListener('pointermove', onMove)
     window.addEventListener('pointerup', onUp)
-    window.addEventListener('pointercancel', onUp)
+    window.addEventListener('pointercancel', onCancel)
   }
 
   // Move the WHOLE run, locked to one direction: the vertical world axis, or a
@@ -904,10 +945,14 @@ const DuctPointHandles = ({ duct, target }: { duct: DuctSegmentNode; target: Obj
     useViewer.getState().setInputDragging(true)
     document.body.style.cursor = kind.axis === 'y' ? 'ns-resize' : 'grabbing'
     setRunMoving(true)
+    const releaseScope = claimHandleDrag(duct.id, AXIS_MOVE_DRAG_LABEL, () => {
+      swallowNextClick()
+      finish(false)
+    })
     let delta = 0
     // Last frame's offset outcome (vertical move only): a valid plan to mint on
     // release, an invalid marker (preview-only, snap back), or null for a plain
-    // translate. `onUp` reads it to decide create vs. translate vs. nothing.
+    // translate. `finish` reads it to decide create vs. translate vs. nothing.
     let offsetResult: VerticalOffsetResult = null
 
     // Shift the LOGICAL L: vertical adds the carried `baseDy` plus this drag's
@@ -924,10 +969,10 @@ const DuctPointHandles = ({ duct, target }: { duct: DuctSegmentNode; target: Obj
         }
         return next
       })
-    const batchFor = (path: Point[]): { id: AnyNodeId; data: Partial<AnyNode> }[] => [
-      { id: duct.id as AnyNodeId, data: { path } },
-      ...connectivityUpdatesForPath(connectivity, path),
-    ]
+    const batchFor = (path: Point[]): { id: AnyNodeId; data: Partial<AnyNode> }[] | null => {
+      const followers = connectivityUpdatesForPath(connectivity, path)
+      return followers && [{ id: duct.id as AnyNodeId, data: { path } }, ...followers]
+    }
 
     // Patches restoring every connected partner to its post-rewind (logical-L)
     // pose — runs by path, fittings by position (+ a re-aimed elbow's rotation /
@@ -1028,18 +1073,16 @@ const DuctPointHandles = ({ duct, target }: { duct: DuctSegmentNode; target: Obj
       if (startSample === null) return
       const s = sample(event.clientX, event.clientY)
       if (s === null) return
-      const step = isGridSnapActive() ? useEditor.getState().gridSnapStep : 0
+      const step = !event.altKey && isGridSnapActive() ? useEditor.getState().gridSnapStep : 0
       const next = snap(s - startSample, step)
       if (next === delta) return
-      delta = next
-      if (step > 0) triggerSFX('sfx:grid-snap')
       const dyEff = baseDy + next
       // Vertical move: connected ends stay welded to their (stationary)
       // partner via an auto-routed elbow → riser → elbow offset, planned from
       // the LOGICAL L by the accumulated lift. The planner returns valid (offset
       // fits), invalid (connected but no clean offset at this height), or null
       // (no connections, or dyEff 0 → back at the L → plain translate).
-      offsetResult =
+      const result: VerticalOffsetResult =
         isVertical && dyEff !== 0
           ? planVerticalOffsets({
               duct: logicalDuct,
@@ -1050,6 +1093,19 @@ const DuctPointHandles = ({ duct, target }: { duct: DuctSegmentNode; target: Obj
               nodesById,
             })
           : null
+      const followUpdates =
+        result?.status === 'invalid'
+          ? []
+          : connectivityUpdatesForPath(
+              connectivity,
+              result?.status === 'valid' ? result.plan.followPath : shiftedPath(next),
+            )
+      // Joints that cannot follow hold the last shown frame, which is what
+      // release commits.
+      if (!followUpdates) return
+      delta = next
+      offsetResult = result
+      if (step > 0) triggerSFX('sfx:grid-snap')
       if (offsetResult?.status === 'valid') {
         applyLogicalBasePreview()
         // Lift the run to the offset path; trim run-offset partners back one
@@ -1061,7 +1117,6 @@ const DuctPointHandles = ({ duct, target }: { duct: DuctSegmentNode; target: Obj
         const scene = useScene.getState()
         const deletePreview = (plan.delete ?? []).filter((id) => scene.nodes[id])
         setPreviewHidden([...mintedIds, ...deletePreview])
-        const followUpdates = connectivityUpdatesForPath(connectivity, plan.followPath)
         const updates = [
           { id: duct.id as AnyNodeId, data: { path: plan.ductPath } },
           ...plan.updates.filter((u) => scene.nodes[u.id]),
@@ -1087,16 +1142,18 @@ const DuctPointHandles = ({ duct, target }: { duct: DuctSegmentNode; target: Obj
       } else {
         applyLogicalBasePreview()
         setVerticalGhost(null)
-        const updates = batchFor(shiftedPath(next))
-        publishLivePreview(updates)
+        publishLivePreview([
+          { id: duct.id as AnyNodeId, data: { path: shiftedPath(next) } },
+          ...followUpdates,
+        ])
       }
     }
 
-    const onUp = () => {
-      swallowNextClick()
+    const finish = (commit: boolean) => {
       window.removeEventListener('pointermove', onMove)
       window.removeEventListener('pointerup', onUp)
-      window.removeEventListener('pointercancel', onUp)
+      window.removeEventListener('pointercancel', onCancel)
+      releaseScope()
       useViewer.getState().setInputDragging(false)
       document.body.style.cursor = ''
       setRunMoving(false)
@@ -1104,7 +1161,7 @@ const DuctPointHandles = ({ duct, target }: { duct: DuctSegmentNode; target: Obj
       clearLivePreview()
       setPreviewHidden([])
       resumeSceneHistory(useScene)
-      if (delta === 0) return
+      if (!commit || delta === 0) return
       const dyEff = baseDy + delta
       const result = offsetResult
       // Invalid lift: nothing buildable at this height — keep the prior state
@@ -1128,6 +1185,7 @@ const DuctPointHandles = ({ duct, target }: { duct: DuctSegmentNode; target: Obj
           base,
         }
         const followUpdates = connectivityUpdatesForPath(connectivity, plan.followPath)
+        if (!followUpdates) return
         const updates = [
           {
             id: duct.id as AnyNodeId,
@@ -1212,6 +1270,7 @@ const DuctPointHandles = ({ duct, target }: { duct: DuctSegmentNode; target: Obj
           return
         }
         const updates = batchFor(finalPath)
+        if (!updates) return
         if (isVertical && existingTag) {
           updates[0] = {
             ...updates[0]!,
@@ -1240,9 +1299,15 @@ const DuctPointHandles = ({ duct, target }: { duct: DuctSegmentNode; target: Obj
       }
     }
 
+    const onUp = () => {
+      swallowNextClick()
+      finish(true)
+    }
+    const onCancel = () => finish(false)
+
     window.addEventListener('pointermove', onMove)
     window.addEventListener('pointerup', onUp)
-    window.addEventListener('pointercancel', onUp)
+    window.addEventListener('pointercancel', onCancel)
   }
 
   const cornerArrows = useMemo(() => getCornerArrows(displayDuct), [displayDuct])

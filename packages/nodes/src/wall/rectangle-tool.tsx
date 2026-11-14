@@ -1,6 +1,7 @@
 'use client'
 import {
   emitter,
+  formatLinearMeasurement,
   type GridEvent,
   useScene,
   type WallNode,
@@ -13,7 +14,6 @@ import {
   DRAFT_LABEL_Y_OFFSET,
   DraftMeasurementLabel,
   EDITOR_LAYER,
-  formatLinearMeasurement,
   isMagneticSnapActive,
   markToolCancelConsumed,
   NO_RAYCAST,
@@ -69,6 +69,8 @@ export default function RectangleWallTool() {
           (n): n is WallNode => n.type === 'wall' && n.parentId === activeLevelId,
         ),
         magnetic: isMagneticSnapActive(),
+        // A corner aimed into an existing wall's body joins it.
+        captureWallBodies: true,
       })
       useWallSnapIndicator.getState().set(
         result.snap

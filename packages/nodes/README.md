@@ -8,12 +8,13 @@ Built-in node definitions for the Pascal viewer and editor.
 npm install @pascal-app/core @pascal-app/viewer @pascal-app/editor @pascal-app/nodes
 ```
 
-The package declares the remaining React, Next.js, Three.js, and UI libraries it needs as peer
-dependencies. Install any peers reported by your package manager.
+The full entry uses the editor and its Next.js and UI peers. Render-only hosts can omit
+`@pascal-app/editor` (an optional peer) and Next.js. Install the remaining React and Three.js peers
+reported by your package manager.
 
 ## Usage
 
-Load `builtinPlugin` once before mounting a Pascal viewer or editor:
+Editor hosts load `builtinPlugin` once before mounting:
 
 ```typescript
 import { loadPlugin } from '@pascal-app/core'
@@ -25,6 +26,20 @@ await loadPlugin(builtinPlugin)
 The plugin registers the built-in schemas, renderers, geometry builders, tools, and systems. Hosts
 can load additional plugins through the same `loadPlugin` API.
 
+For a render-only host, use the same plugin contract with all built-in kinds:
+
+```typescript
+import { loadPlugin } from '@pascal-app/core'
+import { renderPlugin } from '@pascal-app/nodes/render'
+
+await loadPlugin(renderPlugin)
+```
+
+Load exactly one built-in entry per runtime. Both use the `pascal:core` plugin id and API version 1;
+`renderPlugin` supplies schemas, geometry, renderers, systems, runtime interactions and the
+read-only floor plan (`def.floorplan`), while `builtinPlugin` also supplies tools, inspectors, paint
+and floor-plan editing (handles, drags, snapping).
+
 See the
 [`@pascal-app/viewer` quick start](https://github.com/pascalorg/editor/tree/main/packages/viewer#usage)
 for bootstrap ordering in a React application.
@@ -33,19 +48,40 @@ for bootstrap ordering in a React application.
 
 MIT
 
-## Kitchen agent tools
+## Agent tools
 
 The built-in plugin exports `builtinAgentTools` from `@pascal-app/nodes/agent-tools`
 (zod-only contracts) and `builtinAgentOperations` from
-`@pascal-app/nodes/agent-operations` (headless planners). Both the inspector and
-agents execute the same finishing planner, including hosted-item support checks.
+`@pascal-app/nodes/agent-operations` (headless planners). The inspectors and
+agents execute the same planners, and each edit applies in one undo step. A
+refused edit changes nothing; each contract's description lists its refusal codes.
+
+Kitchen:
+
 - `kitchen_finish_run({ runId, action: 'align' | 'fill' })` aligns a run or closes
-  50–150 mm wall gaps. Results apply in one undo step. Missing runs and unsupported
-  hosted items return `cabinet_run_not_found` and `hosted_items_unsupported`.
+  50–150 mm wall gaps, including hosted-item support checks. Missing runs and
+  unsupported hosted items return `cabinet_run_not_found` and
+  `hosted_items_unsupported`.
 - `kitchen_check_clearance({ nodeId })` returns an advisory opening warning for a
   run or module. It shares the registry notice used during placement, movement,
   and inspection. It checks conservative envelopes against visible floor objects
   and straight walls; curved walls and wall openings are not resolved.
+
+Ductwork and plumbing keep connected collars joined:
+
+- `duct_edit({ nodeId, action: 'resize' | 'offset', ... })` resizes a duct segment
+  or same-profile branch (transitions where it stops; center alignment for
+  connected runs), or offsets a straight horizontal run around an obstacle with
+  four elbows while both endpoints stay fixed.
+- `pipe_grade({ nodeId, action: 'grade' | 'endpoint' | 'elevation', ... })` sets a
+  run's grade and flow direction, moves a path point while keeping each leg's
+  grade (`detach` leaves the connected runs in place), or changes its elevation.
+- `pipe_resize({ nodeId, diameter, scope? })` resizes a segment or same-size,
+  same-material branch and inserts reducers at its size boundaries.
+- `pipe_offset({ nodeId, from, to, offset })` adds four bends to a straight run,
+  keeping both boundary collars fixed and the parallel sections at grade.
+- `pipe_connect({ nodeId, portId, end, diameter? })` draws a pipe from an open
+  waste or vent collar to a free endpoint, with a reducer when the size differs.
 
 A host that installs the plugin registers its tools on its MCP server with
 `registerOperationTool`, the shared tools' runner, under its own reviewed

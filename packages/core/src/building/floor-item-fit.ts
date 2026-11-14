@@ -7,6 +7,7 @@ import {
 import { findValidPlacement } from '../agent-operations/layout-clearance'
 import { pointInPolygon, polygonBounds, type Vec2 } from '../agent-operations/plan-geometry'
 import type { SceneNodes } from '../agent-operations/types'
+import { queryNodes } from '../runtime/node-queries'
 import type { ZoneNode } from '../schema'
 
 export type FloorItemRoom = { id: string; name: string; width: number; depth: number }
@@ -39,12 +40,8 @@ export function floorItemFit(
     doors?: DoorKeepout[]
   },
 ): FloorItemMisfit | null {
-  const zone = Object.values(nodes).find(
-    (node): node is ZoneNode =>
-      node.type === 'zone' &&
-      node.parentId === item.levelId &&
-      node.polygon.length >= 3 &&
-      pointInPolygon([item.x, item.z], node.polygon as Vec2[]),
+  const zone = queryNodes<ZoneNode>(nodes, { type: 'zone', parentId: item.levelId }).find(
+    (node) => node.polygon.length >= 3 && pointInPolygon([item.x, item.z], node.polygon as Vec2[]),
   )
   const bounds = zone ? polygonBounds(zone.polygon as Vec2[]) : undefined
   const room = zone &&

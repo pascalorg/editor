@@ -1,4 +1,4 @@
-import { type AnyNodeId, sceneRegistry, useScene } from '@pascal-app/core'
+import { type AnyNodeId, sceneRegistry, servesAsRoofLevel, useScene } from '@pascal-app/core'
 import { isProceduralItem } from '@pascal-app/core/procedural-items'
 import { useViewer } from '@pascal-app/viewer'
 import { useEffect } from 'react'
@@ -74,10 +74,59 @@ function setCeilingGridHighlighted(ceilingGrid: Mesh, highlighted: boolean) {
   delete userData[CEILING_GRID_HIGHLIGHT_MATERIAL_KEY]
 }
 
-export const CeilingSystem = () => {
+/**
+ * The "Ceilings" setting that applies on `levelId`: the roof level's, on until turned off; the
+ * floor plans', off until turned on. On, ceilings read as solid from above too.
+ */
+export function useCeilingsSetting(levelId: string | null | undefined): {
+  onRoofLevel: boolean
+  shown: boolean
+  setShown: (show: boolean) => void
+} {
+  const onRoofLevel = useScene((state) => {
+    const level = levelId ? state.nodes[levelId as AnyNodeId] : undefined
+    return level?.type === 'level' && servesAsRoofLevel(state.nodes, level)
+  })
+  const shown = useEditor((state) => (onRoofLevel ? state.showRoofCeilings : state.showCeilings))
+  const setRoof = useEditor((state) => state.setShowRoofCeilings)
+  const setFloor = useEditor((state) => state.setShowCeilings)
+  return { onRoofLevel, shown, setShown: onRoofLevel ? setRoof : setFloor }
+}
+
+function useIsCeilingToolActive(): boolean {
   const tool = useEditor((state) => state.tool)
   const selectedItem = useEditor((state) => state.selectedItem)
   const movingNode = useMovingNode()
+  return (
+    tool === 'ceiling' ||
+    selectedItem?.attachTo === 'ceiling' ||
+    (movingNode?.type === 'item' && movingNode?.asset?.attachTo === 'ceiling') ||
+    (isProceduralItem(movingNode) && movingNode.recipe.mounting?.attachTo === 'ceiling')
+  )
+}
+
+/**
+ * Whether the viewer draws ceiling tops (`showCeilingTops`), from the level's Ceilings setting.
+ * Mounted once by the editor, outside the canvases: the editor and preview viewers each mount a
+ * `CeilingSystem`, and two writers each turning the tops off on unmount raced.
+ */
+export const CeilingTopsSync = () => {
+  const activeLevelId = useViewer((state) => state.selection.levelId)
+  const ceilingsShown = useCeilingsSetting(activeLevelId).shown
+  const isPreviewMode = useEditor((state) => state.isPreviewMode)
+  const isCaptureMode = useEditor((state) => state.isCaptureMode)
+  const isCeilingToolActive = useIsCeilingToolActive()
+  // Placing on a ceiling looks through it from above, so the tops step aside; preview and
+  // captures keep the open look.
+  const showTops = ceilingsShown && !isCeilingToolActive && !isPreviewMode && !isCaptureMode
+  useEffect(() => {
+    useViewer.getState().setShowCeilingTops(showTops)
+    return () => useViewer.getState().setShowCeilingTops(false)
+  }, [showTops])
+  return null
+}
+
+export const CeilingSystem = () => {
   const selectedIds = useViewer((state) => state.selection.selectedIds)
   const activeLevelId = useViewer((state) => state.selection.levelId)
   const hoveredId = useViewer((state) => state.hoveredId)
@@ -87,6 +136,7 @@ export const CeilingSystem = () => {
   // reveal is gated here, on the consumer.
   const inputDragging = useViewer((state) => state.inputDragging)
   const scopeIdle = useInteractionScope((state) => state.scope.kind === 'idle')
+  const isCeilingToolActive = useIsCeilingToolActive()
 
   useEffect(() => {
     const nodes = useScene.getState().nodes
@@ -95,12 +145,6 @@ export const CeilingSystem = () => {
       hoveredNode?.type === 'ceiling' && scopeIdle && !inputDragging ? hoveredNode.id : null
 
     const levelsToShowCeilings = new Set<string>()
-
-    const isCeilingToolActive =
-      tool === 'ceiling' ||
-      selectedItem?.attachTo === 'ceiling' ||
-      (movingNode?.type === 'item' && movingNode?.asset?.attachTo === 'ceiling') ||
-      (isProceduralItem(movingNode) && movingNode.recipe.mounting?.attachTo === 'ceiling')
 
     if (isCeilingToolActive && activeLevelId) {
       levelsToShowCeilings.add(activeLevelId)
@@ -162,15 +206,6 @@ export const CeilingSystem = () => {
         }
       }
     })
-  }, [
-    tool,
-    selectedItem,
-    movingNode,
-    selectedIds,
-    activeLevelId,
-    hoveredId,
-    scopeIdle,
-    inputDragging,
-  ])
+  }, [isCeilingToolActive, selectedIds, activeLevelId, hoveredId, scopeIdle, inputDragging])
   return null
 }

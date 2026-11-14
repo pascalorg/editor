@@ -22,6 +22,7 @@ import {
 } from '@pascal-app/core/procedural-items'
 import { Group, Vector3 } from 'three'
 import { commitFreshPlacementSubtree } from '../../../lib/fresh-planar-placement'
+import useEditor from '../../../store/use-editor'
 import { registerHostingTestNode } from '../__fixtures__/hosting'
 import {
   createItemSurfaceGridDispatch,
@@ -62,6 +63,7 @@ const host = ItemNode.parse({
 let restoreRegistry: () => void
 let oldNodes: ReturnType<typeof useScene.getState>['nodes']
 let oldRoots: AnyNodeId[]
+let oldSnapping: ReturnType<typeof useEditor.getState>['snappingModeByContext']
 
 beforeEach(() => {
   globalThis.requestAnimationFrame = (callback) => {
@@ -69,6 +71,14 @@ beforeEach(() => {
     return 0
   }
   globalThis.cancelAnimationFrame = () => {}
+  // Poses are asserted raw: whatever context a previous suite left active
+  // (a tool, a scope, its snapping mode) must not snap them to the grid.
+  oldSnapping = useEditor.getState().snappingModeByContext
+  useEditor.setState({
+    snappingModeByContext: Object.fromEntries(
+      Object.keys(oldSnapping).map((context) => [context, 'off']),
+    ) as typeof oldSnapping,
+  })
   restoreRegistry = nodeRegistry._snapshot()
   oldNodes = useScene.getState().nodes
   oldRoots = useScene.getState().rootNodeIds
@@ -119,6 +129,7 @@ afterEach(() => {
   globalThis.requestAnimationFrame = originalRaf
   globalThis.cancelAnimationFrame = originalCancelRaf
   restoreRegistry()
+  useEditor.setState({ snappingModeByContext: oldSnapping })
   useLiveTransforms.getState().clear(original.id)
   for (const id of ['level_surface-move', host.id, 'item_second-host'])
     sceneRegistry.nodes.delete(id)

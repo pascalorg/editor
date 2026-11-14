@@ -7,6 +7,7 @@ import {
   ceilingRegionsOwner,
   type MultiPolygon,
   resolveCeilingHeight,
+  roomFloorElevation,
   union,
   useScene,
 } from '@pascal-app/core'
@@ -32,7 +33,6 @@ import { beginGesture, type GestureHandle } from './gesture-lifecycle'
 import { hasActivePaintMaterial } from './material-paint'
 import { isPaintErasing, usePaintRegionMode } from './paint-region-mode'
 import { addCeilingRegion, addFloorRegion } from './paint-regions'
-import { roomFloorElevation } from './room-handle-drag'
 
 // An outline drawn on one room's floor: a rectangle (press, drag, release; a
 // persistent tool also takes two clicks) or a polygon (click points, close on

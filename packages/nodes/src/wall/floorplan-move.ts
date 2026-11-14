@@ -4,8 +4,12 @@ import {
   createLevelStructurePreview,
   type FloorplanMoveTarget,
   type FloorplanMoveTargetSession,
+  finishWallEdit,
+  generateId,
   getPerpendicularWallMoveAxis,
   getPlannedLinkedWallUpdates,
+  planAttachedWallChanges,
+  planAttachedWallUpdates,
   planWallEndRejoins,
   planWallMoveJunctions,
   useLiveNodeOverrides,
@@ -17,10 +21,15 @@ import {
   getFloorplanWallThickness,
   getSegmentGridStep,
   isSegmentLongEnough,
+  isWallRunFree,
+  nearestWallParallelTarget,
+  publishWallParallelGuide,
   snapScalarToGrid,
   useWallMoveGhosts,
   WALL_CONNECT_SNAP_RADIUS,
   type WallMoveGhostBridge,
+  type WallParallelTarget,
+  wallParallelTargets,
 } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import {
@@ -112,7 +121,35 @@ export const wallFloorplanMoveTarget: FloorplanMoveTarget<WallNode> = ({ node })
       .filter((node) => node.parentId === levelId)
       .map((node) => [node.id, node]),
   )
-  const affectedIds: AnyNodeId[] = [wallId, ...linkedOriginals.map((wall) => wall.id as AnyNodeId)]
+  // Lines up with the parallel walls on the level: an outside wall's faces
+  // with the rest of the outside, any other wall's with every wall.
+  const parallelTargets = moveAxis
+    ? wallParallelTargets(
+        node,
+        moveAxis,
+        Object.values(dragNodes).filter((entry): entry is WallNode => entry.type === 'wall'),
+      )
+    : []
+  let lastLineUp: WallParallelTarget | null = null
+  // Walls T'd into this one stay on it, stretched along their own line.
+  const linkedIds = new Set(linkedOriginals.map((wall) => wall.id))
+  const attachedWalls = isNew
+    ? []
+    : planAttachedWallUpdates(
+        Object.values(dragNodes).filter(
+          (entry): entry is WallNode =>
+            entry.type === 'wall' && entry.id !== wallId && !linkedIds.has(entry.id),
+        ),
+        originalStart,
+        originalEnd,
+        originalStart,
+        originalEnd,
+      ).map(({ id }) => dragNodes[id] as WallNode)
+  const affectedIds: AnyNodeId[] = [
+    wallId,
+    ...linkedOriginals.map((wall) => wall.id as AnyNodeId),
+    ...attachedWalls.map((wall) => wall.id as AnyNodeId),
+  ]
   const affectedIdSet = new Set(affectedIds)
   const touchedSurfaceIds = new Set<AnyNodeId>()
 
@@ -160,7 +197,7 @@ export const wallFloorplanMoveTarget: FloorplanMoveTarget<WallNode> = ({ node })
   const session: FloorplanMoveTargetSession = {
     affectedIds,
 
-    apply({ planPoint }) {
+    apply({ planPoint, modifiers }) {
       if (!rawAnchor) {
         rawAnchor = [planPoint[0], planPoint[1]]
         return
@@ -168,25 +205,34 @@ export const wallFloorplanMoveTarget: FloorplanMoveTarget<WallNode> = ({ node })
 
       const rawDx = planPoint[0] - rawAnchor[0]
       const rawDz = planPoint[1] - rawAnchor[1]
-      const step = getSegmentGridStep()
+      // Alt (or snapping off) moves the wall exactly with the pointer.
+      const free = isWallRunFree(modifiers)
+      const step = free ? 0 : getSegmentGridStep()
 
       // Axis-lock the move to the wall's perpendicular (normal). Project
       // the original centre + raw cursor delta onto the axis, snap the
-      // absolute projection to a grid multiple, then translate the wall
-      // by `axis * perpDelta`. Matches `MoveWallTool` so 2D and 3D drag
-      // produce identical wall topology.
+      // absolute projection to a parallel wall it lines up with, else to a
+      // grid multiple, then translate the wall by `axis * perpDelta`.
+      // Matches `MoveWallTool` so 2D and 3D drag produce identical wall
+      // topology.
       let dx: number
       let dz: number
+      let lineUp: WallParallelTarget | null = null
       if (moveAxis) {
         const originalProj = originalCenter[0] * moveAxis[0] + originalCenter[1] * moveAxis[1]
         const rawProj = originalProj + rawDx * moveAxis[0] + rawDz * moveAxis[1]
-        const snappedProj = snapScalarToGrid(rawProj, step)
+        lineUp = free ? null : nearestWallParallelTarget(parallelTargets, rawProj)
+        const snappedProj = lineUp ? lineUp.position : snapScalarToGrid(rawProj, step)
         const perpDelta = snappedProj - originalProj
         dx = moveAxis[0] * perpDelta
         dz = moveAxis[1] * perpDelta
       } else {
         dx = snapScalarToGrid(rawDx, step)
         dz = snapScalarToGrid(rawDz, step)
+      }
+      if (lineUp !== lastLineUp) {
+        lastLineUp = lineUp
+        publishWallParallelGuide(lineUp)
       }
 
       if (dx === lastDelta[0] && dz === lastDelta[1]) return
@@ -242,11 +288,20 @@ export const wallFloorplanMoveTarget: FloorplanMoveTarget<WallNode> = ({ node })
       // until the user commits. Batched into a single zustand
       // notification — otherwise each per-wall `.set` would re-render
       // every override subscriber once per linked wall per tick.
+      const attachedById = new Map(
+        planAttachedWallUpdates(attachedWalls, originalStart, originalEnd, nextStart, nextEnd).map(
+          (update) => [update.id, update],
+        ),
+      )
+      // A wall the move carries off this one's ends lets go: back where it was.
+      const attachedUpdates = attachedWalls.map(
+        (wall) => attachedById.get(wall.id) ?? { id: wall.id, start: wall.start, end: wall.end },
+      )
       useLiveNodeOverrides
         .getState()
         .setMany([
           [wallId, { start: nextStart, end: nextEnd }],
-          ...linkedUpdates.map(
+          ...[...linkedUpdates, ...attachedUpdates].map(
             (upd) =>
               [upd.id, { start: upd.start, end: upd.end }] as [string, Record<string, unknown>],
           ),
@@ -260,7 +315,10 @@ export const wallFloorplanMoveTarget: FloorplanMoveTarget<WallNode> = ({ node })
       // overrides we just published (zustand is still on baseline).
       const previewSceneWalls = getWallsAfterUpdates(dragNodes, [
         { id: wallId, data: { start: nextStart, end: nextEnd } },
-        ...linkedUpdates.map((u) => ({ id: u.id, data: { start: u.start, end: u.end } })),
+        ...[...linkedUpdates, ...attachedUpdates].map((u) => ({
+          id: u.id,
+          data: { start: u.start, end: u.end },
+        })),
       ]).filter((wall) => !collapsedIds.has(wall.id))
       const bridgePreviews = buildBridgeWallPreviews({
         bridgePlans: plan.bridgePlans,
@@ -285,8 +343,8 @@ export const wallFloorplanMoveTarget: FloorplanMoveTarget<WallNode> = ({ node })
       // (override-merged) so the mesh follows the cursor.
       const sceneState = useScene.getState()
       sceneState.markDirty(wallId)
-      for (const upd of linkedUpdates) {
-        sceneState.markDirty(upd.id)
+      for (const upd of [...linkedUpdates, ...attachedUpdates]) {
+        sceneState.markDirty(upd.id as AnyNodeId)
       }
     },
 
@@ -298,13 +356,16 @@ export const wallFloorplanMoveTarget: FloorplanMoveTarget<WallNode> = ({ node })
     },
 
     commit() {
+      publishWallParallelGuide(null)
       const sceneState = useScene.getState()
       const liveWall = sceneState.nodes[wallId] as WallNode | undefined
       if (liveWall?.type !== 'wall') {
         // Bail without leaving stale overrides behind.
         const overrides = useLiveNodeOverrides.getState()
         overrides.clear(wallId)
-        for (const wall of linkedOriginals) overrides.clear(wall.id as AnyNodeId)
+        for (const wall of [...linkedOriginals, ...attachedWalls]) {
+          overrides.clear(wall.id as AnyNodeId)
+        }
         clearSurfacePreviews()
         return
       }
@@ -362,15 +423,46 @@ export const wallFloorplanMoveTarget: FloorplanMoveTarget<WallNode> = ({ node })
         wallCount: Object.values(sceneState.nodes).filter((entry) => entry?.type === 'wall').length,
       })
 
+      // Walls T'd into this one follow it, what hangs on them staying put.
+      const attachedChanges = planAttachedWallChanges(
+        sceneState.nodes,
+        wallId,
+        originalStart,
+        originalEnd,
+        lastNextStart,
+        lastNextEnd,
+        new Set([...linkedIds, ...collapsedLinkedWallIds]),
+      )
+      const attachedWallIds = attachedChanges.flatMap(({ id }) =>
+        sceneState.nodes[id]?.type === 'wall' ? [id] : [],
+      )
+      // The moved and stretched walls and the jogs take over any stretch of a
+      // parallel wall they now run along; jogs on the outline are outside walls.
       sceneState.applyNodeChanges(
-        planWallEndRejoins(
+        finishWallEdit(
           sceneState.nodes,
-          commitUpdates.map(({ id }) => id),
-          WALL_CONNECT_SNAP_RADIUS,
+          planWallEndRejoins(
+            sceneState.nodes,
+            commitUpdates.map(({ id }) => id),
+            WALL_CONNECT_SNAP_RADIUS,
+            {
+              update: [
+                ...(commitUpdates as Array<{ id: AnyNodeId; data: Partial<AnyNode> }>),
+                ...attachedChanges,
+              ],
+              create: bridgeCreates,
+              delete: Array.from(collapsedLinkedWallIds),
+            },
+          ),
           {
-            update: commitUpdates as Array<{ id: AnyNodeId; data: Partial<AnyNode> }>,
-            create: bridgeCreates,
-            delete: Array.from(collapsedLinkedWallIds),
+            winnerIds: [
+              ...commitUpdates.map(({ id }) => id),
+              ...attachedWallIds,
+              ...bridgeCreates.map(({ node }) => node.id),
+            ],
+            movedWallId: wallId,
+            bridgeIds: bridgeCreates.map(({ node }) => node.id),
+            mintId: () => generateId('wall'),
           },
         ),
       )
@@ -382,7 +474,9 @@ export const wallFloorplanMoveTarget: FloorplanMoveTarget<WallNode> = ({ node })
       // next frame reads the new scene state directly.
       const overrides = useLiveNodeOverrides.getState()
       overrides.clear(wallId)
-      for (const wall of linkedOriginals) overrides.clear(wall.id as AnyNodeId)
+      for (const wall of [...linkedOriginals, ...attachedWalls]) {
+        overrides.clear(wall.id as AnyNodeId)
+      }
       clearSurfacePreviews()
 
       // Swap ghosts → real walls: the bridges we just created render

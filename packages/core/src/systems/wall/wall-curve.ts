@@ -306,6 +306,44 @@ export function getWallCurveLength(wall: WallCurveLike, segments = DEFAULT_SAMPL
   return totalLength
 }
 
+function chordFractionAtParam(wall: WallCurveLike, u: number) {
+  const chord = getWallChordFrame(wall)
+  const { point } = getWallCurveFrameAt(wall, u)
+  const dx = chord.end.x - chord.start.x
+  const dy = chord.end.y - chord.start.y
+  return clamp01(
+    ((point.x - chord.start.x) * dx + (point.y - chord.start.y) * dy) / chord.length ** 2,
+  )
+}
+
+/**
+ * Where arc-length `station` (m along the centreline, the frame openings are placed in) projects
+ * onto the chord, as a fraction of it: the frame the wall body is extruded and its top sloped in.
+ */
+export function getWallChordFractionAt(wall: WallCurveLike, station: number): number {
+  const chord = getWallChordLength(wall)
+  if (chord < CURVE_EPSILON) return 0
+  if (!isCurvedWall(wall)) return clamp01(station / chord)
+  return chordFractionAtParam(wall, station / getWallCurveLength(wall))
+}
+
+/**
+ * The arc-length station that projects onto chord `fraction`: the inverse of
+ * {@link getWallChordFractionAt}. A wall arc is at most a semicircle, so the projection only grows.
+ */
+export function getWallStationAtChordFraction(wall: WallCurveLike, fraction: number): number {
+  const chord = getWallChordLength(wall)
+  if (!isCurvedWall(wall) || chord < CURVE_EPSILON) return clamp01(fraction) * chord
+  let lo = 0
+  let hi = 1
+  for (let step = 0; step < 40; step += 1) {
+    const mid = (lo + hi) / 2
+    if (chordFractionAtParam(wall, mid) < fraction) lo = mid
+    else hi = mid
+  }
+  return ((lo + hi) / 2) * getWallCurveLength(wall)
+}
+
 export function getWallSurfacePolygon(
   wall: Pick<WallNode | FenceNode, 'start' | 'end' | 'curveOffset' | 'thickness'> &
     Pick<WallNode, 'justification'>,

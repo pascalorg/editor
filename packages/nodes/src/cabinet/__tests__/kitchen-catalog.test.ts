@@ -13,3 +13,13 @@ test('finding placed kitchen items lists modules, not the fillers of their run',
   expect(findKitchenItems(nodes, 'cupboard').map((node) => node.id)).toEqual([cabinet.id])
   expect(findKitchenItems(nodes, 'dishwasher')).toEqual([])
 })
+
+test('an upper attached to a module is found as a wall cabinet, by its shown name too', () => {
+  const run = CabinetNode.parse({})
+  const base = CabinetModuleNode.parse({ parentId: run.id })
+  const upper = CabinetModuleNode.parse({ parentId: base.id })
+  const nodes = Object.fromEntries([run, base, upper].map((node) => [node.id, node]))
+  expect(findKitchenItems(nodes, 'overhead').map((node) => node.id)).toEqual([upper.id])
+  const shown = (id: string) => (id === 'wall-cabinet' ? 'Meuble haut' : 'Meuble bas')
+  expect(findKitchenItems(nodes, 'meuble haut', shown).map((node) => node.id)).toEqual([upper.id])
+})

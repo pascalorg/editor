@@ -7,9 +7,9 @@ import type {
   WindowNode,
 } from '../schema'
 import type { WallFace } from '../schema/nodes/wall'
-import { getWallTop } from '../services/storey'
+import { getWallTopOver } from '../services/storey'
 import type { WallSlabSupport } from '../systems/slab/slab-support'
-import { isCurvedWall } from '../systems/wall/wall-curve'
+import { getWallCurveLength, isCurvedWall } from '../systems/wall/wall-curve'
 import { parseWallPaintRole } from '../systems/wall/wall-finish'
 import { getWallThickness } from '../systems/wall/wall-footprint'
 import { getWallLocalFaceZ } from '../systems/wall/wall-frame'
@@ -88,11 +88,14 @@ type FaceFrame = {
   top: number
 }
 
-/** A wall whose faces a script can build on: straight, not a curtain wall, standing on a level. */
+/**
+ * A wall whose faces a script can build on: straight, not a curtain wall or a railing (neither has
+ * faces), standing on a level.
+ */
 function scriptableWall(nodes: SceneNodes, wallId: string): WallNode | null {
   const wall = nodes[wallId]
   if (wall?.type !== 'wall' || !wall.parentId) return null
-  if (wall.wallType === 'curtain' || isCurvedWall(wall)) return null
+  if (wall.wallType === 'curtain' || wall.wallType === 'railing' || isCurvedWall(wall)) return null
   return Math.hypot(wall.end[0] - wall.start[0], wall.end[1] - wall.start[1]) < EPS ? null : wall
 }
 
@@ -105,7 +108,14 @@ function faceFrame(nodes: SceneNodes, wallId: string, face: WallFace): FaceFrame
   const support = wallSupportForNodes(wall, nodes)
   const offset = wallFaceBaseOffset(support, face)
   const top =
-    getWallTop(wall, wall.parentId, nodes as Record<string, AnyNode>, support.elevation) -
+    getWallTopOver(
+      wall,
+      wall.parentId,
+      nodes as Record<string, AnyNode>,
+      support.elevation,
+      0,
+      getWallCurveLength(wall),
+    ) -
     support.elevation -
     offset
   const station = (point: { x: number; y: number }) =>
