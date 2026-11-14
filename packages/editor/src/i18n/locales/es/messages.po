@@ -14656,6 +14656,7 @@ msgstr "Taller"
 # Source-Hash: 4323751093d4c560
 # Review: required
 # AI-Provider: claude-code
+# English: "Still loading the project. Editing is paused until it finishes."
 #: packages/editor/src/components/editor/index.tsx
 #, fuzzy
 msgid "editor.sceneData.pending"
@@ -15601,25 +15602,25 @@ msgstr "Actualizar instantánea"
 msgid "editor.sidebar.panels.zonePanel.viewSnapshot"
 msgstr "Ver instantánea"
 
-# English: "Browse plugins"
 # Source-Hash: 7890c110650ad1e5
 # Review: required
+# English: "Browse plugins"
 #: packages/editor/src/components/ui/sidebar/plugins-menu-panel.tsx
 #, fuzzy
 msgid "editor.sidebar.pluginsMenu.browse"
 msgstr "Explorar complementos"
 
-# English: "No plugins in this project yet."
 # Source-Hash: fd7380e83e3c88b3
 # Review: required
+# English: "No plugins in this project yet."
 #: packages/editor/src/components/ui/sidebar/plugins-menu-panel.tsx
 #, fuzzy
 msgid "editor.sidebar.pluginsMenu.empty"
 msgstr "Aún no hay complementos en este proyecto."
 
-# English: "Hide menu"
 # Source-Hash: 8284b6d9e4c05fb1
 # Review: required
+# English: "Hide menu"
 #: packages/editor/src/components/ui/sidebar/tab-bar.tsx
 #, fuzzy
 msgid "editor.sidebar.sideMenu.hide"
@@ -15636,18 +15637,10 @@ msgstr "Ocultar menú"
 msgid "editor.sidebar.sideMenu.plugins"
 msgstr "Complementos"
 
-# English: "Menu"
-# Source-Hash: 1340afc2c56c0229
-# Review: required
-#: packages/editor/src/components/editor/editor-layout-v2.tsx
-#, fuzzy
-msgid "editor.sidebar.sideMenu.show"
-msgstr "Menú"
-
-# English: "Show menu"
 # Source-Hash: 5e1ae5cd25820c60
 # Review: required
-#: packages/editor/src/components/editor/editor-layout-v2.tsx
+# English: "Show menu"
+#: packages/editor/src/components/ui/sidebar/tab-bar.tsx
 #, fuzzy
 msgid "editor.sidebar.sideMenu.showLabel"
 msgstr "Mostrar menú"
