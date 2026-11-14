@@ -6290,11 +6290,7 @@ msgstr "Hide menu"
 msgid "editor.sidebar.sideMenu.plugins"
 msgstr "Plugins"
 
-#: packages/editor/src/components/editor/editor-layout-v2.tsx
-msgid "editor.sidebar.sideMenu.show"
-msgstr "Menu"
-
-#: packages/editor/src/components/editor/editor-layout-v2.tsx
+#: packages/editor/src/components/ui/sidebar/tab-bar.tsx
 msgid "editor.sidebar.sideMenu.showLabel"
 msgstr "Show menu"
 
