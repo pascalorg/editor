@@ -1,11 +1,10 @@
 'use client'
 
 import { usePascalI18n } from '@pascal-app/core'
-import { PanelLeftClose } from 'lucide-react'
-import type { ReactNode } from 'react'
+import { PanelLeftClose, PanelLeftOpen } from 'lucide-react'
+import { type ReactNode, useId } from 'react'
 import { triggerSFX } from './../../../lib/sfx-bus'
 import { cn } from './../../../lib/utils'
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@pascal-app/viewer/ui'
 
 export type SidebarTab = {
   id: string
@@ -85,8 +84,8 @@ interface SideMenuProps {
   onTabClick: (id: string) => void
   /** Listed after the entries, e.g. the host's recent chats. */
   footer?: ReactNode
-  /** Hides the whole menu; a Menu button above the stage brings it back. */
-  onHide: () => void
+  menuHidden: boolean
+  onToggle: () => void
 }
 
 /**
@@ -100,10 +99,14 @@ export function SideMenu({
   collapsed,
   onTabClick,
   footer,
-  onHide,
+  menuHidden,
+  onToggle,
 }: SideMenuProps) {
   const i18n = usePascalI18n()
-  const hideLabel = i18n._({ id: 'editor.sidebar.sideMenu.hide', message: 'Hide menu' })
+  const contentId = useId()
+  const toggleLabel = menuHidden
+    ? i18n._({ id: 'editor.sidebar.sideMenu.showLabel', message: 'Show menu' })
+    : i18n._({ id: 'editor.sidebar.sideMenu.hide', message: 'Hide menu' })
   const litTab = tabs.find((t) => t.id === activeTab)?.menuParent ?? activeTab
   const groups: { section?: string; tabs: SidebarTab[] }[] = []
   for (const tab of tabs) {
@@ -116,20 +119,36 @@ export function SideMenu({
 
   return (
     <nav
-      className="flex h-full w-44 shrink-0 flex-col border-border/50 border-r"
+      className={cn(
+        'flex h-full shrink-0 flex-col border-border/50 border-r',
+        menuHidden ? 'w-12' : 'w-44',
+      )}
       data-surface="icon-rail"
     >
-      <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-2 py-2">
+      <div className="shrink-0 p-2">
         <button
-          aria-label={hideLabel}
-          className="flex h-8 w-full shrink-0 items-center gap-2 rounded-xl px-2.5 text-muted-foreground text-xs transition-colors hover:bg-sidebar-accent/50 hover:text-foreground"
-          onClick={onHide}
-          title={hideLabel}
+          aria-controls={contentId}
+          aria-expanded={!menuHidden}
+          aria-label={toggleLabel}
+          className="flex size-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-sidebar-accent/50 hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring focus-visible:outline-offset-2"
+          onClick={onToggle}
+          title={toggleLabel}
           type="button"
         >
-          <PanelLeftClose aria-hidden className="size-4" />
-          {hideLabel}
+          {menuHidden ? (
+            <PanelLeftOpen aria-hidden className="size-4" />
+          ) : (
+            <PanelLeftClose aria-hidden className="size-4" />
+          )}
         </button>
+      </div>
+      <div
+        className={cn(
+          'min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-2 pb-2',
+          menuHidden ? 'hidden' : 'flex',
+        )}
+        id={contentId}
+      >
         {groups.map((group) => (
           <div className="flex flex-col gap-0.5" key={group.section ?? ''}>
             {group.section ? (
