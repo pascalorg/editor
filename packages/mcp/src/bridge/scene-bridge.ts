@@ -7,6 +7,7 @@ import {
   hierarchyCycleErrors,
   type NodeDeletionPlan,
   type NodeDeletionScene,
+  nodeRegistry,
   pauseSceneHistory,
   pauseSpaceDetection,
   planNodeDeletion,
@@ -26,7 +27,6 @@ import {
 import type { AnyNode, Collection, CollectionId, SceneMaterialId } from '@pascal-app/core/schema'
 import {
   type AnyNodeId,
-  AnyNode as AnyNodeSchema,
   type AnyNodeType,
   generateId,
   parseNode,
@@ -34,6 +34,20 @@ import {
 } from '@pascal-app/core/schema'
 import type { SceneMeta } from '../storage/types'
 import { InMemoryAgentSession } from './agent-session'
+
+type ParsedNode = ReturnType<typeof parseNode>
+
+function parseRegisteredNode(node: unknown): ParsedNode {
+  const builtin = parseNode(node)
+  if (builtin.success) return builtin
+  if (!(node && typeof node === 'object' && !Array.isArray(node))) return builtin
+
+  const type = (node as { type?: unknown }).type
+  if (typeof type !== 'string') return builtin
+
+  const registered = nodeRegistry.get(type)?.schema
+  return registered ? (registered.safeParse(node) as ParsedNode) : builtin
+}
 
 export type ValidationError = { nodeId: string; path: string; message: string }
 export type ValidationResult = {
@@ -488,7 +502,7 @@ export class SceneBridge {
           )
         materialUpserts.set(parsed.data.id, parsed.data)
       } else if (p.op === 'create') {
-        const res = parseNode(p.node)
+        const res = parseRegisteredNode(p.node)
         if (!res.success) {
           throw new Error(
             `invalid patch: patches[${i}] create node failed schema: ${res.error.message}`,
@@ -691,7 +705,7 @@ export class SceneBridge {
       if (node.type === 'site' && node.visible === false) {
         warnings.push({ nodeId: id, path: 'visible', message: HIDDEN_SITE_NOTE })
       }
-      const res = AnyNodeSchema.safeParse(node)
+      const res = parseRegisteredNode(node)
       if (res.success) continue
       for (const issue of res.error.issues) {
         errors.push({
