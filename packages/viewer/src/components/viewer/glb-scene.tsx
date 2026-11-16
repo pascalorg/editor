@@ -40,6 +40,8 @@ import {
 } from '../../lib/occlusion-culler'
 import { filterSectionHits, sectionActive } from '../../lib/section'
 import { applyShadowOnly, clearShadowOnly } from '../../lib/shadow-only'
+import { consumeWalkthroughInteract } from '../../lib/walkthrough-input'
+import { useFirstPersonHud } from '../../store/use-first-person-hud'
 import useViewer from '../../store/use-viewer'
 import { OPEN_SOUNDS, openingSound } from '../../systems/interactive/callout-actions'
 import { proceduralSettled } from '../../systems/interactive/opening-settled'
@@ -1041,6 +1043,13 @@ export function GlbScene({
     const key = `${floor?.id ?? ''}|${zone?.id ?? ''}|${door ? `${doorId}:${door.isOpen}` : ''}`
     if (key !== lastWalkKey.current) {
       lastWalkKey.current = key
+      useFirstPersonHud.getState().setHud({
+        zoneLabel: zone?.label ?? null,
+        floorLabel,
+        interact: door
+          ? { label: door.label, verb: door.verb ?? (door.isOpen ? 'close' : 'open') }
+          : null,
+      })
       onWalkthroughChange?.({ zoneLabel: zone?.label ?? null, floorLabel, door })
     }
   })
@@ -1094,9 +1103,19 @@ export function GlbScene({
     },
     [sceneNodes, toggleableItem, toggleLoopMechanism, toggleOpenable, toggleProcedural],
   )
+  useFrame(() => {
+    if (
+      walkingOnFoot &&
+      useViewer.getState().walkthroughInputMode === 'touch' &&
+      consumeWalkthroughInteract()
+    )
+      activateWalkDoor()
+  })
+
   useEffect(() => {
     if (!walkingOnFoot) return
     const onKey = (event: KeyboardEvent) => {
+      if (useViewer.getState().walkthroughInputMode === 'touch') return
       if (event.key.toLowerCase() === 'e') activateWalkDoor()
       const shutters = walkDoorRef.current?.node
       if (event.key.toLowerCase() === 'f' && !event.repeat && shutters?.userData.shutters) {
@@ -1106,7 +1125,9 @@ export function GlbScene({
     }
     const canvas = document.querySelector('canvas')
     window.addEventListener('keydown', onKey)
-    const onClick = () => activateWalkDoor(true)
+    const onClick = () => {
+      if (useViewer.getState().walkthroughInputMode === 'desktop') activateWalkDoor(true)
+    }
     canvas?.addEventListener('click', onClick)
     return () => {
       window.removeEventListener('keydown', onKey)
@@ -1120,8 +1141,11 @@ export function GlbScene({
     setShuttersInView(false)
     walkDoorRef.current = null
     lastWalkKey.current = null
+    useFirstPersonHud.getState().reset()
     onWalkthroughChange?.(null)
   }, [walkingOnFoot, onWalkthroughChange])
+
+  useEffect(() => () => useFirstPersonHud.getState().reset(), [])
 
   const lastHover = useRef<string | null>(null)
   const handlePointerMove = useCallback(

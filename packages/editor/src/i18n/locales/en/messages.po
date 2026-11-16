@@ -15864,6 +15864,18 @@ msgstr "Walkthrough: {state}"
 msgid "viewer.walkthrough.shutters"
 msgstr "Shutters"
 
+#: packages/viewer/src/ui/components/walkthrough-touch-controls.tsx
+msgid "viewer.walkthroughTouch.exit"
+msgstr "Exit"
+
+#: packages/viewer/src/ui/components/walkthrough-touch-controls.tsx
+msgid "viewer.walkthroughTouch.interact"
+msgstr "Interact"
+
+#: packages/viewer/src/ui/components/walkthrough-touch-controls.tsx
+msgid "viewer.walkthroughTouch.jump"
+msgstr "Jump"
+
 #: packages/viewer/src/ui/components/viewer-controls-bar.tsx
 msgid "viewer.walls.cutaway"
 msgstr "Cutaway"

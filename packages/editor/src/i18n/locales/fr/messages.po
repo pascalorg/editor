@@ -39371,6 +39371,30 @@ msgstr "Visite : {state}"
 msgid "viewer.walkthrough.shutters"
 msgstr "Volets"
 
+# Source-Hash: 938aacb119b29dc1
+# Review: required
+# English: "Exit"
+#: packages/viewer/src/ui/components/walkthrough-touch-controls.tsx
+#, fuzzy
+msgid "viewer.walkthroughTouch.exit"
+msgstr "Quitter"
+
+# Source-Hash: 8f7bdd564c509359
+# Review: required
+# English: "Interact"
+#: packages/viewer/src/ui/components/walkthrough-touch-controls.tsx
+#, fuzzy
+msgid "viewer.walkthroughTouch.interact"
+msgstr "Interagir"
+
+# Source-Hash: d2be4c4b179a0f21
+# Review: required
+# English: "Jump"
+#: packages/viewer/src/ui/components/walkthrough-touch-controls.tsx
+#, fuzzy
+msgid "viewer.walkthroughTouch.jump"
+msgstr "Sauter"
+
 # Source-Hash: 4da8b3678ed77b45
 # Review: human
 # English: "Cutaway"

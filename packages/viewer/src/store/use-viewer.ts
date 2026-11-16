@@ -27,6 +27,7 @@ import {
 } from '../lib/scene-themes'
 import { SECTION_DEFAULTS, type SectionAxis } from '../lib/section'
 import { viewerPreferenceStorage } from '../lib/viewer-preference-storage'
+import { createWalkthroughInput } from '../lib/walkthrough-input'
 
 export type RenderContext = 'editor' | 'viewer'
 export type RenderQuality = 'low' | 'medium' | 'high'
@@ -339,6 +340,9 @@ type ViewerState = {
   sectionFlipped: boolean
   setSectionFlipped: (flipped: boolean) => void
 
+  walkthroughInputMode: 'desktop' | 'touch'
+  setWalkthroughInputMode: (mode: 'desktop' | 'touch') => void
+
   walkthroughMode: boolean
   setWalkthroughMode: (mode: boolean) => void
   /** How the first-person camera moves: on foot (collision, doors) or as a free-flying drone.
@@ -642,7 +646,7 @@ function chooseLook(state: ViewerState, look: LocalLook): Partial<ViewerState> {
 
 const useViewer = create<ViewerState>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       selection: { buildingId: null, levelId: null, zoneId: null, selectedIds: [] },
       focusedUnitId: null,
       setFocusedUnit: (focusedUnitId) => set({ focusedUnitId }),
@@ -885,10 +889,12 @@ const useViewer = create<ViewerState>()(
       setProjectId: (id) =>
         set((state) => {
           if (id === state.projectId) return state
+          createWalkthroughInput().clear()
           const prefs = (id && state.projectPreferences?.[id]) || {}
           const { '': _unscoped, ...projectPreferences } = state.projectPreferences
           return resolveLook(state, {
             projectId: id,
+            walkthroughInputMode: 'desktop',
             projectPreferences,
             projectPresentation: undefined,
             daylightSite: null,
@@ -953,13 +959,21 @@ const useViewer = create<ViewerState>()(
       setSectionPosition: (sectionPosition) => set({ sectionPosition }),
       setSectionFlipped: (sectionFlipped) => set({ sectionFlipped }),
 
+      walkthroughInputMode: 'desktop',
+      setWalkthroughInputMode: (walkthroughInputMode) => {
+        if (walkthroughInputMode === get().walkthroughInputMode) return
+        createWalkthroughInput().clear()
+        set({ walkthroughInputMode, walkthroughSuspended: false })
+      },
       walkthroughMode: false,
-      setWalkthroughMode: (mode) =>
+      setWalkthroughMode: (mode) => {
+        if (!mode) createWalkthroughInput().clear()
         set(
           mode
             ? { walkthroughMode: true, walkthroughSuspended: false }
             : { walkthroughMode: false, walkthroughSuspended: false, walkthroughMovement: 'walk' },
-        ),
+        )
+      },
       walkthroughMovement: 'walk',
       setWalkthroughMovement: (movement) => set({ walkthroughMovement: movement }),
 

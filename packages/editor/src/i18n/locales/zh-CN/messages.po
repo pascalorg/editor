@@ -39371,6 +39371,30 @@ msgstr "漫游：{state}"
 msgid "viewer.walkthrough.shutters"
 msgstr "护窗板"
 
+# Source-Hash: 938aacb119b29dc1
+# Review: required
+# English: "Exit"
+#: packages/viewer/src/ui/components/walkthrough-touch-controls.tsx
+#, fuzzy
+msgid "viewer.walkthroughTouch.exit"
+msgstr "退出"
+
+# Source-Hash: 8f7bdd564c509359
+# Review: required
+# English: "Interact"
+#: packages/viewer/src/ui/components/walkthrough-touch-controls.tsx
+#, fuzzy
+msgid "viewer.walkthroughTouch.interact"
+msgstr "交互"
+
+# Source-Hash: d2be4c4b179a0f21
+# Review: required
+# English: "Jump"
+#: packages/viewer/src/ui/components/walkthrough-touch-controls.tsx
+#, fuzzy
+msgid "viewer.walkthroughTouch.jump"
+msgstr "跳跃"
+
 # Source-Hash: 4da8b3678ed77b45
 # Review: human
 # English: "Cutaway"

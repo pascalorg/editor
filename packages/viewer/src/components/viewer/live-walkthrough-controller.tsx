@@ -66,6 +66,10 @@ import {
 } from 'three'
 import { acceleratedRaycast, computeBoundsTree, disposeBoundsTree } from 'three-mesh-bvh'
 import {
+  useWalkthroughInputLifecycle,
+  useWalkthroughJump,
+} from '../../hooks/use-walkthrough-input-lifecycle'
+import {
   createDroneInput,
   DRONE_SLOW_MULTIPLIER,
   type DroneLook,
@@ -75,10 +79,11 @@ import {
 } from '../../lib/drone-flight'
 import { setSurfaceRaycastLayers } from '../../lib/layers'
 import { isTypingTarget } from '../../lib/typing-target'
+import { consumeWalkthroughFrame, consumeWalkthroughInteract } from '../../lib/walkthrough-input'
 import { useFirstPersonHud, type WalkthroughInteract } from '../../store/use-first-person-hud'
 import useViewer from '../../store/use-viewer'
 import { openingSettled, proceduralSettled } from '../../systems/interactive/opening-settled'
-import BVHEcctrl, { type BVHEcctrlApi, type MovementInput } from './bvh-ecctrl'
+import BVHEcctrl, { type BVHEcctrlApi, characterStatus, type MovementInput } from './bvh-ecctrl'
 import {
   buildFirstPersonColliderWorldFromRegistry,
   deriveFirstPersonSpawn,
@@ -787,6 +792,9 @@ function LiveWalkthroughSession({
     hostRef.current.onExit?.()
   }, [])
   const { camera, gl } = useThree()
+  const touch = useViewer((state) => state.walkthroughInputMode === 'touch')
+  useWalkthroughInputLifecycle()
+  const resolveJump = useWalkthroughJump()
   const placedSpawnNode = useScene((state) => resolvePlacedSpawnNode(state.nodes))
   const isDroneMode = useViewer((state) => state.walkthroughMovement === 'drone')
   const controllerRef = useRef<BVHEcctrlApi | null>(null)
@@ -1423,6 +1431,7 @@ function LiveWalkthroughSession({
   }, [toggleInteractableTarget])
 
   useEffect(() => {
+    if (touch) return
     const canvas = gl.domElement
     const handleMouseMove = (e: MouseEvent) => {
       if (document.pointerLockElement !== canvas) return
@@ -1503,12 +1512,13 @@ function LiveWalkthroughSession({
         document.exitPointerLock()
       }
     }
-  }, [exit, gl])
+  }, [exit, gl, touch])
 
   useEffect(() => {
     const canvas = gl.domElement
 
     const applyMovementKey = (event: KeyboardEvent, active: boolean) => {
+      if (useViewer.getState().walkthroughInputMode === 'touch') return false
       if (isTypingTarget(event.target)) return false
 
       const movement = getMovementInputForKey(event.code, active)
@@ -1521,6 +1531,10 @@ function LiveWalkthroughSession({
     }
 
     const handleKeyDown = (event: KeyboardEvent) => {
+      if (useViewer.getState().walkthroughInputMode === 'touch') {
+        if (event.code === 'Escape') exit()
+        return
+      }
       const handledMovement = applyMovementKey(event, true)
       if (handledMovement) return
 
@@ -1619,6 +1633,24 @@ function LiveWalkthroughSession({
       window.removeEventListener('blur', handleBlur)
     }
   }, [closeInteractableTarget, exit, gl, isDroneMode, toggleInteractableTarget])
+
+  // biome-ignore lint/correctness/useExhaustiveDependencies: drop held input whenever the input mode changes
+  useEffect(() => {
+    Object.assign(movementInputRef.current, inactiveMovementInput)
+    controllerRef.current?.setMovement({ ...inactiveMovementInput, joystick: { x: 0, y: 0 } })
+    crouchKeyRef.current = false
+    suspendRef.current = false
+  }, [touch])
+
+  useFrame(() => {
+    if (!touch || isDroneMode || !controllerRef.current) return
+    const input = consumeWalkthroughFrame()
+    if (hostRef.current.paused) return
+    input.jump = resolveJump(input.jump, characterStatus.isOnGround, characterStatus.linvel.y)
+    controllerRef.current.setMovement(input)
+    turnFirstPersonLook(lookRef.current, input.dx, input.dy)
+    if (consumeWalkthroughInteract()) toggleInteractableTargetRef.current()
+  }, -1)
 
   const syncElevatorColliderMeshes = useCallback(() => {
     const nodes = useScene.getState().nodes
@@ -1963,7 +1995,7 @@ function LiveWalkthroughSession({
   return (
     <>
       {controllerStart && (
-        <KeyboardControls map={keyboardMap}>
+        <KeyboardControls map={touch ? [] : keyboardMap}>
           <BVHEcctrl
             acceleration={26}
             airDragFactor={0.3}

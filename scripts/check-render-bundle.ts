@@ -155,9 +155,10 @@ const result = await build({
       'render-consumer',
       `
     import { loadPlugin, roomCounts, useScene } from '@pascal-app/core';
-    import { LiveWalkthroughController, SectionGroup, sectionBounds, presetInstant, resolveDaylightSite, useFirstPersonHud, useViewer, Viewer } from '@pascal-app/viewer';
+    import { createWalkthroughInput, GlbWalkthroughController, LiveWalkthroughController, SectionGroup, sectionBounds, presetInstant, resolveDaylightSite, useFirstPersonHud, useViewer, Viewer } from '@pascal-app/viewer';
     import { renderPlugin } from '@pascal-app/nodes/render';
-    export { LiveWalkthroughController, SectionGroup, sectionBounds, presetInstant, resolveDaylightSite, roomCounts, useFirstPersonHud, useViewer, Viewer, renderPlugin };
+    import { WalkthroughTouchControls } from '@pascal-app/viewer/ui';
+    export { createWalkthroughInput, GlbWalkthroughController, WalkthroughTouchControls, LiveWalkthroughController, SectionGroup, sectionBounds, presetInstant, resolveDaylightSite, roomCounts, useFirstPersonHud, useViewer, Viewer, renderPlugin };
     export async function hydrate(scene) {
       await loadPlugin(renderPlugin);
       useScene.getState().setScene(scene);
@@ -252,6 +253,12 @@ const consumerSource = `
   useViewer.getState().setDaylightSite(site);
   export const counts = (graph: SceneGraph): RoomCounts => roomCounts(graph);
   import { LiveWalkthroughController, useFirstPersonHud, type LiveWalkthroughControllerProps } from '@pascal-app/viewer';
+  import { createWalkthroughInput, GlbWalkthroughController, type WalkthroughInput } from '@pascal-app/viewer';
+  const input: WalkthroughInput = createWalkthroughInput();
+  input.setMove(1, 0); input.addLook(12, 4); input.requestJump(); input.requestInteract(); input.clear();
+  useViewer.getState().setWalkthroughInputMode('touch');
+  export const touchMode: 'desktop' | 'touch' = useViewer.getState().walkthroughInputMode;
+  export { GlbWalkthroughController };
   const walkProps: LiveWalkthroughControllerProps = { paused: false };
   export const walkthrough = { LiveWalkthroughController, useFirstPersonHud, walkProps };
   import { renderPlugin } from '@pascal-app/nodes/render';
@@ -259,7 +266,9 @@ const consumerSource = `
   const sound: SoundName = 'menuClick';
   export const play = () => playSound(sound);
   export { initInteractionSounds, useAudioSettings };
-  import { ParametricViewerRooms, RoomPillsLayer2D, RoomPillsLayer3D, SceneLoader, ViewerControlsBar, ViewerRooms, ViewerSceneHeader, WalkthroughHud, type ViewerLinkProps } from '@pascal-app/viewer/ui';
+  import { ParametricViewerRooms, RoomPillsLayer2D, RoomPillsLayer3D, SceneLoader, ViewerControlsBar, ViewerRooms, ViewerSceneHeader, WalkthroughHud, WalkthroughTouchControls, type WalkthroughTouchControlsProps, type ViewerLinkProps } from '@pascal-app/viewer/ui';
+  export const touchProps: WalkthroughTouchControlsProps = { className: 'host-skin' };
+  export { WalkthroughTouchControls };
   const link = (props: ViewerLinkProps) => props.href;
   export const ui = { SceneLoader, ViewerControlsBar, ViewerSceneHeader, WalkthroughHud, link };
   export const rooms = { ParametricViewerRooms, RoomPillsLayer2D, RoomPillsLayer3D, ViewerRooms };

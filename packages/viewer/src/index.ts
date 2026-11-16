@@ -359,6 +359,7 @@ export {
   getViewerConfig,
   type ViewerConfig,
 } from './lib/viewer-config'
+export { createWalkthroughInput, type WalkthroughInput } from './lib/walkthrough-input'
 export { createZoneShape, createZoneWallGeometry } from './lib/zone-geometry'
 export {
   type FirstPersonHudState,

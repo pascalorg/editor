@@ -23,9 +23,15 @@ import {
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import { acceleratedRaycast, computeBoundsTree, disposeBoundsTree } from 'three-mesh-bvh'
 import { useGLTFKTX2 } from '../../hooks/use-gltf-ktx2'
+import {
+  useWalkthroughInputLifecycle,
+  useWalkthroughJump,
+} from '../../hooks/use-walkthrough-input-lifecycle'
+import { turnFirstPersonLook } from '../../lib/drone-flight'
 import { BATCHED_LAYER, SCENE_LAYER } from '../../lib/layers'
+import { consumeWalkthroughFrame } from '../../lib/walkthrough-input'
 import useViewer from '../../store/use-viewer'
-import BVHEcctrl, { type BVHEcctrlApi, type MovementInput } from './bvh-ecctrl'
+import BVHEcctrl, { type BVHEcctrlApi, characterStatus, type MovementInput } from './bvh-ecctrl'
 import { applyWalkthroughCameraClipping } from './viewer-camera'
 
 // First-person FOV. The orbit camera is 50° (set on the Canvas), which feels
@@ -40,7 +46,6 @@ export const WALKTHROUGH_FOV = 60
 const CAMERA_EYE_OFFSET = 0.45
 const CONTROLLER_CENTER_FROM_EYE = 0.85
 const SPAWN_EYE_HEIGHT = 1.65
-const LOOK_SENSITIVITY = 0.002
 const VOID_FALL_RESPAWN_DEPTH = 12
 
 // Crouch (hold Ctrl): swap to a short capsule — it shrinks around the centre,
@@ -265,12 +270,14 @@ function resolveGlbSpawn(
  */
 export function GlbWalkthroughController({ url }: { url: string }) {
   const { camera, gl } = useThree()
+  const touch = useViewer((state) => state.walkthroughInputMode === 'touch')
+  useWalkthroughInputLifecycle()
+  const resolveJump = useWalkthroughJump()
   const gltf = useGLTFKTX2(url) as unknown as { scene: Object3D }
 
   const worldRef = useRef<GlbColliderWorld | null>(null)
   const controllerRef = useRef<BVHEcctrlApi | null>(null)
-  const yawRef = useRef(0)
-  const pitchRef = useRef(0)
+  const lookRef = useRef({ yaw: 0, pitch: 0 })
   const crouchKeyRef = useRef(false)
   const suspendRef = useRef(false)
   const eyeOffsetRef = useRef(CAMERA_EYE_OFFSET)
@@ -345,8 +352,8 @@ export function GlbWalkthroughController({ url }: { url: string }) {
     if (!world || start) return
     const spawn = resolveGlbSpawn(gltf.scene)
     const eye = spawn?.position ?? [0, SPAWN_EYE_HEIGHT, 0]
-    yawRef.current = spawn?.yaw ?? 0
-    pitchRef.current = 0
+    lookRef.current.yaw = spawn?.yaw ?? 0
+    lookRef.current.pitch = 0
     setStart({ position: [eye[0], eye[1] - CONTROLLER_CENTER_FROM_EYE, eye[2]] })
   }, [world, start, gltf.scene])
 
@@ -355,15 +362,12 @@ export function GlbWalkthroughController({ url }: { url: string }) {
   // keydown, so we can't rely on it; or any other unlock) leaves the walkthrough
   // in a single press rather than just freeing the cursor.
   useEffect(() => {
+    if (touch) return
     const canvas = gl.domElement
     let wasLocked = false
     const onMouseMove = (event: MouseEvent) => {
       if (document.pointerLockElement !== canvas) return
-      yawRef.current -= event.movementX * LOOK_SENSITIVITY
-      pitchRef.current = Math.max(
-        -(Math.PI / 2 - 0.05),
-        Math.min(Math.PI / 2 - 0.05, pitchRef.current - event.movementY * LOOK_SENSITIVITY),
-      )
+      turnFirstPersonLook(lookRef.current, event.movementX, event.movementY)
     }
     const onClick = () => {
       if (document.pointerLockElement !== canvas) canvas.requestPointerLock?.()
@@ -429,23 +433,38 @@ export function GlbWalkthroughController({ url }: { url: string }) {
       useViewer.getState().setWalkthroughSuspended(false)
       if (document.pointerLockElement === canvas) document.exitPointerLock()
     }
-  }, [gl])
+  }, [gl, touch])
 
   // Lock the pointer the moment the walkthrough is ready, so the user doesn't
   // have to click the canvas first. The walkthrough toggle is itself a user
   // gesture; if the browser still rejects the request (no transient activation
   // left), the click-to-lock fallback above covers it.
   useEffect(() => {
-    if (!(world && start)) return
+    if (touch || !(world && start)) return
     const canvas = gl.domElement
     if (document.pointerLockElement === canvas) return
     const result = canvas.requestPointerLock?.() as Promise<void> | undefined
     if (result && typeof result.catch === 'function') result.catch(() => {})
-  }, [gl, world, start])
+  }, [gl, world, start, touch])
 
   const setControllerApi = useCallback((api: BVHEcctrlApi | null) => {
     controllerRef.current = api
   }, [])
+
+  // biome-ignore lint/correctness/useExhaustiveDependencies: drop held input whenever the input mode changes
+  useEffect(() => {
+    controllerRef.current?.setMovement({ joystick: { x: 0, y: 0 }, jump: false })
+    crouchKeyRef.current = false
+    suspendRef.current = false
+  }, [touch])
+
+  useFrame(() => {
+    if (!touch || !controllerRef.current) return
+    const input = consumeWalkthroughFrame()
+    input.jump = resolveJump(input.jump, characterStatus.isOnGround, characterStatus.linvel.y)
+    controllerRef.current.setMovement(input)
+    turnFirstPersonLook(lookRef.current, input.dx, input.dy)
+  }, -1)
 
   const hasStandingClearance = useCallback((position: Vector3) => {
     const mesh = worldRef.current?.mesh
@@ -477,7 +496,7 @@ export function GlbWalkthroughController({ url }: { url: string }) {
 
     group.rotation.y = 0
     camera.position.copy(group.position).add(cameraOffset.set(0, eyeOffsetRef.current, 0))
-    cameraEuler.set(pitchRef.current, yawRef.current, 0, 'YXZ')
+    cameraEuler.set(lookRef.current.pitch, lookRef.current.yaw, 0, 'YXZ')
     camera.quaternion.setFromEuler(cameraEuler)
     camera.updateMatrixWorld(true)
   }, 2.5)
@@ -485,7 +504,7 @@ export function GlbWalkthroughController({ url }: { url: string }) {
   if (!(world && start)) return null
 
   return (
-    <KeyboardControls map={keyboardMap}>
+    <KeyboardControls map={touch ? [] : keyboardMap}>
       <BVHEcctrl
         acceleration={26}
         airDragFactor={0.3}

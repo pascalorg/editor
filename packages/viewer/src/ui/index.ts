@@ -70,6 +70,10 @@ export {
   type WalkthroughHudProps,
 } from './components/walkthrough-hud'
 export {
+  WalkthroughTouchControls,
+  type WalkthroughTouchControlsProps,
+} from './components/walkthrough-touch-controls'
+export {
   subscribeFloorplanCameraNavigation,
   useFloorplanCameraSyncBridge,
 } from './floorplan/floorplan-camera-sync'
