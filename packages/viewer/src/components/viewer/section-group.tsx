@@ -4,6 +4,7 @@ import { useThree } from '@react-three/fiber'
 import { type ReactNode, useLayoutEffect, useMemo } from 'react'
 import { type Object3D, Plane } from 'three'
 import { ClippingGroup } from 'three/webgpu'
+import { SCENE_LAYER } from '../../lib/layers'
 import { sectionActive, updateSectionPlane } from '../../lib/section'
 import useViewer from '../../store/use-viewer'
 
@@ -31,6 +32,7 @@ export function SectionGroup({ children, name }: { children?: ReactNode; name?: 
       const state = useViewer.getState()
       updateSectionPlane(group.clippingPlanes[0]!, state)
       group.enabled = sectionActive(state)
+      group.layers.mask = group.enabled ? -1 : 1 << SCENE_LAYER
       group.clipShadows = group.enabled
       invalidate()
     }

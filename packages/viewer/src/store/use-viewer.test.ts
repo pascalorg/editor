@@ -1,7 +1,8 @@
 // @ts-expect-error — bun:test is provided by the Bun runtime; viewer does not
 // include Bun ambient types in its production declaration build.
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { resolveDaylightSite, useViewer } from '../index'
+import { useViewer } from '../index'
+import { resolveDaylightSite } from '../lib/daylight/location'
 import { groundVeiled, siteGroundShown } from './use-viewer'
 
 const resetMeasurementPreferences = () => {

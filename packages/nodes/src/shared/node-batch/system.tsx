@@ -129,6 +129,8 @@ function appearanceChanged(): boolean {
 }
 
 export function resetNodeBatchState() {
+  visibilityFamily = undefined
+  visibilityNodes = undefined
   releaseAll()
   changedNodes.clear()
   surfaceLevelReadyAt.clear()
@@ -181,11 +183,18 @@ function releaseAll() {
   revealAllBatchedHolds()
 }
 
+let visibilityFamily: string | null | undefined
+let visibilityNodes: unknown
+
 function updateBatchVisibility() {
   const viewer = useViewer.getState()
   const nodes = useScene.getState().nodes
+  const family = xrayActive(viewer) ? viewer.xrayFamily : null
+  if (family === visibilityFamily && (family === null || nodes === visibilityNodes)) return
+  visibilityFamily = family
+  visibilityNodes = nodes
   store.setVisibility(
-    xrayActive(viewer)
+    family !== null
       ? (id) => {
           const node = nodes[id as AnyNodeId]
           const family = node && familyForNode(node)

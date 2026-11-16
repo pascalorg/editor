@@ -957,7 +957,11 @@ test('two families in one material batch retain only the selected family without
   const geometry = batch.geometry
   useViewer.getState().setXrayFamily('items')
   expect([0, 1, 2, 3].map((id) => batch.getVisibleAt(id))).toEqual([true, true, false, false])
+  const writes = spyOn(batch, 'setVisibleAt')
   frame()
+  frame()
+  expect(writes).not.toHaveBeenCalled()
+  writes.mockRestore()
   expect(batches(root)[0]).toBe(batch)
   expect(batch.geometry).toBe(geometry)
   expect([0, 1, 2, 3].map((id) => batch.getVisibleAt(id))).toEqual([true, true, false, false])

@@ -65,6 +65,11 @@ export function showInScene(obj: Object3D, reason: HiddenReason): void {
   delete holder[HOLD]
 }
 
+/** Layer eligibility before isolation, solo, batching or X-ray presentation holds. */
+export function modelLayerMask(obj: Object3D): number {
+  return (obj as Holder)[HOLD]?.original ?? obj.layers.mask
+}
+
 /** The reasons `obj` is held off the scene layer, if any. */
 export function heldReasons(obj: Object3D): ReadonlySet<HiddenReason> | undefined {
   return (obj as Holder)[HOLD]?.reasons

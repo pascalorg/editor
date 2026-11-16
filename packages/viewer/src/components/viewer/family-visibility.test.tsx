@@ -62,6 +62,21 @@ test('live family isolation follows newly mounted semantic roots and preserves h
     expect(wall.layers.isEnabled(0)).toBe(false)
     expect(wall.visible).toBe(true)
     expect(item.layers.isEnabled(0)).toBe(true)
+    // Accessing children measures the family walker without depending on its implementation.
+    const children = wall.children
+    let visits = 0
+    Object.defineProperty(wall, 'children', {
+      configurable: true,
+      get: () => {
+        visits++
+        return children
+      },
+    })
+    await renderer.advanceFrames(1, 1 / 60)
+    const first = visits
+    await renderer.advanceFrames(1, 1 / 60)
+    expect(visits - first).toBe(1) // Draw's traversal only.
+    Object.defineProperty(wall, 'children', { configurable: true, value: children })
     const late = new Mesh(new BoxGeometry(), wall.material)
     late.name = 'late'
     root.add(late)

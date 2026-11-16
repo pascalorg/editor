@@ -1,7 +1,17 @@
 import { sceneRegistry } from '@pascal-app/core'
-import { Box3, type BufferAttribute, type BufferGeometry, type Mesh, type Object3D } from 'three'
+import type { BatchedMesh } from 'three'
+import {
+  Box3,
+  type BufferAttribute,
+  type BufferGeometry,
+  type Matrix4,
+  type Mesh,
+  Object3D,
+} from 'three'
 import { DEFAULT_FRAMING_EXCLUDED_TYPES } from './hero-pose'
 import { BATCHED_LAYER, SCENE_LAYER, SHADOW_ONLY_LAYER } from './layers'
+import { hasRevealPose } from './reveal-pose'
+import { modelLayerMask } from './scene-visibility'
 
 const excluded = new Set<string>(DEFAULT_FRAMING_EXCLUDED_TYPES)
 type Source = Object3D | ReadonlyMap<string, Object3D>
@@ -32,8 +42,38 @@ function geometryBounds(geometry: BufferGeometry): Box3 | null {
   return cached.box
 }
 
-function meshBounds(mesh: Mesh): Box3 | null {
-  const local = geometryBounds(mesh.geometry)
+/** Read the rest transform without clearing or writing a live reveal pose. */
+function modelWorldMatrix(object: Object3D, cache: Map<Object3D, Matrix4>): Matrix4 {
+  const cached = cache.get(object)
+  if (cached) return cached
+  let matrix = object.matrixWorld
+  if (object.matrixWorldAutoUpdate) {
+    const parent = object.parent ? modelWorldMatrix(object.parent, cache) : null
+    let local = object.matrix
+    if (object.matrixAutoUpdate && hasRevealPose(object)) {
+      const rest = new Object3D()
+      rest.position.copy(object.position)
+      rest.quaternion.copy(object.quaternion)
+      rest.scale.copy(object.scale)
+      rest.pivot = object.pivot
+      rest.updateMatrix()
+      local = rest.matrix
+    }
+    if (local !== object.matrix || (parent && parent !== object.parent!.matrixWorld)) {
+      matrix = parent ? local.clone().premultiply(parent) : local.clone()
+    }
+  }
+  cache.set(object, matrix)
+  return matrix
+}
+
+function meshBounds(mesh: Mesh, matrix: Matrix4): Box3 | null {
+  // Synthesized batches are stripped (or marked glbBatch) and excluded by the walker.
+  // Standalone plugin batches have no public mutation version: refresh their instance union,
+  // then retain the cached world box when that union and world transform are unchanged.
+  const batch = mesh as BatchedMesh
+  if (batch.isBatchedMesh) batch.computeBoundingBox()
+  const local = batch.isBatchedMesh ? batch.boundingBox : geometryBounds(mesh.geometry)
   if (!local || local.isEmpty()) return null
   const instanced = mesh as Mesh & {
     isInstancedMesh?: boolean
@@ -50,18 +90,18 @@ function meshBounds(mesh: Mesh): Box3 | null {
     cached.local.equals(local) &&
     cached.instanceVersion === instanceVersion &&
     cached.count === instanced.count &&
-    cached.matrix.every((value, i) => value === mesh.matrixWorld.elements[i])
+    cached.matrix.every((value, i) => value === matrix.elements[i])
   )
     return cached.box
 
   if (instanced.isInstancedMesh) instanced.computeBoundingBox!()
   const box = (instanced.isInstancedMesh ? instanced.boundingBox! : local)
     .clone()
-    .applyMatrix4(mesh.matrixWorld)
+    .applyMatrix4(matrix)
   meshCache.set(mesh, {
     geometry: mesh.geometry,
     local: local.clone(),
-    matrix: mesh.matrixWorld.elements.slice(),
+    matrix: matrix.elements.slice(),
     instanceVersion,
     count: instanced.count,
     box,
@@ -71,7 +111,7 @@ function meshBounds(mesh: Mesh): Box3 | null {
 
 /**
  * Unclipped world bounds (metres), independent of current visibility/section/culling.
- * O(objects) cache validation; unchanged meshes never rescan vertices or rebuild boxes.
+ * Ordinary meshes reuse vertex bounds and world boxes; standalone batches refresh their instance union.
  * Pass a baked model root / identity map, or omit for the registered live model.
  * Treat the returned cached Box3 as read-only. Empty models return null.
  */
@@ -86,17 +126,25 @@ export function sectionBounds(source: Source = sceneRegistry.nodes): Box3 | null
   const roots = 'isObject3D' in source ? [source as Object3D] : [...source.values()]
   const rootSet = new Set(roots)
   const boxes: Box3[] = []
+  const matrices = new Map<Object3D, Matrix4>()
   const walk = (object: Object3D, ownerExcluded: boolean) => {
-    if (object.type.endsWith('Helper') || object.userData.pascalExport === 'strip') return
+    if (
+      object.type.endsWith('Helper') ||
+      object.userData.pascalExport === 'strip' ||
+      object.userData.glbBatch
+    )
+      return
     const kind = owners.get(object) ?? object.userData.kind
     const skip = typeof kind === 'string' ? excluded.has(kind) : ownerExcluded
     const mesh = object as Mesh
     if (
       !skip &&
       mesh.isMesh &&
-      [SCENE_LAYER, BATCHED_LAYER, SHADOW_ONLY_LAYER].some((layer) => mesh.layers.isEnabled(layer))
+      [SCENE_LAYER, BATCHED_LAYER, SHADOW_ONLY_LAYER].some(
+        (layer) => (modelLayerMask(mesh) & (1 << layer)) !== 0,
+      )
     ) {
-      const box = meshBounds(mesh)
+      const box = meshBounds(mesh, modelWorldMatrix(mesh, matrices))
       if (box && !box.isEmpty()) boxes.push(box)
     }
     for (const child of object.children) walk(child, skip)

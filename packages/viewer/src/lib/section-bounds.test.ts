@@ -83,3 +83,57 @@ test('instance bounds follow live replacement geometry and matrix updates', () =
   expect(sectionBounds(instances)!.max.x).toBe(21)
   expect(sectionBounds(new Group())).toBeNull()
 })
+
+test('temporary family, isolation, solo and reveal masks never shrink model bounds', async () => {
+  const { hideFromScene, showInScene } = await import('./scene-visibility')
+  const root = new Group()
+  const large = new Mesh(new BoxGeometry(20, 20, 20))
+  const small = new Mesh(new BoxGeometry(1, 1, 1))
+  root.add(large, small)
+  const original = sectionBounds(root)!.clone()
+  for (const reason of ['xray', 'isolated', 'shadow-only'] as const) {
+    hideFromScene(large, reason)
+    expect(sectionBounds(root)!.equals(original)).toBe(true)
+    showInScene(large, reason)
+  }
+  large.visible = false
+  expect(sectionBounds(root)!.equals(original)).toBe(true)
+})
+
+test('standalone batch bounds follow translated instances and later instance mutations', async () => {
+  const { BatchedMesh, MeshBasicMaterial } = await import('three')
+  const batch = new BatchedMesh(2, 100, 100, new MeshBasicMaterial())
+  const geometry = batch.addGeometry(new BoxGeometry(2, 2, 2))
+  const instance = batch.addInstance(geometry)
+  batch.setMatrixAt(instance, new Matrix4().makeTranslation(100, 0, 0))
+  expect(sectionBounds(batch)!.min.x).toBe(99)
+  expect(sectionBounds(batch)!.max.x).toBe(101)
+  batch.setMatrixAt(instance, new Matrix4().makeTranslation(200, 0, 0))
+  expect(sectionBounds(batch)!.min.x).toBe(199)
+  batch.dispose()
+})
+
+test('construction reveal poses on meshes and ancestors leave rest bounds and live matrices unchanged', async () => {
+  const { clearRevealPose, setRevealPose } = await import('./reveal-pose')
+  const { Vector3 } = await import('three')
+  const parent = new Group()
+  parent.position.set(10, 5, -3)
+  const mesh = new Mesh(new BoxGeometry(20, 10, 4))
+  mesh.position.set(4, 0, 2)
+  mesh.pivot = new Vector3(1, 2, 3)
+  parent.add(mesh)
+  const original = sectionBounds(parent)!.clone()
+  try {
+    setRevealPose(parent, new Vector3(), new Vector3(0.01, 0.01, 0.01), 20)
+    setRevealPose(mesh, new Vector3(2, 0, 0), new Vector3(0.1, 1, 0.1), 10)
+    parent.updateWorldMatrix(true, true)
+    const posed = mesh.matrixWorld.clone()
+    expect(sectionBounds(parent)!.equals(original)).toBe(true)
+    // A registered child may be the only source, with its posed parent outside that source.
+    expect(sectionBounds(new Map([['mesh', mesh]]))!.equals(original)).toBe(true)
+    expect(mesh.matrixWorld.equals(posed)).toBe(true)
+  } finally {
+    clearRevealPose(mesh)
+    clearRevealPose(parent)
+  }
+})

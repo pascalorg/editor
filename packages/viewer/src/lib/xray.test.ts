@@ -1,12 +1,17 @@
-import { afterEach, beforeEach, expect, test } from 'bun:test'
+import { afterEach, beforeEach, expect, spyOn, test } from 'bun:test'
 import { type AnyNode, nodeRegistry } from '@pascal-app/core'
 import { BoxGeometry, Group, Mesh, MeshBasicMaterial, Vector3 } from 'three'
-import { resolveGlbPick, xrayActive, xrayShadowSignature } from '../index'
+import { resolveGlbPick, xrayActive } from '../index'
 import { mergeBakedStatic } from './glb-merge'
 import { BATCHED_LAYER, SCENE_LAYER, SHADOW_ONLY_LAYER } from './layers'
 import { filterSectionHits, SECTION_DEFAULTS } from './section'
 import { applyShadowOnly, clearShadowOnly } from './shadow-only'
-import { createFamilyVisibility, filterXrayHits } from './xray'
+import {
+  createFamilyVisibility,
+  filterXrayHits,
+  viewerShadowSignature,
+  xrayShadowSignature,
+} from './xray'
 
 let restore: () => void
 beforeEach(() => {
@@ -120,4 +125,36 @@ test('daylight shadows change family signatures and suspend isolation while walk
   expect(xrayShadowSignature({ xrayFamily: 'items', walkthroughMode: true })).toBe(
     xrayShadowSignature({ xrayFamily: null }),
   )
+})
+
+test('the main viewer entry exposes host taxonomy without internal resolvers or cache helpers', async () => {
+  const api = await import('../index')
+  expect('xrayShadowSignature' in api).toBe(false)
+  expect('resolveFamilyVisibility' in api).toBe(false)
+  expect('resolveDaylightSite' in api).toBe(false)
+  expect(api.VIEWER_FAMILIES).toContain('other')
+})
+
+test('default shadow family signature does not serialize per frame', () => {
+  const serialize = spyOn(JSON, 'stringify')
+  try {
+    xrayShadowSignature({ xrayFamily: null })
+    xrayShadowSignature({ xrayFamily: null })
+    expect(serialize).not.toHaveBeenCalled()
+  } finally {
+    serialize.mockRestore()
+  }
+})
+
+test('default presentation shadows return a constant without reading section parameters', () => {
+  const state = {
+    ...SECTION_DEFAULTS,
+    xrayFamily: null,
+    get sectionAxis(): never {
+      throw new Error('default signature formatted section parameters')
+    },
+  }
+  expect(viewerShadowSignature(state)).toBe('')
+  expect(viewerShadowSignature(state)).toBe('')
+  expect(viewerShadowSignature({ ...SECTION_DEFAULTS, xrayFamily: 'walls' })).not.toBe('')
 })

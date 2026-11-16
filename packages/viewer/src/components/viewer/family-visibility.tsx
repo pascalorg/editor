@@ -16,14 +16,17 @@ export function LiveFamilyVisibility() {
     const state = useViewer.getState()
     if (!xrayActive(state) && !wasActive.current) return
     wasActive.current = xrayActive(state)
-    const owners = new Map([...sceneRegistry.nodes].map(([id, object]) => [object, id]))
+    let owners: Map<import('three').Object3D, string> | undefined
+    const nodes = useScene.getState().nodes
     visibility.update(
       scene,
       (object) => {
+        owners ??= new Map([...sceneRegistry.nodes].map(([id, object]) => [object, id]))
         const id = owners.get(object)
-        return id ? useScene.getState().nodes[id as AnyNodeId] : undefined
+        return id ? nodes[id as AnyNodeId] : undefined
       },
       state,
+      nodes,
     )
   }, [scene, visibility])
   useFrame(update, 0.9)

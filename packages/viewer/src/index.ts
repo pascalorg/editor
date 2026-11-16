@@ -130,7 +130,6 @@ export {
   type LatLng,
   type LocationSource,
   requestDeviceLocation,
-  resolveDaylightSite,
   resolveLocation,
 } from './lib/daylight/location'
 export { type DaylightAtmosphereSource, isDaylightAtmosphere } from './lib/daylight/look'
@@ -288,7 +287,6 @@ export {
 export { planRevealWindows, type RevealWindow } from './lib/reveal-windows'
 export {
   familyForNode,
-  resolveFamilyVisibility,
   sceneFamilies,
   VIEWER_FAMILIES,
 } from './lib/scene-families'
@@ -315,6 +313,7 @@ export {
   siteGround,
   siteSurfaces,
   temporarilyVeilGround,
+  useSiteSurfaceOwner,
 } from './lib/site-surfaces'
 export {
   createPlainSnapshotPipeline,
@@ -366,7 +365,7 @@ export {
   type ViewerConfig,
 } from './lib/viewer-config'
 export { createWalkthroughInput, type WalkthroughInput } from './lib/walkthrough-input'
-export { xrayActive, xrayShadowSignature } from './lib/xray'
+export { xrayActive } from './lib/xray'
 export { createZoneShape, createZoneWallGeometry } from './lib/zone-geometry'
 export {
   type FirstPersonHudState,

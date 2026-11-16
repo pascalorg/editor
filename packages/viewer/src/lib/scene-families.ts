@@ -1,4 +1,10 @@
-import { type AnyNode, type AnyNodeId, nodeRegistry, type SceneGraph } from '@pascal-app/core'
+import {
+  type AnyNode,
+  type AnyNodeId,
+  hidesDescendants,
+  nodeRegistry,
+  type SceneGraph,
+} from '@pascal-app/core'
 
 export const VIEWER_FAMILIES = [
   'site',
@@ -34,9 +40,13 @@ export function resolveFamilyVisibility(graph: SceneGraph, family: string | null
     if (visited.has(id)) continue
     visited.add(id)
     const node = graph.nodes[id]
-    if (!node || node.visible === false) continue
+    if (!node || (node.visible === false && hidesDescendants(node))) continue
     const classification = familyForNode(node)
-    if (family === null || classification === undefined || classification === family) shown.add(id)
+    if (
+      node.visible !== false &&
+      (family === null || classification === undefined || classification === family)
+    )
+      shown.add(id)
     if ('children' in node) {
       for (const child of node.children)
         if (typeof child === 'string') pending.push(child as AnyNodeId)

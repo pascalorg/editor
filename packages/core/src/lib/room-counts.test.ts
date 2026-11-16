@@ -108,3 +108,16 @@ describe('roomCounts', () => {
     })
   })
 })
+
+test('a hidden site keeps the bedrooms in its visible buildings counted', async () => {
+  const { SiteNode, BuildingNode } = await import('../index')
+  const scene = graph([[room('Bedroom')]])
+  const building = BuildingNode.parse({ children: scene.rootNodeIds })
+  for (const id of scene.rootNodeIds) scene.nodes[id]!.parentId = building.id
+  const site = SiteNode.parse({ visible: false, children: [building.id] })
+  building.parentId = site.id
+  scene.nodes[site.id] = site
+  scene.nodes[building.id] = building
+  scene.rootNodeIds = [site.id]
+  expect(roomCounts(scene)).toMatchObject({ rooms: 1, bedrooms: 1, modelledAreaM2: 16 })
+})

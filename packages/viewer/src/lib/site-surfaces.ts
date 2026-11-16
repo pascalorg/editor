@@ -1,4 +1,5 @@
 import { sceneRegistry } from '@pascal-app/core'
+import { type RefObject, useLayoutEffect } from 'react'
 import type { Object3D } from 'three'
 import { temporarilySetGroundAside } from './scene-visibility'
 
@@ -7,6 +8,30 @@ import { temporarilySetGroundAside } from './scene-visibility'
  * drawn on the ground (property line, setbacks, contours) carry none.
  */
 export const SITE_GROUND = 'siteGround'
+
+const ownedRoots = new Map<string, Set<Object3D>>()
+
+/** A portaled surface scope retains the site's capture ownership. */
+export function useSiteSurfaceOwner(siteId: string, ref: RefObject<Object3D | null>) {
+  useLayoutEffect(() => {
+    const root = ref.current
+    if (!root) return
+    const roots = ownedRoots.get(siteId) ?? new Set<Object3D>()
+    ownedRoots.set(siteId, roots)
+    roots.add(root)
+    return () => {
+      roots.delete(root)
+      if (!roots.size) ownedRoots.delete(siteId)
+    }
+  }, [siteId, ref])
+}
+
+function siteChildren(siteId: string): Object3D[] {
+  return [
+    ...(sceneRegistry.nodes.get(siteId)?.children ?? []),
+    ...[...(ownedRoots.get(siteId) ?? [])].flatMap((root) => root.children),
+  ]
+}
 
 /**
  * `solid`: the lot's fill, its sculpted terrain, the horizon disc. `veil`: what is drawn in their
@@ -21,7 +46,7 @@ export type SiteGroundRole = 'solid' | 'veil'
 export function siteSurfaces(): Object3D[] {
   const surfaces: Object3D[] = []
   for (const siteId of sceneRegistry.byType.site ?? []) {
-    for (const child of sceneRegistry.nodes.get(siteId)?.children ?? []) {
+    for (const child of siteChildren(siteId)) {
       if (child.visible && !(child.type === 'Group' && child.children.length > 0)) {
         surfaces.push(child)
       }
@@ -34,7 +59,7 @@ export function siteSurfaces(): Object3D[] {
 export function siteGround(): Record<SiteGroundRole, Object3D[]> {
   const ground: Record<SiteGroundRole, Object3D[]> = { solid: [], veil: [] }
   for (const siteId of sceneRegistry.byType.site ?? []) {
-    for (const child of sceneRegistry.nodes.get(siteId)?.children ?? []) {
+    for (const child of siteChildren(siteId)) {
       const role: unknown = child.userData[SITE_GROUND]
       if (role === 'solid' || role === 'veil') ground[role].push(child)
     }

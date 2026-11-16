@@ -39,6 +39,7 @@ import {
   useNodeEvents,
   useSceneAtmosphere,
   useSceneGroundReplacement,
+  useSiteSurfaceOwner,
   useViewer,
 } from '@pascal-app/viewer'
 import { createPortal, useThree } from '@react-three/fiber'
@@ -709,6 +710,8 @@ export const SiteRenderer = ({ node }: { node: SiteNode }) => {
   // `showGround` hides both ground and horizon when authored geometry supplies them, unless a level
   // below grade is shown: the level display hides that geometry then, and the ground stands in.
   const showSiteSurfaces = node.visible !== false
+  const horizonRef = useRef<Group>(null)
+  useSiteSurfaceOwner(node.id, horizonRef)
   const showGround = siteGroundShown(node, { belowGrade })
 
   if (!(node && lineGeometry)) {
@@ -765,7 +768,7 @@ export const SiteRenderer = ({ node }: { node: SiteNode }) => {
 
       {/* The horizon is world presentation, outside the model's section scope. */}
       {createPortal(
-        <>
+        <group ref={horizonRef}>
           {/* Infinite-ground presentation disc fading into the sky at the horizon */}
           {showGround && !immersiveXR && horizonGeometry && horizonMaterial && fadeBounds && (
             <mesh
@@ -786,7 +789,7 @@ export const SiteRenderer = ({ node }: { node: SiteNode }) => {
               rotation={FLAT_ON_THE_GROUND}
             />
           )}
-        </>,
+        </group>,
         scene,
       )}
 

@@ -96,3 +96,59 @@ test('installs the pointer filter only during a cut and restores the host filter
     await renderer.unmount()
   }
 })
+
+test('the indexed zone pass retains section clipping ancestry for fills and borders', async () => {
+  const { LayerPassIndex, LayerPassNode } = await import('../../lib/layer-pass')
+  const { ZONE_LAYER } = await import('../../lib/layers')
+  const { Layers, PerspectiveCamera, Scene } = await import('three')
+  const { NodeFrame, PassNode } = await import('three/webgpu')
+  useViewer.setState({ sectionEnabled: true, sectionAxis: 'x', sectionPosition: 0 })
+  const renderer = await create(
+    <SectionGroup>
+      <mesh name="fill" layers={ZONE_LAYER} />
+      <mesh name="border" layers={ZONE_LAYER} />
+    </SectionGroup>,
+  )
+  const group = renderer.scene.children[0]!.instance as ClippingGroup
+  const scene = new Scene()
+  scene.add(group)
+  const index = new LayerPassIndex(scene, [ZONE_LAYER])
+  const camera = new PerspectiveCamera()
+  const main = new PassNode(PassNode.COLOR, scene, camera)
+  main.updateBefore = () => undefined
+  const pass = new LayerPassNode(index, camera, ZONE_LAYER, main)
+  const layers = new Layers()
+  layers.set(ZONE_LAYER)
+  pass.setLayers(layers)
+  const seen: string[] = []
+  const frame = new NodeFrame()
+  frame.renderer = {
+    getRenderTarget: () => null,
+    setRenderTarget() {},
+    getMRT: () => null,
+    setMRT() {},
+    getOutputRenderTarget: () => null,
+    getDrawingBufferSize: (size: any) => size.set(100, 100),
+    render(root: Scene) {
+      const visit = (object: any, context: ClippingContext) => {
+        if (object.isClippingGroup && object.enabled && camera.layers.test(object.layers))
+          context = context.getGroupContext(object)
+        if (object.isMesh && camera.layers.test(object.layers)) {
+          expect(context.unionPlanes).toHaveLength(1)
+          seen.push(object.name)
+        }
+        for (const child of object.children) visit(child, context)
+      }
+      visit(root, new ClippingContext())
+    },
+  } as any
+  try {
+    pass.updateBefore(frame)
+    expect(seen).toEqual(['fill', 'border'])
+  } finally {
+    index.dispose()
+    pass.dispose()
+    main.dispose()
+    await renderer.unmount()
+  }
+})

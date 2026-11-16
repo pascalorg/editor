@@ -1,6 +1,7 @@
 import { isOutdoorRoom, roomUseOfName } from '../building/room-use'
 import type { AnyNodeId } from '../schema'
 import type { SceneGraph } from '../utils/clone-scene-graph'
+import { hidesDescendants } from './node-visibility'
 import { area, type Polygon, union } from './polygon-boolean'
 
 export type RoomCounts = {
@@ -23,7 +24,7 @@ export function roomCounts(graph: SceneGraph): RoomCounts {
     if (visited.has(entry.id)) continue
     visited.add(entry.id)
     const node = graph.nodes[entry.id]
-    if (!node || node.visible === false) continue
+    if (!node || (node.visible === false && hidesDescendants(node))) continue
     const level = node.type === 'level' ? node.id : entry.level
     if (node.type === 'zone') {
       // The schema's legacy default is generic, not room: missing roles remain unclassified.

@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, expect, test } from 'bun:test'
 import { type AnyNode, type AnyNodeId, nodeRegistry, type SceneGraph } from '@pascal-app/core'
-import { familyForNode, resolveFamilyVisibility, sceneFamilies } from '../index'
+import { familyForNode, sceneFamilies } from '../index'
+import { resolveFamilyVisibility } from './scene-families'
 
 let restore: () => void
 beforeEach(() => {
@@ -60,4 +61,15 @@ test('a hosted child retains its family and an excluded container never imposes 
   ])
   scene.nodes.root!.children = ['root', 'wall', 'slab', 'hidden', 'plugin'] as AnyNodeId[]
   expect(resolveFamilyVisibility(scene, 'items').has('item' as AnyNodeId)).toBe(true)
+})
+
+test('a hidden site hides only its own family, preserving its visible buildings', () => {
+  nodeRegistry._register({
+    kind: 'site',
+    schemaVersion: 1,
+    extensions: { 'pascal:viewer': { family: 'site' } },
+  } as never)
+  const scene = graph()
+  scene.nodes.root = { ...scene.nodes.root!, type: 'site', visible: false } as AnyNode
+  expect(sceneFamilies(scene)).toEqual(['floors', 'walls', 'items', 'other'])
 })

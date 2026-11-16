@@ -13,6 +13,7 @@ import {
   operateItem,
   polygonInteriorPoint,
   type SurfaceRole,
+  sceneRegistry,
   useInteractive,
   usePascalI18n,
 } from '@pascal-app/core'
@@ -661,13 +662,16 @@ export function GlbScene({
     if (!xrayActive(state) && !familyWasActive.current) return
     familyWasActive.current = xrayActive(state)
     mergeRef.current?.setUnmerged(xrayActive(state))
+    let owners: Map<THREE.Object3D, string> | undefined
     familyVisibility.update(
       gltf.scene,
       (object) => {
-        const id = (object.userData as PascalExtras).pascalId
+        owners ??= new Map([...sceneRegistry.nodes].map(([id, root]) => [root, id]))
+        const id = owners.get(object) ?? (object.userData as PascalExtras).pascalId
         return id ? sceneNodes?.[id] : undefined
       },
       state,
+      sceneNodes,
     )
   }, [gltf.scene, sceneNodes, familyVisibility])
   useFrame(updateFamily, 0.9)

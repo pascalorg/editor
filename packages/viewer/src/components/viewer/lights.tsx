@@ -11,9 +11,8 @@ import * as THREE from 'three/webgpu'
 import { isDaylightAtmosphere } from '../../lib/daylight/look'
 import { getKeyLightDirectionOverride } from '../../lib/key-light-override'
 import { SHADOW_ONLY_LAYER } from '../../lib/layers'
-import { sectionShadowSignature } from '../../lib/section'
 import { registerSkyLights } from '../../lib/underground-ambiance'
-import { xrayShadowSignature } from '../../lib/xray'
+import { viewerShadowSignature } from '../../lib/xray'
 import useViewer, { groundVeiled } from '../../store/use-viewer'
 import { useSceneAtmosphere } from './scene-atmosphere'
 import { UndergroundAmbiance } from './underground-ambiance'
@@ -311,7 +310,7 @@ export function Lights() {
             collectShadowCasters(state.scene, shadowCasters.current)
           }
           const signature = shadowSignature(light, cam, shadowCasters.current)
-          const sectionSignature = `${sectionShadowSignature(useViewer.getState())}:${xrayShadowSignature(useViewer.getState())}`
+          const sectionSignature = viewerShadowSignature(useViewer.getState())
           if (
             signature !== lastShadowSignature.current ||
             sectionSignature !== lastSectionSignature.current

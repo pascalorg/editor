@@ -395,7 +395,7 @@ function MiniSky({ sky }: { sky: ReturnType<typeof useSky> }) {
   )
 }
 
-function SkyPanel({ sky }: { sky: ReturnType<typeof useSky> }) {
+export function SkyPanel({ sky }: { sky: ReturnType<typeof useSky> }) {
   const i18n = usePascalI18n()
   const [locating, setLocating] = useState(false)
   const viewer = useViewer.getState
@@ -465,7 +465,7 @@ function SkyPanel({ sky }: { sky: ReturnType<typeof useSky> }) {
         </span>
       </div>
 
-      <div className="grid grid-cols-4 gap-2">
+      <div className="grid grid-cols-5 gap-2">
         {PRESETS.map((preset) => (
           <OptionCard
             active={sky.activePreset === preset.id}
