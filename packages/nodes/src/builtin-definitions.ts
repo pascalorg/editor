@@ -38,6 +38,7 @@ import { pipeFittingRenderDefinition } from './pipe-fitting/definition.render'
 import { pipeSegmentRenderDefinition } from './pipe-segment/definition.render'
 import { pipeTrapRenderDefinition } from './pipe-trap/definition.render'
 import { proceduralItemRenderDefinition } from './procedural-item/definition.render'
+import { rampRenderDefinition } from './ramp/definition.render'
 import { ridgeVentRenderDefinition } from './ridge-vent/definition.render'
 import { roofRenderDefinition } from './roof/definition.render'
 import { roofSegmentRenderDefinition } from './roof-segment/definition.render'
@@ -52,6 +53,8 @@ import { spawnRenderDefinition } from './spawn/definition.render'
 import { stairRenderDefinition } from './stair/definition.render'
 import { stairSegmentRenderDefinition } from './stair-segment/definition.render'
 import { structuralGridRenderDefinition } from './structural-grid/definition.render'
+import { terrainBreakRenderDefinition } from './terrain-break/definition.render'
+import { terrainTileRenderDefinition } from './terrain-tile/definition.render'
 import { turbineVentRenderDefinition } from './turbine-vent/definition.render'
 import { unitRenderDefinition } from './unit/definition.render'
 import { wallRenderDefinition } from './wall/definition.render'
@@ -115,6 +118,9 @@ export const builtinRenderDefinitions = [
   pipeSegmentRenderDefinition,
   pipeFittingRenderDefinition,
   pipeTrapRenderDefinition,
+  rampRenderDefinition,
+  terrainTileRenderDefinition,
+  terrainBreakRenderDefinition,
 ] as const
 
 export type BuiltinKind = (typeof builtinRenderDefinitions)[number]['kind']

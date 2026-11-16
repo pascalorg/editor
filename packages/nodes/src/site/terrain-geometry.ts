@@ -3,8 +3,10 @@ import {
   heightAt,
   heightAtSample,
   normalAt,
+  type TerrainBreakNode,
   type TerrainField,
 } from '@pascal-app/core'
+import { buildTerrainBreakSkirt, updateTerrainBreakSkirt } from './terrain-break-split'
 
 /**
  * Builds the terrain mesh buffers from a `TerrainField`.
@@ -60,6 +62,12 @@ export type TerrainMeshBuffers = {
   uvs: Float32Array
   /** Triangle indices, two per grid cell. */
   indices: Uint32Array
+  terrainBreaks?: readonly TerrainBreakNode[]
+  terrainBreakSides?: readonly (readonly ('left' | 'right')[])[]
+  /** Set on a ground built smooth beside its breaks (`setTerrainBreakGround`); absent, faceted. */
+  terrainBreakGround?: 'smooth'
+  /** Vertices from this one on are closing faces: a live stroke leaves them where they stand. */
+  fixedFrom?: number
 }
 
 /** Vertex index of sample [c,r]. */
@@ -160,6 +168,8 @@ export type TerrainSkirtBuffers = {
    * counter-clockwise. Absent, the skirt runs round the field's own rectangle.
    */
   ring?: Float32Array
+  terrainBreaks?: readonly TerrainBreakNode[]
+  terrainBreakSides?: readonly (readonly ('left' | 'right')[])[]
 }
 
 /**
@@ -224,12 +234,16 @@ function boundarySample(field: TerrainField, i: number): { col: number; row: num
  * sit just beneath it without cutting into the lot anywhere.
  */
 export function terrainBlockBase(field: TerrainField): number {
-  let minH = 0
-  for (let i = 0; i < field.heights.length; i++) {
-    const h = field.heights[i] ?? 0
-    if (h < minH) minH = h
+  if (field.heightBounds && field.heights.length === 0) {
+    return Math.min(0, field.heightBounds[0], HORIZON_PLANE_Y) - SKIRT_DROP
   }
-  return Math.min(minH * field.step, HORIZON_PLANE_Y) - SKIRT_DROP
+  let minH = 0
+  for (let row = 0; row < field.rows; row++) {
+    for (let col = 0; col < field.cols; col++) {
+      minH = Math.min(minH, heightAtSample(field, col, row))
+    }
+  }
+  return Math.min(minH, HORIZON_PLANE_Y) - SKIRT_DROP
 }
 
 /**
@@ -251,7 +265,14 @@ export function skirtRing(
     area += x0 * z1 - x1 * z0
   }
   const ordered = area > 0 ? points : [...points].reverse()
-  const step = field.spacing / 2
+  let perimeter = 0
+  for (let i = 0; i < ordered.length; i++) {
+    const [ax, az] = ordered[i] as readonly [number, number]
+    const [bx, bz] = ordered[(i + 1) % ordered.length] as readonly [number, number]
+    perimeter += Math.hypot(bx - ax, bz - az)
+  }
+  // Keep the fallback horizon's skirt bounded on very large virtual lots.
+  const step = Math.max(field.spacing / 2, perimeter / 4096)
   const out: number[] = []
   for (let i = 0; i < ordered.length; i++) {
     const [ax, az] = ordered[i] as readonly [number, number]
@@ -267,6 +288,8 @@ export function buildTerrainSkirt(
   ring?: Float32Array | null,
 ): TerrainSkirtBuffers {
   const onRing = !!ring && ring.length >= 6
+  if (onRing && field.terrainBreaks?.length)
+    return buildTerrainBreakSkirt(field, ring as Float32Array, terrainBlockBase(field))
   const count = onRing ? (ring as Float32Array).length / 2 : perimeterCount(field)
   const vertices = count === 0 ? 0 : (count + 1) * 2
   const buffers: TerrainSkirtBuffers = {
@@ -299,14 +322,25 @@ export function buildTerrainSkirt(
  * bookkeeping to find which boundary samples a rectangular patch touched costs
  * more than re-uploading all of them. The surface's dirty range earns its
  * complexity because it saves 400 KB a dab; here there is nothing to save.
+ *
+ * The skirt along a property line is the exception: its points are spread at half a
+ * cell round the whole lot (1 920 vertices on a 30 m lot, 46 KB a dab), each a read of
+ * the ground, so with `bounds` (a stroke's rectangle) only the points inside are read
+ * again. Returns the range of `positions` it wrote, or null when the stroke touched none.
  */
-export function updateTerrainSkirt(field: TerrainField, buffers: TerrainSkirtBuffers): void {
-  if (buffers.ring) {
-    updateRingSkirt(field, buffers, buffers.ring)
-    return
+export function updateTerrainSkirt(
+  field: TerrainField,
+  buffers: TerrainSkirtBuffers,
+  bounds?: { minX: number; minZ: number; maxX: number; maxZ: number },
+): { start: number; count: number } | null {
+  const whole = { start: 0, count: buffers.positions.length }
+  if (buffers.terrainBreakSides) {
+    updateTerrainBreakSkirt(field, buffers, terrainBlockBase(field))
+    return whole
   }
+  if (buffers.ring) return updateRingSkirt(field, buffers, buffers.ring, bounds)
   const count = perimeterCount(field)
-  if (count === 0) return
+  if (count === 0) return null
 
   for (let i = 0; i <= count; i++) {
     const { col, row } = boundarySample(field, i % count)
@@ -329,6 +363,7 @@ export function updateTerrainSkirt(field: TerrainField, buffers: TerrainSkirtBuf
     writeSkirtVertex(buffers, topIndex, x, Math.max(h, HORIZON_PLANE_Y), z, nx, nz)
     writeSkirtVertex(buffers, bottomIndex, x, Math.min(h, HORIZON_PLANE_Y) - SKIRT_DROP, z, nx, nz)
   }
+  return whole
 }
 
 /**
@@ -340,14 +375,23 @@ function updateRingSkirt(
   field: TerrainField,
   buffers: TerrainSkirtBuffers,
   ring: Float32Array,
-): void {
+  bounds?: { minX: number; minZ: number; maxX: number; maxZ: number },
+): { start: number; count: number } | null {
   const count = ring.length / 2
-  if (count < 3) return
+  if (count < 3) return null
   const base = terrainBlockBase(field)
+  // Every bottom vertex stands on the block's one base: a stroke that moves it moves them all.
+  const within = bounds && buffers.positions[4] === Math.fround(base) ? bounds : undefined
+  let start = buffers.positions.length
+  let end = 0
   for (let i = 0; i <= count; i++) {
     const at = i % count
     const x = ring[at * 2] ?? 0
     const z = ring[at * 2 + 1] ?? 0
+    if (within && (x < within.minX || x > within.maxX || z < within.minZ || z > within.maxZ))
+      continue
+    start = Math.min(start, i * 6)
+    end = i * 6 + 6
     const prev = (at - 1 + count) % count
     const next = (at + 1) % count
     const tx = (ring[next * 2] ?? 0) - (ring[prev * 2] ?? 0)
@@ -358,6 +402,7 @@ function updateRingSkirt(
     writeSkirtVertex(buffers, i * 2, x, heightAt(field, x, z), z, nx, nz)
     writeSkirtVertex(buffers, i * 2 + 1, x, base, z, nx, nz)
   }
+  return end > start ? { start, count: end - start } : null
 }
 
 function writeSkirtVertex(

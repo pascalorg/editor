@@ -18,6 +18,7 @@ import {
   SCENE_LAYER,
   SITE_GROUND,
   setSurfaceRaycastLayers,
+  undergroundAmbianceNode,
   useViewer,
 } from '@pascal-app/viewer'
 import { act, create } from '@react-three/test-renderer'
@@ -89,6 +90,15 @@ function readsHoleOpening(root: unknown) {
 }
 const solidMasks = (root: Object3D) =>
   ground(root, 'solid').map((surface) => (surface.material as MeshBasicNodeMaterial).maskNode)
+
+/** True when the node graph under `root` reads the dark mode's factor. */
+function readsDarkMode(root: unknown) {
+  let reads = false
+  ;(root as { traverse: (visit: (child: unknown) => void) => void } | null)?.traverse((child) => {
+    if (child === undergroundAmbianceNode()) reads = true
+  })
+  return reads
+}
 
 let previous: {
   viewer: ReturnType<typeof useViewer.getState>
@@ -163,6 +173,68 @@ test.each([false, true])(
     groundHoleOpenNode().value = 0
     await renderer.advanceFrames(2, 0.05)
     expect(groundPickedAt(scene, 3, 2).length).toBeGreaterThan(0)
+    await renderer.unmount()
+  },
+)
+
+test('a sculpted site says where its ground is drawn past the property line; a flat one has one ground', async () => {
+  setNodes([])
+  const sculpted = await create(<SiteRenderer node={lot(true)} />)
+  await sculpted.advanceFrames(1, 0.05)
+  const past = useViewer.getState().groundPastLot
+  // The horizon disc, under the base of the lot's block (a metre under its lowest ground), and
+  // the property line the sculpted ground is cut to.
+  expect(past?.lot).toEqual(lotPoints)
+  expect(past?.y).toBeLessThan(-1)
+  const disc = ground(sculpted.scene.instance as Object3D, 'solid').find(
+    (surface) => surface.userData.pascalExport === 'strip',
+  )
+  expect(disc?.position.y).toBe(past?.y)
+  await sculpted.unmount()
+  expect(useViewer.getState().groundPastLot).toBeNull()
+
+  const flat = await create(<SiteRenderer node={lot(false)} />)
+  await flat.advanceFrames(1, 0.05)
+  expect(useViewer.getState().groundPastLot).toBeNull()
+  await flat.unmount()
+})
+
+test.each([false, true])(
+  'with the earth implied under the ground, no ground is drawn to an eye under it; off, the ground knows nothing of the dark mode (basement: %p)',
+  async (basement) => {
+    if (basement) withBasement()
+    else setNodes([])
+    const renderer = await create(<SiteRenderer node={lot(true)} />)
+    const scene = renderer.scene.instance as Object3D
+    const shadowMasks = () =>
+      ground(scene, 'solid').map(
+        (surface) => (surface.material as unknown as { maskShadowNode: unknown }).maskShadowNode,
+      )
+    const veilOpacities = () =>
+      ground(scene, 'veil').map(
+        (surface) => (surface.material as MeshBasicNodeMaterial).opacityNode,
+      )
+    // As it ships: the block's surface, its skirt and the horizon disc are drawn whatever the eye
+    // does, and nothing in them reads the dark mode's factor.
+    expect(useViewer.getState().undergroundLook.ground).toBe('drawn')
+    expect(ground(scene, 'solid').length).toBeGreaterThanOrEqual(3)
+    expect(solidMasks(scene).some(readsDarkMode)).toBe(false)
+    expect(veilOpacities().some(readsDarkMode)).toBe(false)
+    expect(shadowMasks().every((mask) => mask == null)).toBe(true)
+
+    await act(async () => useViewer.getState().setUndergroundLook({ ground: 'implied' }))
+    await renderer.advanceFrames(2, 0.05)
+    // Every solid surface (the horizon disc and the skirt with it) and every veil steps aside
+    // with the dark mode; the shadow each one casts does not.
+    expect(solidMasks(scene).length).toBeGreaterThanOrEqual(3)
+    expect(solidMasks(scene).every(readsDarkMode)).toBe(true)
+    expect(veilOpacities().length).toBeGreaterThan(0)
+    expect(veilOpacities().every(readsDarkMode)).toBe(true)
+    expect(shadowMasks().every((mask) => mask != null && !readsDarkMode(mask))).toBe(true)
+
+    await act(async () => useViewer.getState().setUndergroundLook({ ground: 'drawn' }))
+    await renderer.advanceFrames(2, 0.05)
+    expect(solidMasks(scene).some(readsDarkMode)).toBe(false)
     await renderer.unmount()
   },
 )

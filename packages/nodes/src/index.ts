@@ -97,6 +97,21 @@ export { measurementDefinition } from './measurement'
 export { pipeFittingDefinition } from './pipe-fitting'
 export { pipeSegmentDefinition } from './pipe-segment'
 export { pipeTrapDefinition } from './pipe-trap'
+export {
+  buildRampFloorplan,
+  buildRampGeometry,
+  buildRampRibbonGeometry,
+  commitRampCreation,
+  commitRampEdit,
+  moveRampPoint,
+  rampDefinition,
+  rampFloorplanFrame,
+  rampPlanToSite,
+  rampSegmentEnd,
+  rampSegmentFrames,
+  rampSegmentThrough,
+  rampSiteToPlan,
+} from './ramp'
 export { ridgeVentDefinition } from './ridge-vent'
 export { type RoofFootprintSourceChoice, roofDefinition, useRoofFootprintSource } from './roof'
 export { glazedRoofGeometryAdapter } from './roof/glazed-geometry'
@@ -109,6 +124,12 @@ export { separatorDefinition } from './separator/definition'
 export { default as PipeCollarInspector } from './shared/pipe-collar-inspector'
 export { shelfDefinition } from './shelf'
 export { siteDefinition } from './site'
+export {
+  getTerrainBreakGround,
+  setTerrainBreakGround,
+  type TerrainBreakGround,
+} from './site/terrain-break-split'
+export { buildTerrainGroundMesh, terrainGroundPatches } from './site/terrain-ground'
 export { skylightDefinition } from './skylight'
 export { slabDefinition } from './slab'
 export { solarPanelDefinition } from './solar-panel'
@@ -124,6 +145,11 @@ export { buildFloorplanStairEntry } from './stair/plan-entry'
 export { buildPostAndRailGuard } from './stair/post-and-rail-guard'
 export { stairSegmentDefinition } from './stair-segment'
 export { structuralGridDefinition } from './structural-grid'
+export { terrainBreakDefinition } from './terrain-break/definition'
+export { commitTerrainBreakCreation, commitTerrainBreakEdit } from './terrain-break/edit'
+export { buildTerrainBreakFloorplan } from './terrain-break/floorplan'
+export { buildTerrainBreakGeometry, buildTerrainBreakMesh } from './terrain-break/geometry'
+export { buildTerrainTileMesh, terrainTileDefinition } from './terrain-tile'
 export { turbineVentDefinition } from './turbine-vent'
 export { unitDefinition } from './unit'
 export { wallDefinition } from './wall'

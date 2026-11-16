@@ -1,5 +1,5 @@
 import { afterEach, expect, test } from 'bun:test'
-import { groundHoleOpenNode } from '@pascal-app/viewer'
+import { groundHoleOpenNode, undergroundAmbianceNode } from '@pascal-app/viewer'
 import {
   groundHoleColorNode,
   groundHoleContains,
@@ -9,6 +9,7 @@ import {
   HOLE_MARGIN,
   setGroundHoleEdge,
   setGroundHoleFootprints,
+  setSolidGroundMask,
   solidGroundMaskNode,
 } from './ground-hole'
 
@@ -82,4 +83,33 @@ test('the mask, the rim and the shadow word build as TSL nodes', () => {
   expect(solidGroundMaskNode()).toBeTruthy()
   expect(groundHoleColorNode('#4a5470')).toBeTruthy()
   expect(typeof groundHoleShadowNode()).toBe('function')
+})
+
+test('a solid ground surface is masked by the dark mode only when the earth is implied under the ground', () => {
+  const reads = (root: unknown, wanted: unknown) => {
+    let found = false
+    ;(root as { traverse: (visit: (node: unknown) => void) => void }).traverse((node) => {
+      if (node === wanted) found = true
+    })
+    return found
+  }
+  type Masked = { maskNode: unknown; maskShadowNode: unknown }
+  for (const hasBasement of [false, true]) {
+    // As it ships: the window's mask (and the hole's with a level below grade), nothing else, and
+    // no mask of its own for the shadow. What a break's face and the lot's ground both get.
+    const shipped: Masked = { maskNode: null, maskShadowNode: null }
+    setSolidGroundMask(shipped, hasBasement, false)
+    expect(reads(shipped.maskNode, undergroundAmbianceNode())).toBe(false)
+    expect(reads(shipped.maskNode, groundHoleOpenNode())).toBe(hasBasement)
+    expect(shipped.maskShadowNode).toBeNull()
+
+    // Implied: the surface leaves with the dark mode, and still casts the shadow it cast.
+    const implied: Masked = { maskNode: null, maskShadowNode: null }
+    setSolidGroundMask(implied, hasBasement, true)
+    expect(reads(implied.maskNode, undergroundAmbianceNode())).toBe(true)
+    expect(reads(implied.maskNode, groundHoleOpenNode())).toBe(hasBasement)
+    expect(implied.maskShadowNode).not.toBeNull()
+    expect(reads(implied.maskShadowNode, undergroundAmbianceNode())).toBe(false)
+    expect(reads(implied.maskShadowNode, groundHoleOpenNode())).toBe(hasBasement)
+  }
 })

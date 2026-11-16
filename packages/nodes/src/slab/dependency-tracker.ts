@@ -11,6 +11,8 @@ import {
   scopeSlabPolygonContext,
   slabPolygonContextChanges,
   slabPolygonContextForLevel,
+  slabTerrainFrameOf,
+  type TerrainField,
   type ZoneNode,
 } from '@pascal-app/core'
 
@@ -18,6 +20,7 @@ type LevelContext = { slabs: SlabNode[] }
 type CachedLevel = {
   prepared: ReturnType<typeof prepareSlabPolygonContext>
   transform: string
+  drape: { field: TerrainField | null; baseY: number | null; revision: number }
   partitionRevision: number
   slabs: Map<AnyNodeId, { node: SlabNode; signature: string; lift: number }>
   references: {
@@ -64,6 +67,7 @@ export function createSlabDependencyTracker(initialNodes: Record<string, AnyNode
               node.support,
               node.plateRole,
               node.fillToTerrain,
+              node.terrainMode,
               node.floorHeight,
               node.foundation,
               node.boundary,
@@ -117,6 +121,19 @@ export function createSlabDependencyTracker(initialNodes: Record<string, AnyNode
       )
       const building = level?.parentId ? nodes[level.parentId] : undefined
       const cached = previous.get(levelId)
+      let terrainFrame: ReturnType<typeof slabTerrainFrameOf> = null
+      for (const slab of context.slabs) {
+        terrainFrame = slabTerrainFrameOf(slab, nodes)
+        if (terrainFrame) break
+      }
+      const field = terrainFrame?.field ?? null
+      const baseY = terrainFrame?.baseY ?? null
+      const sameDrape = cached?.drape.field === field && cached?.drape.baseY === baseY
+      const drape = {
+        field,
+        baseY,
+        revision: (cached?.drape.revision ?? 0) + (sameDrape ? 0 : 1),
+      }
       // Plates carry room finishes, so a zone edit changes what they draw even
       // when nothing about their own polygon moved.
       const { zones, openings = [] } = plateLevelContext(level ?? null, (id) => nodes[id])
@@ -130,6 +147,7 @@ export function createSlabDependencyTracker(initialNodes: Record<string, AnyNode
       }
       if (
         cached &&
+        sameDrape &&
         cached.references.level === level &&
         cached.references.building === building &&
         sameReferences(cached.references.slabs, context.slabs) &&
@@ -142,13 +160,16 @@ export function createSlabDependencyTracker(initialNodes: Record<string, AnyNode
         continue
       }
       const transform =
-        building?.type === 'building' ? [building.id, building.position, building.rotation] : null
+        building?.type === 'building'
+          ? [building.id, building.parentId, building.position, building.rotation]
+          : null
       const transformSignature = JSON.stringify(transform)
       const sameValues = <T extends AnyNode>(left: T[], right: T[]) =>
         left.length === right.length &&
         left.every((node, index) => node === right[index] || sign(node) === sign(right[index]!))
       if (
         cached &&
+        sameDrape &&
         cached.transform === transformSignature &&
         sameValues(cached.references.context.walls, polygonContext.walls) &&
         sameValues(cached.references.slabs, context.slabs) &&
@@ -169,12 +190,14 @@ export function createSlabDependencyTracker(initialNodes: Record<string, AnyNode
       for (const slab of context.slabs) {
         const previousSlab = cached?.slabs.get(slab.id)
         const lift = isFloorPlate(slab) ? 0 : floorConstructionLift(nodes, slab)
+        const terrainDependent =
+          slab.terrainMode === 'draped' || (slab.fillToTerrain && !slab.recessed)
         if (
           previousSlab &&
           previousSlab.lift === lift &&
           !isFloorPlate(slab) &&
           (previousSlab.node === slab || sign(previousSlab.node) === sign(slab)) &&
-          (!slab.fillToTerrain || slab.recessed || cached?.transform === transformSignature) &&
+          (!terrainDependent || (cached?.transform === transformSignature && sameDrape)) &&
           !affected(slab)
         ) {
           slabs.set(slab.id, previousSlab)
@@ -189,7 +212,9 @@ export function createSlabDependencyTracker(initialNodes: Record<string, AnyNode
           slab.elevation + lift,
           slab.thickness,
           slab.recessed,
-          slab.fillToTerrain && !slab.recessed ? transform : null,
+          slab.terrainMode ?? 'flat',
+          terrainDependent ? transform : null,
+          slab.terrainMode === 'draped' ? [drape.baseY, drape.revision] : null,
           isFloorPlate(slab) ? partitionRevision : null,
         ])
         slabs.set(slab.id, { node: slab, signature, lift })
@@ -198,6 +223,7 @@ export function createSlabDependencyTracker(initialNodes: Record<string, AnyNode
       current.set(levelId, {
         prepared,
         transform: transformSignature,
+        drape,
         slabs,
         references,
         partitionRevision,

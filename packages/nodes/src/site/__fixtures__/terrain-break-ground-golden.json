@@ -1,0 +1,192 @@
+{
+  "one straight break, oblique": [
+    {
+      "key": "terrain-tile_x0z0",
+      "positions": "41e8df88eaed9f525cdc5533",
+      "normals": "4fd119f629e42a42031a8d09",
+      "uvs": "792a7e77e74816a6b9498dd2",
+      "indices": "8aa90e0785be14147634c1d9",
+      "verts": 25842,
+      "tris": 8614
+    },
+    {
+      "key": "terrain-tile_x1z0",
+      "positions": "59cfda4d812bf7e5a793b131",
+      "normals": "011ee8ff5e8b3be020d3dc0d",
+      "uvs": "0986ce0677d0c5600db76f8a",
+      "indices": "fc0be75c3434331d153fe1e2",
+      "verts": 24648,
+      "tris": 8216
+    },
+    {
+      "key": "terrain-tile_x0z1",
+      "positions": "99f8276f189cb8bcbc980c7b",
+      "normals": "920159a71f627aed492c62b1",
+      "uvs": "da305989fcf7bfe082a7c893",
+      "indices": "694176534b129f6c3205ff03",
+      "verts": 24576,
+      "tris": 8192
+    },
+    {
+      "key": "terrain-tile_x1z1",
+      "positions": "e3a37305f400cefa1b7f69bc",
+      "normals": "6f351cdac47202e3ab69e8df",
+      "uvs": "4287618ba3292097af312fff",
+      "indices": "641c12701dcbbe0d2ab316ff",
+      "verts": 25782,
+      "tris": 8594
+    }
+  ],
+  "one closed ring across the tile seams": [
+    {
+      "key": "terrain-tile_x0z0",
+      "positions": "09239d3306ccededf91c804d",
+      "normals": "da124607ac637ae66966c4ad",
+      "uvs": "801476e6bac6ce11aaa89718",
+      "indices": "49d3adc2877a46a04f5099da",
+      "verts": 26976,
+      "tris": 8992
+    },
+    {
+      "key": "terrain-tile_x1z0",
+      "positions": "fa2558f7e74373bc31f118b5",
+      "normals": "deea167f4a4ff0009707bd7c",
+      "uvs": "673d5fb6b93786084e75aaff",
+      "indices": "b1e8409420bbcd236a3f9982",
+      "verts": 24810,
+      "tris": 8270
+    },
+    {
+      "key": "terrain-tile_x0z1",
+      "positions": "a7482f046dee196acbf78bd0",
+      "normals": "76ede2ddbdb957f4b942a553",
+      "uvs": "2ebd1e54bf43997487a451ac",
+      "indices": "f0165fe62d6ad13e6cece4fe",
+      "verts": 25278,
+      "tris": 8426
+    },
+    {
+      "key": "terrain-tile_x1z1",
+      "positions": "98378ad6edd9a67824d6e9e6",
+      "normals": "825806339c6ae863d152b8f9",
+      "uvs": "b192d502c0a35fa2a9c91bc7",
+      "indices": "9c3b21d2150bdf4bda6be117",
+      "verts": 25860,
+      "tris": 8620
+    }
+  ],
+  "a ring standing off a straight break (a T that does not touch)": [
+    {
+      "key": "terrain-tile_x0z0",
+      "positions": "2cfec7ff4de24a6364f4ef4d",
+      "normals": "05d4eae544c90feb7823c1f5",
+      "uvs": "3a3faf7d7ce0201515bc3b11",
+      "indices": "6125e9bb625af9816d65e06f",
+      "verts": 25344,
+      "tris": 8448
+    },
+    {
+      "key": "terrain-tile_x1z0",
+      "positions": "0760174d88475f3598da5edd",
+      "normals": "aa8d91b3ecdb81ced41a5ef7",
+      "uvs": "55de7e8ba55b2997677ce5f6",
+      "indices": "17a4cf18e286f0da3b526cf1",
+      "verts": 25512,
+      "tris": 8504
+    },
+    {
+      "key": "terrain-tile_x0z1",
+      "positions": "4535f4dc395568ef64588c45",
+      "normals": "bb6749f2b371bb2b5a1a5014",
+      "uvs": "e256b33f2872a9a69b9d02c2",
+      "indices": "433684d9c42a3b8ecbd97b96",
+      "verts": 26112,
+      "tris": 8704
+    },
+    {
+      "key": "terrain-tile_x1z1",
+      "positions": "a0edab13fb1494ee21d5215a",
+      "normals": "0c719af97761b7b49c8a4973",
+      "uvs": "37d177778a9d5cf1fe17882d",
+      "indices": "e4147d86396f6cd2c44aae40",
+      "verts": 26280,
+      "tris": 8760
+    }
+  ],
+  "a ring that ends inside one tile": [
+    {
+      "key": "terrain-tile_x0z0",
+      "positions": "668947bcba8d9442e93e6087",
+      "normals": "0ae991a3c8ad8c185d2b5292",
+      "uvs": "c0dd6d2eed08c0edff854812",
+      "indices": "545f36a593d4ee759d8d7a5d",
+      "verts": 26040,
+      "tris": 8680
+    },
+    {
+      "key": "terrain-tile_x1z0",
+      "positions": "8c9ca93c2a6bf67b790d6490",
+      "normals": "557b914124951303bc30f8eb",
+      "uvs": "3f6404e628eddb3d5ebba680",
+      "indices": "694176534b129f6c3205ff03",
+      "verts": 24576,
+      "tris": 8192
+    },
+    {
+      "key": "terrain-tile_x0z1",
+      "positions": "03837451d378f054c8c676f8",
+      "normals": "4ceb0237a97322bad3646c1e",
+      "uvs": "80eda32d69f116637b7c15d8",
+      "indices": "142135763d3b5a2dba039edf",
+      "verts": 25314,
+      "tris": 8438
+    },
+    {
+      "key": "terrain-tile_x1z1",
+      "positions": "fa83d995072881ae0424ec1c",
+      "normals": "30e55fe623848f52fbe492a5",
+      "uvs": "bed638a637540de9d8e5fe71",
+      "indices": "42a2bad2706a03eb33141c48",
+      "verts": 26466,
+      "tris": 8822
+    }
+  ],
+  "a straight break on the tile seam": [
+    {
+      "key": "terrain-tile_x0z0",
+      "positions": "49d4f907b6382b26144b7631",
+      "normals": "ad60c6fe10adecc2970d5fa4",
+      "uvs": "50478b4ad3bca8e8b634172f",
+      "indices": "694176534b129f6c3205ff03",
+      "verts": 24576,
+      "tris": 8192
+    },
+    {
+      "key": "terrain-tile_x1z0",
+      "positions": "8e06be7a2cb5f04a90c5369f",
+      "normals": "e4ae504e929d9f437ef2ef8c",
+      "uvs": "3f6404e628eddb3d5ebba680",
+      "indices": "694176534b129f6c3205ff03",
+      "verts": 24576,
+      "tris": 8192
+    },
+    {
+      "key": "terrain-tile_x0z1",
+      "positions": "99f8276f189cb8bcbc980c7b",
+      "normals": "920159a71f627aed492c62b1",
+      "uvs": "da305989fcf7bfe082a7c893",
+      "indices": "694176534b129f6c3205ff03",
+      "verts": 24576,
+      "tris": 8192
+    },
+    {
+      "key": "terrain-tile_x1z1",
+      "positions": "bff26a48c0a658985d23d24b",
+      "normals": "e4ae504e929d9f437ef2ef8c",
+      "uvs": "f1855933b67abbe69d4af3d5",
+      "indices": "694176534b129f6c3205ff03",
+      "verts": 24576,
+      "tris": 8192
+    }
+  ]
+}

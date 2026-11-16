@@ -37,6 +37,7 @@ import { pipeFittingEditContribution } from './pipe-fitting/definition.edit'
 import { pipeSegmentEditContribution } from './pipe-segment/definition.edit'
 import { pipeTrapEditContribution } from './pipe-trap/definition.edit'
 import { proceduralItemEditContribution } from './procedural-item/definition.edit'
+import { rampEditContribution } from './ramp/definition.edit'
 import { ridgeVentEditContribution } from './ridge-vent/definition.edit'
 import { roofEditContribution } from './roof/definition.edit'
 import { roofSegmentEditContribution } from './roof-segment/definition.edit'
@@ -51,6 +52,8 @@ import { spawnEditContribution } from './spawn/definition.edit'
 import { stairEditContribution } from './stair/definition.edit'
 import { stairSegmentEditContribution } from './stair-segment/definition.edit'
 import { structuralGridEditContribution } from './structural-grid/definition.edit'
+import { terrainBreakEditContribution } from './terrain-break/definition.edit'
+import { terrainTileEditContribution } from './terrain-tile/definition.edit'
 import { turbineVentEditContribution } from './turbine-vent/definition.edit'
 import { unitEditContribution } from './unit/definition.edit'
 import { wallEditContribution } from './wall/definition.edit'
@@ -114,4 +117,7 @@ export const builtinEditContributions = {
   'pipe-segment': pipeSegmentEditContribution,
   'pipe-fitting': pipeFittingEditContribution,
   'pipe-trap': pipeTrapEditContribution,
+  ramp: rampEditContribution,
+  'terrain-tile': terrainTileEditContribution,
+  'terrain-break': terrainBreakEditContribution,
 } satisfies BuiltinEditContributions
