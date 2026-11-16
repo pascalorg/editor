@@ -13,6 +13,7 @@ export const skylightRenderDefinition: NodeRenderDefinition<typeof SkylightNode>
   kind: 'skylight'
 } = {
   kind: 'skylight',
+  extensions: { 'pascal:viewer': { family: 'openings' } },
   schemaVersion: 1,
   schema: SkylightNode,
   category: 'structure',

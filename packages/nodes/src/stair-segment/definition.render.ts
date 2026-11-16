@@ -6,6 +6,7 @@ export const stairSegmentRenderDefinition: NodeRenderDefinition<typeof StairSegm
   kind: 'stair-segment'
 } = {
   kind: 'stair-segment',
+  extensions: { 'pascal:viewer': { family: 'circulation' } },
   schemaVersion: 2,
   schema: StairSegmentNode,
   category: 'structure',

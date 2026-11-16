@@ -10,6 +10,7 @@ import { CupolaNode } from './schema'
 export const cupolaRenderDefinition: NodeRenderDefinition<typeof CupolaNode> & { kind: 'cupola' } =
   {
     kind: 'cupola',
+    extensions: { 'pascal:viewer': { family: 'roofs' } },
     schemaVersion: 4,
     schema: CupolaNode,
     category: 'structure',

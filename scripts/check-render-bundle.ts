@@ -155,10 +155,10 @@ const result = await build({
       'render-consumer',
       `
     import { loadPlugin, roomCounts, useScene } from '@pascal-app/core';
-    import { createWalkthroughInput, GlbWalkthroughController, LiveWalkthroughController, SectionGroup, sectionBounds, presetInstant, resolveDaylightSite, useFirstPersonHud, useViewer, Viewer } from '@pascal-app/viewer';
+    import { createWalkthroughInput, GlbWalkthroughController, LiveWalkthroughController, familyForNode, resolveFamilyVisibility, sceneFamilies, VIEWER_FAMILIES, xrayActive, xrayShadowSignature, SectionGroup, sectionBounds, presetInstant, resolveDaylightSite, useFirstPersonHud, useViewer, Viewer } from '@pascal-app/viewer';
     import { renderPlugin } from '@pascal-app/nodes/render';
     import { WalkthroughTouchControls } from '@pascal-app/viewer/ui';
-    export { createWalkthroughInput, GlbWalkthroughController, WalkthroughTouchControls, LiveWalkthroughController, SectionGroup, sectionBounds, presetInstant, resolveDaylightSite, roomCounts, useFirstPersonHud, useViewer, Viewer, renderPlugin };
+    export { createWalkthroughInput, GlbWalkthroughController, WalkthroughTouchControls, LiveWalkthroughController, familyForNode, resolveFamilyVisibility, sceneFamilies, VIEWER_FAMILIES, xrayActive, xrayShadowSignature, SectionGroup, sectionBounds, presetInstant, resolveDaylightSite, roomCounts, useFirstPersonHud, useViewer, Viewer, renderPlugin };
     export async function hydrate(scene) {
       await loadPlugin(renderPlugin);
       useScene.getState().setScene(scene);
@@ -240,9 +240,13 @@ console.log(`Render bundle including all lazy chunks: ${bytes} bytes across ${fi
 const consumer = resolve(root, 'packages/nodes/render-consumer.ts')
 const consumerSource = `
   import { roomCounts, type Plugin, type RoomCounts, type SceneGraph } from '@pascal-app/core';
-  import { SectionGroup, sectionBounds, presetInstant, resolveDaylightSite, useViewer, type SectionAxis, type DaylightSite, type TimeOfDay } from '@pascal-app/viewer';
+  import { familyForNode, resolveFamilyVisibility, sceneFamilies, VIEWER_FAMILIES, xrayActive, xrayShadowSignature, SectionGroup, sectionBounds, presetInstant, resolveDaylightSite, useViewer, type SectionAxis, type DaylightSite, type TimeOfDay } from '@pascal-app/viewer';
   const site: DaylightSite = { northRotation: 1, lat: 48.86, lng: 2.35 };
   const dawn: TimeOfDay = 'dawn';
+  export const families = (graph: SceneGraph): string[] => sceneFamilies(graph);
+  export const familyApi = { familyForNode, resolveFamilyVisibility, VIEWER_FAMILIES, xrayActive, xrayShadowSignature };
+  useViewer.getState().setXrayFamily('items');
+  export const xray: string | null = useViewer.getState().xrayFamily;
   const axis: SectionAxis = 'y';
   useViewer.getState().setSectionEnabled(true);
   useViewer.getState().setSectionAxis(axis);

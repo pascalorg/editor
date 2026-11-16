@@ -286,6 +286,12 @@ export {
   revealTimingAt,
 } from './lib/reveal-schedule'
 export { planRevealWindows, type RevealWindow } from './lib/reveal-windows'
+export {
+  familyForNode,
+  resolveFamilyVisibility,
+  sceneFamilies,
+  VIEWER_FAMILIES,
+} from './lib/scene-families'
 export { createSceneSupportHeightSampler } from './lib/scene-support-height'
 export {
   getSceneTheme,
@@ -360,6 +366,7 @@ export {
   type ViewerConfig,
 } from './lib/viewer-config'
 export { createWalkthroughInput, type WalkthroughInput } from './lib/walkthrough-input'
+export { xrayActive, xrayShadowSignature } from './lib/xray'
 export { createZoneShape, createZoneWallGeometry } from './lib/zone-geometry'
 export {
   type FirstPersonHudState,

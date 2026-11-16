@@ -129,6 +129,7 @@ const SpawnRenderer = ({ node }: { node: SpawnNode }) => {
   )
   const liveTransform = useLiveTransforms((state) => state.get(node.id))
   const walkthroughMode = useViewer((state) => state.walkthroughMode)
+  const renderContext = useViewer((state) => state.renderContext)
 
   useRegistry(node.id, 'spawn', ref)
 
@@ -137,7 +138,7 @@ const SpawnRenderer = ({ node }: { node: SpawnNode }) => {
       position={liveTransform?.position ?? effectiveNode.position}
       ref={ref}
       rotation={[0, liveTransform?.rotation ?? effectiveNode.rotation, 0]}
-      visible={!walkthroughMode && effectiveNode.visible !== false}
+      visible={renderContext === 'editor' && !walkthroughMode && effectiveNode.visible !== false}
     >
       <SpawnVisual node={effectiveNode} />
     </group>

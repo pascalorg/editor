@@ -7,6 +7,7 @@ export const ridgeVentRenderDefinition: NodeRenderDefinition<typeof RidgeVentNod
   kind: 'ridge-vent'
 } = {
   kind: 'ridge-vent',
+  extensions: { 'pascal:viewer': { family: 'roof-services' } },
   schemaVersion: 1,
   schema: RidgeVentNode,
   category: 'structure',

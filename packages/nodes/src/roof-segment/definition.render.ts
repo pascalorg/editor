@@ -12,6 +12,7 @@ export const roofSegmentRenderDefinition: NodeRenderDefinition<typeof RoofSegmen
   kind: 'roof-segment'
 } = {
   kind: 'roof-segment',
+  extensions: { 'pascal:viewer': { family: 'roofs' } },
   schemaVersion: 7,
   schema: RoofSegmentNode,
   category: 'structure',

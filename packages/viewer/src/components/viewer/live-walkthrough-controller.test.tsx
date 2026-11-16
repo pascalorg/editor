@@ -1,5 +1,12 @@
 import { afterEach, beforeEach, expect, test } from 'bun:test'
-import { DoorNode, SiteNode, sceneRegistry, useInteractive, useScene } from '@pascal-app/core'
+import {
+  DoorNode,
+  nodeRegistry,
+  SiteNode,
+  sceneRegistry,
+  useInteractive,
+  useScene,
+} from '@pascal-app/core'
 import {
   createWalkthroughInput,
   GlbScene,
@@ -448,3 +455,73 @@ test('baked touch Interact reaches GlbScene activation and publishes its target 
 async function frames(count: number) {
   for (let frame = 0; frame < count; frame += 1) await renderer!.advanceFrames(1, 1 / 60)
 }
+
+test('baked family isolation uses the supplied graph without hydrating useScene and restores the same merge', async () => {
+  const restoreRegistry = nodeRegistry._snapshot()
+  const viewer = useViewer.getState()
+  nodeRegistry._register({
+    kind: 'beam',
+    schemaVersion: 1,
+    extensions: { 'pascal:viewer': { family: 'structure' } },
+  } as never)
+  nodeRegistry._register({
+    kind: 'pipe-segment',
+    schemaVersion: 1,
+    extensions: { 'pascal:viewer': { family: 'plumbing' } },
+  } as never)
+  nodeRegistry._register({
+    kind: 'level',
+    schemaVersion: 1,
+    extensions: { 'pascal:viewer': { family: null } },
+  } as never)
+  window.location.search = '?occlusion=0'
+  const scene = new Group()
+  const level = new Group()
+  level.userData = { kind: 'level', pascalId: 'level_xray' }
+  scene.add(level)
+  const material = new MeshBasicMaterial()
+  const beam = new Mesh(new BoxGeometry(), material)
+  beam.userData = { kind: 'beam', pascalId: 'beam_xray' }
+  const pipe = new Mesh(new BoxGeometry(), material)
+  pipe.userData = { kind: 'pipe-segment', pascalId: 'pipe_xray' }
+  level.add(beam, pipe)
+  const nodes = Object.fromEntries(
+    [level, beam, pipe].map((object) => [
+      object.userData.pascalId,
+      { id: object.userData.pascalId, type: object.userData.kind },
+    ]),
+  ) as never
+  seedGltf('baked-family-isolation', scene)
+  useScene.setState({ nodes: {}, rootNodeIds: [] })
+  try {
+    renderer = await create(<GlbScene url="baked-family-isolation" sceneNodes={nodes} />)
+    await frames(1)
+    const batch = level.children.find((object) => object.userData.glbBatch)!
+    expect(batch).toBeDefined()
+    expect(beam.layers.isEnabled(0)).toBe(false)
+    expect(pipe.layers.isEnabled(0)).toBe(false)
+    await act(async () => useViewer.getState().setXrayFamily('plumbing'))
+    await frames(1)
+    expect(batch.layers.isEnabled(0)).toBe(false)
+    expect(beam.layers.isEnabled(0)).toBe(false)
+    expect(pipe.layers.isEnabled(0)).toBe(true)
+    expect(useScene.getState().nodes).toEqual({})
+    await act(async () => useViewer.getState().setWalkthroughMode(true))
+    await frames(1)
+    expect(batch.layers.isEnabled(0)).toBe(true)
+    expect(pipe.layers.isEnabled(0)).toBe(false)
+    await act(async () => {
+      useViewer.getState().setWalkthroughMode(false)
+      useViewer.getState().setXrayFamily(null)
+    })
+    await frames(1)
+    expect(level.children.find((object) => object.userData.glbBatch)).toBe(batch)
+    expect(batch.layers.isEnabled(0)).toBe(true)
+    expect(beam.layers.isEnabled(0)).toBe(false)
+  } finally {
+    await renderer?.unmount()
+    renderer = undefined
+    restoreRegistry()
+    useViewer.setState(viewer, true)
+  }
+})

@@ -33,6 +33,7 @@ function resolveColumnStructuralGridMoveSnap({
 export const columnRenderDefinition: NodeRenderDefinition<typeof ColumnNode> & { kind: 'column' } =
   {
     kind: 'column',
+    extensions: { 'pascal:viewer': { family: 'structure' } },
     schemaVersion: 1,
     schema: ColumnNode,
     category: 'structure',

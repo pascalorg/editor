@@ -7,6 +7,7 @@ export const boxVentRenderDefinition: NodeRenderDefinition<typeof BoxVentNode> &
   kind: 'box-vent'
 } = {
   kind: 'box-vent',
+  extensions: { 'pascal:viewer': { family: 'roof-services' } },
   schemaVersion: 3,
   schema: BoxVentNode,
   category: 'structure',

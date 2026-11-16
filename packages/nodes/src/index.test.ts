@@ -103,7 +103,7 @@ describe('builtinPlugin', () => {
       expect(render.floorplanSiblingOverrides).toBeUndefined()
       expect(render.tool).toBeUndefined()
       expect(render.parametrics).toBeUndefined()
-      expect(render.extensions).toBeUndefined()
+      expect(Object.keys(render.extensions ?? {})).toEqual(['pascal:viewer'])
     }
   })
 })
@@ -207,6 +207,86 @@ test.each(['hinged', 'sliding'] as const)(
     } finally {
       useScene.setState(originalScene)
       useInteractive.setState(originalInteractive)
+    }
+  },
+)
+
+test.each([
+  ['full', builtinPlugin],
+  ['render', renderPlugin],
+] as const)(
+  '%s registry declares a viewer-family decision for every built-in kind',
+  async (_entry, plugin) => {
+    const { familyForNode } = await import('@pascal-app/viewer')
+    const restore = nodeRegistry._snapshot()
+    const taxonomy: Record<string, string[]> = {
+      site: ['site', 'fence', 'fence-gate', 'fence-opening'],
+      floors: ['slab'],
+      walls: ['wall'],
+      structure: ['beam', 'column', 'block'],
+      circulation: ['stair', 'stair-segment', 'elevator'],
+      openings: ['door', 'window', 'skylight'],
+      roofs: [
+        'roof',
+        'roof-segment',
+        'ceiling',
+        'dormer',
+        'lean-to-extension',
+        'chimney',
+        'cupola',
+      ],
+      'roof-services': [
+        'box-vent',
+        'ridge-vent',
+        'turbine-vent',
+        'eyebrow-vent',
+        'solar-panel',
+        'gutter',
+        'downspout',
+      ],
+      hvac: [
+        'duct-segment',
+        'duct-fitting',
+        'duct-terminal',
+        'hvac-equipment',
+        'lineset',
+        'liquid-line',
+      ],
+      plumbing: ['pipe-segment', 'pipe-fitting', 'pipe-trap'],
+      items: ['item', 'procedural-item', 'cabinet', 'cabinet-module', 'shelf'],
+      other: ['imported-mesh'],
+    }
+    const excluded = new Set([
+      'building',
+      'level',
+      'unit',
+      'zone',
+      'separator',
+      'floor-opening',
+      'spawn',
+      'guide',
+      'scan',
+      'measurement',
+      'construction-dimension',
+      'structural-grid',
+    ])
+    const expected = new Map(
+      Object.entries(taxonomy).flatMap(([family, kinds]) =>
+        kinds.map((kind) => [kind, family] as const),
+      ),
+    )
+    try {
+      nodeRegistry._reset()
+      await loadPlugin(plugin)
+      for (const [kind, definition] of nodeRegistry.entries()) {
+        expect(expected.has(kind) || excluded.has(kind)).toBe(true)
+        expect(definition.extensions?.['pascal:viewer']).toEqual({
+          family: expected.get(kind) ?? null,
+        })
+        expect(familyForNode({ type: kind } as never)).toBe(expected.get(kind))
+      }
+    } finally {
+      restore()
     }
   },
 )

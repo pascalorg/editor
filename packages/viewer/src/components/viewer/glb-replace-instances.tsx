@@ -9,6 +9,9 @@ import {
 import { createPortal } from '@react-three/fiber'
 import { type ComponentType, Fragment, lazy, memo, type ReactNode, Suspense, useMemo } from 'react'
 import type { Object3D } from 'three'
+import { familyForNode } from '../../lib/scene-families'
+import { xrayActive } from '../../lib/xray'
+import useViewer from '../../store/use-viewer'
 
 type ReplaceRendererProps = { nodes: AnyNode[]; resolve?: GeometryContext['resolve'] }
 
@@ -47,9 +50,12 @@ export const GlbReplaceInstances = memo(function GlbReplaceInstances({
   /** Looks up nodes of the published scene graph; handed to every renderer. */
   resolve?: GeometryContext['resolve']
 }) {
+  const family = useViewer((state) => (xrayActive(state) ? state.xrayFamily : null))
   const byLevel = useMemo(() => {
     const levels = new Map<string, Map<string, AnyNode[]>>()
     for (const node of nodes) {
+      const classification = family !== null ? familyForNode(node) : undefined
+      if (classification !== undefined && classification !== family) continue
       const parentId = node.parentId
       if (!parentId) continue
       let byKind = levels.get(parentId)
@@ -62,7 +68,7 @@ export const GlbReplaceInstances = memo(function GlbReplaceInstances({
       else byKind.set(node.type, [node])
     }
     return levels
-  }, [nodes])
+  }, [nodes, family])
 
   const portals: ReactNode[] = []
   byLevel.forEach((byKind, parentId) => {

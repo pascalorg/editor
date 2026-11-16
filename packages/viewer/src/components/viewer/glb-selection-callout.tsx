@@ -3,6 +3,7 @@
 import { type AnyNode, type AnyNodeId, useInteractive } from '@pascal-app/core'
 import { useCallback } from 'react'
 import type { Object3D } from 'three'
+import { familyForNode } from '../../lib/scene-families'
 import useViewer from '../../store/use-viewer'
 import {
   type CalloutActionInput,
@@ -49,6 +50,7 @@ export function GlbSelectionCallout({
   toggleOpen: (object: Object3D) => void | Promise<void>
 }) {
   const selectedIds = useViewer((s) => s.selection.selectedIds)
+  const family = useViewer((state) => state.xrayFamily)
   const walkthrough = useViewer((s) => s.walkthroughMode)
   const id = selectedIds.length === 1 ? selectedIds[0]! : null
   const object = id ? identity.get(id) : undefined
@@ -62,6 +64,10 @@ export function GlbSelectionCallout({
   const extras = object.userData as BakedExtras
   if (!hasCallout(extras.kind)) return null
   const node = sceneNodes?.[id]
+  if (family !== null && node) {
+    const classification = familyForNode(node)
+    if (classification !== undefined && classification !== family) return null
+  }
   const title = extras.label ?? node?.name ?? 'Item'
   const opening = (node ?? { type: extras.kind ?? 'item' }) as CalloutActionInput
 

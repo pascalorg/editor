@@ -16,6 +16,7 @@ import {
   SCENE_LAYER,
   useViewer,
   type WallMode,
+  xrayActive,
 } from '@pascal-app/viewer'
 import { useFrame, useThree } from '@react-three/fiber'
 import { useEffect, useRef } from 'react'
@@ -403,6 +404,17 @@ export const WallBatchSystem = () => {
   const wakeRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useFrame(() => runBatchFrame(invalidate, wakeRef), 5)
+  useEffect(
+    () =>
+      useViewer.subscribe((state, previous) => {
+        // Stand down before the viewport's next draw, not its later geometry pass.
+        if (xrayActive(state) && !xrayActive(previous)) {
+          runBatchFrame(invalidate, wakeRef)
+          invalidate()
+        }
+      }),
+    [invalidate],
+  )
 
   // Captures and exports clone the scene and prune whatever is off the scene
   // layer, so the sources come back for the capture and go under again after
@@ -585,7 +597,8 @@ export function runBatchFrame(
   // lift. `cutaway` stays live because WallCutout stamps hidden walls at
   // priority 0 and this system releases them per wall at priority 5 in the
   // same frame. See `canBatchWalls`.
-  const suspended = !canBatchWalls(useViewer.getState().wallMode, isIsolationActive())
+  const viewer = useViewer.getState()
+  const suspended = !canBatchWalls(viewer.wallMode, isIsolationActive() || xrayActive(viewer))
   if (suspended !== batchingSuspended) {
     batchingSuspended = suspended
     for (const levelId of [...batchesByLevel.keys()]) disposeLevelBatches(levelId)

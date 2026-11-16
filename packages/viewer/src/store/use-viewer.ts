@@ -330,7 +330,10 @@ type ViewerState = {
   debugColors: boolean
   setDebugColors: (enabled: boolean) => void
 
-  /** A first-person camera is active (walk or drone): orbit controls and selection stand aside. */
+  /** Transient family isolation; null leaves the normal presentation intact. */
+  xrayFamily: string | null
+  setXrayFamily: (family: string | null) => void
+
   sectionEnabled: boolean
   setSectionEnabled: (enabled: boolean) => void
   sectionAxis: SectionAxis
@@ -899,6 +902,7 @@ const useViewer = create<ViewerState>()(
             projectPresentation: undefined,
             daylightSite: null,
             ...SECTION_DEFAULTS,
+            xrayFamily: null,
             previewSceneTheme: null,
             framingOnly: false,
             framingShown: false,
@@ -953,6 +957,8 @@ const useViewer = create<ViewerState>()(
       debugColors: false,
       setDebugColors: (enabled) => set({ debugColors: enabled }),
 
+      xrayFamily: null,
+      setXrayFamily: (xrayFamily) => set({ xrayFamily }),
       ...SECTION_DEFAULTS,
       setSectionEnabled: (sectionEnabled) => set({ sectionEnabled }),
       setSectionAxis: (sectionAxis) => set({ sectionAxis }),

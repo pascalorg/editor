@@ -23,7 +23,7 @@ import {
 } from '@pascal-app/core/procedural-items'
 import { Html } from '@react-three/drei'
 import { type ThreeEvent, useFrame, useThree } from '@react-three/fiber'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import * as THREE from 'three'
 import { lerp } from 'three/src/math/MathUtils.js'
 import { acceleratedRaycast, computeBoundsTree, disposeBoundsTree } from 'three-mesh-bvh'
@@ -41,6 +41,7 @@ import {
 import { filterSectionHits, sectionActive } from '../../lib/section'
 import { applyShadowOnly, clearShadowOnly } from '../../lib/shadow-only'
 import { consumeWalkthroughInteract } from '../../lib/walkthrough-input'
+import { createFamilyVisibility, filterXrayHits, xrayActive } from '../../lib/xray'
 import { useFirstPersonHud } from '../../store/use-first-person-hud'
 import useViewer from '../../store/use-viewer'
 import { OPEN_SOUNDS, openingSound } from '../../systems/interactive/callout-actions'
@@ -642,6 +643,7 @@ export function GlbScene({
     const { textures: texturesNow, sceneTheme: themeNow } = useViewer.getState()
     for (const batch of merge.batches) applyBatchLook(batch, texturesNow, themeNow)
     mergeRef.current = merge
+    merge.setUnmerged(xrayActive(useViewer.getState()))
     mergeSignature.current = merge.visibilitySignature()
     setMergeVersion((version) => version + 1)
     return () => {
@@ -650,6 +652,42 @@ export function GlbScene({
       if (mergeRef.current === merge) mergeRef.current = null
     }
   }, [gltf.scene, gltf.animations, interactiveItems, mergeEnabled, mergeRebuild])
+
+  const familyVisibility = useMemo(createFamilyVisibility, [])
+  const familyWasActive = useRef(false)
+  const invalidate = useThree((state) => state.invalidate)
+  const updateFamily = useCallback(() => {
+    const state = useViewer.getState()
+    if (!xrayActive(state) && !familyWasActive.current) return
+    familyWasActive.current = xrayActive(state)
+    mergeRef.current?.setUnmerged(xrayActive(state))
+    familyVisibility.update(
+      gltf.scene,
+      (object) => {
+        const id = (object.userData as PascalExtras).pascalId
+        return id ? sceneNodes?.[id] : undefined
+      },
+      state,
+    )
+  }, [gltf.scene, sceneNodes, familyVisibility])
+  useFrame(updateFamily, 0.9)
+  useLayoutEffect(() => {
+    updateFamily()
+    const unsubscribe = useViewer.subscribe((state, previous) => {
+      if (
+        state.xrayFamily !== previous.xrayFamily ||
+        state.walkthroughMode !== previous.walkthroughMode
+      ) {
+        updateFamily()
+        invalidate()
+      }
+    })
+    return () => {
+      unsubscribe()
+      familyVisibility.clear()
+      mergeRef.current?.setUnmerged(false)
+    }
+  }, [familyVisibility, invalidate, updateFamily])
 
   // Occlusion culling (see lib/occlusion-culler.ts): what the walls, slabs and roofs hide from
   // the eye isn't drawn. Rebuilt with the merge, whose batches are what it mostly culls.
@@ -673,7 +711,7 @@ export function GlbScene({
       pipeline,
       culler,
       getCamera: () => getThree().camera,
-      isEnabled: () => !sectionActive(useViewer.getState()),
+      isEnabled: () => !sectionActive(useViewer.getState()) && !xrayActive(useViewer.getState()),
     })
     return () => {
       detach()
@@ -1153,7 +1191,10 @@ export function GlbScene({
       event.stopPropagation()
       if (walkthroughMode || !onPick) return
       const pick = resolveGlbPick(
-        filterSectionHits(event.intersections, useViewer.getState()),
+        filterXrayHits(
+          filterSectionHits(event.intersections, useViewer.getState()),
+          useViewer.getState(),
+        ),
         identity,
       )
       document.body.style.cursor = pick ? 'pointer' : 'auto'
@@ -1181,7 +1222,10 @@ export function GlbScene({
       // selects.
       if (walkthroughMode || !onPick) return
       const pick = resolveGlbPick(
-        filterSectionHits(event.intersections, useViewer.getState()),
+        filterXrayHits(
+          filterSectionHits(event.intersections, useViewer.getState()),
+          useViewer.getState(),
+        ),
         identity,
       )
       onPick({ type: 'click', pick, modifiers: modifiersOf(event.nativeEvent) })

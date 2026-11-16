@@ -4,6 +4,7 @@ import { useThree } from '@react-three/fiber'
 import { useLayoutEffect } from 'react'
 import { BATCHED_LAYER } from '../../lib/layers'
 import { filterSectionHits, sectionActive } from '../../lib/section'
+import { filterXrayHits, xrayActive } from '../../lib/xray'
 import useViewer from '../../store/use-viewer'
 import { isSectionObject } from './section-group'
 
@@ -21,7 +22,7 @@ import { isSectionObject } from './section-group'
  * for the private raycasters callers build per query, and this one is shared.
  */
 export const PointerRaycastLayers = () => {
-  const active = useViewer(sectionActive)
+  const active = useViewer((state) => sectionActive(state) || xrayActive(state))
   const get = useThree((state) => state.get)
   const setEvents = useThree((state) => state.setEvents)
   const raycaster = useThree((state) => state.raycaster)
@@ -41,7 +42,8 @@ export const PointerRaycastLayers = () => {
       const kept = filterSectionHits(hits, useViewer.getState(), (hit) =>
         isSectionObject(hit.object),
       )
-      return previous ? previous(kept, state) : kept
+      const visible = filterXrayHits(kept, useViewer.getState())
+      return previous ? previous(visible, state) : visible
     }
     setEvents({ filter })
     return () => {

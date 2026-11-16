@@ -512,3 +512,33 @@ describe('section presentation', () => {
     }
   })
 })
+
+describe('family presentation', () => {
+  afterEach(() => useViewer.getState().setXrayFamily(null))
+  test('defaults to no family, retains it for the same project and resets on project change', () => {
+    const viewer = useViewer.getState()
+    expect(useViewer.getInitialState().xrayFamily).toBeNull()
+    viewer.setProjectId('xray-a')
+    viewer.setXrayFamily('items')
+    viewer.setProjectId('xray-a')
+    expect(useViewer.getState().xrayFamily).toBe('items')
+    viewer.setProjectId('xray-b')
+    expect(useViewer.getState().xrayFamily).toBeNull()
+    viewer.setProjectId('xray-a')
+    expect(useViewer.getState().xrayFamily).toBeNull()
+  })
+  test('family is omitted from preference storage', () => {
+    const storage = useViewer.persist.getOptions().storage!
+    const original = storage.setItem
+    let written: any
+    storage.setItem = (_key, value) => {
+      written = value
+    }
+    try {
+      useViewer.getState().setXrayFamily('items')
+      expect(written.state).not.toHaveProperty('xrayFamily')
+    } finally {
+      storage.setItem = original
+    }
+  })
+})

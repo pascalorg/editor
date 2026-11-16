@@ -8,6 +8,7 @@ import { ItemNode } from './schema'
 
 export const itemRenderDefinition: NodeRenderDefinition<typeof ItemNode> & { kind: 'item' } = {
   kind: 'item',
+  extensions: { 'pascal:viewer': { family: 'items' } },
   schemaVersion: 2,
   schema: ItemNode,
   category: 'furnish',
