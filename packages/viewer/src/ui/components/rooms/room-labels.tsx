@@ -985,13 +985,11 @@ export function roomLabelEntries(
   rooms: readonly RoomSelectionRecord[],
   zones: readonly ZoneNode[],
 ): RoomLabelEntry[] {
-  const hiddenIds = new Set<string>(
-    zones.filter((zone) => !isRoomZone(zone)).map((zone) => zone.id),
-  )
+  const zonesById = new Map<string, ZoneNode>(zones.map((zone) => [zone.id, zone]))
   const roomIds = new Set(rooms.map((room) => room.zoneId))
   const entries: RoomLabelEntry[] = [
     ...rooms
-      .filter((room) => isRoomZone(room) && !hiddenIds.has(room.zoneId))
+      .filter((room) => isRoomZone(zonesById.get(room.zoneId) ?? room, room))
       .map((room) => ({
         zoneId: room.zoneId,
         polygon: room.polygon,
@@ -1469,23 +1467,25 @@ export function RoomPillsLayer3D({
 
   if (entries.length === 0 || !portals) return null
   return (
-    <PillPortalContext.Provider value={portals.pills}>
-      <HiddenPillsContext.Provider value={gone}>
-        <group matrixAutoUpdate={false} ref={ref}>
-          {entries.map((entry) => (
-            <Fragment key={entry.zoneId}>{renderLabel(entry, anchors, layer.elements)}</Fragment>
-          ))}
-          <LocalizedHtml
-            calculatePosition={atLayerOrigin}
-            onOcclude={keepShown}
-            portal={portals.detail}
-            style={{ pointerEvents: 'none' }}
-          >
-            <OpenRoomLabelDetail entries={entries} layer={layer} renderDetail={renderDetail} />
-          </LocalizedHtml>
-        </group>
-      </HiddenPillsContext.Provider>
-    </PillPortalContext.Provider>
+    <RoomLabelSection levelObject={levelObject}>
+      <PillPortalContext.Provider value={portals.pills}>
+        <HiddenPillsContext.Provider value={gone}>
+          <group matrixAutoUpdate={false} ref={ref}>
+            {entries.map((entry) => (
+              <Fragment key={entry.zoneId}>{renderLabel(entry, anchors, layer.elements)}</Fragment>
+            ))}
+            <LocalizedHtml
+              calculatePosition={atLayerOrigin}
+              onOcclude={keepShown}
+              portal={portals.detail}
+              style={{ pointerEvents: 'none' }}
+            >
+              <OpenRoomLabelDetail entries={entries} layer={layer} renderDetail={renderDetail} />
+            </LocalizedHtml>
+          </group>
+        </HiddenPillsContext.Provider>
+      </PillPortalContext.Provider>
+    </RoomLabelSection>
   )
 }
 
@@ -1494,7 +1494,7 @@ const HiddenPillsContext = createContext<ReadonlySet<string>>(new Set())
 
 /** The label and its outline inside the kept room prism, expressed in its level's frame. */
 export function sectionRoomLabel(
-  entry: RoomLabelEntry,
+  entry: Pick<RoomLabelEntry, 'polygon' | 'holes'>,
   floorY: number,
   topY: number,
   world: Matrix4,
@@ -1555,49 +1555,99 @@ export function sectionRoomLabel(
   return { position, polygon: kept.outer, holes: kept.holes }
 }
 
+const REST_SECTION: SectionState = {
+  sectionEnabled: false,
+  sectionAxis: 'y',
+  sectionPosition: 0,
+  sectionFlipped: false,
+}
+const LABEL_WORLD = new Matrix4()
+type LabelSection = { world: Matrix4 | null; state: SectionState } | null
+const RoomLabelSectionContext = createContext<LabelSection | undefined>(undefined)
+
+/** One section subscription per labels layer; the inactive path mounts no frame callback. */
+export function RoomLabelSection({
+  levelObject,
+  children,
+}: {
+  levelObject: () => Object3D | undefined | null
+  children: ReactNode
+}) {
+  const inherited = useContext(RoomLabelSectionContext)
+  return inherited !== undefined ? (
+    children
+  ) : (
+    <RoomLabelSectionRoot levelObject={levelObject}>{children}</RoomLabelSectionRoot>
+  )
+}
+
+function RoomLabelSectionRoot({
+  levelObject,
+  children,
+}: {
+  levelObject: () => Object3D | undefined | null
+  children: ReactNode
+}) {
+  const active = useViewer(sectionActive)
+  return active ? (
+    <ActiveRoomLabelSection levelObject={levelObject}>{children}</ActiveRoomLabelSection>
+  ) : (
+    <RoomLabelSectionContext.Provider value={null}>{children}</RoomLabelSectionContext.Provider>
+  )
+}
+
+function ActiveRoomLabelSection({
+  levelObject,
+  children,
+}: {
+  levelObject: () => Object3D | undefined | null
+  children: ReactNode
+}) {
+  const read = () => {
+    const level = levelObject()
+    level?.updateWorldMatrix(true, false)
+    return { world: level?.matrixWorld.clone() ?? null, state: useViewer.getState() }
+  }
+  const [section, setSection] = useState(read)
+  const last = useRef(section)
+  useFrame(() => {
+    const level = levelObject()
+    level?.updateWorldMatrix(true, false)
+    const state = useViewer.getState()
+    const previous = last.current
+    if (
+      sectionShadowSignature(state) === sectionShadowSignature(previous.state) &&
+      (level ? previous.world?.equals(level.matrixWorld) : previous.world === null)
+    )
+      return
+    const next = { world: level?.matrixWorld.clone() ?? null, state }
+    last.current = next
+    setSection(next)
+  }, -1)
+  return (
+    <RoomLabelSectionContext.Provider value={section}>{children}</RoomLabelSectionContext.Provider>
+  )
+}
+
 export function useSectionRoomLabel(
   entry: RoomLabelEntry,
   floorY: number,
   topY: number,
-  levelObject: () => Object3D | undefined | null,
   restY = floorY + LABEL_HEIGHT,
 ) {
-  const [label, setLabel] = useState(() => {
-    const level = levelObject()
-    const state = useViewer.getState()
-    if (!level && sectionActive(state)) return null
-    level?.updateWorldMatrix(true, false)
-    return sectionRoomLabel(entry, floorY, topY, level?.matrixWorld ?? new Matrix4(), state, restY)
-  })
-  const last = useRef<{
-    signature: string
-    world: Matrix4
-    entry: RoomLabelEntry
-    floorY: number
-    topY: number
-    restY: number
-  } | null>(null)
-  useFrame(() => {
-    const level = levelObject()
-    if (!level) return
-    level.updateWorldMatrix(true, false)
-    const state = useViewer.getState()
-    const signature = sectionShadowSignature(state)
-    const previous = last.current
-    if (
-      previous &&
-      previous.signature === signature &&
-      previous.world.equals(level.matrixWorld) &&
-      previous.entry === entry &&
-      previous.floorY === floorY &&
-      previous.topY === topY &&
-      previous.restY === restY
+  const section = useContext(RoomLabelSectionContext)
+  const { polygon, holes } = entry
+  return useMemo(() => {
+    if (section && !section.world) return null
+    return sectionRoomLabel(
+      { polygon, holes },
+      floorY,
+      topY,
+      section?.world ?? LABEL_WORLD,
+      section?.state ?? REST_SECTION,
+      restY,
     )
-      return
-    last.current = { signature, world: level.matrixWorld.clone(), entry, floorY, topY, restY }
-    setLabel(sectionRoomLabel(entry, floorY, topY, level.matrixWorld, state, restY))
-  }, -1)
-  return label
+  }, [polygon, holes, floorY, topY, restY, section])
 }
 
 /** Where a room's pill floats: over its interior, at mid-storey above its floor. */
@@ -1605,26 +1655,18 @@ export function RoomLabelAnchor3D({
   entry,
   floorY,
   topY = floorY + DEFAULT_LEVEL_HEIGHT,
-  levelObject,
   anchors,
   children,
 }: {
   entry: LabelEntry
   floorY: number
   topY?: number
-  levelObject?: () => Object3D | undefined
   anchors: Map<string, Vector3>
   children: ReactNode
 }) {
   const portal = useContext(PillPortalContext)
   const gone = useContext(HiddenPillsContext)
-  const ref = useRef<Group>(null)
-  const label = useSectionRoomLabel(
-    entry,
-    floorY,
-    topY,
-    () => levelObject?.() ?? ref.current?.parent,
-  )
+  const label = useSectionRoomLabel(entry, floorY, topY)
   // Hidden HTML still needs a live anchor so a new view can give its pill room again.
   useLayoutEffect(() => {
     if (label) {
@@ -1642,20 +1684,17 @@ export function RoomLabelAnchor3D({
     },
     [anchors, entry.zoneId],
   )
+  if (!label || gone.has(entry.zoneId)) return null
   return (
-    <group ref={ref}>
-      {label && !gone.has(entry.zoneId) ? (
-        <LocalizedHtml
-          center
-          portal={portal ?? undefined}
-          position={label.position}
-          style={{ pointerEvents: 'none' }}
-          zIndexRange={[20, 0]}
-        >
-          {children}
-        </LocalizedHtml>
-      ) : null}
-    </group>
+    <LocalizedHtml
+      center
+      portal={portal ?? undefined}
+      position={label.position}
+      style={{ pointerEvents: 'none' }}
+      zIndexRange={[20, 0]}
+    >
+      {children}
+    </LocalizedHtml>
   )
 }
 

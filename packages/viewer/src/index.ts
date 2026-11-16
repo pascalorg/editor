@@ -314,7 +314,6 @@ export {
   siteGround,
   siteSurfaces,
   temporarilyVeilGround,
-  useSiteSurfaceOwner,
 } from './lib/site-surfaces'
 export {
   createPlainSnapshotPipeline,

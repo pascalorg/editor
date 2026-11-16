@@ -243,3 +243,68 @@ test.each(['x', 'y', 'z'] as const)(
     }
   },
 )
+
+test('default site surfaces keep the original parent chain and child order', async () => {
+  setHouse(false)
+  showGroundFloor()
+  useViewer.setState({ sectionEnabled: false })
+  const node = lot(true)
+  const original = Bun.spawnSync([
+    'git',
+    'show',
+    'origin/main:packages/nodes/src/site/renderer.tsx',
+  ])
+  expect(original.exitCode).toBe(0)
+  const transpiler = new Bun.Transpiler({
+    loader: 'tsx',
+    autoImportJSX: true,
+    tsconfig: JSON.stringify({ compilerOptions: { jsx: 'react-jsx' } }),
+  })
+  let js = transpiler.transformSync(original.stdout.toString())
+  for (const { path } of transpiler.scanImports(js))
+    js = js.replaceAll(JSON.stringify(path), JSON.stringify(Bun.resolveSync(path, import.meta.dir)))
+  const { SiteRenderer: MainSiteRenderer } = await import(
+    `data:text/javascript;base64,${Buffer.from(js).toString('base64')}`
+  )
+  const hierarchy = (root: Object3D) => {
+    const result: {
+      path: number[]
+      kind: string
+      ground: unknown
+      export: unknown
+      order: number
+    }[] = []
+    const visit = (object: Object3D, path: number[]) => {
+      result.push({
+        path,
+        kind: object.type,
+        ground: object.userData[SITE_GROUND],
+        export: object.userData.pascalExport,
+        order: object.renderOrder,
+      })
+      object.children.forEach((child, i) => {
+        visit(child, [...path, i])
+      })
+    }
+    root.children.forEach((child, i) => {
+      visit(child, [i])
+    })
+    return result
+  }
+  const main = await create(<MainSiteRenderer node={node} />)
+  let expected: ReturnType<typeof hierarchy>
+  try {
+    expected = hierarchy(main.scene.instance)
+  } finally {
+    await main.unmount()
+  }
+  const renderer = await create(<SiteRenderer node={node} />)
+  try {
+    const actual = hierarchy(renderer.scene.instance)
+    expect(actual.filter((object) => object.ground === 'solid')).toHaveLength(2)
+    expect(actual.filter((object) => object.ground === 'veil')).toHaveLength(2)
+    expect(actual).toEqual(expected)
+  } finally {
+    await renderer.unmount()
+  }
+})

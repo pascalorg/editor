@@ -9,6 +9,10 @@ import { temporarilySetGroundAside } from './scene-visibility'
  */
 export const SITE_GROUND = 'siteGround'
 
+const ownerIds = new WeakMap<Object3D, string>()
+
+export const siteSurfaceOwnerId = (object: Object3D) => ownerIds.get(object)
+
 const ownedRoots = new Map<string, Set<Object3D>>()
 
 /** A portaled surface scope retains the site's capture ownership. */
@@ -19,8 +23,10 @@ export function useSiteSurfaceOwner(siteId: string, ref: RefObject<Object3D | nu
     const roots = ownedRoots.get(siteId) ?? new Set<Object3D>()
     ownedRoots.set(siteId, roots)
     roots.add(root)
+    ownerIds.set(root, siteId)
     return () => {
       roots.delete(root)
+      ownerIds.delete(root)
       if (!roots.size) ownedRoots.delete(siteId)
     }
   }, [siteId, ref])

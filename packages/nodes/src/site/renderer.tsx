@@ -763,7 +763,7 @@ export const SiteRenderer = ({ node }: { node: SiteNode }) => {
           </>
         )}
       </SiteSurfaceScope>
-      <SiteSurfaceScope siteId={node.id}>
+      <SiteSurfaceScope siteId={node.id} object={() => ref.current}>
         {/* Infinite-ground presentation disc fading into the sky at the horizon */}
         {showGround && !immersiveXR && horizonGeometry && horizonMaterial && fadeBounds && (
           <mesh

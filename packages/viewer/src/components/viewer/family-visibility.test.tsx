@@ -102,3 +102,73 @@ test('live family isolation follows newly mounted semantic roots and preserves h
     restoreRegistry()
   }
 })
+
+test('section portals keep live and baked site family ownership', async () => {
+  const { SiteSurfaceScope, BakedSiteSurfaces, bakedSiteSurfaceScopes } = await import(
+    './site-surface-scope'
+  )
+  const { LiveFamilyVisibility } = await import('./family-visibility')
+  const { SectionGroup } = await import('./section-group')
+  const { createFamilyVisibility } = await import('../../lib/xray')
+  const previousViewer = useViewer.getState()
+  const previousScene = useScene.getState()
+  const restoreRegistry = nodeRegistry._snapshot()
+  nodeRegistry._register({
+    kind: 'site',
+    schemaVersion: 1,
+    extensions: { 'pascal:viewer': { family: 'site' } },
+  } as never)
+  const node = { id: 'site_family_cut', type: 'site' } as never
+  useScene.setState({ nodes: { site_family_cut: node } })
+  useViewer.setState({ sectionEnabled: false, walkthroughMode: false, xrayFamily: 'walls' })
+  const site = new Group()
+  site.userData = { kind: 'site', pascalId: 'site_family_cut' }
+  const ground = new Mesh(new BoxGeometry(), new MeshBasicMaterial())
+  site.add(ground)
+  sceneRegistry.nodes.set('site_family_cut', site)
+  const renderer = await create(
+    <>
+      <LiveFamilyVisibility />
+      <SectionGroup>
+        <primitive object={site} />
+        <BakedSiteSurfaces scopes={bakedSiteSurfaceScopes(site)} />
+        <SiteSurfaceScope siteId="site_family_cut" object={() => site}>
+          <mesh name="live-lot" />
+        </SiteSurfaceScope>
+      </SectionGroup>
+    </>,
+  )
+  const visibility = createFamilyVisibility()
+  try {
+    await renderer.advanceFrames(1, 0.01)
+    expect(ground.layers.isEnabled(0)).toBe(false)
+    await act(async () => useViewer.getState().setSectionEnabled(true))
+    await renderer.advanceFrames(1, 0.01)
+    expect(renderer.scene.findByProps({ name: 'live-lot' }).instance.layers.isEnabled(0)).toBe(
+      false,
+    )
+    expect(ground.layers.isEnabled(0)).toBe(false)
+    // The baked resolver reads semantic IDs, without hydrating the live store.
+    visibility.update(
+      renderer.scene.instance,
+      (object) => (object.userData.pascalId === 'site_family_cut' ? node : undefined),
+      useViewer.getState(),
+    )
+    expect(ground.layers.isEnabled(0)).toBe(false)
+    expect(renderer.scene.findByProps({ name: 'live-lot' }).instance.layers.isEnabled(0)).toBe(
+      false,
+    )
+  } finally {
+    visibility.clear()
+    await renderer.unmount()
+    sceneRegistry.nodes.delete('site_family_cut')
+    restoreRegistry()
+    useViewer.setState(previousViewer, true)
+    useScene.setState(previousScene)
+  }
+})
+
+test('the internal site ownership hook is absent from the public entry', async () => {
+  const entry = await import('../../index')
+  expect('useSiteSurfaceOwner' in entry).toBe(false)
+})

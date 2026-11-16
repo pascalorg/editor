@@ -3,6 +3,7 @@
 import { type AnyNodeId, sceneRegistry, useScene } from '@pascal-app/core'
 import { useFrame, useThree } from '@react-three/fiber'
 import { useCallback, useLayoutEffect, useMemo, useRef } from 'react'
+import { siteSurfaceOwnerId } from '../../lib/site-surfaces'
 import { createFamilyVisibility, xrayActive } from '../../lib/xray'
 import useViewer from '../../store/use-viewer'
 
@@ -22,7 +23,7 @@ export function LiveFamilyVisibility() {
       scene,
       (object) => {
         owners ??= new Map([...sceneRegistry.nodes].map(([id, object]) => [object, id]))
-        const id = owners.get(object)
+        const id = owners.get(object) ?? siteSurfaceOwnerId(object)
         return id ? nodes[id as AnyNodeId] : undefined
       },
       state,

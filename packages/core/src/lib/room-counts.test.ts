@@ -159,3 +159,121 @@ test.each(translatedBedrooms)(
       expect(readings.find((reading) => reading.name === annex)?.use).not.toBe('bedroom')
   },
 )
+
+// Recorded by executing origin/main:packages/core/src/building/room-use.ts.
+test.each([
+  ['Bedroom 1', 'bedroom'],
+  ['Primary bedroom', 'bedroom'],
+  ['Chambre', 'bedroom'],
+  ['Chambre à coucher', 'bedroom'],
+  ['Nursery', 'bedroom'],
+  ['Dortoir', 'bedroom'],
+  ['Dormitory', 'bedroom'],
+  ['Suite parentale', 'bedroom'],
+  ['Bathroom', 'bathroom'],
+  ['Family bathroom', 'bathroom'],
+  ['Salle de bains', 'bathroom'],
+  ['Salle d’eau', 'bathroom'],
+  ['WC', 'bathroom'],
+  ['Douche', 'bathroom'],
+  ['Sanitaire', 'bathroom'],
+  ['Lavabo', 'bathroom'],
+  ['Kitchen', 'kitchen'],
+  ['Pantry', 'kitchen'],
+  ['Cuisine', 'kitchen'],
+  ['Garde-manger', 'kitchen'],
+  ['Dining room', 'dining'],
+  ['Salle à manger', 'dining'],
+  ['Living room', 'living'],
+  ['Lounge', 'living'],
+  ['Family room', 'living'],
+  ['Sitting room', 'living'],
+  ['Salon', 'living'],
+  ['Séjour', 'living'],
+  ['Pièce de vie', 'living'],
+  ['Great room', 'living'],
+  ['Office', 'office'],
+  ['Study', 'office'],
+  ['Den', 'office'],
+  ['Library', 'office'],
+  ['Workspace', 'office'],
+  ['Bureau', 'office'],
+  ['Bibliothèque', 'office'],
+  ['Hall', 'hallway'],
+  ['Hall des chambres', 'hallway'],
+  ['Couloir', 'hallway'],
+  ['Palier', 'hallway'],
+  ['Vestibule', 'hallway'],
+  ['Galerie', 'hallway'],
+  ['Entrée', 'hallway'],
+  ['Corridor', 'hallway'],
+  ['Landing', 'hallway'],
+  ['Foyer', 'hallway'],
+  ['Passage', 'hallway'],
+  ['Dégagement', 'hallway'],
+  ['Study lobby', 'hallway'],
+  ['Kitchen hall 2', 'hallway'],
+  ['Laundry', 'laundry'],
+  ['Buanderie', 'laundry'],
+  ['Lingerie', 'laundry'],
+  ['Utility', 'laundry'],
+  ['Laverie', 'laundry'],
+  ['Garage', 'garage'],
+  ['Carport', 'garage'],
+  ['Parking', 'garage'],
+  ['Dressing', 'other'],
+  ['Walk-in', 'other'],
+  ['Closet', 'other'],
+  ['Wardrobe', 'other'],
+  ['Storage', 'other'],
+  ['Rangement', 'other'],
+  ['Placard', 'other'],
+  ['Cellier', 'other'],
+  ['Mud room', 'other'],
+  ['Bed 1 Entry', 'hallway'],
+  ['Bed 3 WIR', 'other'],
+  ['Bedroom ensuite', 'bathroom'],
+  ['Chambre placard', 'other'],
+  ['Unknown', 'other'],
+  ['Room 1', 'other'],
+  ['Atelier', 'other'],
+  ['Guest room office', 'office'],
+  ['Guest room garage', 'garage'],
+  ['Kids room family', 'living'],
+  ['Guest room cuisine', 'kitchen'],
+  ['Kids room bureau', 'office'],
+  ['Dormitorio office', 'office'],
+  ['Schlafzimmer garage', 'garage'],
+  ['Quarto cuisine', 'kitchen'],
+] as const)('%s preserves its original name classification', (name, expected) => {
+  expect(readRooms(graph([[room(name)]]).nodes)[0]?.use).toBe(expected)
+})
+
+test('Quarto is the Portuguese bedroom noun', () => {
+  expect(readRooms(graph([[room('Quarto')]]).nodes)[0]?.use).toBe('bedroom')
+})
+
+test.each([0, 2, 4])(
+  'wall-detected rooms with %s stored vertices count with their effective outline',
+  async (vertices) => {
+    const { WallNode } = await import('../index')
+    const zone = room('Bedroom', { polygon: square.slice(0, vertices) })
+    const scene = graph([[zone]])
+    const level = scene.nodes[scene.rootNodeIds[0]!]! as LevelNode
+    const walls = square.map((start, i) =>
+      WallNode.parse({ parentId: level.id, start, end: square[(i + 1) % square.length] }),
+    )
+    for (const wall of walls) scene.nodes[wall.id] = wall
+    level.children.push(...walls.map((wall) => wall.id))
+    const stored = scene.nodes[zone.id] as ZoneNode
+    stored.boundaryWallIds = walls.map((wall) => wall.id)
+    expect(roomCounts(scene)).toEqual({
+      rooms: 1,
+      bedrooms: 1,
+      modelledAreaM2: 16,
+      unclassifiedZones: 0,
+    })
+    stored.visible = false
+    expect(roomCounts(scene).rooms).toBe(0)
+  },
+)

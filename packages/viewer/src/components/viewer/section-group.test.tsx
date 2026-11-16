@@ -269,7 +269,9 @@ test.each(['x', 'y', 'z'] as const)(
 )
 
 test('room labels update with the section and a moving level, then return to their resting anchor', async () => {
-  const { useSectionRoomLabel } = await import('../../ui/components/rooms/room-labels')
+  const { useSectionRoomLabel, RoomLabelSection } = await import(
+    '../../ui/components/rooms/room-labels'
+  )
   const { DEFAULT_LEVEL_HEIGHT } = await import('@pascal-app/core')
   const { Object3D } = await import('three')
   const level = new Object3D()
@@ -286,7 +288,7 @@ test('room labels update with the section and a moving level, then return to the
     area: 16,
   }
   function Label() {
-    const label = useSectionRoomLabel(entry, 0, 3, () => level)
+    const label = useSectionRoomLabel(entry, 0, 3)
     return label ? <group name="room-label" position={label.position} /> : null
   }
   useViewer.setState({
@@ -295,7 +297,11 @@ test('room labels update with the section and a moving level, then return to the
     sectionPosition: 5.2,
     sectionFlipped: false,
   })
-  const renderer = await create(<Label />)
+  const renderer = await create(
+    <RoomLabelSection levelObject={() => level}>
+      <Label />
+    </RoomLabelSection>,
+  )
   const position = () => renderer.scene.findByProps({ name: 'room-label' }).instance.position
   const frame = () =>
     act(async () => {
@@ -321,6 +327,128 @@ test('room labels update with the section and a moving level, then return to the
     })
     await frame()
     expect(position().y).toBe(DEFAULT_LEVEL_HEIGHT / 2)
+  } finally {
+    await renderer.unmount()
+  }
+})
+
+test.each([false, true])(
+  'baked own surfaces preserve clipped descendants (site mesh: %s)',
+  async (siteMesh) => {
+    const { BakedSiteSurfaces, bakedSiteSurfaceScopes } = await import('./site-surface-scope')
+    const { isSectionObject } = await import('./section-group')
+    const { Group, Mesh, BoxGeometry } = await import('three')
+    const root = new Group()
+    const site = siteMesh ? new Mesh(new BoxGeometry()) : new Group()
+    site.userData = { kind: 'site', pascalId: 'site_nested' }
+    const ground = new Mesh(new BoxGeometry())
+    const tree = new Group()
+    tree.userData = { kind: 'item', pascalId: 'item_nested_tree' }
+    const canopy = new Mesh(new BoxGeometry())
+    tree.add(canopy)
+    site.add(ground)
+    ground.add(tree)
+    root.add(site)
+    const scopes = bakedSiteSurfaceScopes(root)
+    const renderer = await create(
+      <SectionGroup>
+        <primitive object={root} />
+        <BakedSiteSurfaces scopes={scopes} />
+      </SectionGroup>,
+    )
+    try {
+      await act(async () => useViewer.getState().setSectionEnabled(true))
+      expect(isSectionObject(ground)).toBe(false)
+      if (siteMesh) expect(isSectionObject(site)).toBe(false)
+      expect(isSectionObject(canopy)).toBe(true)
+      await act(async () => useViewer.getState().setSectionEnabled(false))
+      expect(root.children.map((child) => child.uuid)).toEqual([site.uuid])
+      expect(site.children.map((child) => child.uuid)).toEqual([ground.uuid])
+      expect(ground.children.map((child) => child.uuid)).toEqual([tree.uuid])
+    } finally {
+      await renderer.unmount()
+    }
+  },
+)
+
+test('inactive label anchors do no per-label frame work', async () => {
+  const { useSectionRoomLabel, RoomLabelSection } = await import(
+    '../../ui/components/rooms/room-labels'
+  )
+  const { Object3D } = await import('three')
+  const level = new Object3D()
+  let matrices = 0
+  let anchors = 0
+  const update = level.updateWorldMatrix.bind(level)
+  level.updateWorldMatrix = (...args) => {
+    matrices++
+    update(...args)
+  }
+  const entries = Array.from({ length: 120 }, (_, i) => ({
+    zoneId: `zone_${i}`,
+    polygon: [
+      [0, 0],
+      [4, 0],
+      [4, 4],
+      [0, 4],
+    ] as [number, number][],
+    holes: [],
+    area: 16,
+  }))
+  // Accesses to a polygon observe anchor computation without timing the test.
+  for (const entry of entries) {
+    const polygon = entry.polygon
+    Object.defineProperty(entry, 'polygon', {
+      get() {
+        anchors++
+        return polygon
+      },
+    })
+  }
+  function Label({ entry }: { entry: (typeof entries)[number] }) {
+    useSectionRoomLabel(entry, 0, 3)
+    return null
+  }
+  useViewer.setState({ sectionEnabled: false })
+  const renderer = await create(
+    <RoomLabelSection levelObject={() => level}>
+      {entries.map((entry) => (
+        <Label key={entry.zoneId} entry={entry} />
+      ))}
+    </RoomLabelSection>,
+  )
+  try {
+    matrices = 0
+    anchors = 0
+    await renderer.advanceFrames(10, 1 / 60)
+    expect(matrices).toBe(0)
+    expect(anchors).toBe(0)
+  } finally {
+    await renderer.unmount()
+  }
+})
+
+test('a mixed site and non-site collective mesh stays in the cut', async () => {
+  const { BakedSiteSurfaces, bakedSiteSurfaceScopes } = await import('./site-surface-scope')
+  const { isSectionObject } = await import('./section-group')
+  const { Group, Mesh, BoxGeometry } = await import('three')
+  const root = new Group()
+  const site = new Group()
+  site.userData = { kind: 'site', pascalId: 'site_mixed' }
+  // The retained batch has one draw and no per-triangle semantic ownership.
+  const mixed = new Mesh(new BoxGeometry())
+  mixed.userData.glbBatch = true
+  site.add(mixed)
+  root.add(site)
+  useViewer.setState({ sectionEnabled: true })
+  const renderer = await create(
+    <SectionGroup>
+      <primitive object={root} />
+      <BakedSiteSurfaces scopes={bakedSiteSurfaceScopes(root)} />
+    </SectionGroup>,
+  )
+  try {
+    expect(isSectionObject(mixed)).toBe(true)
   } finally {
     await renderer.unmount()
   }

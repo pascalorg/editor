@@ -14,6 +14,7 @@ import {
 import { useCallback, useEffect, useMemo } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { SelectionCallout } from '../../../components/viewer/selection-callout'
+import { sectionActive } from '../../../lib/section'
 import useViewer from '../../../store/use-viewer'
 import { formatRoomArea } from '../../lib/room-area'
 import { resolveRoomAssemblyHeights } from '../../lib/room-assembly-overlay'
@@ -28,6 +29,7 @@ import { RoomAssemblyMesh } from './room-highlight'
 import {
   RoomLabelAnchor3D,
   type RoomLabelEntry,
+  RoomLabelSection,
   RoomPillChip,
   RoomPillDetail,
   RoomPillsLayer3D,
@@ -88,10 +90,11 @@ export function ViewerRooms({ source }: { source: ViewerSource }) {
     )
   }, [levelId, nodes, rooms])
 
+  const section = useViewer(sectionActive)
   const tops = useMemo(
     () =>
       new Map(
-        entries.map((entry) => {
+        (section ? entries : []).map((entry) => {
           const room = rooms.find((room) => room.zoneId === entry.zoneId)
           const heights = room
             ? resolveRoomAssemblyHeights(room, nodes as Record<string, AnyNode>)
@@ -108,7 +111,7 @@ export function ViewerRooms({ source }: { source: ViewerSource }) {
           ]
         }),
       ),
-    [entries, rooms, nodes, levelId],
+    [entries, rooms, nodes, levelId, section],
   )
 
   const highlighted = useMemo(() => {
@@ -130,7 +133,7 @@ export function ViewerRooms({ source }: { source: ViewerSource }) {
   }, [focusedUnitId, hoveredId, levelId, nodes, walkthrough, zoneId])
 
   return (
-    <>
+    <RoomLabelSection levelObject={() => (levelId ? source.objectFor(levelId) : undefined)}>
       {pillsPresent && levelId ? (
         <RoomPillsLayer3D
           entries={entries}
@@ -159,7 +162,6 @@ export function ViewerRooms({ source }: { source: ViewerSource }) {
                 entry={entry}
                 floorY={roomFloorElevation(nodes as Record<string, AnyNode>, entry.zoneId)}
                 topY={tops.get(entry.zoneId)}
-                levelObject={() => source.objectFor(levelId)}
               >
                 <RoomPillChip
                   areaM2={entry.area}
@@ -201,7 +203,7 @@ export function ViewerRooms({ source }: { source: ViewerSource }) {
             ) : null
           })()
         : null}
-    </>
+    </RoomLabelSection>
   )
 }
 
@@ -225,7 +227,6 @@ function ViewerRoomCallout({
     entry,
     floorY,
     topY ?? floorY + DEFAULT_LEVEL_HEIGHT,
-    () => level,
     floorY + 0.05,
   )
   const dismiss = useCallback(() => {

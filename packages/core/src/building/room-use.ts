@@ -73,10 +73,7 @@ const PATTERNS: readonly (readonly [RegExp, RoomUse])[] = [
   ],
   [/laundry|buanderie|lingerie|utility|laverie/, 'laundry'],
   [/dressing|walk-?in|closet|wardrobe|storage|rangement|placard|cellier|mud ?room/, 'other'],
-  [
-    /bed(?!side)|nursery|chambre|\bsuite\b|dortoir|dormitory|\bguest room\b|\bkids'? room\b/,
-    'bedroom',
-  ],
+  [/bed(?!side)|nursery|chambre|\bsuite\b|dortoir|dormitory/, 'bedroom'],
   [/kitchen|pantry|cuisine|garde-manger/, 'kitchen'],
   [/dining|salle a manger/, 'dining'],
   [/living|lounge|family|sitting|salon|sejour|piece de vie|great room/, 'living'],
@@ -109,21 +106,29 @@ const TRANSLATED_BEDROOM_ANNEXES: readonly (readonly [RegExp, RoomUse])[] = [
 ]
 
 /** The use a room's name gives it; `other` when the name says none. */
-export function roomUseOfName(name: string): RoomUse {
-  const folded = foldRoomName(name)
+function originalRoomUse(folded: string): RoomUse | undefined {
   if (CIRCULATION_FIRST.test(folded) || CIRCULATION_LAST.test(folded)) return 'hallway'
   if (STORAGE_LAST.test(folded)) return 'other'
   if (BED_ANNEX.test(folded) && folded.match(BED_WORD)) {
-    const beside = roomUseOfName(
+    const beside = originalRoomUse(
       folded
         .replace(BED_WORD, ' ')
         .replace(/\b\d+\b/g, ' ')
         .replace(/\s+/g, ' ')
         .trim(),
     )
-    if (beside !== 'bedroom') return beside
+    if (beside !== 'bedroom') return beside ?? 'other'
   }
   for (const [pattern, use] of PATTERNS) if (pattern.test(folded)) return use
+  return undefined
+}
+
+/** Original matches, including explicit storage, always precede the new bedroom vocabulary. */
+export function roomUseOfName(name: string): RoomUse {
+  const folded = foldRoomName(name)
+  const original = originalRoomUse(folded)
+  if (original !== undefined) return original
+  if (/\bguest room\b|\bkids'? room\b/.test(folded)) return 'bedroom'
   const translatedBedroom = TRANSLATED_BEDROOM.test(folded)
   if (translatedBedroom) {
     for (const [pattern, use] of TRANSLATED_BEDROOM_ANNEXES) if (pattern.test(folded)) return use

@@ -656,6 +656,7 @@ export function GlbScene({
     }
   }, [gltf.scene, gltf.animations, interactiveItems, mergeEnabled, mergeRebuild])
 
+  const rootScene = useThree((state) => state.scene)
   const familyVisibility = useMemo(createFamilyVisibility, [])
   const familyWasActive = useRef(false)
   const invalidate = useThree((state) => state.invalidate)
@@ -666,7 +667,7 @@ export function GlbScene({
     mergeRef.current?.setUnmerged(xrayActive(state))
     let owners: Map<THREE.Object3D, string> | undefined
     familyVisibility.update(
-      gltf.scene,
+      rootScene,
       (object) => {
         owners ??= new Map([...sceneRegistry.nodes].map(([id, root]) => [root, id]))
         const id = owners.get(object) ?? (object.userData as PascalExtras).pascalId
@@ -675,7 +676,7 @@ export function GlbScene({
       state,
       sceneNodes,
     )
-  }, [gltf.scene, sceneNodes, familyVisibility])
+  }, [rootScene, sceneNodes, familyVisibility])
   useFrame(updateFamily, 0.9)
   useLayoutEffect(() => {
     updateFamily()
@@ -698,7 +699,6 @@ export function GlbScene({
   // Occlusion culling (see lib/occlusion-culler.ts): what the walls, slabs and roofs hide from
   // the eye isn't drawn. Rebuilt with the merge, whose batches are what it mostly culls.
   // `?occlusion=0` draws everything.
-  const rootScene = useThree((state) => state.scene)
   const renderer = useThree((state) => state.gl)
   const getThree = useThree((state) => state.get)
   const occlusionEnabled = useMemo(
