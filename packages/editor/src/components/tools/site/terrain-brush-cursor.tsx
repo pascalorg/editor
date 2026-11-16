@@ -8,6 +8,7 @@ import {
   type TerrainField,
   terrainFieldOf,
   useLiveTerrain,
+  useScene,
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { LocalizedHtml as Html } from '@pascal-app/viewer/ui'
@@ -22,7 +23,11 @@ import {
   Vector2,
 } from 'three'
 import { EDITOR_LAYER } from '../../../lib/constants'
-import { sculptFieldForSite, terrainPointInsideSite } from '../../../lib/terrain-sculpt'
+import {
+  sculptFieldForSite,
+  terrainPointInsideSite,
+  terrainSculptRefusal,
+} from '../../../lib/terrain-sculpt'
 import { brushRingColor } from '../../../lib/terrain-verb-color'
 import useEditor from '../../../store/use-editor'
 import { formatMeasurement } from '../../editor/measurement-pill'
@@ -122,7 +127,8 @@ export const TerrainBrushCursor: React.FC<{
     const center = centerRef.current
     const pointer = pointerRef.current
     if (!(line && center)) return
-    if (!(pointer || focusRef.current)) {
+    if (!(pointer || focusRef.current) || terrainSculptRefusal(site)) {
+      focusRef.current = null
       line.visible = false
       center.visible = false
       if (heightRef.current) heightRef.current.style.display = 'none'
@@ -135,7 +141,8 @@ export const TerrainBrushCursor: React.FC<{
     // would read as lag. Drawing uses the live field so the ring drapes over the
     // hill as it rises. Outside a stroke the two are the same field.
     const stroke = useLiveTerrain.getState().strokeOf(site.id)
-    const surface: TerrainField = stroke?.field ?? terrainFieldOf(site) ?? sculptFieldForSite(site)
+    const surface: TerrainField =
+      stroke?.field ?? terrainFieldOf(site, useScene.getState().nodes) ?? sculptFieldForSite(site)
     const aim: TerrainField = stroke?.snapshot ?? surface
 
     let hit: { x: number; z: number } | null = null

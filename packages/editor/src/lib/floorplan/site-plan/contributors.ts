@@ -3,14 +3,21 @@
  * site plan without the editor depending on them.
  *
  * The site-plan layer draws only what `buildSitePlanDrawing` returns (it
- * replaces the registry layer, so `def.floorplan` is not consulted in site
- * view). A plugin whose kinds live in SITE metres (utilities: poles, runs,
+ * replaces the registry layer). Site-scoped node definitions contribute their
+ * floorplan geometry automatically. A plugin with other drawing content in
+ * SITE metres (utilities: poles, runs,
  * service points) registers a contributor at bootstrap; its primitives are
  * appended to every site-plan drawing, on screen and on sheets alike. A
  * plugin that locates the house's utility services also passes `services`,
  * and the site plan runs them schematically to the street.
  */
-import type { AnyNodeId, FloorplanGeometry, SceneSnapshot } from '@pascal-app/core'
+import {
+  type AnyNodeId,
+  buildFloorplanContext,
+  type FloorplanGeometry,
+  nodeRegistry,
+  type SceneSnapshot,
+} from '@pascal-app/core'
 
 export type SitePlanContributor = (
   scene: SceneSnapshot,
@@ -64,8 +71,37 @@ export function subscribeSitePlanContributors(listener: () => void): () => void 
   }
 }
 
-export function sitePlanContributions(scene: SceneSnapshot): FloorplanGeometry[] {
+function registeredSitePlanGeometry(scene: SceneSnapshot): FloorplanGeometry[] {
   const out: FloorplanGeometry[] = []
+  for (const node of Object.values(scene.nodes)) {
+    const definition = nodeRegistry.get(node.type)
+    if (node.visible === false || definition?.floorplanScope !== 'site' || !definition.floorplan)
+      continue
+    const parent = node.parentId ? scene.nodes[node.parentId as AnyNodeId] : null
+    if (parent?.type !== 'site' || parent.visible === false) continue
+    try {
+      const geometry = definition.floorplan(
+        node,
+        buildFloorplanContext(node, scene.nodes, {
+          selected: false,
+          highlighted: false,
+          hovered: false,
+          moving: false,
+          unit: 'metric',
+          palette: undefined,
+          purpose: 'document',
+        }),
+      )
+      if (geometry) out.push(geometry)
+    } catch (error) {
+      if (typeof console !== 'undefined') console.warn(`[site-plan] node ${node.id} failed`, error)
+    }
+  }
+  return out
+}
+
+export function sitePlanContributions(scene: SceneSnapshot): FloorplanGeometry[] {
+  const out = registeredSitePlanGeometry(scene)
   for (const [key, { draw }] of contributors) {
     if (!draw) continue
     try {

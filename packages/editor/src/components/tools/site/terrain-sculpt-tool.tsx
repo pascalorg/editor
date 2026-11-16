@@ -22,10 +22,11 @@ import { markToolCancelConsumed } from '../../../hooks/use-keyboard'
 import { sfxEmitter } from '../../../lib/sfx-bus'
 import {
   clipTerrainPatchToSite,
-  commitStroke,
+  commitLiveStroke,
   resolveFlattenTarget,
   sculptFieldForSite,
   terrainPointInsideSite,
+  terrainSculptRefusal,
 } from '../../../lib/terrain-sculpt'
 import useEditor from '../../../store/use-editor'
 import { isBoxSelectPointerSuppressed } from '../select/box-select-state'
@@ -79,6 +80,8 @@ export const TerrainSculptTool: React.FC = () => {
     stroke: TerrainStroke
     field: TerrainField
     siteId: string
+    /** Live-store identity of this stroke; stale once anything else ends it. */
+    strokeId: number
     /** The pointer that owns this stroke; every other one is ignored. */
     pointerId: number
   } | null>(null)
@@ -152,7 +155,7 @@ export const TerrainSculptTool: React.FC = () => {
         brush: settings,
         flattenTarget: explicit,
       } = latest.current
-      if (!target) return
+      if (!target || terrainSculptRefusal(target)) return
 
       const field = sculptFieldForSite(target)
       const point = groundPoint(event, field)
@@ -179,13 +182,14 @@ export const TerrainSculptTool: React.FC = () => {
         target:
           activeVerb === 'flatten' ? resolveFlattenTarget(field, explicit, ...point) : undefined,
       })
+      const strokeId = useLiveTerrain.getState().begin(target.id, field)
       strokeRef.current = {
         stroke,
         field,
         siteId: target.id,
+        strokeId,
         pointerId: event.pointerId,
       }
-      useLiveTerrain.getState().begin(target.id, field)
       sfxEmitter.emit('sfx:terrain-sculpt-start', activeVerb)
 
       // Capture so a stroke that leaves the canvas still ends. Without this a
@@ -198,6 +202,11 @@ export const TerrainSculptTool: React.FC = () => {
     const applyDab = (event: PointerEvent) => {
       const active = strokeRef.current
       if (!active) return
+      // A terrain write that landed mid-stroke ended this stroke in the live
+      // store and persisted its own ground. The ref outlives that, so without
+      // this check the held pointer would keep painting a field nothing reads
+      // — and pointer-up must not resurrect it either (`commitLiveStroke`).
+      if (useLiveTerrain.getState().strokeOf(active.siteId)?.id !== active.strokeId) return
       // Re-checked per dab, not just at pointer-down: a wheel or trackpad zoom
       // mid-stroke sets `cameraDragging` and releases it on a 500 ms timer
       // (`scheduleEnd`), all while the pointer is still down and painting. The
@@ -259,11 +268,12 @@ export const TerrainSculptTool: React.FC = () => {
       if (canvas.hasPointerCapture(event.pointerId)) canvas.releasePointerCapture(event.pointerId)
       sfxEmitter.emit('sfx:terrain-sculpt-stop')
 
-      // Commit before ending the live stroke: `terrainFieldOf` prefers the live
-      // field, so ending first would flash one frame of the pre-stroke ground
-      // between the two writes.
-      commitStroke(active.siteId as SiteNode['id'], active.field)
-      useLiveTerrain.getState().end(active.siteId)
+      // Commits only if this stroke is still the live one: a terrain write
+      // that landed mid-stroke ended it, and committing the ref's field now
+      // would overwrite that write with the pre-write ground. Inside, the
+      // commit lands before the live stroke ends — `terrainFieldOf` prefers
+      // the live field, so ending first would flash one frame of old ground.
+      commitLiveStroke(active.siteId as SiteNode['id'], active.strokeId, active.field)
     }
 
     /**

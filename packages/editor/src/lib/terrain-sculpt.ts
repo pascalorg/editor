@@ -7,14 +7,14 @@
 // instead of e2e.
 
 import {
+  type AnyNode,
+  type AnyNodeId,
   type BrushSettings,
-  commitTerrainField,
-  createTerrainField,
   DEFAULT_TERRAIN_SPACING,
+  fieldExtentForSite,
   type HeightPatch,
-  isDatumField,
   minBrushRadius,
-  persistedTerrainFieldOf,
+  planTerrainTileChanges,
   pointInPolygon2D,
   quantize,
   runAsSingleSceneHistoryStep,
@@ -22,82 +22,49 @@ import {
   sampleTarget,
   type TerrainField,
   type TerrainVerb,
+  terrainEditField,
+  terrainTilesOf,
   useLiveTerrain,
   useScene,
 } from '@pascal-app/core'
 
-/**
- * Field sizes we allow, all `2ⁿ+1` so a future LOD halving lands on existing
- * samples instead of interpolating a seam.
- */
-const FIELD_SIZES = [33, 65, 129, 257] as const
+// The sizing rule moved to core, where the agent's terrain writes share it; the editor still exports it.
+export { fieldExtentForSite }
 
-/**
- * Sample count a fresh field gets, chosen to cover the site polygon at roughly
- * `DEFAULT_TERRAIN_SPACING` and never exceeding 257² (66 049 samples — about
- * four furnished rooms' worth of vertices).
- *
- * Sizing from the polygon rather than a fixed extent matters because the extent
- * is baked at creation: the field is the ground for the whole session, and a
- * grid that stops short of the lot line leaves a visible cliff where the terrain
- * mesh ends and the flat fill resumes. Padding by one spacing keeps the boundary
- * line itself on interpolated ground rather than on the clamped edge row.
- */
-export function fieldExtentForSite(site: Pick<SiteNode, 'polygon'> | null | undefined): {
-  origin: [number, number]
-  cols: number
-  rows: number
-  spacing: number
-} {
-  const points = site?.polygon?.points ?? []
-  if (points.length < 3) {
-    const half = ((65 - 1) / 2) * DEFAULT_TERRAIN_SPACING
-    return { origin: [-half, -half], cols: 65, rows: 65, spacing: DEFAULT_TERRAIN_SPACING }
-  }
+const MAX_SCULPT_SAMPLES = 1_000_000
 
-  let minX = Number.POSITIVE_INFINITY
-  let minZ = Number.POSITIVE_INFINITY
-  let maxX = Number.NEGATIVE_INFINITY
-  let maxZ = Number.NEGATIVE_INFINITY
-  for (const [x, z] of points) {
-    if (x < minX) minX = x
-    if (x > maxX) maxX = x
-    if (z < minZ) minZ = z
-    if (z > maxZ) maxZ = z
-  }
-
-  // The grid is square: a rectangular field would need two spacings or two
-  // sample counts, and both make every downstream index calculation branchier
-  // for no visual gain.
-  const pad = DEFAULT_TERRAIN_SPACING * 2
-  const span = Math.max(maxX - minX, maxZ - minZ) + pad * 2
-  const centerX = (minX + maxX) / 2
-  const centerZ = (minZ + maxZ) / 2
-
-  const wanted = Math.ceil(span / DEFAULT_TERRAIN_SPACING) + 1
-  const size = FIELD_SIZES.find((candidate) => candidate >= wanted) ?? FIELD_SIZES.at(-1)!
-  // Spacing stretches when the lot is bigger than 257 samples can cover at the
-  // default: coarser ground beats ground that stops at the property line.
-  const spacing = Math.max(DEFAULT_TERRAIN_SPACING, span / (size - 1))
-  const half = ((size - 1) / 2) * spacing
-
+function sculptBounds(site: SiteNode) {
+  const points = site.polygon.points
+  const xs = points.map(([x]) => x)
+  const zs = points.map(([, z]) => z)
   return {
-    origin: [centerX - half, centerZ - half],
-    cols: size,
-    rows: size,
-    spacing,
+    minX: Math.min(...xs) - 4,
+    minZ: Math.min(...zs) - 4,
+    maxX: Math.max(...xs) + 4,
+    maxZ: Math.max(...zs) + 4,
   }
 }
 
-/**
- * The field a sculpt stroke on `site` should start from: its existing terrain,
- * or a fresh flat one sized to the lot.
- *
- * Not `terrainFieldForEdit` — that takes explicit options, and the whole point
- * here is that the tool must not have to know how to size a grid.
- */
-export function sculptFieldForSite(site: SiteNode): TerrainField {
-  return persistedTerrainFieldOf(site) ?? createTerrainField(fieldExtentForSite(site))
+/** Refuse the working allocation, not the lot: bounded agent tile edits remain available. */
+export function terrainSculptRefusal(site: SiteNode): string | null {
+  const bounds = sculptBounds(site)
+  const spacing = DEFAULT_TERRAIN_SPACING
+  const cols = Math.ceil(bounds.maxX / spacing) - Math.floor(bounds.minX / spacing) + 1
+  const rows = Math.ceil(bounds.maxZ / spacing) - Math.floor(bounds.minZ / spacing) + 1
+  const samples = cols * rows
+  return !Number.isSafeInteger(samples) || samples > MAX_SCULPT_SAMPLES || samples <= 0
+    ? 'Brush sculpting would exceed its 1,000,000-sample working budget. Use shape_site_terrain or carve_terrain_pad on smaller areas; the lot can stay this size.'
+    : null
+}
+
+/** A regular editing lattice with the eight diffusion passes' four-metre halo. */
+export function sculptFieldForSite(
+  site: SiteNode,
+  nodes: Readonly<Record<string, AnyNode>> = useScene.getState().nodes,
+): TerrainField {
+  const refusal = terrainSculptRefusal(site)
+  if (refusal) throw new RangeError(refusal)
+  return terrainEditField(site, nodes, sculptBounds(site))
 }
 
 /** Whether an XZ point belongs to the editable property footprint. */
@@ -166,30 +133,10 @@ export function activeSiteNode(): SiteNode | null {
  */
 export const MAX_BRUSH_RADIUS = 20
 
-/**
- * The legal brush-radius range for `site`, low end first.
- *
- * Exists because two controls set this value — the panel's Size slider and the
- * `[`/`]` keys — and both used to carry their own hardcoded `0.5`/`20`, with a
- * comment in the keyboard handler asserting they matched. They did, but nothing
- * held them to it, and the shared minimum was wrong anyway: it was a flat 0.5 m
- * while the real floor scales with the field's spacing, which
- * `fieldExtentForSite` stretches on large lots. Below that floor a drag paints
- * nothing at all (see `MIN_BRUSH_RADIUS_IN_SPACINGS`).
- *
- * The max is clamped to stay above the min so the range never inverts on a lot
- * big enough that the minimum passes 20 m — the brush ends up pinned to one
- * usable size, which is honest, rather than to an empty range.
- */
+/** The controls and keyboard share the fixed tile lattice's brush floor. */
 export function brushRadiusRange(site: SiteNode | null | undefined): [number, number] {
-  // Spacing, not the field: this runs on every render of the panel, and
-  // `sculptFieldForSite` would decode or allocate up to 257² samples to read one
-  // number off the result. An existing field's spacing is on the node; a lot with
-  // no terrain yet gets the spacing it *would* be given.
-  const spacing = site
-    ? (site.terrain?.spacing ?? fieldExtentForSite(site).spacing)
-    : DEFAULT_TERRAIN_SPACING
-  const min = minBrushRadius({ spacing })
+  void site
+  const min = minBrushRadius({ spacing: DEFAULT_TERRAIN_SPACING })
   return [min, Math.max(min, MAX_BRUSH_RADIUS)]
 }
 
@@ -247,35 +194,35 @@ function abandonLiveStroke(site: Pick<SiteNode, 'id'>): void {
 /**
  * Flatten the whole site to one height in a single step.
  *
- * The brush cannot do this well and should not have to: covering a lot with dabs
- * is dozens of strokes, and any sample the brush misses leaves a ridge that is
- * invisible until a slab lands on it. Sizing from `fieldExtentForSite` means the
- * result covers the padded extent, so the property line stays on flat ground too.
+ * The brush cannot cover a whole lot reliably; context outside the lot stays unchanged.
  */
 export function flattenSite(site: SiteNode, metres: number): void {
   abandonLiveStroke(site)
   const field = sculptFieldForSite(site)
   const value = quantize(field, metres)
-  const heights = new Int16Array(field.heights.length)
-  heights.fill(value)
-  commitStroke(site.id, { ...field, heights })
+  const heights = field.heights.slice()
+  for (let row = 0; row < field.rows; row++)
+    for (let col = 0; col < field.cols; col++)
+      if (
+        terrainPointInsideSite(
+          site,
+          field.origin[0] + col * field.spacing,
+          field.origin[1] + row * field.spacing,
+        )
+      )
+        heights[row * field.cols + col] = value
+  commitStroke(site.id, { ...field, heights }, field)
 }
 
 /**
- * Drop a site's terrain entirely, back to the implicit flat ground.
- *
- * Distinct from flattening to 0: this removes the `terrain` field, so the scene
- * returns to the exact state it had before terrain was ever touched rather than
- * carrying a field of zeroes. Undo-able like any other sculpt.
+ * Clear the authored overlays, revealing the unchanged legacy ground (or datum).
  */
 export function resetSiteTerrain(site: SiteNode): void {
-  // Before the `site.terrain` guard, not after: a stroke on a site that has no
-  // persisted terrain yet is exactly the case that reaches the early return, and
-  // leaving it live would keep showing sculpted ground the scene graph has none of.
   abandonLiveStroke(site)
-  if (!site.terrain) return
+  const tiles = terrainTilesOf(site, useScene.getState().nodes)
+  if (!tiles.length) return
   runAsSingleSceneHistoryStep(useScene, () => {
-    useScene.getState().updateNode(site.id, { terrain: undefined })
+    useScene.getState().applyNodeChanges({ delete: tiles.map((tile) => tile.id) })
   })
 }
 
@@ -287,15 +234,63 @@ export function resetSiteTerrain(site: SiteNode): void {
  * undo would walk back through the stroke dab by dab, which is both surprising
  * and unbounded in length.
  *
- * A stroke that leaves the field at the datum writes `undefined` rather than
- * ~11 KB of base64 zeroes: sculpting up and then flattening back down should
- * return the scene to the state it would have had if terrain were never touched,
- * not merely to a visually identical one.
+ * Only changed samples become tile writes, including duplicate seam samples.
  */
-export function commitStroke(siteId: SiteNode['id'], field: TerrainField): void {
+export function commitStroke(
+  siteId: SiteNode['id'],
+  field: TerrainField,
+  snapshot?: TerrainField,
+): void {
+  const { nodes } = useScene.getState()
+  const site = nodes[siteId]
+  if (site?.type !== 'site') return
+  const before =
+    snapshot ??
+    terrainEditField(site, nodes, {
+      minX: field.origin[0],
+      minZ: field.origin[1],
+      maxX: field.origin[0] + (field.cols - 1) * field.spacing,
+      maxZ: field.origin[1] + (field.rows - 1) * field.spacing,
+    })
+  const changes = planTerrainTileChanges(site, nodes, before, field)
+  if (!changes.create?.length && !changes.update?.length) return
   runAsSingleSceneHistoryStep(useScene, () => {
-    useScene.getState().updateNode(siteId, {
-      terrain: isDatumField(field) ? undefined : commitTerrainField(field),
+    useScene.getState().applyNodeChanges({
+      create: changes.create?.map(({ node, parentId }) => ({
+        node,
+        parentId: parentId as AnyNodeId | undefined,
+      })),
+      update: changes.update?.map(({ id, data }) => ({ id: id as AnyNodeId, data })),
     })
   })
+}
+
+/**
+ * The pointer-up path: persist the stroke only if it is still the live one.
+ *
+ * The sculpt tool holds the in-flight field in a ref from pointer-down to
+ * pointer-up, and a terrain write landing inside that window (a tool shaping
+ * the ground, `flattenSite`, `resetSiteTerrain`) ends the live stroke and
+ * persists its own field. Ending the store entry alone cannot stop the ref:
+ * an unguarded `commitStroke` on pointer-up would write the pre-write
+ * snapshot over the newer write and add a second, phantom undo step. So the
+ * commit is gated on stroke identity — a stroke that was ended or superseded
+ * since pointer-down is dropped, exactly as if it had been abandoned.
+ *
+ * Returns whether the stroke committed. On success the commit lands before
+ * the live stroke ends, so readers never see a frame of pre-stroke ground.
+ */
+export function commitLiveStroke(
+  siteId: SiteNode['id'],
+  strokeId: number,
+  field: TerrainField,
+): boolean {
+  const stroke = useLiveTerrain.getState().strokeOf(siteId)
+  if (stroke?.id !== strokeId) return false
+  try {
+    commitStroke(siteId, field, stroke.snapshot)
+    return true
+  } finally {
+    useLiveTerrain.getState().end(siteId)
+  }
 }
