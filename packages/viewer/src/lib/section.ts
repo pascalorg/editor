@@ -1,8 +1,10 @@
 import { Plane, type Vector3 } from 'three'
 
 export type SectionAxis = 'x' | 'y' | 'z'
+export type SectionShadows = 'full' | 'cut'
 
 export type SectionState = {
+  sectionShadows?: SectionShadows
   sectionEnabled: boolean
   sectionAxis: SectionAxis
   sectionPosition: number
@@ -11,6 +13,7 @@ export type SectionState = {
 }
 
 export const SECTION_DEFAULTS = {
+  sectionShadows: 'full',
   sectionEnabled: false,
   sectionAxis: 'y',
   sectionPosition: 0,
@@ -43,7 +46,12 @@ export function filterSectionHits<T extends { point: Vector3 }>(
   )
 }
 
-/** Included separately in the daylight cache key to avoid collisions with caster sums. */
-export function sectionShadowSignature(state: SectionState): string {
+/** Plane/presentation identity, including colour-only changes used by label anchors. */
+export function sectionSignature(state: SectionState): string {
   return `${state.sectionEnabled}:${state.sectionAxis}:${state.sectionPosition}:${state.sectionFlipped}:${!!state.walkthroughMode}`
+}
+
+/** Full-building shadows do not depend on the colour-pass section plane. */
+export function sectionShadowSignature(state: SectionState): string {
+  return state.sectionShadows === 'cut' && sectionActive(state) ? sectionSignature(state) : ''
 }

@@ -33,12 +33,13 @@ export function SectionGroup({ children, name }: { children?: ReactNode; name?: 
       updateSectionPlane(group.clippingPlanes[0]!, state)
       group.enabled = sectionActive(state)
       group.layers.mask = group.enabled ? -1 : 1 << SCENE_LAYER
-      group.clipShadows = group.enabled
+      group.clipShadows = group.enabled && state.sectionShadows === 'cut'
       invalidate()
     }
     update()
     return useViewer.subscribe((state, previous) => {
       if (
+        state.sectionShadows !== previous.sectionShadows ||
         state.sectionEnabled !== previous.sectionEnabled ||
         state.sectionAxis !== previous.sectionAxis ||
         state.sectionPosition !== previous.sectionPosition ||

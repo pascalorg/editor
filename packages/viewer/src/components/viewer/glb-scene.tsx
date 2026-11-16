@@ -51,6 +51,7 @@ import { tapAllowsClick } from '../../lib/pointer-gesture'
 import { filterSectionHits, sectionActive } from '../../lib/section'
 import { applyShadowOnly, clearShadowOnly } from '../../lib/shadow-only'
 import { consumeWalkthroughInteract } from '../../lib/walkthrough-input'
+import { bakedWalkthroughSettings } from '../../lib/walkthrough-settings'
 import { createFamilyVisibility, filterXrayHits, xrayActive } from '../../lib/xray'
 import { useFirstPersonHud } from '../../store/use-first-person-hud'
 import useViewer from '../../store/use-viewer'
@@ -1068,7 +1069,7 @@ export function GlbScene({
     const floorLabel = floor ? ((floor.node.userData as PascalExtras).label ?? floor.id) : null
     const zone = floor ? zoneAtPoint(_walkPos, floor.id) : null
 
-    _reticleRaycaster.far = WALK_REACH
+    _reticleRaycaster.far = Math.max(WALK_REACH, bakedWalkthroughSettings.seeDistance)
     _reticleRaycaster.setFromCamera(_reticleNdc, camera)
     const hit = raycastOpenings(
       _reticleRaycaster,
@@ -1132,20 +1133,34 @@ export function GlbScene({
       if ((node?.userData as PascalExtras | undefined)?.shutters && node)
         doorNode = { hit: hit.object, node }
     }
-    setShuttersInView(Boolean((doorNode?.node.userData as PascalExtras | undefined)?.shutters))
-    walkDoorRef.current = doorNode
-    walkPromptRef.current = door
+    const inReach = !!hit && hit.distance <= WALK_REACH
+    const seenInteract =
+      !inReach && hit && door && hit.distance <= bakedWalkthroughSettings.seeDistance
+        ? {
+            label: door.label,
+            verb: door.verb ?? (door.isOpen ? 'close' : 'open'),
+            kind: (doorNode?.node.userData as PascalExtras | undefined)?.kind ?? 'item',
+            distance: hit.distance,
+          }
+        : null
+    setShuttersInView(
+      inReach && Boolean((doorNode?.node.userData as PascalExtras | undefined)?.shutters),
+    )
+    walkDoorRef.current = inReach ? doorNode : null
+    walkPromptRef.current = inReach ? door : null
+    if (!inReach) door = null
 
+    useFirstPersonHud.getState().setHud({
+      seenInteract,
+      zoneLabel: zone?.label ?? null,
+      floorLabel,
+      interact: door
+        ? { label: door.label, verb: door.verb ?? (door.isOpen ? 'close' : 'open') }
+        : null,
+    })
     const key = `${floor?.id ?? ''}|${zone?.id ?? ''}|${door ? `${doorId}:${door.isOpen}` : ''}`
     if (key !== lastWalkKey.current) {
       lastWalkKey.current = key
-      useFirstPersonHud.getState().setHud({
-        zoneLabel: zone?.label ?? null,
-        floorLabel,
-        interact: door
-          ? { label: door.label, verb: door.verb ?? (door.isOpen ? 'close' : 'open') }
-          : null,
-      })
       onWalkthroughChange?.({ zoneLabel: zone?.label ?? null, floorLabel, door })
     }
   })

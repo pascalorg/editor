@@ -2,6 +2,7 @@ export {
   type FirstPersonHudState,
   useFirstPersonHud,
   type WalkthroughInteract,
+  type WalkthroughSeenInteract,
 } from '../store/use-first-person-hud'
 export { ActionButton } from './components/action-button'
 export {

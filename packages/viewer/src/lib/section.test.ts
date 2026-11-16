@@ -39,17 +39,24 @@ test('picking passes through removed hits without changing order or identity', (
   expect(filterSectionHits(hits, { ...state, walkthroughMode: true })).toBe(hits)
 })
 
-test('every section field invalidates the shadow cache; identical state reuses it', () => {
-  const original = sectionShadowSignature(SECTION_DEFAULTS)
-  for (const change of [
-    { sectionEnabled: true },
-    { sectionAxis: 'x' as const },
-    { sectionAxis: 'z' as const },
-    { sectionPosition: 0.001 },
-    { sectionFlipped: true },
-    { walkthroughMode: true },
-  ]) {
-    expect(sectionShadowSignature({ ...SECTION_DEFAULTS, ...change })).not.toBe(original)
-  }
-  expect(sectionShadowSignature({ ...SECTION_DEFAULTS })).toBe(original)
-})
+test.each(['full', 'cut'] as const)(
+  '%s section shadow cache tracks only clipped casters',
+  (sectionShadows) => {
+    const state = { ...SECTION_DEFAULTS, sectionEnabled: true, sectionShadows }
+    const original = sectionShadowSignature(state)
+    for (const change of [
+      { sectionEnabled: false },
+      { sectionAxis: 'x' as const },
+      { sectionAxis: 'z' as const },
+      { sectionPosition: 0.001 },
+      { sectionFlipped: true },
+      { walkthroughMode: true },
+    ]) {
+      expect(sectionShadowSignature({ ...state, ...change }) === original).toBe(
+        sectionShadows === 'full',
+      )
+    }
+    expect(sectionShadowSignature({ ...state })).toBe(original)
+    expect(sectionShadowSignature({ ...state, sectionShadows: 'full' })).toBe('')
+  },
+)

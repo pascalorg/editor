@@ -229,14 +229,18 @@ function ground() {
   sceneRegistry.byType.site!.add(site.id)
 }
 
-async function mountWalk(kind: 'live' | 'baked', touch = true) {
+async function mountWalk(
+  kind: 'live' | 'baked',
+  touch = true,
+  props: Pick<LiveWalkthroughControllerProps, 'speeds' | 'seeDistance'> = {},
+) {
   if (touch) useViewer.getState().setWalkthroughInputMode('touch')
   useViewer.getState().setWalkthroughMode(true)
   const camera = new PerspectiveCamera(47)
   camera.position.set(0, 1.65, 0)
   if (kind === 'live') {
     ground()
-    renderer = await create(<LiveWalkthroughController />, {
+    renderer = await create(<LiveWalkthroughController {...props} />, {
       camera,
       beforeReturn: (element) => {
         canvas = element as HTMLCanvasElement
@@ -251,7 +255,7 @@ async function mountWalk(kind: 'live' | 'baked', touch = true) {
     scene.add(floor)
     const url = `walkthrough-fixture-${touch}`
     seedGltf(url, scene)
-    renderer = await create(<GlbWalkthroughController url={url} />, {
+    renderer = await create(<GlbWalkthroughController url={url} {...props} />, {
       camera,
       beforeReturn: (element) => {
         canvas = element as HTMLCanvasElement
@@ -648,4 +652,142 @@ test('baked family isolation uses the supplied graph without hydrating useScene 
     restoreRegistry()
     useViewer.setState(viewer, true)
   }
+})
+
+for (const kind of ['live', 'baked'] as const) {
+  for (const speeds of [undefined, { walk: 1.8, run: 2.8 }, { run: 3.2 }]) {
+    for (const running of [false, true]) {
+      test(`${kind}: ${JSON.stringify(speeds) ?? 'default'} speeds cover the expected metres in one second (${running ? 'run' : 'walk'})`, async () => {
+        const camera = await mountWalk(kind, false, { speeds })
+        await frames(120)
+        const press = (code: string) => {
+          key(code)
+          window.dispatchEvent(Object.assign(new Event('keydown'), { code, key: code }))
+        }
+        press('KeyW')
+        if (running) press('ShiftLeft')
+        await frames(60) // Reach steady velocity before measuring a fixed one-second interval.
+        const start = camera.position.clone()
+        await frames(60)
+        expect(camera.position.distanceTo(start)).toBeCloseTo(
+          running ? (speeds?.run ?? 5) : (speeds?.walk ?? 2),
+          2,
+        )
+      })
+    }
+  }
+}
+
+test('live: distant identification has a kind, prompt and distance, never activates, and clears outside seeDistance', async () => {
+  const camera = await mountWalk('live', true, { seeDistance: 6 })
+  const door = DoorNode.parse({ id: 'door_seen' })
+  useScene.setState({ nodes: { ...useScene.getState().nodes, [door.id]: door } })
+  const object = new Mesh(new BoxGeometry(1, 2.5, 0.1), new MeshBasicMaterial())
+  object.position.set(0, 1.2, -4)
+  sceneRegistry.nodes.set(door.id, object)
+  sceneRegistry.byType.door!.add(door.id)
+  await frames(1)
+  expect(useFirstPersonHud.getState().interact).toBeNull()
+  expect(useFirstPersonHud.getState().seenInteract).toMatchObject({ kind: 'door', verb: 'open' })
+  expect(useFirstPersonHud.getState().seenInteract?.distance).toBeCloseTo(3.95)
+  createWalkthroughInput().requestInteract()
+  await frames(1)
+  expect(useInteractive.getState().doorAnimations[door.id]).toBeUndefined()
+  object.position.z = -6.1
+  await frames(1)
+  expect(useFirstPersonHud.getState().seenInteract).toBeNull()
+  object.position.z = -1
+  await frames(1)
+  expect(useFirstPersonHud.getState().interact).not.toBeNull()
+  expect(useFirstPersonHud.getState().seenInteract).toBeNull()
+  expect(camera.position.z).toBeCloseTo(0)
+  await renderer!.update(<LiveWalkthroughController />)
+  object.position.z = -10
+  await frames(1)
+  expect(useFirstPersonHud.getState().seenInteract?.distance).toBeCloseTo(9.95)
+  object.position.z = -16.1
+  await frames(1)
+  expect(useFirstPersonHud.getState().seenInteract).toBeNull()
+})
+
+test('baked: controller seeDistance configures GlbScene, reports distance changes, and never activates a distant target', async () => {
+  useViewer.getState().setWalkthroughInputMode('touch')
+  useViewer.getState().setWalkthroughMode(true)
+  const scene = new Group()
+  const floor = new Mesh(new BoxGeometry(100, 0.1, 100), new MeshBasicMaterial())
+  floor.position.y = -0.05
+  floor.userData.kind = 'slab'
+  const door = new Mesh(new BoxGeometry(1, 2.5, 0.1), new MeshBasicMaterial())
+  door.name = 'seenDoor'
+  door.position.set(0, 1.2, -4)
+  door.userData = {
+    pascalId: 'door_seen_baked',
+    kind: 'door',
+    label: 'Door',
+    openable: true,
+    clips: ['Door: open'],
+  }
+  scene.add(floor, door)
+  seedGltf('baked-seen', scene, [
+    new AnimationClip('Door: open', 1, [
+      new NumberKeyframeTrack('seenDoor.rotation[y]', [0, 1], [0, 1]),
+    ]),
+  ])
+  const camera = new PerspectiveCamera()
+  camera.position.set(0, 1.65, 0)
+  const content = (seeDistance?: number) => (
+    <>
+      <GlbScene url="baked-seen" />
+      <GlbWalkthroughController url="baked-seen" seeDistance={seeDistance} />
+    </>
+  )
+  renderer = await create(content(6), { camera })
+  await act(async () => {
+    await frames(1)
+  })
+  await act(async () => {
+    await frames(8)
+  })
+  expect(useFirstPersonHud.getState().interact).toBeNull()
+  expect(useFirstPersonHud.getState().seenInteract).toMatchObject({
+    kind: 'door',
+    label: 'Door',
+    verb: 'open',
+  })
+  expect(useFirstPersonHud.getState().seenInteract?.distance).toBeCloseTo(3.95)
+  const input = createWalkthroughInput()
+  input.requestInteract()
+  await frames(20)
+  expect(door.rotation.y).toBe(0)
+  input.setMove(0, -1)
+  await frames(30)
+  expect(useFirstPersonHud.getState().seenInteract?.distance).toBeGreaterThan(4)
+  await frames(90)
+  expect(useFirstPersonHud.getState().seenInteract).toBeNull()
+  input.clear()
+  // The omitted option restores Craftsman's 16 m identification range.
+  await renderer.update(content())
+  await frames(30)
+  expect(useFirstPersonHud.getState().seenInteract?.distance).toBeGreaterThan(6)
+  input.setMove(0, -1)
+  await frames(300)
+  expect(useFirstPersonHud.getState().seenInteract).toBeNull()
+  input.setMove(0, 1)
+  await frames(470)
+  input.clear()
+  await frames(30)
+  expect(useFirstPersonHud.getState().seenInteract).toBeNull()
+  expect(useFirstPersonHud.getState().interact).toEqual({ label: 'Door', verb: 'open' })
+})
+
+test('seen HUD equality includes kind and distance, and reset clears it', () => {
+  const seen = { kind: 'door', label: 'Door', verb: 'open', distance: 4 }
+  uiHud.getState().setHud({ seenInteract: seen })
+  const before = useFirstPersonHud.getState()
+  uiHud.getState().setHud({ seenInteract: { ...seen } })
+  expect(useFirstPersonHud.getState()).toBe(before)
+  uiHud.getState().setHud({ seenInteract: { ...seen, distance: 5 } })
+  expect(useFirstPersonHud.getState().seenInteract?.distance).toBe(5)
+  uiHud.getState().reset()
+  expect(useFirstPersonHud.getState().seenInteract).toBeNull()
 })

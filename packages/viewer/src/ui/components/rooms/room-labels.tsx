@@ -44,7 +44,7 @@ import { timeSpan } from '../../../lib/perf-tracks'
 import {
   type SectionState,
   sectionActive,
-  sectionShadowSignature,
+  sectionSignature,
   updateSectionPlane,
 } from '../../../lib/section'
 import useViewer from '../../../store/use-viewer'
@@ -1616,7 +1616,7 @@ function ActiveRoomLabelSection({
     const state = useViewer.getState()
     const previous = last.current
     if (
-      sectionShadowSignature(state) === sectionShadowSignature(previous.state) &&
+      sectionSignature(state) === sectionSignature(previous.state) &&
       (level ? previous.world?.equals(level.matrixWorld) : previous.world === null)
     )
       return

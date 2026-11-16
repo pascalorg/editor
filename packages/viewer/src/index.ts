@@ -53,6 +53,7 @@ export {
   CROUCH_WALK_SPEED,
   EYE_LERP_SPEED,
   GlbWalkthroughController,
+  type GlbWalkthroughControllerProps,
   STAND_CAPSULE,
   STAND_CLEARANCE,
   STAND_FLOAT_HEIGHT,
@@ -309,7 +310,7 @@ export {
   temporarilyShowShadowOnly,
 } from './lib/scene-visibility'
 export { SCRIPTED_MODEL_FLAG } from './lib/scripted-opening'
-export { filterSectionHits, type SectionAxis } from './lib/section'
+export { filterSectionHits, type SectionAxis, type SectionShadows } from './lib/section'
 export { sectionBounds } from './lib/section-bounds'
 export {
   SITE_GROUND,
@@ -369,12 +370,18 @@ export {
   type ViewerConfig,
 } from './lib/viewer-config'
 export { createWalkthroughInput, type WalkthroughInput } from './lib/walkthrough-input'
+export {
+  WALKTHROUGH_DEFAULT_SPEEDS,
+  WALKTHROUGH_SEE_DISTANCE,
+  type WalkthroughSpeeds,
+} from './lib/walkthrough-settings'
 export { filterXrayHits, xrayActive } from './lib/xray'
 export { createZoneShape, createZoneWallGeometry } from './lib/zone-geometry'
 export {
   type FirstPersonHudState,
   useFirstPersonHud,
   type WalkthroughInteract,
+  type WalkthroughSeenInteract,
 } from './store/use-first-person-hud'
 export type { LightSource } from './store/use-item-light-pool'
 export { catalogLightSource, useItemLightPool } from './store/use-item-light-pool'

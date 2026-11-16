@@ -2,7 +2,7 @@ import { type AnyNode, sceneRegistry } from '@pascal-app/core'
 import type { BufferGeometry, Object3D } from 'three'
 import { familyForNode } from './scene-families'
 import { heldReasons, hideFromScene, showInScene } from './scene-visibility'
-import { type SectionState, sectionActive, sectionShadowSignature } from './section'
+import { type SectionState, sectionShadowSignature } from './section'
 import { SITE_HORIZON } from './site-surfaces'
 
 export type XrayState = { xrayFamily: string | null; walkthroughMode?: boolean }
@@ -17,8 +17,9 @@ export function xrayShadowSignature(state: XrayState): string {
 
 /** The default path returns a literal without serializing or concatenating state. */
 export function viewerShadowSignature(state: XrayState & SectionState): string {
-  if (!sectionActive(state) && !xrayActive(state)) return ''
-  return `${sectionShadowSignature(state)}:${xrayShadowSignature(state)}`
+  const section = sectionShadowSignature(state)
+  const xray = xrayShadowSignature(state)
+  return section || xray ? `${section}:${xray}` : ''
 }
 
 /** Layers do not cascade, so a hidden wall keeps its hosted items and openings. */

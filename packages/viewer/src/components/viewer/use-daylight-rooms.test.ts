@@ -310,3 +310,31 @@ for (const path of ['live', 'baked'] as const) {
     }
   })
 }
+
+for (const path of ['live', 'baked'] as const) {
+  test(`${path}: full section cuts keep rooms enclosed, window portals and lamps without rebuilding`, async () => {
+    const scene = await mountedRooms(path, 'stacked')
+    try {
+      await scene.renderer.advanceFrames(10, 0.1)
+      const rooms = daylightRooms.rooms
+      const openings = daylightRooms.openings
+      const portals = daylightRooms.portals
+      const buildCount = scene.inputs.length
+      useViewer.getState().setSectionShadows('full')
+      useViewer.getState().setSectionEnabled(true)
+      for (const axis of ['x', 'y', 'z'] as const) {
+        useViewer.getState().setSectionAxis(axis)
+        useViewer.getState().setSectionPosition(2)
+        await scene.renderer.advanceFrames(10, 0.1)
+        expect(scene.inputs).toHaveLength(buildCount)
+        expect(daylightRooms.rooms).toBe(rooms)
+        expect(daylightRooms.openings).toBe(openings)
+        expect(daylightRooms.portals).toBe(portals)
+        expect(rooms.map((room) => room.enclosed)).toEqual([true, true])
+        expect(rooms.map((room) => room.lamps[0]?.itemId)).toEqual(['lamp_0', 'lamp_1'])
+      }
+    } finally {
+      await scene.close()
+    }
+  })
+}

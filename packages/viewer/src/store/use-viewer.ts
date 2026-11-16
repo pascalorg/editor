@@ -25,7 +25,7 @@ import {
   SCENE_THEME_IDS,
   type SceneTheme,
 } from '../lib/scene-themes'
-import { SECTION_DEFAULTS, type SectionAxis } from '../lib/section'
+import { SECTION_DEFAULTS, type SectionAxis, type SectionShadows } from '../lib/section'
 import { viewerPreferenceStorage } from '../lib/viewer-preference-storage'
 import { createWalkthroughInput } from '../lib/walkthrough-input'
 
@@ -334,6 +334,8 @@ type ViewerState = {
   xrayFamily: string | null
   setXrayFamily: (family: string | null) => void
 
+  sectionShadows: SectionShadows
+  setSectionShadows: (shadows: SectionShadows) => void
   sectionEnabled: boolean
   setSectionEnabled: (enabled: boolean) => void
   sectionAxis: SectionAxis
@@ -960,6 +962,7 @@ const useViewer = create<ViewerState>()(
       xrayFamily: null,
       setXrayFamily: (xrayFamily) => set({ xrayFamily }),
       ...SECTION_DEFAULTS,
+      setSectionShadows: (sectionShadows) => set({ sectionShadows }),
       setSectionEnabled: (sectionEnabled) => set({ sectionEnabled }),
       setSectionAxis: (sectionAxis) => set({ sectionAxis }),
       setSectionPosition: (sectionPosition) => set({ sectionPosition }),

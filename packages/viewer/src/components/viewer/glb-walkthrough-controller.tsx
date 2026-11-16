@@ -2,7 +2,7 @@
 
 import { KeyboardControls } from '@react-three/drei'
 import { useFrame, useThree } from '@react-three/fiber'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import {
   Box3,
   BoxGeometry,
@@ -30,6 +30,12 @@ import {
 import { turnFirstPersonLook } from '../../lib/drone-flight'
 import { BATCHED_LAYER, SCENE_LAYER } from '../../lib/layers'
 import { consumeWalkthroughFrame } from '../../lib/walkthrough-input'
+import {
+  bakedWalkthroughSettings,
+  WALKTHROUGH_DEFAULT_SPEEDS,
+  WALKTHROUGH_SEE_DISTANCE,
+  type WalkthroughSpeeds,
+} from '../../lib/walkthrough-settings'
 import useViewer from '../../store/use-viewer'
 import BVHEcctrl, { type BVHEcctrlApi, characterStatus, type MovementInput } from './bvh-ecctrl'
 import { applyWalkthroughCameraClipping } from './viewer-camera'
@@ -268,7 +274,24 @@ function resolveGlbSpawn(
  * the parametric scene. Pointer-lock drives look; WASD moves; Space jumps; Shift
  * sprints. Interaction stays in `GlbScene` (its centre-ray HUD).
  */
-export function GlbWalkthroughController({ url }: { url: string }) {
+export type GlbWalkthroughControllerProps = {
+  url: string
+  speeds?: WalkthroughSpeeds
+  /** Identification range in metres; GlbScene publishes seenInteract, never activates it. */
+  seeDistance?: number
+}
+
+export function GlbWalkthroughController({
+  url,
+  speeds,
+  seeDistance = WALKTHROUGH_SEE_DISTANCE,
+}: GlbWalkthroughControllerProps) {
+  useLayoutEffect(() => {
+    bakedWalkthroughSettings.seeDistance = seeDistance
+    return () => {
+      bakedWalkthroughSettings.seeDistance = WALKTHROUGH_SEE_DISTANCE
+    }
+  }, [seeDistance])
   const { camera, gl } = useThree()
   const touch = useViewer((state) => state.walkthroughInputMode === 'touch')
   useWalkthroughInputLifecycle()
@@ -524,9 +547,11 @@ export function GlbWalkthroughController({ url }: { url: string }) {
         floatSpringK={1200}
         gravity={9.81}
         jumpVel={5}
-        maxRunSpeed={crouched ? CROUCH_RUN_SPEED : 5}
+        maxRunSpeed={crouched ? CROUCH_RUN_SPEED : (speeds?.run ?? WALKTHROUGH_DEFAULT_SPEEDS.run)}
         maxSlope={1.2}
-        maxWalkSpeed={crouched ? CROUCH_WALK_SPEED : 2}
+        maxWalkSpeed={
+          crouched ? CROUCH_WALK_SPEED : (speeds?.walk ?? WALKTHROUGH_DEFAULT_SPEEDS.walk)
+        }
         position={start.position}
         ref={setControllerApi}
       />

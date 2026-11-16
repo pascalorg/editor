@@ -158,3 +158,21 @@ test('default presentation shadows return a constant without reading section par
   expect(viewerShadowSignature(state)).toBe('')
   expect(viewerShadowSignature({ ...SECTION_DEFAULTS, xrayFamily: 'walls' })).not.toBe('')
 })
+
+test('full section changes leave the combined daylight shadow signature unchanged', () => {
+  const state = { ...SECTION_DEFAULTS, xrayFamily: null }
+  const before = viewerShadowSignature(state)
+  expect(viewerShadowSignature({ ...state, sectionEnabled: true })).toBe(before)
+  expect(
+    viewerShadowSignature({
+      ...state,
+      sectionEnabled: true,
+      sectionAxis: 'z',
+      sectionPosition: 7,
+      sectionFlipped: true,
+    }),
+  ).toBe(before)
+  const cut = { ...state, sectionEnabled: true, sectionShadows: 'cut' as const }
+  expect(viewerShadowSignature(cut)).not.toBe(before)
+  expect(viewerShadowSignature({ ...cut, sectionPosition: 2 })).not.toBe(viewerShadowSignature(cut))
+})

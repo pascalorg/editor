@@ -2,7 +2,7 @@
 
 import { usePascalI18n } from '@pascal-app/core'
 import { type ReactNode, useMemo } from 'react'
-import type { WalkthroughInteract } from '../../store/use-first-person-hud'
+import type { WalkthroughInteract, WalkthroughSeenInteract } from '../../store/use-first-person-hud'
 import useViewer from '../../store/use-viewer'
 import { cn } from '../lib/cn'
 import { displayRoomName } from '../lib/room-name-messages'
@@ -14,6 +14,9 @@ export type WalkthroughHudProps = {
   floorLabel?: string | null
   zoneLabel?: string | null
   interact?: WalkthroughInteract
+  /** Opt in by passing the controller's seenInteract and a localized prompt, e.g. "Come a little closer". */
+  seenInteract?: WalkthroughSeenInteract
+  comeCloserLabel?: string
   /** Movement controls listed before the cursor and exit pills. */
   hints?: readonly WalkthroughHint[]
   /** Pointer lock temporarily released (OS screenshot) — the pill flips to
@@ -48,6 +51,8 @@ export function WalkthroughHud({
   floorLabel,
   zoneLabel,
   interact = null,
+  seenInteract = null,
+  comeCloserLabel,
   hints,
   suspended = false,
   onExit,
@@ -131,6 +136,12 @@ export function WalkthroughHud({
               )}
             </>
           )}
+        </div>
+      )}
+
+      {!interact && seenInteract && comeCloserLabel && (
+        <div className="absolute top-1/2 left-1/2 mt-7 -translate-x-1/2 whitespace-nowrap text-xs">
+          {seenInteract.label} · {comeCloserLabel}
         </div>
       )}
 

@@ -155,10 +155,10 @@ const result = await build({
       'render-consumer',
       `
     import { loadPlugin, roomCounts, useScene } from '@pascal-app/core';
-    import { transitionTimeOfDay, filterSectionHits, filterXrayHits, isSectionObject, heldReasons, GlbScene, InteractiveSystem, createWalkthroughInput, GlbWalkthroughController, LiveWalkthroughController, familyForNode, sceneFamilies, VIEWER_FAMILIES, xrayActive, SectionGroup, sectionBounds, presetInstant, useFirstPersonHud, useViewer, Viewer } from '@pascal-app/viewer';
+    import { transitionTimeOfDay, filterSectionHits, filterXrayHits, isSectionObject, heldReasons, GlbScene, InteractiveSystem, createWalkthroughInput, WALKTHROUGH_DEFAULT_SPEEDS, WALKTHROUGH_SEE_DISTANCE, GlbWalkthroughController, LiveWalkthroughController, familyForNode, sceneFamilies, VIEWER_FAMILIES, xrayActive, SectionGroup, sectionBounds, presetInstant, useFirstPersonHud, useViewer, Viewer } from '@pascal-app/viewer';
     import { renderPlugin } from '@pascal-app/nodes/render';
     import { WalkthroughTouchControls } from '@pascal-app/viewer/ui';
-    export { transitionTimeOfDay, filterSectionHits, filterXrayHits, isSectionObject, heldReasons, GlbScene, InteractiveSystem, createWalkthroughInput, GlbWalkthroughController, WalkthroughTouchControls, LiveWalkthroughController, familyForNode, sceneFamilies, VIEWER_FAMILIES, xrayActive, SectionGroup, sectionBounds, presetInstant, roomCounts, useFirstPersonHud, useViewer, Viewer, renderPlugin };
+    export { transitionTimeOfDay, filterSectionHits, filterXrayHits, isSectionObject, heldReasons, GlbScene, InteractiveSystem, createWalkthroughInput, WALKTHROUGH_DEFAULT_SPEEDS, WALKTHROUGH_SEE_DISTANCE, GlbWalkthroughController, WalkthroughTouchControls, LiveWalkthroughController, familyForNode, sceneFamilies, VIEWER_FAMILIES, xrayActive, SectionGroup, sectionBounds, presetInstant, roomCounts, useFirstPersonHud, useViewer, Viewer, renderPlugin };
     export async function hydrate(scene) {
       await loadPlugin(renderPlugin);
       useScene.getState().setScene(scene);
@@ -240,7 +240,7 @@ console.log(`Render bundle including all lazy chunks: ${bytes} bytes across ${fi
 const consumer = resolve(root, 'packages/nodes/render-consumer.ts')
 const consumerSource = `
   import { roomCounts, type Plugin, type RoomCounts, type SceneGraph } from '@pascal-app/core';
-  import { familyForNode, sceneFamilies, VIEWER_FAMILIES, xrayActive, SectionGroup, sectionBounds, presetInstant, useViewer, type SectionAxis, type DaylightSite, type TimeOfDay } from '@pascal-app/viewer';
+  import { familyForNode, sceneFamilies, VIEWER_FAMILIES, xrayActive, SectionGroup, sectionBounds, presetInstant, useViewer, type SectionAxis, type SectionShadows, type DaylightSite, type TimeOfDay } from '@pascal-app/viewer';
   import { transitionTimeOfDay, filterSectionHits, filterXrayHits, isSectionObject, heldReasons, GlbScene, InteractiveSystem, type GlbPickEvent, type SelectionCalloutProps, type CalloutAction } from '@pascal-app/viewer';
   import type { ComponentProps } from 'react';
   const renderCallout = (props: SelectionCalloutProps) => { const actions: CalloutAction[] = props.actions; return null; };
@@ -259,25 +259,33 @@ const consumerSource = `
   useViewer.getState().setSectionAxis(axis);
   useViewer.getState().setSectionPosition(2);
   useViewer.getState().setSectionFlipped(false);
+  const shadows: SectionShadows = 'full';
+  useViewer.getState().setSectionShadows(shadows);
   export const section = { SectionGroup, sectionBounds, extent: sectionBounds() }; 
   export const daylight = { instant: presetInstant(new Date(), site.lat!, site.lng!, dawn), site };
   useViewer.getState().setDaylightSite(site);
   export const counts = (graph: SceneGraph): RoomCounts => roomCounts(graph);
   import { LiveWalkthroughController, useFirstPersonHud, type LiveWalkthroughControllerProps } from '@pascal-app/viewer';
-  import { createWalkthroughInput, GlbWalkthroughController, type WalkthroughInput } from '@pascal-app/viewer';
+  import { createWalkthroughInput, GlbWalkthroughController, type GlbWalkthroughControllerProps, type WalkthroughInput, type WalkthroughSpeeds, type WalkthroughSeenInteract, WALKTHROUGH_DEFAULT_SPEEDS, WALKTHROUGH_SEE_DISTANCE } from '@pascal-app/viewer';
   const input: WalkthroughInput = createWalkthroughInput();
   input.setMove(1, 0); input.addLook(12, 4); input.requestJump(); input.requestInteract(); input.clear();
   useViewer.getState().setWalkthroughInputMode('touch');
   export const touchMode: 'desktop' | 'touch' = useViewer.getState().walkthroughInputMode;
   export { GlbWalkthroughController };
-  const walkProps: LiveWalkthroughControllerProps = { paused: false };
+  const speeds: WalkthroughSpeeds = { walk: 1.8, run: 2.8 };
+  const walkProps: LiveWalkthroughControllerProps = { paused: false, speeds, seeDistance: 16 };
+  export const bakedWalkProps: GlbWalkthroughControllerProps = { url: 'scene.glb', speeds, seeDistance: 6 };
+  export const seenInteract: WalkthroughSeenInteract = useFirstPersonHud.getState().seenInteract;
+  export const walkthroughDefaults = { WALKTHROUGH_DEFAULT_SPEEDS, WALKTHROUGH_SEE_DISTANCE };
   export const walkthrough = { LiveWalkthroughController, useFirstPersonHud, walkProps };
   import { renderPlugin } from '@pascal-app/nodes/render';
   import { playSound, initInteractionSounds, useAudioSettings, type SoundName } from '@pascal-app/viewer/sfx';
   const sound: SoundName = 'menuClick';
   export const play = () => playSound(sound);
   export { initInteractionSounds, useAudioSettings };
-  import { ParametricViewerRooms, RoomPillsLayer2D, RoomPillsLayer3D, SceneLoader, ViewerControlsBar, ViewerRooms, ViewerSceneHeader, WalkthroughHud, WalkthroughTouchControls, type WalkthroughTouchControlsProps, type ViewerLinkProps } from '@pascal-app/viewer/ui';
+  import { ParametricViewerRooms, RoomPillsLayer2D, RoomPillsLayer3D, SceneLoader, ViewerControlsBar, ViewerRooms, ViewerSceneHeader, WalkthroughHud, WalkthroughTouchControls, type WalkthroughHudProps, type WalkthroughTouchControlsProps, type WalkthroughSeenInteract as UiSeenInteract, type ViewerLinkProps } from '@pascal-app/viewer/ui';
+  const uiSeen: UiSeenInteract = seenInteract;
+  export const hudProps: WalkthroughHudProps = { seenInteract: uiSeen, comeCloserLabel: 'Come a little closer' };
   export const touchProps: WalkthroughTouchControlsProps = { className: 'host-skin' };
   export { WalkthroughTouchControls };
   const link = (props: ViewerLinkProps) => props.href;

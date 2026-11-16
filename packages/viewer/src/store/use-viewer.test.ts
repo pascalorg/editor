@@ -459,6 +459,7 @@ describe('section presentation', () => {
     sectionAxis: 'y',
     sectionPosition: 0,
     sectionFlipped: false,
+    sectionShadows: 'full' as const,
   }
   afterEach(() => useViewer.setState(defaults))
 
@@ -467,6 +468,7 @@ describe('section presentation', () => {
     viewer.setProjectId('section-a')
     expect(useViewer.getState()).toMatchObject(defaults)
     viewer.setSectionEnabled(true)
+    viewer.setSectionShadows('cut')
     viewer.setSectionAxis('z')
     viewer.setSectionPosition(4.5)
     viewer.setSectionFlipped(true)
@@ -475,6 +477,7 @@ describe('section presentation', () => {
       sectionAxis: 'z',
       sectionPosition: 4.5,
       sectionFlipped: true,
+      sectionShadows: 'cut',
     })
     viewer.setProjectId('section-a')
     expect(useViewer.getState().sectionEnabled).toBe(true)
@@ -502,6 +505,7 @@ describe('section presentation', () => {
     try {
       const viewer = useViewer.getState()
       viewer.setSectionEnabled(true)
+      viewer.setSectionShadows('cut')
       viewer.setSectionAxis('x')
       viewer.setSectionPosition(12)
       viewer.setSectionFlipped(true)
