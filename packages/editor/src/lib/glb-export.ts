@@ -9,11 +9,13 @@ import {
   getLevelDisplayName,
   hidesDescendants,
   isNodeKindEnabled,
+  isOpenAirRoom,
   isOperationDoorType,
   itemClipRegistry,
   type LevelNode,
   levelBaseElevationAt,
   nodeRegistry,
+  openPlanRoomGroups,
   sceneRegistry,
   useScene,
   type WindowNode,
@@ -1882,6 +1884,8 @@ function stampIdentity(
     }
   })
 
+  // Open-plan room groups, computed once: /viewer lights each group as one space (see rooms.ts).
+  const openPlanGroups = openPlanRoomGroups(nodes)
   for (const [id, original] of registryEntries) {
     const node = nodes[id]
     const target = cloneByOriginal.get(original)
@@ -1933,6 +1937,11 @@ function stampIdentity(
       extras.polygon = zone.polygon
       if (zone.holes?.length) extras.holes = zone.holes
       extras.color = zone.color
+      // Open-air rooms (porch/deck/patio, or left open on a side) are lit as outdoors in /viewer,
+      // the same as the live editor; stamp it so the bake matches (core `isOpenAirRoom`).
+      if (isOpenAirRoom(nodes, zone)) extras.open = true
+      const group = openPlanGroups.get(id)
+      if (group) extras.group = group
       target.visible = true
     }
     if (node.type === 'spawn') {

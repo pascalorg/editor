@@ -11,7 +11,13 @@ import { getWallThickness } from '../systems/wall/wall-footprint'
 import { planSeparatorInsertion } from '../systems/wall/wall-topology'
 import { beamBottomElevation } from './beam'
 import { FRAMING_POST_SIZES } from './framing-post'
-import { DECK_FLOOR_DROP, DECKING_THICKNESS, PORCH_FLOOR_DROP } from './outdoor-room'
+import {
+  DECK_FLOOR_DROP,
+  DECKING_THICKNESS,
+  isOpenAirRoom,
+  openPlanRoomGroups,
+  PORCH_FLOOR_DROP,
+} from './outdoor-room'
 import { PORCH_POST_SETBACK } from './porch-framing'
 import { porchPartOf } from './porch-framing-sync'
 import { reconcileLevelStructure } from './structure-kernel'
@@ -550,5 +556,163 @@ describe('deleting a floor plate', () => {
     expect(derivedDeletionIntent(nodes as never, [own.id as AnyNodeId])).toEqual([
       { id: porch.id, data: { hasFloor: false } },
     ] as never)
+  })
+})
+
+describe('isOpenAirRoom', () => {
+  const zone = (over: Partial<ZoneNode>): ZoneNode =>
+    ({
+      type: 'zone',
+      parentId: LEVEL,
+      spaceRole: 'room',
+      roomType: undefined,
+      enclosureStatus: 'auto',
+      boundaryWallIds: [],
+      boundarySeparatorIds: [],
+      ...over,
+    }) as unknown as ZoneNode
+
+  const map = (...list: ZoneNode[]) =>
+    Object.fromEntries(list.map((z) => [z.id, z])) as Record<string, AnyNode>
+
+  test('an outdoor room type is open air, however it is covered', () => {
+    for (const roomType of ['porch', 'deck', 'patio'] as const) {
+      const z = zone({ id: `zone_${roomType}`, roomType })
+      expect(isOpenAirRoom(map(z), z)).toBe(true)
+    }
+  })
+
+  test('an explicitly open room is open air; a hand-drawn enclosed one never is', () => {
+    const open = zone({ id: 'zone_open', enclosureStatus: 'open' })
+    expect(isOpenAirRoom(map(open), open)).toBe(true)
+    // A person's `enclosed` on a hand-drawn zone wins even with open sides of its own.
+    const sealed = zone({
+      id: 'zone_sealed',
+      enclosureStatus: 'enclosed',
+      autoFromWalls: false,
+      boundarySeparatorIds: ['separator_a'],
+    })
+    expect(isOpenAirRoom(map(sealed), sealed)).toBe(false)
+  })
+
+  test('a room found from walls with its walls switched off is open air despite `enclosed`', () => {
+    // The structure kernel stamps `enclosed` on every room whose boundary closes, open sides too:
+    // one wall kept against the house, three sides open, a ceiling over it.
+    const shed = zone({
+      id: 'zone_shed',
+      enclosureStatus: 'enclosed',
+      autoFromWalls: true,
+      boundaryWallIds: ['wall_house'] as never,
+      boundarySeparatorIds: ['separator_n', 'separator_w', 'separator_s'],
+    })
+    expect(isOpenAirRoom(map(shed), shed)).toBe(true)
+    // Walled all round, the same stamp still reads indoors.
+    const walled = zone({
+      id: 'zone_walled_auto',
+      enclosureStatus: 'enclosed',
+      autoFromWalls: true,
+    })
+    expect(isOpenAirRoom(map(walled), walled)).toBe(false)
+  })
+
+  test('an auto room with no open side is not open air', () => {
+    const z = zone({ id: 'zone_walled' })
+    expect(isOpenAirRoom(map(z), z)).toBe(false)
+  })
+
+  test('an open side no other room shares faces outside → open air', () => {
+    const z = zone({ id: 'zone_terrace', boundarySeparatorIds: ['separator_out'] })
+    expect(isOpenAirRoom(map(z), z)).toBe(true)
+  })
+
+  test('an open side two rooms share is an interior threshold → not open air', () => {
+    const a = zone({ id: 'zone_a', boundarySeparatorIds: ['separator_between'] })
+    const b = zone({ id: 'zone_b', boundarySeparatorIds: ['separator_between'] })
+    expect(isOpenAirRoom(map(a, b), a)).toBe(false)
+    expect(isOpenAirRoom(map(a, b), b)).toBe(false)
+  })
+
+  test('a separator shared only with a generic (non-room) zone still faces outside', () => {
+    const room = zone({ id: 'zone_room', boundarySeparatorIds: ['separator_edge'] })
+    const generic = zone({
+      id: 'zone_site',
+      spaceRole: 'generic',
+      boundarySeparatorIds: ['separator_edge'],
+    })
+    expect(isOpenAirRoom(map(room, generic), room)).toBe(true)
+  })
+
+  test('an open side shared with a room on another level does not seal this one', () => {
+    const here = zone({ id: 'zone_here', boundarySeparatorIds: ['separator_x'] })
+    const elsewhere = zone({
+      id: 'zone_elsewhere',
+      parentId: 'level_other',
+      boundarySeparatorIds: ['separator_x'],
+    })
+    expect(isOpenAirRoom(map(here, elsewhere), here)).toBe(true)
+  })
+})
+
+describe('openPlanRoomGroups', () => {
+  const zone = (over: Partial<ZoneNode>): ZoneNode =>
+    ({
+      type: 'zone',
+      parentId: LEVEL,
+      spaceRole: 'room',
+      roomType: undefined,
+      enclosureStatus: 'auto',
+      boundaryWallIds: [],
+      boundarySeparatorIds: [],
+      ...over,
+    }) as unknown as ZoneNode
+
+  const map = (...list: ZoneNode[]) =>
+    Object.fromEntries(list.map((z) => [z.id, z])) as Record<string, AnyNode>
+
+  test('two indoor rooms sharing a separator are one group', () => {
+    const a = zone({ id: 'zone_a', boundarySeparatorIds: ['separator_1'] })
+    const b = zone({ id: 'zone_b', boundarySeparatorIds: ['separator_1'] })
+    const groups = openPlanRoomGroups(map(a, b))
+    expect(groups.get('zone_a')).toBe(groups.get('zone_b'))
+    expect(groups.get('zone_a')).toBe('zone_a') // lowest id is the stable root
+  })
+
+  test('a run of open-plan rooms collapses into one group (transitive)', () => {
+    const a = zone({ id: 'zone_a', boundarySeparatorIds: ['sep_ab'] })
+    const b = zone({ id: 'zone_b', boundarySeparatorIds: ['sep_ab', 'sep_bc'] })
+    const c = zone({ id: 'zone_c', boundarySeparatorIds: ['sep_bc'] })
+    const groups = openPlanRoomGroups(map(a, b, c))
+    const root = groups.get('zone_a')
+    expect(root).toBeDefined()
+    expect(groups.get('zone_b')).toBe(root)
+    expect(groups.get('zone_c')).toBe(root)
+  })
+
+  test('a room standing on its own gets no group entry', () => {
+    const a = zone({ id: 'zone_a', boundarySeparatorIds: ['sep_a'] })
+    const b = zone({ id: 'zone_b', boundarySeparatorIds: ['sep_b'] })
+    const groups = openPlanRoomGroups(map(a, b))
+    expect(groups.has('zone_a')).toBe(false)
+    expect(groups.has('zone_b')).toBe(false)
+  })
+
+  test('an open-air room is never merged with the indoor room it opens onto', () => {
+    // Shared separator, but the porch faces outside → it stays out of the group.
+    const room = zone({ id: 'zone_room', boundarySeparatorIds: ['sep_shared'] })
+    const porch = zone({
+      id: 'zone_porch',
+      roomType: 'porch',
+      boundarySeparatorIds: ['sep_shared'],
+    })
+    const groups = openPlanRoomGroups(map(room, porch))
+    expect(groups.has('zone_porch')).toBe(false)
+    expect(groups.has('zone_room')).toBe(false) // nothing left to merge with
+  })
+
+  test('rooms that share only a wall (no separator) are not grouped', () => {
+    const a = zone({ id: 'zone_a', boundaryWallIds: ['wall_1'] })
+    const b = zone({ id: 'zone_b', boundaryWallIds: ['wall_1'] })
+    const groups = openPlanRoomGroups(map(a, b))
+    expect(groups.size).toBe(0)
   })
 })

@@ -15,6 +15,7 @@ import {
   getWallCurveFrameAt,
   getWallCurveLength,
   getWallFaceOffsets,
+  getWallJunctionClosing,
   getWallLevelZones,
   getWallMiterBoundaryPoints,
   getWallPlaneTop,
@@ -326,10 +327,13 @@ function buildTaggedWallBoundaryEdges(
     return edges
   }
 
-  const startKey = pointToKey({ x: wall.start[0], y: wall.start[1] })
-  const startJunction = miterData.junctionData.get(startKey)?.get(wall.id)
-  const startLeftIndex = startJunction ? localPoints.length - 2 : localPoints.length - 1
-  const endLeftIndex = startJunction ? localPoints.length - 3 : localPoints.length - 2
+  // The footprint ends with the start junction's closing points: one, or several where a
+  // T-junction closes around the joint. Count them, or the front tag lands on the start cap.
+  const wallStart = { x: wall.start[0], y: wall.start[1] }
+  const startJunction = miterData.junctionData.get(pointToKey(wallStart))?.get(wall.id)
+  const startClosing = startJunction ? getWallJunctionClosing(startJunction, wallStart).length : 0
+  const startLeftIndex = localPoints.length - 1 - startClosing
+  const endLeftIndex = startLeftIndex - 1
 
   addTaggedWallBoundaryEdge(edges, localPoints, 0, 1, 'back')
 

@@ -476,6 +476,7 @@ export {
 export {
   DECK_FLOOR_DROP,
   DECKING_THICKNESS,
+  isOpenAirRoom,
   isOutdoorRoom,
   isOutdoorRoomType,
   nextOutdoorRoomName,
@@ -483,6 +484,7 @@ export {
   OUTDOOR_ROOM_TYPES,
   type OutdoorRoomDefaults,
   type OutdoorRoomType,
+  openPlanRoomGroups,
   PORCH_FLOOR_DROP,
 } from './lib/outdoor-room'
 export {
@@ -1278,6 +1280,7 @@ export {
 export {
   DEFAULT_WALL_HEIGHT,
   DEFAULT_WALL_THICKNESS,
+  getWallJunctionClosing,
   getWallPlanFootprint,
   getWallThickness,
 } from './systems/wall/wall-footprint'
