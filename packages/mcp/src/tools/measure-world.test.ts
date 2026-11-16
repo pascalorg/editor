@@ -3,7 +3,12 @@ import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { Client } from '@modelcontextprotocol/client'
 import { InMemoryTransport, McpServer } from '@modelcontextprotocol/server'
-import { nodeRegistry, registerNode } from '@pascal-app/core'
+import {
+  createTerrainField,
+  encodeTerrainField,
+  nodeRegistry,
+  registerNode,
+} from '@pascal-app/core'
 import { shelfRecipe } from '@pascal-app/core/procedural-items'
 import * as schema from '@pascal-app/core/schema'
 import {
@@ -102,6 +107,12 @@ const REQUIRED_FIELDS: Record<string, Record<string, unknown>> = {
       [1, 0, 0],
     ],
   },
+  ramp: {
+    start: [0, 0],
+    segments: [{ type: 'line', end: [10, 0] }],
+    endHeight: -1,
+    terrainMode: 'none',
+  },
   separator: { start: [20, 0], end: [22, 0] },
   slab: {
     polygon: [
@@ -109,6 +120,20 @@ const REQUIRED_FIELDS: Record<string, Record<string, unknown>> = {
       [4, 0],
       [4, 4],
     ],
+  },
+  'terrain-break': {
+    line: [
+      [-15, 12],
+      [15, 12],
+    ],
+    kind: 'cliff',
+    left: 0,
+    right: 'ground',
+  },
+  'terrain-tile': {
+    ix: 1,
+    iz: -1,
+    heights: encodeTerrainField(createTerrainField()).heights,
   },
   wall: { start: [0, 0], end: [4, 0] },
   zone: {
@@ -520,10 +545,15 @@ describe('measure in world space', () => {
     const roof = RoofNode.parse({ position: [0, 3, 10], children: [segment.id] })
     const cabinet = CabinetNode.parse({ position: [5, 0, 5] })
     const stair = StairNode.parse({ position: [-5, 0, -5] })
-    const hosts: Record<string, AnyNode> = { wall, 'roof-segment': segment, cabinet, stair }
+    const site = Object.values(bridge.getNodes()).find((node) => node.type === 'site')
+    if (!site) throw new Error('Default scene must contain a Site')
+    const hosts: Record<string, AnyNode> = { site, wall, 'roof-segment': segment, cabinet, stair }
     const hostOf: Record<string, string> = {
       door: 'wall',
       window: 'wall',
+      ramp: 'site',
+      'terrain-break': 'site',
+      'terrain-tile': 'site',
       'cabinet-module': 'cabinet',
       'stair-segment': 'stair',
     }

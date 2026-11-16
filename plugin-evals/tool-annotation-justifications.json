@@ -85,6 +85,58 @@
       }
     },
     {
+      "name": "add_ramp",
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": true,
+        "openWorldHint": false
+      },
+      "justifications": {
+        "readOnlyHint": "Adds a Site-owned ramp and, in cut-fill mode, reshapes the persisted terrain under its corridor.",
+        "destructiveHint": "Cut-fill overwrites existing ground heights in the ramp corridor; undo restores the previous terrain.",
+        "openWorldHint": "Uses only the connected scene and its persisted terrain, without contacting external services."
+      }
+    },
+    {
+      "name": "add_steps_to_ground",
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "openWorldHint": false
+      },
+      "justifications": {
+        "readOnlyHint": "It is not read-only because it adds a short outside stair, from the ground to an exterior door's sill, to a level of the connected Pascal scene.",
+        "destructiveHint": "Its intended operation adds new modeled state without deleting or replacing existing Pascal scene or project state.",
+        "openWorldHint": "It operates on the connected Pascal scene without accessing the public internet."
+      }
+    },
+    {
+      "name": "add_terraces",
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": true,
+        "openWorldHint": false
+      },
+      "justifications": {
+        "readOnlyHint": "It is not read-only because it writes terrain heights and creates retaining terrain breaks, and may add outside flights, in the connected Pascal scene.",
+        "destructiveHint": "It overwrites the ground heights under and beside the terraces; undo restores the previous ground.",
+        "openWorldHint": "It operates on the connected Pascal scene without accessing the public internet."
+      }
+    },
+    {
+      "name": "add_terrain_break",
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": true,
+        "openWorldHint": false
+      },
+      "justifications": {
+        "readOnlyHint": "It creates a terrain break node that changes the effective ground and adds a vertical face.",
+        "destructiveHint": "Numeric side heights replace the effective terrain on that side; undo restores the previous ground.",
+        "openWorldHint": "It operates only on the connected Pascal scene without public internet access."
+      }
+    },
+    {
       "name": "add_wall",
       "annotations": {
         "readOnlyHint": false,
@@ -160,6 +212,19 @@
         "readOnlyHint": "Writes the whole conversion: levels, walls, openings, rooms, slabs, columns, items and lights replace what the scene held.",
         "destructiveHint": "Replaces the scene's levels with the payload's; with replace it writes over a previous conversion.",
         "openWorldHint": "Everything it touches is the scene and the project's own artifact store."
+      }
+    },
+    {
+      "name": "carve_terrain_pad",
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": true,
+        "openWorldHint": false
+      },
+      "justifications": {
+        "readOnlyHint": "Levels a pad of the site's persisted terrain and blends it to the existing ground, changing the connected scene in one undo step.",
+        "destructiveHint": "It overwrites the ground heights it levels or blends; the previous ground returns only by undoing the step.",
+        "openWorldHint": "Reads and writes only the connected scene's persisted heightfield; it contacts no external service."
       }
     },
     {
@@ -355,6 +420,19 @@
         "readOnlyHint": "Updates room intent and reconciles construction in the connected scene.",
         "destructiveHint": "Can replace room intent or boundaries and retire derived construction.",
         "openWorldHint": "Uses only the connected scene; no public internet access."
+      }
+    },
+    {
+      "name": "describe_terrain_under_house",
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "openWorldHint": false
+      },
+      "justifications": {
+        "readOnlyHint": "Reports sampled ground facts under a slab footprint from the site's persisted terrain, with an advisory guard note, without changing the scene.",
+        "destructiveHint": "Creates, replaces and deletes no scene state and adds no undo or save entry; the guard link is a stated fact, never a write.",
+        "openWorldHint": "Reads only the connected scene's persisted heightfield; it contacts no external service."
       }
     },
     {
@@ -618,6 +696,32 @@
       }
     },
     {
+      "name": "grade_along_line",
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": true,
+        "openWorldHint": false
+      },
+      "justifications": {
+        "readOnlyHint": "Grades a strip of the site's persisted terrain along a line (the bed of a drive or a path, a swale or a berm), changing the connected scene in one undo step.",
+        "destructiveHint": "It overwrites the ground heights it cuts or fills along the strip and its batters; the previous ground returns only by undoing the step.",
+        "openWorldHint": "Reads and writes only the connected scene's persisted heightfield; it contacts no external service."
+      }
+    },
+    {
+      "name": "grade_around_house",
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": true,
+        "openWorldHint": false
+      },
+      "justifications": {
+        "readOnlyHint": "Grades the site's persisted terrain around a house outline (a pad, then a batter to the existing ground or a lawn level) and may add a retaining terrain-break, changing the connected scene in one undo step.",
+        "destructiveHint": "It overwrites the ground heights it pads, cuts or fills; the previous ground returns only by undoing the step.",
+        "openWorldHint": "Reads and writes only the connected scene's persisted heightfield; it contacts no external service."
+      }
+    },
+    {
       "name": "list_collections",
       "annotations": {
         "readOnlyHint": true,
@@ -878,6 +982,45 @@
       }
     },
     {
+      "name": "read_site_terrain",
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "openWorldHint": false
+      },
+      "justifications": {
+        "readOnlyHint": "Reports sampled ground facts from the site's persisted terrain without changing the scene.",
+        "destructiveHint": "Creates, replaces and deletes no scene state and adds no undo or save entry.",
+        "openWorldHint": "Reads only the connected scene's persisted heightfield; it contacts no external service."
+      }
+    },
+    {
+      "name": "read_terrain_contours",
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "openWorldHint": false
+      },
+      "justifications": {
+        "readOnlyHint": "Reports approximate contour lines from the site's persisted terrain without changing the scene.",
+        "destructiveHint": "Creates, replaces and deletes no scene state and adds no undo or save entry.",
+        "openWorldHint": "Reads only the connected scene's persisted heightfield; it contacts no external service."
+      }
+    },
+    {
+      "name": "read_terrain_facts",
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "openWorldHint": false
+      },
+      "justifications": {
+        "readOnlyHint": "Reports measured facts of how floors, walls, doors, paved surfaces, steps and ramps meet the site's persisted ground, without changing the scene.",
+        "destructiveHint": "Creates, replaces and deletes no scene state and adds no undo or save entry.",
+        "openWorldHint": "Reads only the connected scene's nodes and persisted heightfield; it contacts no external service."
+      }
+    },
+    {
       "name": "rebase_floor_reference",
       "annotations": {
         "readOnlyHint": false,
@@ -956,6 +1099,19 @@
       }
     },
     {
+      "name": "sample_terrain_line",
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "openWorldHint": false
+      },
+      "justifications": {
+        "readOnlyHint": "Reports a sampled segment profile from the site's persisted terrain without changing the scene.",
+        "destructiveHint": "Creates, replaces and deletes no scene state and adds no undo or save entry.",
+        "openWorldHint": "Reads only the connected scene's persisted heightfield; it contacts no external service."
+      }
+    },
+    {
       "name": "save_scene",
       "annotations": {
         "readOnlyHint": false,
@@ -992,6 +1148,19 @@
         "readOnlyHint": "It searches the Pascal material library without painting anything or changing a scene.",
         "destructiveHint": "It does not create, update, replace, delete, load, or save Pascal scene or project state.",
         "openWorldHint": "It reads only the material library built into Pascal and does not access the public internet."
+      }
+    },
+    {
+      "name": "seat_house",
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": true,
+        "openWorldHint": false
+      },
+      "justifications": {
+        "readOnlyHint": "Moves a building in height to seat its ground floor on the ground and grades the site's persisted terrain to meet it, changing the connected scene in one undo step.",
+        "destructiveHint": "It replaces the building's height on the site and overwrites the ground heights it pads, cuts or fills; the previous state returns only by undoing the step.",
+        "openWorldHint": "Reads and writes only the connected scene's persisted heightfield; it contacts no external service."
       }
     },
     {
@@ -1047,6 +1216,32 @@
       }
     },
     {
+      "name": "set_site_lot",
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": true,
+        "openWorldHint": false
+      },
+      "justifications": {
+        "readOnlyHint": "Writes the site's property boundary in the connected scene in one undo step.",
+        "destructiveHint": "Replaces the existing lot polygon; undo restores the previous boundary.",
+        "openWorldHint": "Uses only the connected scene and its persisted terrain without contacting external services."
+      }
+    },
+    {
+      "name": "set_terrain_plane",
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": true,
+        "openWorldHint": false
+      },
+      "justifications": {
+        "readOnlyHint": "Sets the site's persisted terrain over an area to one sloping plane, changing the connected scene in one undo step.",
+        "destructiveHint": "It overwrites the ground heights of the area and of its blend ring; the previous ground returns only by undoing the step.",
+        "openWorldHint": "Reads and writes only the connected scene's persisted heightfield; it contacts no external service."
+      }
+    },
+    {
       "name": "set_unit_members",
       "annotations": {
         "readOnlyHint": false,
@@ -1096,6 +1291,19 @@
         "readOnlyHint": "Updates room intent and reconciles construction in the connected scene.",
         "destructiveHint": "Updates room intent without deleting authored rooms, boundaries or contents.",
         "openWorldHint": "Uses only the connected scene; no public internet access."
+      }
+    },
+    {
+      "name": "shape_site_terrain",
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": true,
+        "openWorldHint": false
+      },
+      "justifications": {
+        "readOnlyHint": "Flattens, raises, lowers or smooths the site's persisted terrain over an area, changing the connected scene in one undo step.",
+        "destructiveHint": "It overwrites the ground heights in its area; the previous ground returns only by undoing the step.",
+        "openWorldHint": "Reads and writes only the connected scene's persisted heightfield; it contacts no external service."
       }
     },
     {
