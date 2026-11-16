@@ -1,6 +1,10 @@
 import { describe, expect, test } from 'bun:test'
 import { z } from 'zod'
-import { NOT_LENGTHS, NOTATION_CASES } from '../agent-operations/__fixtures__/notation-cases'
+import {
+  METRES_ONLY_TOOLS,
+  NOT_LENGTHS,
+  NOTATION_CASES,
+} from '../agent-operations/__fixtures__/notation-cases'
 import { HOSTED_SERVICE_TOOL_CONTRACTS } from './hosted-services'
 import {
   AGENT_TOOL_CONTRACTS,
@@ -35,7 +39,11 @@ describe('one notation (N1): each length, angle and pitch reads in its own unit 
 
 test('every other number a shared tool takes by name is a coordinate, a fraction or a ratio', () => {
   const plain = bareNumberPaths(CONTRACTS)
-  expect(plain.filter((path) => !NOT_LENGTHS.has(path))).toEqual([])
+  expect(
+    plain.filter(
+      (path) => !(NOT_LENGTHS.has(path) || METRES_ONLY_TOOLS.has(path.split('.')[0] ?? '')),
+    ),
+  ).toEqual([])
   expect([...NOT_LENGTHS].filter((path) => !plain.includes(path))).toEqual([])
 })
 

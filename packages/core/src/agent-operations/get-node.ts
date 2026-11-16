@@ -9,6 +9,7 @@ import { resolveCeilingHeight } from '../services/level-height'
 import { getWallThickness } from '../systems/wall/wall-footprint'
 import { wallResolvedHeight } from './level-reads'
 import { referencedSceneMaterialIds } from './scene-materials'
+import { terrainFactsForNode } from './terrain-break-facts'
 import type { AgentOperation, SceneNodes } from './types'
 
 /**
@@ -92,6 +93,15 @@ export const getNode: AgentOperation<{ id: string }> = (nodes, { id }, { materia
     : []
   return {
     result: {
+      // A terrain break says its facts (line, length, side heights, drops, face area); a site its
+      // breaks'. A break whose ground does not read leaves them out, never the read.
+      ...(() => {
+        try {
+          return terrainFactsForNode(node, nodes)
+        } catch {
+          return {}
+        }
+      })(),
       node: { ...node, ...derivedFields(nodes, node) },
       ancestorIds: ancestorIdsOf(nodes, id),
       ...(missingChildIds.length ? { missingChildIds } : {}),

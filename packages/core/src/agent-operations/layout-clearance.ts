@@ -11,6 +11,7 @@
 import { floorConstructionLift, liftedManualSlab } from '../lib/floor-construction-lift'
 import { selectSlabSupportForItem } from '../lib/item-slab-support'
 import { getRenderableSlabPolygon } from '../lib/slab-polygon'
+import { slabTerrainHeightAt } from '../lib/slab-terrain'
 import { levelBaseElevationAt } from '../lib/terrain-support-query'
 import {
   type Bounds,
@@ -232,9 +233,14 @@ function itemFloorLift(node: ItemNode, nodes: Record<string, AnyNode>): number {
         walls,
         siblingSlabs: slabs.filter((other) => other.id !== slab.id),
       }),
-    { preferredSlabId: node.supportSlabId },
+    {
+      preferredSlabId: node.supportSlabId,
+      elevationOf: (slab) => slabTerrainHeightAt(slab, nodes, node.position[0], node.position[2]),
+    },
   )
-  return support ? support.elevation : ground()
+  return support
+    ? slabTerrainHeightAt(support, nodes, node.position[0], node.position[2])
+    : ground()
 }
 
 /**

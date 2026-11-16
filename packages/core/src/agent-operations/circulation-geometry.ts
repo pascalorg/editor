@@ -93,9 +93,11 @@ function geometryGroups(scene: SceneNodes, graph: CirculationGraph) {
     add(
       node?.type === 'stair'
         ? 'incomplete_stairs'
-        : node?.type === 'door'
-          ? 'unhosted_doors'
-          : 'disconnected_surfaces',
+        : node?.type === 'ramp'
+          ? 'incomplete_ramps'
+          : node?.type === 'door'
+            ? 'unhosted_doors'
+            : 'disconnected_surfaces',
       id,
     )
   }
@@ -118,6 +120,8 @@ const REASONS: Record<string, (count: number) => string> = {
     `${n} stair or deck connection${n === 1 ? '' : 's'} cannot be measured between their walking surfaces`,
   incomplete_stairs: (n) =>
     `${n} stair${n === 1 ? ' has' : 's have'} an incomplete walking path or a missing destination floor`,
+  incomplete_ramps: (n) =>
+    `${n} ramp${n === 1 ? ' has' : 's have'} invalid or unmeasurable centreline geometry`,
   unhosted_doors: (n) => `${n} door${n === 1 ? ' has' : 's have'} no wall host`,
   disconnected_surfaces: (n) =>
     `${n} floor surface${n === 1 ? ' is' : 's are'} split into disconnected walking regions`,

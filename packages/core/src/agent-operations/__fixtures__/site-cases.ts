@@ -292,8 +292,9 @@ export const GET_SITE_CASES: AgentToolCase[] = [
   {
     name: 'a terrain far off the lot, its samples 10 nm apart: read over the field’s own lines',
     tool: 'get_site',
-    // past the field heightAt holds its edge, so the lot's lines cross only the field's few grid
-    // lines, not the 10^24 between the lot and the field; the field's west column rises 2 m
+    // the lot's lines cross only the field's few grid lines, not the 10^24 between the lot and
+    // the field. Past the field the ground continues as the field's own context plane (virtual
+    // ground, not its edge held), which is flat: the lot far from the field reads 0 m of fall.
     scene: () => {
       const field = createTerrainField({ origin: [1e16, 0], spacing: 1e-8, cols: 2, rows: 2 })
       field.heights[2] = quantize(field, 2)
@@ -301,7 +302,7 @@ export const GET_SITE_CASES: AgentToolCase[] = [
       return scene(site({ polygon: STRAIGHT.polygon, terrain }), building(), level())
     },
     input: {},
-    expect: { result: { ground: { state: 'sloped', reliefM: 2 } } },
+    expect: { result: { ground: { state: 'sloped', reliefM: 0 } } },
   },
   {
     name: 'a terrain finer than the coordinates can hold: the fall heightAt shows, not its samples',

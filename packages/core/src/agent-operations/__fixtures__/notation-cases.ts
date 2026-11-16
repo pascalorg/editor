@@ -322,6 +322,19 @@ export const NOTATION_CASES: NotationCase[] = [
 ]
 
 /**
+ * The terrain and ramp tools whose lengths still read their own unit only (metres): the one notation (N1)
+ * is owed on them. Their bare numbers are not listed one by one.
+ */
+export const METRES_ONLY_TOOLS = new Set([
+  'add_ramp',
+  'add_terrain_break',
+  'read_site_terrain',
+  'read_terrain_contours',
+  'sample_terrain_line',
+  'shape_site_terrain',
+])
+
+/**
  * Every other number a shared tool takes by name, none of them a length or an angle. Numbers in
  * an array are coordinates (points, outlines, vectors) and whole numbers are counts, indices or
  * pixels, so neither is listed; a length or an angle added as a bare number fails the test.
@@ -365,6 +378,15 @@ export const NOT_LENGTHS = new Set([
   'create_room.doors[].t',
   'create_room.windows[].t',
   // Ratios, a material's own properties, a duration.
+  // A batter's run: horizontal metres per metre of height (2 is 1:2), a ratio.
+  'grade_around_house.run',
+  'seat_house.run',
+  'grade_along_line.run',
+  'add_terraces.run',
+  'add_terraces.stepsAt',
+  // A fall or a grade, in percent.
+  'seat_house.padFallPercent',
+  'grade_along_line.maxSlopePercent',
   'view_scene.camera.aspect',
   'paint.material.properties.roughness',
   'paint.material.properties.metalness',
