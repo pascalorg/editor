@@ -2,7 +2,7 @@ import { stretchesAlongWall } from '../building/zone-wall-stretches'
 import { automaticFloorHeight, floorPlateAtGroundContact } from '../lib/floor-foundation-datum'
 import { floorSlabsOf, levelGradeStanding } from '../lib/grade-standing'
 import { groundLevelOf } from '../lib/ground-level'
-import { getOpeningFloorDatum } from '../lib/opening-floor-datum'
+import { getOpeningFloorDatum, wallSupportForNodes } from '../lib/opening-floor-datum'
 import { rampHeightAt, rampOffsetPoint, rampStations } from '../lib/ramp'
 import { rampFacts } from '../lib/ramp-facts'
 import { classifyEdges, outwardNormal, resolveFrontEdge } from '../lib/setback-envelope'
@@ -23,8 +23,9 @@ import type {
   SlabNode,
   StairNode,
   WallNode,
+  ZoneNode,
 } from '../schema'
-import { MIN_SLAB_THICKNESS } from '../schema/nodes/slab'
+import { DEFAULT_SLAB_ELEVATION, MIN_SLAB_THICKNESS } from '../schema/nodes/slab'
 import {
   getLevelElevations,
   getLevelFloorToFloorHeight,
@@ -83,6 +84,11 @@ export const TERRAIN_FACT_LIMITS = {
   walkPercent: 12.5,
   /** The end of a flight or a ramp this far from the ground or the sill misses it. */
   meetM: 0.05,
+  /**
+   * A room's stored floor elevation this far off the floor that the ground has moved: the stored
+   * figure is level-local and did not follow the ground (three risers; a deliberate step is less).
+   */
+  floorSplitM: 0.45,
   /** A house this close to the top of a face this high stands at the edge of a drop. */
   dropEdgeM: 2,
   dropHeightM: 1,
@@ -97,6 +103,8 @@ export type TerrainFinding = {
     | 'floor_in_air'
     | 'floor_lifted_by_ground'
     | 'floor_without_thickness'
+    | 'floor_split'
+    | 'room_without_floor'
     | 'door_above_ground'
     | 'door_below_ground'
     | 'ground_falls_to_wall'
@@ -459,9 +467,36 @@ function inOrNear(x: number, z: number, polygon: Pt[], reach: number): boolean {
 
 type Exterior = { wall: WallNode; outward: 1 | -1 }
 
-/** The walls of a level with a floor on one side only, and which side is out. */
-function exteriorWalls(level: LevelNode, floors: SlabNode[], nodes: SceneNodes): Exterior[] {
-  const onFloor = ([x, z]: Pt) => floors.some((slab) => inPolygon(x, z, slab.polygon))
+/**
+ * The enclosed rooms of a level that have no floor plate (`hasFloor: false`): a garage or a carport
+ * on the ground. They are inside the house all the same: their walls meet the ground.
+ */
+function floorlessRooms(level: LevelNode, nodes: SceneNodes): ZoneNode[] {
+  return level.children.flatMap((id) => {
+    const zone = nodes[id as AnyNodeId]
+    return zone?.type === 'zone' &&
+      zone.spaceRole === 'room' &&
+      zone.hasFloor === false &&
+      zone.enclosureStatus !== 'open' &&
+      zone.polygon.length >= 3
+      ? [zone]
+      : []
+  })
+}
+
+/** Whether a point of a level is inside its house: over a floor plate, or in a room with none. */
+function insideOf(floors: SlabNode[], floorless: ZoneNode[]) {
+  return ([x, z]: Pt) =>
+    floors.some((slab) => inPolygon(x, z, slab.polygon)) ||
+    floorless.some((zone) => inPolygon(x, z, zone.polygon))
+}
+
+/** The walls of a level with the house on one side only, and which side is out. */
+function exteriorWalls(
+  level: LevelNode,
+  onFloor: (point: Pt) => boolean,
+  nodes: SceneNodes,
+): Exterior[] {
   const found: Exterior[] = []
   for (const id of level.children) {
     const wall = nodes[id]
@@ -485,6 +520,16 @@ function exteriorWalls(level: LevelNode, floors: SlabNode[], nodes: SceneNodes):
     else if (a >= 2 && b === 0) found.push({ wall, outward: -1 })
   }
   return found
+}
+
+/** Points just inside an exterior wall, at a fifth, half and four fifths of its length. */
+function insideSide({ wall, outward }: Exterior): Pt[] {
+  const faces = getWallFaceOffsets(wall)
+  const offset = outward === 1 ? faces.b - 0.15 : faces.a + 0.15
+  return [0.2, 0.5, 0.8].map((t) => {
+    const frame = getWallCurveFrameAt(wall, t)
+    return [frame.point.x + frame.normal.x * offset, frame.point.y + frame.normal.y * offset]
+  })
 }
 
 function wallFacts(
@@ -615,7 +660,7 @@ function doorFacts(
   ground: Ground,
   nodes: SceneNodes,
 ): DoorGroundFacts[] {
-  const onFloor = ([x, z]: Pt) => floors.some((slab) => inPolygon(x, z, slab.polygon))
+  const onFloor = insideOf(floors, floorlessRooms(level, nodes))
   const others = level.children
     .map((id) => nodes[id])
     .filter(
@@ -727,11 +772,16 @@ function houseFacts(
         ? []
         : doorFacts(each, floorSlabsOf(record, each), frame, eachPlane, ground, nodes)
     })
-  const walls = exteriorWalls(level, floors, nodes).map((exterior) =>
+  const floorless = floorlessRooms(level, nodes)
+  const overPlate = ([x, z]: Pt) => floors.some((slab) => inPolygon(x, z, slab.polygon))
+  const walls = exteriorWalls(level, insideOf(floors, floorless), nodes).map((exterior) =>
     wallFacts(
       exterior,
       frame,
-      Math.max(...tops),
+      // A wall with no floor plate inside it (a room with none) is read from its own foot.
+      insideSide(exterior).some(overPlate)
+        ? Math.max(...tops)
+        : plane + wallSupportForNodes(exterior.wall, nodes as Record<string, AnyNode>).elevation,
       ground,
       nodes,
       sideOf,
@@ -762,6 +812,89 @@ function houseFacts(
     doors,
     roomsAgainstEarth: roomsAgainstEarth(level, walls, doors, nodes),
   }
+}
+
+/**
+ * What splits the floor of a house's ground level, and the rooms the house holds with no floor:
+ * - shared base plates (not a room's own keyed floor) standing at different heights;
+ * - a room whose stored floor elevation (level-local) stays where it was while the ground moved
+ *   the floor that follows it: the room gets a plate of its own that far off the rest;
+ * - a room with no floor plate: no seat moves it, its walls stand on their own foot.
+ */
+function floorFindings(house: HouseGroundFacts, nodes: SceneNodes): TerrainFinding[] {
+  const L = TERRAIN_FACT_LIMITS
+  const record = nodes as Record<AnyNodeId, AnyNode>
+  const level = record[house.levelId as AnyNodeId]
+  const plane = levelPlaneWorldY(record, house.levelId)
+  if (level?.type !== 'level' || plane === null) return []
+  const findings: TerrainFinding[] = []
+  const nameOf = (zone: ZoneNode) => `${zone.name ?? 'A room'} (${zone.id})`
+  const zoneOf = (id: string) => {
+    const zone = record[id as AnyNodeId]
+    return zone?.type === 'zone' ? zone : undefined
+  }
+  const floors = floorSlabsOf(record, level)
+  const shared = floors.filter(
+    (slab) =>
+      slab.plateRole === 'base' && !(slab.zoneIds ?? []).some((id) => zoneOf(id)?.floor?.footprint),
+  )
+  const tops = shared.map((slab) => ({ slab, top: plane + floorTopOf(nodes, slab) }))
+  const high = Math.max(...tops.map((each) => each.top))
+  const low = Math.min(...tops.map((each) => each.top))
+  if (tops.length > 1 && high - low > L.meetM)
+    findings.push({
+      code: 'floor_split',
+      id: level.id,
+      value: round(high - low),
+      message: `The floor of ${level.id} is split into ${tops.length} plates at different heights: ${tops
+        .map(
+          ({ slab, top }) =>
+            `${slab.id} at ${top.toFixed(2)} m (${(slab.zoneIds ?? [])
+              .map((id) => zoneOf(id)?.name ?? id)
+              .join(', ')})`,
+        )
+        .join('; ')}.`,
+    })
+  for (const { slab, top } of tops) {
+    if (!followsGround(nodes, slab) || top - plane - DEFAULT_SLAB_ELEVATION <= L.floorLiftM)
+      continue
+    for (const id of slab.zoneIds ?? []) {
+      const zone = zoneOf(id)
+      const stored = zone?.floor?.elevation
+      if (
+        !zone ||
+        stored === undefined ||
+        zone.hasFloor === false ||
+        zone.floor?.support === 'open' ||
+        Math.abs(plane + stored - top) <= L.floorSplitM
+      )
+        continue
+      const step = plane + stored - top
+      findings.push({
+        code: 'floor_split',
+        id: zone.id,
+        value: round(Math.abs(step)),
+        message: `${nameOf(zone)} keeps its stored floor elevation (${stored.toFixed(2)} m over the level's base) while the floor that rests on the ground has followed it to ${top.toFixed(2)} m: its floor stands ${Math.abs(step).toFixed(2)} m ${step < 0 ? 'under' : 'over'} the rest of the floor, on a plate of its own.`,
+      })
+    }
+  }
+  for (const zone of floorlessRooms(level, nodes)) {
+    const bases = zone.boundaryWallIds.flatMap((id) => {
+      const wall = record[id as AnyNodeId]
+      return wall?.type === 'wall'
+        ? [plane + wallSupportForNodes(wall, record as Record<string, AnyNode>).elevation]
+        : []
+    })
+    const foot = bases.length ? Math.min(...bases) : plane
+    const floor = house.floorM.max
+    findings.push({
+      code: 'room_without_floor',
+      id: zone.id,
+      value: round(Math.abs(foot - floor)),
+      message: `${nameOf(zone)} has no floor plate: no seat moves it. Its walls stand on their own foot at ${foot.toFixed(2)} m, ${Math.abs(foot - floor).toFixed(2)} m ${foot < floor ? 'under' : 'over'} the floor of ${level.id} (${floor.toFixed(2)} m); they are read here with the house's other walls.`,
+    })
+  }
+  return findings
 }
 
 /** The rooms of a level that lie along a wall holding earth, with what their openings keep clear. */
@@ -1236,6 +1369,7 @@ export function terrainFacts(
   const say = (code: TerrainFinding['code'], id: string, value: number, message: string) =>
     open.push({ code, id, value: round(value), message })
   for (const house of houses) {
+    open.push(...floorFindings(house, nodes))
     if (house.floorOverGroundM.min < -L.groundOverM)
       say(
         'ground_over_floor',
