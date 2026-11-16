@@ -99,6 +99,17 @@ export type RoomZone = {
   polygon: [number, number][]
   holes?: [number, number][][]
   levelIndex: number
+  /**
+   * Open to the outside (a porch/deck/patio, or a room left open on a side): lit and metered as
+   * outdoors even under a cover, never as a sealed interior. See core `isOpenAirRoom`.
+   */
+  open?: boolean
+  /**
+   * Open-plan group id: indoor rooms joined by an open side (no wall between) share one id and are
+   * lit as a single space — one shared light set, no seam across the open threshold. Absent for a
+   * room that stands on its own. See core `openPlanRoomGroups`.
+   */
+  group?: string
 }
 
 export type RoomOpeningRoot = { object: Object3D; kind: 'window' | 'door'; id: string }
@@ -274,7 +285,9 @@ export class RoomLighting {
           holes.reduce((sum, hole) => sum + Math.abs(polygonArea(hole)), 0),
       )
       const c = interiorPoint(zone.polygon, holes)
-      // Enclosed = something overhead (ceiling / roof / slab above). Open terraces get sky light.
+      // Enclosed = a cover overhead (ceiling / roof / slab above) AND closed in on the sides.
+      // Open terraces, and rooms left open on a side, get sky light under their cover, never a
+      // sealed interior's virtual lamp — `open` carries the side state (core `isOpenAirRoom`).
       raycaster.set(new Vector3(c.x, floorY + 1.2, c.y), new Vector3(0, 1, 0))
       raycaster.far = 30
       const hits = intersectGeometry(raycaster, coverGrid.near(c.x, c.y, c.x, c.y), false)
@@ -285,7 +298,7 @@ export class RoomLighting {
       this.rooms.push({
         zone,
         levelIndex,
-        enclosed: !!hit,
+        enclosed: !!hit && !zone.open,
         area,
         centroid: new Vector3(c.x, floorY, c.y),
         ceilingY,
@@ -334,16 +347,31 @@ export class RoomLighting {
         on: input.virtualLampsOn,
       })
     }
-    // Per-room soft cap: average lamp irradiance ≈ ρ·Σ(4πI)/A_surfaces (+ multi-bounce), compressed
-    // with E_t·(1 − e^(−E/E_t)) so a hall with ten chandeliers can't flood while dim rooms stay dim.
+    // Open-plan groups: indoor rooms joined by an open side (no wall between) are one lit space. Each
+    // keeps its own lamp (so every nook stays covered), but the group shares one pooled lamp set and
+    // one soft cap over the combined surfaces, so a fragment either side of an open threshold sees the
+    // same lights — no seam, and no nook lit on its own as if a wall closed it off.
+    const groups = new Map<string, Room[]>()
     for (const room of this.rooms) {
-      const raw =
-        (room.lamps.reduce((s, l) => s + 4 * Math.PI * l.intensity, 0) / room.surfaces) * 0.6
-      if (raw <= 0) continue
-      const soft = LAMP_E_TARGET * (1 - Math.exp(-raw / LAMP_E_TARGET))
-      const k = soft / raw
-      for (const l of room.lamps) l.intensity *= k
-      room.lampE = soft
+      const key = room.zone.group ?? room.zone.id
+      const list = groups.get(key)
+      if (list) list.push(room)
+      else groups.set(key, [room])
+    }
+    // Per-group soft cap: average lamp irradiance ≈ ρ·Σ(4πI)/A_surfaces (+ multi-bounce), compressed
+    // with E_t·(1 − e^(−E/E_t)) so a hall with ten chandeliers can't flood while dim rooms stay dim.
+    for (const members of groups.values()) {
+      const lamps: RoomLamp[] = members.flatMap((room) => room.lamps)
+      if (lamps.length === 0) continue
+      const surfaces = members.reduce((sum, room) => sum + room.surfaces, 0)
+      const raw = (lamps.reduce((sum, l) => sum + 4 * Math.PI * l.intensity, 0) / surfaces) * 0.6
+      const soft = raw > 0 ? LAMP_E_TARGET * (1 - Math.exp(-raw / LAMP_E_TARGET)) : 0
+      const scaled =
+        raw > 0 ? lamps.map((l) => ({ ...l, intensity: l.intensity * (soft / raw) })) : lamps
+      for (const room of members) {
+        room.lamps = scaled
+        room.lampE = soft
+      }
     }
 
     // ---- window portals (glass of windows and glazed doors) ---------------------------------
@@ -424,8 +452,14 @@ export class RoomLighting {
       const A = this.rooms[op.a]!
       const B = op.b >= 0 ? this.rooms[op.b]! : null
       if (B && A.enclosed && B.enclosed) {
-        addOpening(op.a, op.normal.clone().negate(), op, 1, op.b)
-        addOpening(op.b, op.normal.clone(), op, 1, op.a)
+        // Two members of one open-plan group are a single lit space (shared, pooled lamps and
+        // daylight). An interior opening between them would throw the neighbour's light back in as
+        // a second, directional source — the hard diagonal across the open threshold. Skip it: the
+        // pooled light already fills both sides to the same level.
+        if (!(A.zone.group && A.zone.group === B.zone.group)) {
+          addOpening(op.a, op.normal.clone().negate(), op, 1, op.b)
+          addOpening(op.b, op.normal.clone(), op, 1, op.a)
+        }
       } else if (B && A.enclosed && !B.enclosed)
         addOpening(op.a, op.normal.clone().negate(), op, 2, -1)
       else if (B?.enclosed && !A.enclosed) addOpening(op.b, op.normal.clone(), op, 2, -1)
@@ -681,7 +715,9 @@ export class RoomLighting {
     const rho = 0.5
     const interiorTint = new Color(1.0, 0.93, 0.84) // white walls + wood/textile floors
     const soft = this.softRooms.value as number
-    this.rooms.forEach((r, i) => {
+    // Window flux per room, then pooled across each open-plan group so both sides of an open
+    // threshold share one daylight fill (no bounce/dayE seam), the same way the lamps are pooled.
+    const roomFlux = this.rooms.map((r) => {
       const flux = new Color(0, 0, 0)
       for (const p of r.portals) {
         if (p.kind === 1) continue
@@ -694,9 +730,27 @@ export class RoomLighting {
             sunColor.clone().multiplyScalar(sunIrradiance * cos * A * (p.kind === 0 ? glassT : 1)),
           )
       }
-      // Daylight meter for this room: direct flux spread over its surfaces + the multi-bounce part.
-      r.dayE = ((flux.r + flux.g + flux.b) / 3 / r.surfaces) * (1 + rho / (1 - rho))
-      const e = flux.multiplyScalar(rho / (r.surfaces * (1 - rho))).multiply(interiorTint)
+      return flux
+    })
+    const groupFlux = new Map<string, Color>()
+    const groupSurfaces = new Map<string, number>()
+    this.rooms.forEach((r, i) => {
+      const key = r.zone.group ?? r.zone.id
+      const existing = groupFlux.get(key)
+      if (existing) existing.add(roomFlux[i]!)
+      else groupFlux.set(key, roomFlux[i]!.clone())
+      groupSurfaces.set(key, (groupSurfaces.get(key) ?? 0) + r.surfaces)
+    })
+    this.rooms.forEach((r, i) => {
+      const key = r.zone.group ?? r.zone.id
+      const flux = groupFlux.get(key)!
+      const surfaces = groupSurfaces.get(key)!
+      // Daylight meter for the space: direct flux spread over its surfaces + the multi-bounce part.
+      r.dayE = ((flux.r + flux.g + flux.b) / 3 / surfaces) * (1 + rho / (1 - rho))
+      const e = flux
+        .clone()
+        .multiplyScalar(rho / (surfaces * (1 - rho)))
+        .multiply(interiorTint)
       this.set(i * 3 + 1, r.portals.length, e.r, e.g, e.b)
     })
     this.writeInteriorPortals()
@@ -712,7 +766,10 @@ export class RoomLighting {
   private activeBase = 0
 
   private allocateData() {
-    const nRoomLamps = this.rooms.reduce((s, r) => s + r.lamps.length, 0)
+    // Members of an open-plan group share one pooled lamp list: write it once and point every
+    // member at that range, so each lamp has a single texel that switches update.
+    const lampLists = [...new Set(this.rooms.map((r) => r.lamps))]
+    const nRoomLamps = lampLists.reduce((s, lamps) => s + lamps.length, 0)
     const nLamps = nRoomLamps + this.exteriorLamps.length
     const texels =
       this.rooms.length * 3 +
@@ -727,16 +784,20 @@ export class RoomLighting {
     const lampBase = this.rooms.length * 3
     this.portalBase = lampBase + nLamps * 2 + this.exteriorLamps.length
     let lamp = 0
-    this.rooms.forEach((r, i) => {
-      this.set(i * 3, r.enclosed ? 1 : 0, lampBase + lamp * 2, r.lamps.length, 0)
-      this.set(i * 3 + 1, r.portals.length, 0, 0, 0)
-      this.set(i * 3 + 2, r.coverY, r.coverIsRoof ? 1 : 0, this.map.gpuLevel(r.levelIndex), 0)
-      for (const l of r.lamps) {
+    const listStart = new Map<RoomLamp[], number>()
+    for (const lamps of lampLists) {
+      listStart.set(lamps, lampBase + lamp * 2)
+      for (const l of lamps) {
         this.lampTexel.set(l, lampBase + lamp * 2)
         this.set(lampBase + lamp * 2, l.position.x, l.position.y, l.position.z, l.range)
         this.writeLamp(l)
         lamp++
       }
+    }
+    this.rooms.forEach((r, i) => {
+      this.set(i * 3, r.enclosed ? 1 : 0, listStart.get(r.lamps)!, r.lamps.length, 0)
+      this.set(i * 3 + 1, r.portals.length, 0, 0, 0)
+      this.set(i * 3 + 2, r.coverY, r.coverIsRoof ? 1 : 0, this.map.gpuLevel(r.levelIndex), 0)
     })
     // Exterior lamps after the room lamps — evaluated analytically on outside surfaces.
     const extLampStart = lampBase + lamp * 2

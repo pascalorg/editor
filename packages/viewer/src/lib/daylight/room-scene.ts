@@ -2,9 +2,12 @@ import {
   type AnyNode,
   type AnyNodeId,
   getLevelElevations,
+  isOpenAirRoom,
+  openPlanRoomGroups,
   sceneRegistry,
   useInteractive,
   useScene,
+  type ZoneNode,
 } from '@pascal-app/core'
 import { Box3, Color, type Material, MathUtils, type Mesh, type Object3D, Vector3 } from 'three'
 import { materialEmissive, smoothstep, uniform, vec3 } from 'three/tsl'
@@ -139,6 +142,7 @@ export function liveRoomScene(virtualLampsOn: boolean): RoomSceneInput | null {
   const { ids, levels } = liveLevels()
   const levelIndex = new Map<string, number>(ids.map((id, index) => [id, index]))
 
+  const groups = openPlanRoomGroups(nodes)
   const zones: RoomZone[] = []
   const point = new Vector3()
   for (const id of zoneIds) {
@@ -163,6 +167,8 @@ export function liveRoomScene(virtualLampsOn: boolean): RoomSceneInput | null {
       polygon: toWorld(node.polygon),
       holes: (node.holes ?? []).filter((hole) => hole.length >= 3).map(toWorld),
       levelIndex: levelIndex.get(node.parentId ?? '') ?? 0,
+      open: isOpenAirRoom(nodes, node as unknown as ZoneNode),
+      group: groups.get(id),
     })
   }
   if (!zones.length) return null
@@ -258,6 +264,10 @@ type BakedExtras = {
   pascalId?: string
   polygon?: [number, number][]
   holes?: [number, number][][]
+  /** Open to the outside — stamped by the GLB export (core `isOpenAirRoom`). */
+  open?: boolean
+  /** Open-plan group id — stamped by the GLB export (core `openPlanRoomGroups`). */
+  group?: string
 }
 
 /** A baked artifact's identity tree (levels, zones, covers, walls, openings), or null. */
@@ -314,6 +324,8 @@ export function bakedRoomScene(root: Object3D, virtualLampsOn: boolean): RoomSce
       polygon: toWorld(polygon),
       holes: (holes ?? []).filter((hole) => hole.length >= 3).map(toWorld),
       levelIndex: level.index,
+      open: (object.userData as BakedExtras).open === true,
+      group: (object.userData as BakedExtras).group,
     })
   }
   if (!zones.length) return null
