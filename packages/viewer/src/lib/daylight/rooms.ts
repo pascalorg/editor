@@ -766,7 +766,10 @@ export class RoomLighting {
   private activeBase = 0
 
   private allocateData() {
-    const nRoomLamps = this.rooms.reduce((s, r) => s + r.lamps.length, 0)
+    // Members of an open-plan group share one pooled lamp list: write it once and point every
+    // member at that range, so each lamp has a single texel that switches update.
+    const lampLists = [...new Set(this.rooms.map((r) => r.lamps))]
+    const nRoomLamps = lampLists.reduce((s, lamps) => s + lamps.length, 0)
     const nLamps = nRoomLamps + this.exteriorLamps.length
     const texels =
       this.rooms.length * 3 +
@@ -781,16 +784,20 @@ export class RoomLighting {
     const lampBase = this.rooms.length * 3
     this.portalBase = lampBase + nLamps * 2 + this.exteriorLamps.length
     let lamp = 0
-    this.rooms.forEach((r, i) => {
-      this.set(i * 3, r.enclosed ? 1 : 0, lampBase + lamp * 2, r.lamps.length, 0)
-      this.set(i * 3 + 1, r.portals.length, 0, 0, 0)
-      this.set(i * 3 + 2, r.coverY, r.coverIsRoof ? 1 : 0, this.map.gpuLevel(r.levelIndex), 0)
-      for (const l of r.lamps) {
+    const listStart = new Map<RoomLamp[], number>()
+    for (const lamps of lampLists) {
+      listStart.set(lamps, lampBase + lamp * 2)
+      for (const l of lamps) {
         this.lampTexel.set(l, lampBase + lamp * 2)
         this.set(lampBase + lamp * 2, l.position.x, l.position.y, l.position.z, l.range)
         this.writeLamp(l)
         lamp++
       }
+    }
+    this.rooms.forEach((r, i) => {
+      this.set(i * 3, r.enclosed ? 1 : 0, listStart.get(r.lamps)!, r.lamps.length, 0)
+      this.set(i * 3 + 1, r.portals.length, 0, 0, 0)
+      this.set(i * 3 + 2, r.coverY, r.coverIsRoof ? 1 : 0, this.map.gpuLevel(r.levelIndex), 0)
     })
     // Exterior lamps after the room lamps — evaluated analytically on outside surfaces.
     const extLampStart = lampBase + lamp * 2
