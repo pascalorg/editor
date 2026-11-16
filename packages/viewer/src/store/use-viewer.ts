@@ -12,7 +12,6 @@ import type {
   ZoneNode,
 } from '@pascal-app/core'
 import type { Object3D } from 'three'
-
 import { create } from 'zustand'
 import { createJSONStorage, persist } from 'zustand/middleware'
 import type { DaylightSite, LatLng } from '../lib/daylight/location'
@@ -26,6 +25,7 @@ import {
   SCENE_THEME_IDS,
   type SceneTheme,
 } from '../lib/scene-themes'
+import { SECTION_DEFAULTS, type SectionAxis } from '../lib/section'
 import { viewerPreferenceStorage } from '../lib/viewer-preference-storage'
 
 export type RenderContext = 'editor' | 'viewer'
@@ -330,6 +330,15 @@ type ViewerState = {
   setDebugColors: (enabled: boolean) => void
 
   /** A first-person camera is active (walk or drone): orbit controls and selection stand aside. */
+  sectionEnabled: boolean
+  setSectionEnabled: (enabled: boolean) => void
+  sectionAxis: SectionAxis
+  setSectionAxis: (axis: SectionAxis) => void
+  sectionPosition: number
+  setSectionPosition: (position: number) => void
+  sectionFlipped: boolean
+  setSectionFlipped: (flipped: boolean) => void
+
   walkthroughMode: boolean
   setWalkthroughMode: (mode: boolean) => void
   /** How the first-person camera moves: on foot (collision, doors) or as a free-flying drone.
@@ -883,6 +892,7 @@ const useViewer = create<ViewerState>()(
             projectPreferences,
             projectPresentation: undefined,
             daylightSite: null,
+            ...SECTION_DEFAULTS,
             previewSceneTheme: null,
             framingOnly: false,
             framingShown: false,
@@ -936,6 +946,12 @@ const useViewer = create<ViewerState>()(
 
       debugColors: false,
       setDebugColors: (enabled) => set({ debugColors: enabled }),
+
+      ...SECTION_DEFAULTS,
+      setSectionEnabled: (sectionEnabled) => set({ sectionEnabled }),
+      setSectionAxis: (sectionAxis) => set({ sectionAxis }),
+      setSectionPosition: (sectionPosition) => set({ sectionPosition }),
+      setSectionFlipped: (sectionFlipped) => set({ sectionFlipped }),
 
       walkthroughMode: false,
       setWalkthroughMode: (mode) =>

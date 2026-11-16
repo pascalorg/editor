@@ -451,3 +451,64 @@ describe('daylight presentation', () => {
     }
   })
 })
+
+describe('section presentation', () => {
+  const defaults = {
+    sectionEnabled: false,
+    sectionAxis: 'y',
+    sectionPosition: 0,
+    sectionFlipped: false,
+  }
+  afterEach(() => useViewer.setState(defaults))
+
+  test('defaults, setters and project changes are transient presentation', () => {
+    const viewer = useViewer.getState()
+    viewer.setProjectId('section-a')
+    expect(useViewer.getState()).toMatchObject(defaults)
+    viewer.setSectionEnabled(true)
+    viewer.setSectionAxis('z')
+    viewer.setSectionPosition(4.5)
+    viewer.setSectionFlipped(true)
+    expect(useViewer.getState()).toMatchObject({
+      sectionEnabled: true,
+      sectionAxis: 'z',
+      sectionPosition: 4.5,
+      sectionFlipped: true,
+    })
+    viewer.setProjectId('section-a')
+    expect(useViewer.getState().sectionEnabled).toBe(true)
+    viewer.setProjectId('section-b')
+    expect(useViewer.getState()).toMatchObject(defaults)
+    viewer.setProjectId('section-a')
+    expect(useViewer.getState()).toMatchObject(defaults)
+  })
+
+  test('no section field is written to preference storage', () => {
+    const savedWindow = Object.getOwnPropertyDescriptor(globalThis, 'window')
+    let persisted = ''
+    Object.defineProperty(globalThis, 'window', {
+      configurable: true,
+      value: {
+        localStorage: {
+          getItem: () => null,
+          setItem: (_key: string, value: string) => {
+            persisted = value
+          },
+          removeItem: () => {},
+        },
+      },
+    })
+    try {
+      const viewer = useViewer.getState()
+      viewer.setSectionEnabled(true)
+      viewer.setSectionAxis('x')
+      viewer.setSectionPosition(12)
+      viewer.setSectionFlipped(true)
+      const state = JSON.parse(persisted).state
+      for (const key of Object.keys(defaults)) expect(state).not.toHaveProperty(key)
+    } finally {
+      if (savedWindow) Object.defineProperty(globalThis, 'window', savedWindow)
+      else Reflect.deleteProperty(globalThis, 'window')
+    }
+  })
+})

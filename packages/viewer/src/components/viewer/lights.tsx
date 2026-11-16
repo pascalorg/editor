@@ -11,6 +11,7 @@ import * as THREE from 'three/webgpu'
 import { isDaylightAtmosphere } from '../../lib/daylight/look'
 import { getKeyLightDirectionOverride } from '../../lib/key-light-override'
 import { SHADOW_ONLY_LAYER } from '../../lib/layers'
+import { sectionShadowSignature } from '../../lib/section'
 import { registerSkyLights } from '../../lib/underground-ambiance'
 import useViewer, { groundVeiled } from '../../store/use-viewer'
 import { useSceneAtmosphere } from './scene-atmosphere'
@@ -145,6 +146,7 @@ export function Lights() {
   const shadowCasters = useRef<THREE.Mesh[]>([])
   const shadowCasterTime = useRef(-1)
   const lastShadowSignature = useRef(Number.NaN)
+  const lastSectionSignature = useRef('')
   const shadowHelpers = useRef<Array<THREE.CameraHelper | null>>([])
 
   const hemiRef = useRef<HemisphereLight>(null)
@@ -308,7 +310,12 @@ export function Lights() {
             collectShadowCasters(state.scene, shadowCasters.current)
           }
           const signature = shadowSignature(light, cam, shadowCasters.current)
-          if (signature !== lastShadowSignature.current) {
+          const sectionSignature = sectionShadowSignature(useViewer.getState())
+          if (
+            signature !== lastShadowSignature.current ||
+            sectionSignature !== lastSectionSignature.current
+          ) {
+            lastSectionSignature.current = sectionSignature
             lastShadowSignature.current = signature
             light.shadow.needsUpdate = true
           }

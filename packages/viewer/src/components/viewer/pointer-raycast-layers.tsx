@@ -3,6 +3,9 @@
 import { useThree } from '@react-three/fiber'
 import { useLayoutEffect } from 'react'
 import { BATCHED_LAYER } from '../../lib/layers'
+import { filterSectionHits, sectionActive } from '../../lib/section'
+import useViewer from '../../store/use-viewer'
+import { isSectionObject } from './section-group'
 
 /**
  * Lets R3F's pointer raycaster see geometry a collective batch draws.
@@ -18,6 +21,9 @@ import { BATCHED_LAYER } from '../../lib/layers'
  * for the private raycasters callers build per query, and this one is shared.
  */
 export const PointerRaycastLayers = () => {
+  const active = useViewer(sectionActive)
+  const get = useThree((state) => state.get)
+  const setEvents = useThree((state) => state.setEvents)
   const raycaster = useThree((state) => state.raycaster)
 
   useLayoutEffect(() => {
@@ -27,6 +33,21 @@ export const PointerRaycastLayers = () => {
       raycaster.layers.mask = mask
     }
   }, [raycaster])
+
+  useLayoutEffect(() => {
+    if (!active) return
+    const previous = get().events.filter
+    const filter: NonNullable<ReturnType<typeof get>['events']['filter']> = (hits, state) => {
+      const kept = filterSectionHits(hits, useViewer.getState(), (hit) =>
+        isSectionObject(hit.object),
+      )
+      return previous ? previous(kept, state) : kept
+    }
+    setEvents({ filter })
+    return () => {
+      if (get().events.filter === filter) setEvents({ filter: previous })
+    }
+  }, [active, get, setEvents])
 
   return null
 }

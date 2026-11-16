@@ -38,6 +38,7 @@ import {
   type CullingPipeline,
   createOcclusionCuller,
 } from '../../lib/occlusion-culler'
+import { filterSectionHits, sectionActive } from '../../lib/section'
 import { applyShadowOnly, clearShadowOnly } from '../../lib/shadow-only'
 import useViewer from '../../store/use-viewer'
 import { OPEN_SOUNDS, openingSound } from '../../systems/interactive/callout-actions'
@@ -51,6 +52,7 @@ import { GlbReplaceInstances } from './glb-replace-instances'
 import { bindGlbShutters, isGlbShutterHit, toggleGlbShutters } from './glb-scene-motion'
 import { GlbSelectionCallout } from './glb-selection-callout'
 import { useSceneAtmosphere } from './scene-atmosphere'
+import { SectionGroup } from './section-group'
 import type { CalloutSound } from './selection-callout'
 
 /** Baked `kind` → surface role, so monochrome can recolor by role like the
@@ -669,6 +671,7 @@ export function GlbScene({
       pipeline,
       culler,
       getCamera: () => getThree().camera,
+      isEnabled: () => !sectionActive(useViewer.getState()),
     })
     return () => {
       detach()
@@ -1125,7 +1128,10 @@ export function GlbScene({
     (event: ThreeEvent<PointerEvent>) => {
       event.stopPropagation()
       if (walkthroughMode || !onPick) return
-      const pick = resolveGlbPick(event.intersections, identity)
+      const pick = resolveGlbPick(
+        filterSectionHits(event.intersections, useViewer.getState()),
+        identity,
+      )
       document.body.style.cursor = pick ? 'pointer' : 'auto'
       const key = pick ? `${pick.nodeId}:${pick.point?.join(',') ?? ''}` : null
       if (key === lastHover.current) return
@@ -1150,7 +1156,10 @@ export function GlbScene({
       // Walkthrough handles its own door activation (E / canvas click) and never
       // selects.
       if (walkthroughMode || !onPick) return
-      const pick = resolveGlbPick(event.intersections, identity)
+      const pick = resolveGlbPick(
+        filterSectionHits(event.intersections, useViewer.getState()),
+        identity,
+      )
       onPick({ type: 'click', pick, modifiers: modifiersOf(event.nativeEvent) })
     },
     [identity, onPick, walkthroughMode],
@@ -1180,15 +1189,30 @@ export function GlbScene({
   return (
     <group ref={rootRef}>
       {walkingOnFoot && shuttersInView ? <GlbShuttersPrompt /> : null}
-      <primitive
-        object={gltf.scene}
-        onClick={handleClick}
-        onPointerMissed={handlePointerMissed}
-        onPointerMove={handlePointerMove}
-        onPointerOut={handlePointerOut}
-      />
-      {/* Re-light + re-animate the baked artifact from the DB scene graph,
+      <SectionGroup>
+        <primitive
+          object={gltf.scene}
+          onClick={handleClick}
+          onPointerMissed={handlePointerMissed}
+          onPointerMove={handlePointerMove}
+          onPointerOut={handlePointerOut}
+        />
+        {/* Re-light + re-animate the baked artifact from the DB scene graph,
           joined to the baked nodes by pascalId. */}
+        {interactiveItems?.length ? (
+          <GlbInteractive actions={actions} identity={identity} items={interactiveItems} />
+        ) : null}
+        {/* Scans + guides, stripped from the bake and re-added from scene data,
+          anchored to their parent level's baked node. */}
+        {referenceNodes?.length ? (
+          <GlbReferenceNodes identity={identity} nodes={referenceNodes} />
+        ) : null}
+        {/* `bake: 'replace'` nodes (plugin trees): baked meshes hidden above, the
+          live instanced render portaled per level via each kind's bakeReplaceRenderer. */}
+        {replaceNodes?.length ? (
+          <GlbReplaceInstances identity={identity} nodes={replaceNodes} resolve={resolveNode} />
+        ) : null}
+      </SectionGroup>
       <GlbSelectionCallout
         identity={identity}
         isOpen={isOpen}
@@ -1197,19 +1221,6 @@ export function GlbScene({
         sceneNodes={sceneNodes}
         toggleOpen={toggleOpenable}
       />
-      {interactiveItems?.length ? (
-        <GlbInteractive actions={actions} identity={identity} items={interactiveItems} />
-      ) : null}
-      {/* Scans + guides, stripped from the bake and re-added from scene data,
-          anchored to their parent level's baked node. */}
-      {referenceNodes?.length ? (
-        <GlbReferenceNodes identity={identity} nodes={referenceNodes} />
-      ) : null}
-      {/* `bake: 'replace'` nodes (plugin trees): baked meshes hidden above, the
-          live instanced render portaled per level via each kind's bakeReplaceRenderer. */}
-      {replaceNodes?.length ? (
-        <GlbReplaceInstances identity={identity} nodes={replaceNodes} resolve={resolveNode} />
-      ) : null}
       <GlbDaylightGround root={gltf.scene} />
     </group>
   )

@@ -1,6 +1,7 @@
 import { expect, test } from 'bun:test'
 import * as THREE from 'three'
-import { resolveGlbPick } from './glb-scene'
+import { resolveGlbPick } from '../../index'
+import { filterSectionHits, SECTION_DEFAULTS } from '../../lib/section'
 
 /** A baked level (raised and shifted, as level stacking moves it) holding a wall, a ceiling and a sofa. */
 function bakedLevel() {
@@ -50,4 +51,20 @@ test('a hidden floor and empty space are no pick', () => {
   expect(
     resolveGlbPick([{ object: meshes.sofa, point: new THREE.Vector3(12, 3.4, -3) }], identity),
   ).toBeNull()
+})
+
+test('a cut exposes the next semantic hit in the same level frame', () => {
+  const { identity, meshes } = bakedLevel()
+  const hits = [
+    { object: meshes.wall, point: new THREE.Vector3(13.85, 4, -3) },
+    { object: meshes.sofa, point: new THREE.Vector3(12, 3.4, -3) },
+  ]
+  const pick = resolveGlbPick(
+    filterSectionHits(hits, { ...SECTION_DEFAULTS, sectionEnabled: true, sectionPosition: 3.5 }),
+    identity,
+  )
+  expect(pick?.nodeId).toBe('item_sofa')
+  expect(pick?.hitObject).toBe(meshes.sofa)
+  expect(pick?.point).toEqual([2, 2])
+  expect(resolveGlbPick(filterSectionHits(hits, SECTION_DEFAULTS), identity)?.nodeId).toBe('wall_1')
 })

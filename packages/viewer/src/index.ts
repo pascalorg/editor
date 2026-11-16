@@ -78,6 +78,7 @@ export {
   SceneGroundReplacement,
   useSceneGroundReplacement,
 } from './components/viewer/scene-ground-replacement'
+export { SectionGroup } from './components/viewer/section-group'
 export {
   type CalloutAction,
   type CalloutText,
@@ -300,6 +301,8 @@ export {
   temporarilyShowShadowOnly,
 } from './lib/scene-visibility'
 export { SCRIPTED_MODEL_FLAG } from './lib/scripted-opening'
+export type { SectionAxis } from './lib/section'
+export { sectionBounds } from './lib/section-bounds'
 export {
   SITE_GROUND,
   type SiteGroundRole,

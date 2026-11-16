@@ -41,6 +41,7 @@ import {
   useSceneGroundReplacement,
   useViewer,
 } from '@pascal-app/viewer'
+import { createPortal, useThree } from '@react-three/fiber'
 import { useEffect, useMemo, useRef } from 'react'
 import {
   BufferAttribute,
@@ -197,6 +198,7 @@ export const SiteRenderer = ({ node }: { node: SiteNode }) => {
 
   useRegistry(node.id, 'site', ref)
 
+  const scene = useThree((state) => state.scene)
   const theme = useViewer((state) => state.sceneAppearance)
   // The colored appearance's daylight look: a neutral parcel, lit by the sky (Standard), on a
   // squared ground whose horizon the atmosphere's fog blends into the sky.
@@ -761,25 +763,31 @@ export const SiteRenderer = ({ node }: { node: SiteNode }) => {
         </>
       )}
 
-      {/* Infinite-ground presentation disc fading into the sky at the horizon */}
-      {showGround && !immersiveXR && horizonGeometry && horizonMaterial && fadeBounds && (
-        <mesh
-          geometry={horizonGeometry}
-          material={horizonMaterial}
-          position={[fadeBounds.cx, horizonY, fadeBounds.cz]}
-          raycast={noopRaycast}
-          receiveShadow
-          rotation={FLAT_ON_THE_GROUND}
-          userData={{ pascalExport: 'strip', [SITE_GROUND]: 'solid' }}
-        />
-      )}
-      {showGround && !immersiveXR && horizonGeometry && horizonVeil && fadeBounds && (
-        <GroundVeil
-          geometry={horizonGeometry}
-          material={horizonVeil}
-          position={[fadeBounds.cx, horizonY, fadeBounds.cz]}
-          rotation={FLAT_ON_THE_GROUND}
-        />
+      {/* The horizon is world presentation, outside the model's section scope. */}
+      {createPortal(
+        <>
+          {/* Infinite-ground presentation disc fading into the sky at the horizon */}
+          {showGround && !immersiveXR && horizonGeometry && horizonMaterial && fadeBounds && (
+            <mesh
+              geometry={horizonGeometry}
+              material={horizonMaterial}
+              position={[fadeBounds.cx, horizonY, fadeBounds.cz]}
+              raycast={noopRaycast}
+              receiveShadow
+              rotation={FLAT_ON_THE_GROUND}
+              userData={{ pascalExport: 'strip', [SITE_GROUND]: 'solid' }}
+            />
+          )}
+          {showGround && !immersiveXR && horizonGeometry && horizonVeil && fadeBounds && (
+            <GroundVeil
+              geometry={horizonGeometry}
+              material={horizonVeil}
+              position={[fadeBounds.cx, horizonY, fadeBounds.cz]}
+              rotation={FLAT_ON_THE_GROUND}
+            />
+          )}
+        </>,
+        scene,
       )}
 
       {showSiteSurfaces && ribbons && (

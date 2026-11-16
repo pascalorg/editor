@@ -10,7 +10,13 @@ import {
   SlabNode,
   useScene,
 } from '@pascal-app/core'
-import { groundHoleOpenNode, SCENE_LAYER, SITE_GROUND, useViewer } from '@pascal-app/viewer'
+import {
+  groundHoleOpenNode,
+  SCENE_LAYER,
+  SectionGroup,
+  SITE_GROUND,
+  useViewer,
+} from '@pascal-app/viewer'
 import { act, create } from '@react-three/test-renderer'
 import type { Mesh, Object3D } from 'three'
 import { SiteRenderer } from './renderer'
@@ -153,6 +159,34 @@ test('the stand-in follows the level display live: it comes with the basement an
     await act(async () => showGroundFloor())
     await renderer.advanceFrames(2, 0.05)
     expect(surfaces(scene, 'solid')).toHaveLength(0)
+  } finally {
+    await renderer.unmount()
+  }
+})
+
+test('a section clips the parcel while the horizon remains world presentation', async () => {
+  setHouse(false)
+  showGroundFloor()
+  useViewer.getState().setSectionEnabled(true)
+  const renderer = await create(
+    <SectionGroup name="cut-model">
+      <SiteRenderer node={lot(true)} />
+    </SectionGroup>,
+  )
+  try {
+    const scene = renderer.scene.instance as Object3D
+    const scope = renderer.scene.findByProps({ name: 'cut-model' }).instance
+    const isInside = (object: Object3D) => {
+      for (let ancestor: Object3D | null = object; ancestor; ancestor = ancestor.parent) {
+        if (ancestor === scope) return true
+      }
+      return false
+    }
+    const ground = surfaces(scene, 'solid')
+    const horizon = ground.filter((mesh) => mesh.userData.pascalExport === 'strip')
+    expect(horizon).toHaveLength(1)
+    expect(horizon.every((mesh) => !isInside(mesh))).toBe(true)
+    expect(ground.filter((mesh) => !horizon.includes(mesh)).every(isInside)).toBe(true)
   } finally {
     await renderer.unmount()
   }
