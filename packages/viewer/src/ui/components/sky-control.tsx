@@ -1,6 +1,6 @@
 'use client'
 
-import { type PascalI18n, usePascalI18n, useScene } from '@pascal-app/core'
+import { type PascalI18n, usePascalI18n } from '@pascal-app/core'
 import {
   Cloud,
   CloudSun,
@@ -23,7 +23,7 @@ import {
   useState,
 } from 'react'
 import { create } from 'zustand'
-import { requestDeviceLocation, resolveLocation } from '../../lib/daylight/location'
+import { requestDeviceLocation } from '../../lib/daylight/location'
 import { WEATHER_COVER, type Weather } from '../../lib/daylight/sky'
 import {
   presetInstant,
@@ -35,6 +35,7 @@ import {
   sunEvents,
   type TimeOfDay,
 } from '../../lib/daylight/solar'
+import { useDaylightSite } from '../../lib/daylight/use-daylight-site'
 import useViewer from '../../store/use-viewer'
 import { cn } from '../lib/cn'
 import { Popover, PopoverAnchor, PopoverContent } from '../primitives/popover'
@@ -100,6 +101,7 @@ function easeTimeTo(from: number, to: number, done: () => void) {
 }
 
 const PRESETS: readonly { id: TimeOfDay; icon: typeof Sun }[] = [
+  { id: 'dawn', icon: Sunrise },
   { id: 'midday', icon: Sun },
   { id: 'golden', icon: Sunset },
   { id: 'blue', icon: Sunrise },
@@ -119,6 +121,8 @@ export function weatherIcon(weather: Weather) {
 
 function presetName(i18n: PascalI18n, id: TimeOfDay) {
   switch (id) {
+    case 'dawn':
+      return i18n._({ id: 'viewer.daylight.time.dawn', message: 'Dawn' })
     case 'golden':
       return i18n._({ id: 'viewer.daylight.time.golden', message: 'Golden hour' })
     case 'midday':
@@ -183,22 +187,13 @@ const formatMinutes = (() => {
   }
 })()
 
-type SiteFacts = Parameters<typeof resolveLocation>[0]
-
 /** The sky the viewer shows right now: its time on the site's sun clock, phase and events. */
 function useSky() {
   const timeOfDay = useViewer((s) => s.timeOfDay)
   const timeOfDayMinutes = useViewer((s) => s.timeOfDayMinutes)
   const skyLive = useViewer((s) => s.skyLive)
   const weather = useViewer((s) => s.weather)
-  const deviceLocation = useViewer((s) => s.deviceLocation)
-  const site = useScene((state) => {
-    for (const id of state.rootNodeIds) {
-      const node = state.nodes[id]
-      if (node?.type === 'site') return node as unknown as SiteFacts
-    }
-    return undefined
-  })
+  const { location, source } = useDaylightSite()
   // The live clock moves the chip on once a minute.
   const [now, setNow] = useState(() => new Date())
   useEffect(() => {
@@ -208,7 +203,6 @@ function useSky() {
     return () => clearInterval(timer)
   }, [skyLive])
 
-  const { location, source } = resolveLocation(site, deviceLocation)
   const { lat, lng } = location
   const day = useMemo(() => {
     const today = new Date()

@@ -15,7 +15,7 @@ import type { Object3D } from 'three'
 
 import { create } from 'zustand'
 import { createJSONStorage, persist } from 'zustand/middleware'
-import type { LatLng } from '../lib/daylight/location'
+import type { DaylightSite, LatLng } from '../lib/daylight/location'
 import type { Weather } from '../lib/daylight/sky'
 import type { TimeOfDay } from '../lib/daylight/solar'
 import type { EdgeMode } from '../lib/edge-style'
@@ -277,6 +277,9 @@ type ViewerState = {
   /** Colored appearance: cloud cover preset. */
   weather: Weather
   setWeather: (weather: Weather) => void
+  /** Transient site facts for baked hosts; null reads the scene. */
+  daylightSite: DaylightSite | null
+  setDaylightSite: (site: DaylightSite | null) => void
   /** A device position the user chose to share; used when the site has no geocoded point. */
   deviceLocation: LatLng | null
   setDeviceLocation: (location: LatLng | null) => void
@@ -381,7 +384,7 @@ type PersistedViewerState = Partial<
   >
 >
 
-const TIMES_OF_DAY = ['golden', 'midday', 'blue', 'night'] as const
+const TIMES_OF_DAY = ['dawn', 'golden', 'midday', 'blue', 'night'] as const
 const WEATHERS = ['clear', 'fair', 'cloudy', 'overcast'] as const
 const RENDER_QUALITY_CHOICES = ['auto', 'low', 'medium', 'high'] as const
 
@@ -846,6 +849,8 @@ const useViewer = create<ViewerState>()(
       setSkyLive: (skyLive) => set({ skyLive }),
       weather: 'fair',
       setWeather: (weather) => set({ weather }),
+      daylightSite: null,
+      setDaylightSite: (daylightSite) => set({ daylightSite }),
       deviceLocation: null,
       setDeviceLocation: (deviceLocation) => set({ deviceLocation }),
       renderQuality: provisionalRenderQuality(),
@@ -877,6 +882,7 @@ const useViewer = create<ViewerState>()(
             projectId: id,
             projectPreferences,
             projectPresentation: undefined,
+            daylightSite: null,
             previewSceneTheme: null,
             framingOnly: false,
             framingShown: false,

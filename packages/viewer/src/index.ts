@@ -125,9 +125,11 @@ export {
   daylightGroundColor,
 } from './lib/daylight/ground'
 export {
+  type DaylightSite,
   type LatLng,
   type LocationSource,
   requestDeviceLocation,
+  resolveDaylightSite,
   resolveLocation,
 } from './lib/daylight/location'
 export { type DaylightAtmosphereSource, isDaylightAtmosphere } from './lib/daylight/look'

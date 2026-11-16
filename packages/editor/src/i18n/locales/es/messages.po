@@ -38930,6 +38930,15 @@ msgstr "Cielo"
 msgid "viewer.daylight.time.blue"
 msgstr "Hora azul"
 
+# Source-Hash: bbe32d215ec26c48
+# Review: required
+# English: "Dawn"
+#: packages/viewer/src/ui/components/render-settings-menu.tsx
+#: packages/viewer/src/ui/components/sky-control.tsx
+#, fuzzy
+msgid "viewer.daylight.time.dawn"
+msgstr "Amanecer"
+
 # Source-Hash: cbeb868b31e2efcb
 # Review: required
 # AI-Provider: claude-code

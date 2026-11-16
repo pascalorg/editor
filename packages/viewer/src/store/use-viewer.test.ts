@@ -1,7 +1,8 @@
 // @ts-expect-error — bun:test is provided by the Bun runtime; viewer does not
 // include Bun ambient types in its production declaration build.
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import useViewer, { groundVeiled, siteGroundShown } from './use-viewer'
+import { resolveDaylightSite, useViewer } from '../index'
+import { groundVeiled, siteGroundShown } from './use-viewer'
 
 const resetMeasurementPreferences = () => {
   useViewer.setState({
@@ -372,4 +373,81 @@ test('denied preference storage does not block hydration or presentation changes
     if (savedWindow) Object.defineProperty(globalThis, 'window', savedWindow)
     else Reflect.deleteProperty(globalThis, 'window')
   }
+})
+
+describe('daylight presentation', () => {
+  const original = useViewer.getState()
+  afterEach(() => useViewer.setState(original, true))
+
+  test('an empty scene uses the host site; null preserves scene facts and location precedence', () => {
+    const store = useViewer.getState()
+    store.setDaylightSite({ northRotation: 1.2, lat: -33.87, lng: 151.21 })
+    expect(resolveDaylightSite(undefined, useViewer.getState().daylightSite, null)).toEqual({
+      northRotation: 1.2,
+      location: { lat: -33.87, lng: 151.21 },
+      source: 'site',
+    })
+    store.setDaylightSite(null)
+    const site = {
+      northRotation: 0.7,
+      parcel: { originLngLat: [2.35, 48.86] as const },
+      dossier: { point: { lat: 1, lng: 2 } },
+    }
+    expect(
+      resolveDaylightSite(site, useViewer.getState().daylightSite, { lat: 10, lng: 20 }),
+    ).toEqual({
+      northRotation: 0.7,
+      location: { lat: 48.86, lng: 2.35 },
+      source: 'site',
+    })
+    store.setDaylightSite({ northRotation: 2 })
+    expect(
+      resolveDaylightSite(site, useViewer.getState().daylightSite, { lat: 10, lng: 20 }),
+    ).toEqual({
+      northRotation: 2,
+      location: { lat: 10, lng: 20 },
+      source: 'device',
+    })
+  })
+
+  test('project changes reset the override; rerendering the same project retains it', () => {
+    const store = useViewer.getState()
+    store.setProjectId('sun-a')
+    store.setDaylightSite({ northRotation: 1 })
+    store.setProjectId('sun-a')
+    expect(useViewer.getState().daylightSite).toEqual({ northRotation: 1 })
+    store.setProjectId('sun-b')
+    expect(useViewer.getState().daylightSite).toBeNull()
+  })
+
+  test('all presets survive storage reloads, and the site override is never persisted', async () => {
+    const savedWindow = Object.getOwnPropertyDescriptor(globalThis, 'window')
+    const values = new Map<string, string>()
+    Object.defineProperty(globalThis, 'window', {
+      configurable: true,
+      value: {
+        localStorage: {
+          getItem: (key: string) => values.get(key) ?? null,
+          setItem: (key: string, value: string) => values.set(key, value),
+          removeItem: (key: string) => values.delete(key),
+        },
+      },
+    })
+    try {
+      for (const preset of ['dawn', 'golden', 'midday', 'blue', 'night'] as const) {
+        useViewer.getState().setDaylightSite({ northRotation: 1 })
+        useViewer.getState().setTimeOfDay(preset)
+        const persisted = values.get('viewer-preferences')!
+        expect(JSON.parse(persisted).state.daylightSite).toBeUndefined()
+        useViewer.setState({ timeOfDay: 'midday', daylightSite: null })
+        values.set('viewer-preferences', persisted)
+        await useViewer.persist.rehydrate()
+        expect(useViewer.getState().timeOfDay).toBe(preset)
+        expect(useViewer.getState().daylightSite).toBeNull()
+      }
+    } finally {
+      if (savedWindow) Object.defineProperty(globalThis, 'window', savedWindow)
+      else Reflect.deleteProperty(globalThis, 'window')
+    }
+  })
 })

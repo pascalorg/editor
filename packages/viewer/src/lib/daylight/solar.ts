@@ -114,6 +114,7 @@ export function solarLight(
 
 /** Sun elevation each preset aims for (degrees); midday takes the day's highest sun. */
 const PRESET_ELEVATION = {
+  dawn: 6,
   golden: 6,
   midday: Number.POSITIVE_INFINITY,
   blue: -4,
@@ -123,13 +124,29 @@ export type TimeOfDay = keyof typeof PRESET_ELEVATION
 
 /**
  * The instant on `day` (local calendar day at the site's longitude) when the sun reaches the
- * preset's elevation on the afternoon/evening side. Defined by the sun, not the clock, so no
- * timezone is needed. Falls back to the closest elevation reached (polar summer/winter).
+ * preset's elevation on the afternoon/evening side, or the rising side for dawn. Defined by
+ * the sun, not the clock, so no timezone is needed. Dawn searches the twelve hours preceding
+ * solar noon; if its target is unreachable, it uses the closest elevation on that half-day
+ * (the lowest sun in polar summer, the highest in polar winter).
  */
 export function presetInstant(day: Date, lat: number, lng: number, preset: TimeOfDay): Date {
   // Solar noon in UTC for this longitude: 12:00 local mean time.
   const noonUtc =
     Date.UTC(day.getFullYear(), day.getMonth(), day.getDate(), 12) - (lng / 15) * 3_600_000
+  if (preset === 'dawn') {
+    const noon = presetInstant(day, lat, lng, 'midday').getTime()
+    let best = noon
+    let bestScore = Number.POSITIVE_INFINITY
+    for (let minutes = -12 * 60; minutes <= 0; minutes += 5) {
+      const t = noon + minutes * 60_000
+      const score = Math.abs(solarPosition(new Date(t), lat, lng).elevation - PRESET_ELEVATION.dawn)
+      if (score < bestScore) {
+        bestScore = score
+        best = t
+      }
+    }
+    return new Date(best)
+  }
   const target = PRESET_ELEVATION[preset]
   let best = noonUtc
   let bestScore = Number.POSITIVE_INFINITY

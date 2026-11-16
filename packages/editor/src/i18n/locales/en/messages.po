@@ -15628,6 +15628,11 @@ msgstr "Blue hour"
 
 #: packages/viewer/src/ui/components/render-settings-menu.tsx
 #: packages/viewer/src/ui/components/sky-control.tsx
+msgid "viewer.daylight.time.dawn"
+msgstr "Dawn"
+
+#: packages/viewer/src/ui/components/render-settings-menu.tsx
+#: packages/viewer/src/ui/components/sky-control.tsx
 msgid "viewer.daylight.time.golden"
 msgstr "Golden hour"
 

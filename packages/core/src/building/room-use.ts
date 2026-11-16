@@ -73,7 +73,10 @@ const PATTERNS: readonly (readonly [RegExp, RoomUse])[] = [
   ],
   [/laundry|buanderie|lingerie|utility|laverie/, 'laundry'],
   [/dressing|walk-?in|closet|wardrobe|storage|rangement|placard|cellier|mud ?room/, 'other'],
-  [/bed(?!side)|nursery|chambre|\bsuite\b|dortoir|dormitory/, 'bedroom'],
+  [
+    /bed(?!side)|nursery|chambre|\bsuite\b|dortoir|dormitory|\bguest room\b|\bkids'? room\b/,
+    'bedroom',
+  ],
   [/kitchen|pantry|cuisine|garde-manger/, 'kitchen'],
   [/dining|salle a manger/, 'dining'],
   [/living|lounge|family|sitting|salon|sejour|piece de vie|great room/, 'living'],
