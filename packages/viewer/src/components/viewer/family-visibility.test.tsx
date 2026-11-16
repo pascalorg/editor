@@ -5,6 +5,7 @@ import { act, create } from '@react-three/test-renderer'
 import { BoxGeometry, Group, Mesh, MeshBasicMaterial } from 'three'
 import { useViewer } from '../../index'
 import { SceneRenderer } from '../renderers/scene-renderer'
+import { LiveFamilyVisibility } from './family-visibility'
 
 test('live family isolation follows newly mounted semantic roots and preserves hosted children', async () => {
   const previousViewer = useViewer.getState()
@@ -171,4 +172,67 @@ test('section portals keep live and baked site family ownership', async () => {
 test('the internal site ownership hook is absent from the public entry', async () => {
   const entry = await import('../../index')
   expect('useSiteSurfaceOwner' in entry).toBe(false)
+})
+
+test('live registered geometry without a family is other while excluded annotations remain visible', async () => {
+  const restore = nodeRegistry._snapshot()
+  const previousScene = useScene.getState()
+  const previousViewer = useViewer.getState()
+  const root = new Group()
+  const meshes = ['trees:tree', 'test:plugin', 'measurement', 'level'].map((type, index) => {
+    const object = new Mesh(new BoxGeometry(), new MeshBasicMaterial())
+    const id = `family_${index}` as never
+    root.add(object)
+    sceneRegistry.nodes.set(id, object)
+    return { object, node: { id, type } }
+  })
+  nodeRegistry._register({ kind: 'test:plugin', schemaVersion: 1 } as never)
+  for (const kind of ['measurement', 'level'])
+    nodeRegistry._register({
+      kind,
+      schemaVersion: 1,
+      renderer: () => null,
+      extensions: { 'pascal:viewer': { family: null } },
+    } as never)
+  useScene.setState({
+    nodes: Object.fromEntries(meshes.map(({ node }) => [node.id, node])),
+    rootNodeIds: [],
+  } as never)
+  useViewer.setState({ xrayFamily: 'walls', walkthroughMode: false })
+  const renderer = await create(
+    <>
+      <LiveFamilyVisibility />
+      <primitive object={root} />
+    </>,
+  )
+  try {
+    await renderer.advanceFrames(1, 0.01)
+    expect(meshes.map(({ object }) => object.layers.isEnabled(0))).toEqual([
+      false,
+      false,
+      true,
+      true,
+    ])
+    await act(async () => useViewer.getState().setXrayFamily('other'))
+    expect(meshes.every(({ object }) => object.layers.isEnabled(0))).toBe(true)
+    const empty = new Group()
+    root.add(empty)
+    sceneRegistry.nodes.set('family_empty' as never, empty)
+    useScene.setState({
+      nodes: {
+        ...useScene.getState().nodes,
+        family_empty: { id: 'family_empty', type: 'trees:empty' },
+      },
+    } as never)
+    await act(async () => useViewer.getState().setXrayFamily('walls'))
+    await renderer.advanceFrames(1, 0.01)
+    expect(empty.layers.isEnabled(0)).toBe(true)
+  } finally {
+    await renderer.unmount()
+    for (const { node } of meshes) sceneRegistry.nodes.delete(node.id)
+    sceneRegistry.nodes.delete('family_empty' as never)
+    restore()
+    useScene.setState(previousScene, true)
+    useViewer.setState(previousViewer, true)
+  }
 })

@@ -73,3 +73,13 @@ test('a hidden site hides only its own family, preserving its visible buildings'
   scene.nodes.root = { ...scene.nodes.root!, type: 'site', visible: false } as AnyNode
   expect(sceneFamilies(scene)).toEqual(['floors', 'walls', 'items', 'other'])
 })
+
+test('published unknown kinds are offered as other without loading their plugin', () => {
+  const scene = {
+    nodes: { tree: { id: 'tree', type: 'trees:tree' } },
+    rootNodeIds: ['tree'],
+  } as unknown as SceneGraph
+  expect(sceneFamilies(scene)).toEqual(['other'])
+  expect(resolveFamilyVisibility(scene, 'walls').size).toBe(0)
+  expect([...resolveFamilyVisibility(scene, 'other')]).toEqual(['tree'])
+})

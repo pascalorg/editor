@@ -1,7 +1,12 @@
 import { expect, test } from 'bun:test'
 import { type AnyNodeId, useInteractive } from '@pascal-app/core'
 import * as THREE from 'three'
-import { bindGlbShutters, isGlbShutterHit, toggleGlbShutters } from './glb-scene-motion'
+import {
+  bindGlbShutters,
+  createGlbOpeningRaycast,
+  isGlbShutterHit,
+  toggleGlbShutters,
+} from './glb-scene-motion'
 
 test('paused procedural actions evaluate assigned time without advancing the mixer', () => {
   const root = new THREE.Group()
@@ -87,4 +92,27 @@ test('a hit inside shutter-left or roller groups maps to shutters, while a sash 
     window.add(part)
     expect(isGlbShutterHit(hit, window)).toBe(name !== 'casement-window-sash')
   }
+})
+
+test('baked opening targeting follows the parent placement while the identity animates away', () => {
+  const level = new THREE.Group()
+  const door = new THREE.Mesh(new THREE.BoxGeometry(2, 3, 0.1), new THREE.MeshBasicMaterial())
+  door.position.z = -1
+  door.userData = { pascalId: 'door', openable: true, clips: ['Door: open'] }
+  level.add(door)
+  const hosted = new THREE.Mesh(new THREE.BoxGeometry(20, 20, 20))
+  hosted.userData.pascalId = 'hosted'
+  door.add(hosted)
+  const raycast = createGlbOpeningRaycast(new Map([['door', door]]))
+  const ray = new THREE.Raycaster(new THREE.Vector3(), new THREE.Vector3(0, 0, -1), 0, 3)
+  door.position.y = 4
+  level.updateMatrixWorld(true)
+  expect(ray.intersectObject(door, false)).toHaveLength(0)
+  expect(raycast(ray)?.object).toBe(door)
+  ray.ray.origin.x = 5
+  expect(raycast(ray)).toBeUndefined() // The hosted object cannot enlarge the opening.
+  level.position.x = 5
+  expect(raycast(ray)?.object).toBe(door)
+  level.visible = false
+  expect(raycast(ray)).toBeUndefined()
 })

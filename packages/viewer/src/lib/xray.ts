@@ -1,5 +1,5 @@
 import { type AnyNode, sceneRegistry } from '@pascal-app/core'
-import type { Object3D } from 'three'
+import type { BufferGeometry, Object3D } from 'three'
 import { familyForNode } from './scene-families'
 import { heldReasons, hideFromScene, showInScene } from './scene-visibility'
 import { type SectionState, sectionActive, sectionShadowSignature } from './section'
@@ -78,7 +78,9 @@ export function createFamilyVisibility() {
           object.addEventListener('childremoved', markDirty)
         }
         const node = ownerOf(object) ?? owner
-        const family = node && familyForNode(node)
+        // Classify each owned draw, rather than guessing from an unloaded definition.
+        const draws = Boolean((object as Object3D & { geometry?: BufferGeometry }).geometry)
+        const family = node && familyForNode(node, draws)
         // Collective draws have their own member filter / unmerged fallback.
         if (!object.userData.glbBatch && family !== undefined && family !== state.xrayFamily) {
           hideFromScene(object, 'xray')

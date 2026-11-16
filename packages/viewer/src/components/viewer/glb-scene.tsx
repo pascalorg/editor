@@ -53,7 +53,12 @@ import { GlbInteractive, type GlbInteractiveItem } from './glb-interactive'
 import { bakedLoopMechanisms } from './glb-mechanisms'
 import { GlbReferenceNodes } from './glb-reference-nodes'
 import { GlbReplaceInstances } from './glb-replace-instances'
-import { bindGlbShutters, isGlbShutterHit, toggleGlbShutters } from './glb-scene-motion'
+import {
+  bindGlbShutters,
+  createGlbOpeningRaycast,
+  isGlbShutterHit,
+  toggleGlbShutters,
+} from './glb-scene-motion'
 import { GlbSelectionCallout } from './glb-selection-callout'
 import { useSceneAtmosphere } from './scene-atmosphere'
 import { isSectionObject, SectionGroup } from './section-group'
@@ -999,6 +1004,7 @@ export function GlbScene({
   })
 
   // ── Walkthrough: first-person HUD + interaction ────────────────────────────
+  const raycastOpenings = useMemo(() => createGlbOpeningRaycast(identity), [identity])
   const [shuttersInView, setShuttersInView] = useState(false)
   const walkDoorRef = useRef<{ hit: THREE.Object3D; node: THREE.Object3D } | null>(null)
   const walkPromptRef = useRef<{ isOpen: boolean; verb?: string } | null>(null)
@@ -1021,7 +1027,10 @@ export function GlbScene({
 
     _reticleRaycaster.far = WALK_REACH
     _reticleRaycaster.setFromCamera(_reticleNdc, camera)
-    const hit = _reticleRaycaster.intersectObject(gltf.scene, true)[0]
+    const hit = raycastOpenings(
+      _reticleRaycaster,
+      _reticleRaycaster.intersectObject(gltf.scene, true)[0],
+    )
     let doorNode: { hit: THREE.Object3D; node: THREE.Object3D } | null = null
     let doorId = ''
     let door: { label: string; isOpen: boolean; verb?: string } | null = null

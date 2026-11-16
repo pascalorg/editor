@@ -21,13 +21,19 @@ export const VIEWER_FAMILIES = [
   'other',
 ] as const
 
-/** Uses the loaded node registry, independently of useScene. Null explicitly excludes a kind. */
-export function familyForNode(node: AnyNode): string | undefined {
+/**
+ * Null explicitly excludes a kind, even when it draws geometry. Object paths supply whether
+ * the current object draws; graph-only callers assume an unknown published kind is plugin
+ * geometry, so hosts can offer "other" before its opt-in plugin has loaded.
+ */
+export function familyForNode(node: AnyNode, draws?: boolean): string | undefined {
   const definition = nodeRegistry.get(node.type)
   const viewer = definition?.extensions?.['pascal:viewer'] as { family?: string | null } | undefined
   if (viewer?.family === null) return undefined
   if (typeof viewer?.family === 'string') return viewer.family
-  return definition?.geometry || definition?.renderer ? 'other' : undefined
+  return (draws ?? (!definition || Boolean(definition.geometry || definition.renderer)))
+    ? 'other'
+    : undefined
 }
 
 /** Visible authored scope; family filtering never cascades through a classified host. */

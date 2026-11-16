@@ -451,9 +451,113 @@ test('baked touch Interact reaches GlbScene activation and publishes its target 
   expect(useFirstPersonHud.getState().interact?.verb).toBe('close')
 })
 
+for (const mode of ['touch', 'desktop'] as const) {
+  test(`baked ${mode}: a garage opening remains targeted during and after leaf animation`, async () => {
+    useViewer.getState().setWalkthroughInputMode(mode)
+    useViewer.getState().setWalkthroughMode(true)
+    const scene = new Group()
+    const door = new Group()
+    door.userData = {
+      pascalId: 'door_garage_baked',
+      kind: 'door',
+      label: 'Garage',
+      openable: true,
+      clips: ['Garage: open'],
+    }
+    door.position.set(0, 1.2, -1)
+    const leaf = new Mesh(new BoxGeometry(2, 2.5, 0.1), new MeshBasicMaterial())
+    leaf.name = 'garageLeaf'
+    door.add(leaf)
+    scene.add(door)
+    scene.updateMatrixWorld(true)
+    const url = `garage-activation-${mode}`
+    seedGltf(url, scene, [
+      new AnimationClip('Garage: open', 1, [
+        new NumberKeyframeTrack('garageLeaf.position[y]', [0, 1], [0, 3]),
+      ]),
+    ])
+    const camera = new PerspectiveCamera()
+    camera.position.set(0, 1.2, 0)
+    renderer = await create(<GlbScene url={url} />, { camera })
+    const press = async () => {
+      await act(async () => {
+        if (mode === 'touch') createWalkthroughInput().requestInteract()
+        else window.dispatchEvent(Object.assign(new Event('keydown'), { key: 'e' }))
+        await frames(1)
+      })
+    }
+    await frames(1)
+    expect(useFirstPersonHud.getState().interact?.verb).toBe('open')
+    await press()
+    await frames(30)
+    expect(leaf.position.y).toBeGreaterThan(1.3)
+    expect(useFirstPersonHud.getState().interact?.verb).toBe('close')
+    await press()
+    await frames(40)
+    expect(leaf.position.y).toBeCloseTo(0)
+    await press()
+    await frames(80)
+    expect(leaf.position.y).toBeCloseTo(3)
+    expect(useFirstPersonHud.getState().interact?.verb).toBe('close')
+    // A nearer wall still blocks activation of the stationary opening.
+    const blocker = new Mesh(new BoxGeometry(2, 3, 0.1), new MeshBasicMaterial())
+    blocker.position.set(0, 1.2, -0.5)
+    scene.add(blocker)
+    await frames(1)
+    expect(useFirstPersonHud.getState().interact).toBeNull()
+    scene.remove(blocker)
+    await frames(1)
+    expect(useFirstPersonHud.getState().interact?.verb).toBe('close')
+    await press()
+    await frames(80)
+    expect(leaf.position.y).toBeCloseTo(0)
+    camera.rotation.y = Math.PI
+    camera.updateMatrixWorld(true)
+    await frames(1)
+    expect(useFirstPersonHud.getState().interact).toBeNull()
+    camera.rotation.y = 0
+    camera.position.z = 10
+    camera.updateMatrixWorld(true)
+    await frames(1)
+    expect(useFirstPersonHud.getState().interact).toBeNull()
+  })
+
+  test(`live ${mode}: a garage opening remains targeted when the leaf leaves the ray`, async () => {
+    await mountWalk('live', mode === 'touch')
+    const door = DoorNode.parse({ id: 'door_garage_live', doorType: 'garage-sectional' })
+    useScene.setState({ nodes: { ...useScene.getState().nodes, [door.id]: door } })
+    const object = new Group()
+    object.position.set(0, 1.2, -1)
+    const leaf = new Mesh(new BoxGeometry(2, 2.5, 0.1), new MeshBasicMaterial())
+    object.add(leaf)
+    sceneRegistry.nodes.set(door.id, object)
+    sceneRegistry.byType.door!.add(door.id)
+    await frames(1)
+    expect(useFirstPersonHud.getState().interact?.verb).toBe('open')
+    if (mode === 'touch') createWalkthroughInput().requestInteract()
+    else key('KeyE')
+    await frames(1)
+    expect(useInteractive.getState().doorAnimations[door.id]?.to).toBeGreaterThan(0)
+    // The controller fixture has no door renderer/system; publish its in-flight pose.
+    useInteractive.getState().setDoorOpenState(door.id, { operationState: 0.7 })
+    leaf.position.y = 3
+    await frames(2)
+    expect(useFirstPersonHud.getState().interact?.verb).toBe('close')
+    if (mode === 'touch') createWalkthroughInput().requestInteract()
+    else key('KeyE')
+    await frames(1)
+    expect(useInteractive.getState().doorAnimations[door.id]?.to).toBe(0)
+    useInteractive.getState().cancelDoorAnimation(door.id)
+    useInteractive.getState().removeDoorOpenState(door.id)
+  })
+}
+
 // R3F's test renderer batches by subscriber; advance one frame at a time to preserve input → physics → camera order.
 async function frames(count: number) {
-  for (let frame = 0; frame < count; frame += 1) await renderer!.advanceFrames(1, 1 / 60)
+  for (let frame = 0; frame < count; frame += 1) {
+    renderer!.scene.instance.updateMatrixWorld(true)
+    await renderer!.advanceFrames(1, 1 / 60)
+  }
 }
 
 test('baked family isolation uses the supplied graph without hydrating useScene and restores the same merge', async () => {
@@ -484,9 +588,20 @@ test('baked family isolation uses the supplied graph without hydrating useScene 
   beam.userData = { kind: 'beam', pascalId: 'beam_xray' }
   const pipe = new Mesh(new BoxGeometry(), material)
   pipe.userData = { kind: 'pipe-segment', pascalId: 'pipe_xray' }
-  level.add(beam, pipe)
+  const tree = new Group()
+  tree.userData = { kind: 'trees:tree', pascalId: 'tree_xray' }
+  const foliage = new Mesh(new BoxGeometry(), material)
+  tree.add(foliage)
+  const annotation = new Mesh(new BoxGeometry(), material)
+  annotation.userData = { kind: 'measurement', pascalId: 'annotation_xray' }
+  nodeRegistry._register({
+    kind: 'measurement',
+    schemaVersion: 1,
+    extensions: { 'pascal:viewer': { family: null } },
+  } as never)
+  level.add(beam, pipe, tree, annotation)
   const nodes = Object.fromEntries(
-    [level, beam, pipe].map((object) => [
+    [level, beam, pipe, tree, annotation].map((object) => [
       object.userData.pascalId,
       { id: object.userData.pascalId, type: object.userData.kind },
     ]),
@@ -506,6 +621,15 @@ test('baked family isolation uses the supplied graph without hydrating useScene 
     expect(beam.layers.isEnabled(0)).toBe(false)
     expect(pipe.layers.isEnabled(0)).toBe(true)
     expect(useScene.getState().nodes).toEqual({})
+    await act(async () => useViewer.getState().setXrayFamily('walls'))
+    await frames(1)
+    expect(foliage.layers.isEnabled(0)).toBe(false)
+    expect(annotation.layers.isEnabled(0)).toBe(true)
+    await act(async () => useViewer.getState().setXrayFamily('other'))
+    await frames(1)
+    expect(foliage.layers.isEnabled(0)).toBe(true)
+    expect(beam.layers.isEnabled(0)).toBe(false)
+    expect(annotation.layers.isEnabled(0)).toBe(true)
     await act(async () => useViewer.getState().setWalkthroughMode(true))
     await frames(1)
     expect(batch.layers.isEnabled(0)).toBe(true)
