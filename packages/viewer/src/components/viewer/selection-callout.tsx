@@ -75,14 +75,7 @@ const _ndc = new Vector3()
  * the element's world point each frame rather than living inside its object:
  * kinds that rebuild their children (a window opening) would drop it.
  */
-export function SelectionCallout({
-  object,
-  anchor: anchorProp,
-  title,
-  subtitle,
-  actions,
-  onDismiss,
-}: {
+export type SelectionCalloutProps = {
   object: Object3D
   /** Where the dot sits, in the object's space; the centre of its bounds by default. */
   anchor?: Vector3
@@ -90,7 +83,16 @@ export function SelectionCallout({
   subtitle?: CalloutText | null
   actions: CalloutAction[]
   onDismiss: () => void
-}) {
+}
+
+export function SelectionCallout({
+  object,
+  anchor: anchorProp,
+  title,
+  subtitle,
+  actions,
+  onDismiss,
+}: SelectionCalloutProps) {
   const camera = useThree((state) => state.camera)
   const size = useThree((state) => state.size)
   const rootRef = useRef<HTMLDivElement>(null)

@@ -3,6 +3,7 @@
 import { type AnyNodeId, emitter, type NodeEvent, sceneRegistry, useScene } from '@pascal-app/core'
 import { useThree } from '@react-three/fiber'
 import { useEffect } from 'react'
+import { selectionClickAllowed } from '../../lib/pointer-gesture'
 import useViewer from '../../store/use-viewer'
 import { selectionModifiersFromEvent } from '../lib/selection-modifiers'
 import {
@@ -53,7 +54,7 @@ export function ViewerSelectionManager() {
     const onCanvasClick = (event: MouseEvent) => {
       const viewer = useViewer.getState()
       if (event.button !== 0 || viewer.walkthroughMode) return
-      if (viewer.cameraDragging || viewer.inputDragging) return
+      if (!selectionClickAllowed(viewer.cameraDragging, viewer.inputDragging)) return
       const frame = requestAnimationFrame(() => {
         pendingClicks.delete(frame)
         if (useViewer.getState().walkthroughMode) return

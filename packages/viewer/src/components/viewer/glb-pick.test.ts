@@ -68,3 +68,26 @@ test('a cut exposes the next semantic hit in the same level frame', () => {
   expect(pick?.point).toEqual([2, 2])
   expect(resolveGlbPick(filterSectionHits(hits, SECTION_DEFAULTS), identity)?.nodeId).toBe('wall_1')
 })
+
+test('accepted baked hit metadata uses world coordinates and transformed normals', () => {
+  const { identity, meshes } = bakedLevel()
+  meshes.wall.rotation.y = Math.PI / 2
+  meshes.wall.updateWorldMatrix(true, false)
+  const pick = resolveGlbPick(
+    [
+      { object: meshes.ceiling, point: new THREE.Vector3(0, 10, 0) },
+      {
+        object: meshes.wall,
+        point: new THREE.Vector3(12, 4, -3),
+        face: { normal: new THREE.Vector3(0, 0, 1) },
+      },
+    ],
+    identity,
+  )!
+  expect(pick.worldPosition).toEqual([12, 4, -3])
+  expect(pick.normal?.[0]).toBeCloseTo(1)
+  expect(pick.normal?.[2]).toBeCloseTo(0)
+  expect(
+    resolveGlbPick([{ object: meshes.wall, point: new THREE.Vector3() }], identity)?.normal,
+  ).toBeNull()
+})

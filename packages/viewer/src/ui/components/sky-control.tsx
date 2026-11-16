@@ -35,6 +35,7 @@ import {
   sunEvents,
   type TimeOfDay,
 } from '../../lib/daylight/solar'
+import { cancelTimeTransition, transitionTimeOfDay } from '../../lib/daylight/time-transition'
 import { useDaylightSite } from '../../lib/daylight/use-daylight-site'
 import useViewer from '../../store/use-viewer'
 import { cn } from '../lib/cn'
@@ -62,43 +63,6 @@ export function openSkyPanel() {
 export const SKY_DOCK_BOTTOM = 24
 export const SKY_DOCK_HEIGHT = { editor: 58, viewer: 56 } as const
 export const SKY_COMPASS_BOTTOM = 36
-
-/**
- * A preset or reset eases the sun to its time the short way round the clock, slowly enough to
- * watch the light change: 1.5 s for a short hop, up to 3 s for half a day, easing in and out.
- */
-const TWEEN_MIN_MS = 1500
-const TWEEN_MAX_MS = 3000
-let tween = 0
-
-function stopTween() {
-  cancelAnimationFrame(tween)
-  tween = 0
-}
-
-function easeTimeTo(from: number, to: number, done: () => void) {
-  stopTween()
-  const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
-  const delta = ((((to - from + 2160) % 1440) + 1440) % 1440) - 720
-  if (reduce || Math.abs(delta) < 1) {
-    done()
-    return
-  }
-  const start = performance.now()
-  const duration = TWEEN_MIN_MS + (TWEEN_MAX_MS - TWEEN_MIN_MS) * (Math.abs(delta) / 720)
-  const step = (now: number) => {
-    const t = Math.min(1, (now - start) / duration)
-    const eased = t < 0.5 ? 4 * t ** 3 : 1 - (-2 * t + 2) ** 3 / 2
-    if (t >= 1) {
-      tween = 0
-      done()
-      return
-    }
-    useViewer.getState().setTimeOfDayMinutes((((from + delta * eased) % 1440) + 1440) % 1440)
-    tween = requestAnimationFrame(step)
-  }
-  tween = requestAnimationFrame(step)
-}
 
 const PRESETS: readonly { id: TimeOfDay; icon: typeof Sun }[] = [
   { id: 'dawn', icon: Sunrise },
@@ -419,7 +383,7 @@ export function SkyPanel({ sky }: { sky: ReturnType<typeof useSky> }) {
         <button
           className="flex items-center gap-1 rounded-md px-1.5 py-1 text-violet-600 text-xs hover:bg-accent dark:text-violet-300"
           onClick={() => {
-            easeTimeTo(sky.minutes, sky.presets.midday, () => viewer().setTimeOfDay('midday'))
+            transitionTimeOfDay('midday')
             viewer().setWeather('fair')
           }}
           type="button"
@@ -477,11 +441,7 @@ export function SkyPanel({ sky }: { sky: ReturnType<typeof useSky> }) {
             icon={preset.icon}
             key={preset.id}
             name={presetName(i18n, preset.id)}
-            onSelect={() =>
-              easeTimeTo(sky.minutes, sky.presets[preset.id], () =>
-                viewer().setTimeOfDay(preset.id),
-              )
-            }
+            onSelect={() => transitionTimeOfDay(preset.id)}
           />
         ))}
       </div>
@@ -510,7 +470,7 @@ export function SkyPanel({ sky }: { sky: ReturnType<typeof useSky> }) {
           checked={sky.skyLive}
           disabled={locating}
           onCheckedChange={(live) => {
-            stopTween()
+            cancelTimeTransition()
             viewer().setSkyLive(live)
             if (!live || sky.source === 'site' || sky.source === 'device') return
             setLocating(true)
@@ -655,7 +615,7 @@ function SunArc({ sky }: { sky: ReturnType<typeof useSky> }) {
     if (!rect) return
     const x = ((event.clientX - rect.left) / rect.width) * W
     const y = ((event.clientY - rect.top) / rect.height) * H
-    stopTween()
+    cancelTimeTransition()
     useViewer.getState().setTimeOfDayMinutes(arcMinutes(x, y, sunrise, sunset))
   }
 
@@ -674,7 +634,7 @@ function SunArc({ sky }: { sky: ReturnType<typeof useSky> }) {
         const step = event.key === 'ArrowRight' ? 15 : event.key === 'ArrowLeft' ? -15 : 0
         if (!step) return
         event.preventDefault()
-        stopTween()
+        cancelTimeTransition()
         useViewer.getState().setTimeOfDayMinutes((sky.minutes + step + 1440) % 1440)
       }}
       onPointerDown={(event) => {

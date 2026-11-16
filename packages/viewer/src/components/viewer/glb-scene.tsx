@@ -24,7 +24,15 @@ import {
 } from '@pascal-app/core/procedural-items'
 import { Html } from '@react-three/drei'
 import { type ThreeEvent, useFrame, useThree } from '@react-three/fiber'
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import {
+  type ReactNode,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react'
 import * as THREE from 'three'
 import { lerp } from 'three/src/math/MathUtils.js'
 import { acceleratedRaycast, computeBoundsTree, disposeBoundsTree } from 'three-mesh-bvh'
@@ -39,6 +47,7 @@ import {
   type CullingPipeline,
   createOcclusionCuller,
 } from '../../lib/occlusion-culler'
+import { tapAllowsClick } from '../../lib/pointer-gesture'
 import { filterSectionHits, sectionActive } from '../../lib/section'
 import { applyShadowOnly, clearShadowOnly } from '../../lib/shadow-only'
 import { consumeWalkthroughInteract } from '../../lib/walkthrough-input'
@@ -62,7 +71,7 @@ import {
 import { GlbSelectionCallout } from './glb-selection-callout'
 import { useSceneAtmosphere } from './scene-atmosphere'
 import { isSectionObject, SectionGroup } from './section-group'
-import type { CalloutSound } from './selection-callout'
+import type { CalloutSound, SelectionCalloutProps } from './selection-callout'
 import { BakedSiteSurfaces, bakedSiteSurfaceScopes } from './site-surface-scope'
 
 /** Baked `kind` → surface role, so monochrome can recolor by role like the
@@ -88,6 +97,13 @@ export type GlbPickEvent = {
   type: 'click' | 'hover'
   pick: { nodeId: string; point: [number, number] | null } | null
   modifiers: { alt: boolean; ctrl: boolean; meta: boolean; shift: boolean }
+  worldPosition?: [number, number, number]
+  /** World-space surface normal; null for intersections without a face. */
+  normal?: [number, number, number] | null
+  hitObject?: THREE.Object3D
+  pointerType?: string
+  clientX?: number
+  clientY?: number
 }
 
 /** Kinds a pointer passes through to what lies behind (they frame, they don't get picked). */
@@ -152,7 +168,11 @@ type LookAtControls = {
   moveTo?: (x: number, y: number, z: number, enableTransition?: boolean) => unknown
 }
 
-type HitCandidate = { object: THREE.Object3D; point: THREE.Vector3 }
+type HitCandidate = {
+  object: THREE.Object3D
+  point: THREE.Vector3
+  face?: { normal: THREE.Vector3 } | null
+}
 
 function findIdentityAncestor(object: THREE.Object3D): THREE.Object3D | null {
   let current: THREE.Object3D | null = object
@@ -204,7 +224,13 @@ const ZONE_FOOTPRINT_EPSILON = 0.05
 export function resolveGlbPick(
   hits: readonly HitCandidate[],
   identity: ReadonlyMap<string, THREE.Object3D>,
-): (NonNullable<GlbPickEvent['pick']> & { hitObject: THREE.Object3D }) | null {
+):
+  | (NonNullable<GlbPickEvent['pick']> & {
+      hitObject: THREE.Object3D
+      worldPosition: [number, number, number]
+      normal: [number, number, number] | null
+    })
+  | null {
   for (const hit of hits) {
     const node = findIdentityAncestor(hit.object)
     const extras = node?.userData as PascalExtras | undefined
@@ -219,7 +245,16 @@ export function resolveGlbPick(
       level.worldToLocal(_local)
       point = [_local.x, _local.z]
     }
-    return { nodeId: extras.pascalId, point, hitObject: hit.object }
+    const normal = hit.face?.normal
+      .clone()
+      .applyNormalMatrix(new THREE.Matrix3().getNormalMatrix(hit.object.matrixWorld))
+    return {
+      nodeId: extras.pascalId,
+      point,
+      hitObject: hit.object,
+      worldPosition: hit.point.toArray(),
+      normal: normal?.toArray() ?? null,
+    }
   }
   return null
 }
@@ -247,10 +282,15 @@ export function GlbScene({
   replaceNodes,
   onObjectsChange,
   onPick,
+  outlineSync = true,
+  renderCallout,
   onWalkthroughChange,
   sceneNodes,
 }: {
   url: string
+  /** False leaves both outliner arrays entirely under host ownership. */
+  outlineSync?: boolean
+  renderCallout?: (props: SelectionCalloutProps) => ReactNode
   /** Light / animation effects + controls recovered from the DB scene graph,
    *  joined to the baked nodes by `pascalId` to re-light + re-animate the GLB. */
   interactiveItems?: GlbInteractiveItem[]
@@ -275,6 +315,8 @@ export function GlbScene({
     animations: THREE.AnimationClip[]
   }
   const rootRef = useRef<THREE.Group>(null!)
+  const outlineSyncRef = useRef(outlineSync)
+  outlineSyncRef.current = outlineSync
   const actions = useClipActions(gltf.animations, rootRef)
   const resolveNode = useMemo<GeometryContext['resolve'] | undefined>(
     () =>
@@ -985,6 +1027,7 @@ export function GlbScene({
       else clearShadowOnly(mesh)
     }
 
+    if (!outlineSync) return
     outliner.selectedObjects.length = 0
     outliner.hoveredObjects.length = 0
     if (walk) return
@@ -1218,7 +1261,12 @@ export function GlbScene({
       const key = pick ? `${pick.nodeId}:${pick.point?.join(',') ?? ''}` : null
       if (key === lastHover.current) return
       lastHover.current = key
-      onPick({ type: 'hover', pick, modifiers: modifiersOf(event.nativeEvent) })
+      onPick({
+        type: 'hover',
+        pick,
+        modifiers: modifiersOf(event.nativeEvent),
+        ...pickDetails(pick, event),
+      })
     },
     [identity, onPick, walkthroughMode],
   )
@@ -1237,7 +1285,7 @@ export function GlbScene({
       event.stopPropagation()
       // Walkthrough handles its own door activation (E / canvas click) and never
       // selects.
-      if (walkthroughMode || !onPick) return
+      if (walkthroughMode || !onPick || tapAllowsClick() === false) return
       const pick = resolveGlbPick(
         filterXrayHits(
           filterSectionHits(event.intersections, useViewer.getState(), (hit) =>
@@ -1247,7 +1295,12 @@ export function GlbScene({
         ),
         identity,
       )
-      onPick({ type: 'click', pick, modifiers: modifiersOf(event.nativeEvent) })
+      onPick({
+        type: 'click',
+        pick,
+        modifiers: modifiersOf(event.nativeEvent),
+        ...pickDetails(pick, event),
+      })
     },
     [identity, onPick, walkthroughMode],
   )
@@ -1255,7 +1308,7 @@ export function GlbScene({
   // A click on empty space clears the room and the element (the floor stays).
   const handlePointerMissed = useCallback(
     (event: MouseEvent) => {
-      if (useViewer.getState().walkthroughMode || !onPick) return
+      if (useViewer.getState().walkthroughMode || !onPick || tapAllowsClick() === false) return
       onPick({ type: 'click', pick: null, modifiers: modifiersOf(event) })
     },
     [onPick],
@@ -1264,8 +1317,10 @@ export function GlbScene({
   useEffect(
     () => () => {
       const { outliner } = useViewer.getState()
-      outliner.selectedObjects.length = 0
-      outliner.hoveredObjects.length = 0
+      if (outlineSyncRef.current) {
+        outliner.selectedObjects.length = 0
+        outliner.hoveredObjects.length = 0
+      }
       document.body.style.cursor = 'auto'
       // Restore ceilings/roof — the GLB scene is cached by drei and may be reused.
       for (const mesh of occluderOwnMeshes) clearShadowOnly(mesh)
@@ -1302,6 +1357,7 @@ export function GlbScene({
         ) : null}
       </SectionGroup>
       <GlbSelectionCallout
+        renderCallout={renderCallout}
         identity={identity}
         isOpen={isOpen}
         items={interactiveItems}
@@ -1427,4 +1483,17 @@ function GlbShuttersPrompt() {
       </div>
     </Html>
   )
+}
+
+function pickDetails(pick: ReturnType<typeof resolveGlbPick>, event: ThreeEvent<MouseEvent>) {
+  if (!pick) return {}
+  const native = event.nativeEvent as PointerEvent
+  return {
+    worldPosition: pick.worldPosition,
+    normal: pick.normal,
+    hitObject: pick.hitObject,
+    pointerType: native.pointerType ?? 'mouse',
+    clientX: native.clientX,
+    clientY: native.clientY,
+  }
 }

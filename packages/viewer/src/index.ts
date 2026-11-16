@@ -78,11 +78,12 @@ export {
   SceneGroundReplacement,
   useSceneGroundReplacement,
 } from './components/viewer/scene-ground-replacement'
-export { SectionGroup } from './components/viewer/section-group'
+export { isSectionObject, SectionGroup } from './components/viewer/section-group'
 export {
   type CalloutAction,
   type CalloutText,
   SelectionCallout,
+  type SelectionCalloutProps,
 } from './components/viewer/selection-callout'
 export { SiteSurfaceScope } from './components/viewer/site-surface-scope'
 export { applyWalkthroughCameraClipping } from './components/viewer/viewer-camera'
@@ -145,6 +146,7 @@ export {
   sunEvents,
   type TimeOfDay,
 } from './lib/daylight/solar'
+export { type TimeTransitionOptions, transitionTimeOfDay } from './lib/daylight/time-transition'
 export type { DisplayState } from './lib/display-state'
 export { disposeObject3DResources } from './lib/dispose-object3d'
 export {
@@ -300,13 +302,14 @@ export {
 } from './lib/scene-themes'
 export {
   type HiddenReason,
+  heldReasons,
   hideFromScene,
   showInScene,
   temporarilyShowPresentation,
   temporarilyShowShadowOnly,
 } from './lib/scene-visibility'
 export { SCRIPTED_MODEL_FLAG } from './lib/scripted-opening'
-export type { SectionAxis } from './lib/section'
+export { filterSectionHits, type SectionAxis } from './lib/section'
 export { sectionBounds } from './lib/section-bounds'
 export {
   SITE_GROUND,
@@ -366,7 +369,7 @@ export {
   type ViewerConfig,
 } from './lib/viewer-config'
 export { createWalkthroughInput, type WalkthroughInput } from './lib/walkthrough-input'
-export { xrayActive } from './lib/xray'
+export { filterXrayHits, xrayActive } from './lib/xray'
 export { createZoneShape, createZoneWallGeometry } from './lib/zone-geometry'
 export {
   type FirstPersonHudState,
@@ -454,7 +457,10 @@ export {
   useGeometryStatus,
 } from './systems/geometry/geometry-status'
 export { GuideSystem } from './systems/guide/guide-system'
-export { InteractiveSystem } from './systems/interactive/interactive-system'
+export {
+  InteractiveSystem,
+  type InteractiveSystemProps,
+} from './systems/interactive/interactive-system'
 export { openingSettled, proceduralSettled } from './systems/interactive/opening-settled'
 export {
   type ScriptedClipActions,

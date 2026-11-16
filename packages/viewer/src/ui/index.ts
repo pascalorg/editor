@@ -34,6 +34,7 @@ export { SceneLoader, SceneLoadFailed } from './components/scene-loader'
 export { openSkyPanel, SKY_DOCK_HEIGHT, SkyControl, useSkyPanel } from './components/sky-control'
 export { useViewerCameraNavigationSync } from './components/use-viewer-camera-navigation-sync'
 export {
+  type CameraPointerAction,
   ViewerCameraControls,
   type ViewerCameraControlsProps,
 } from './components/viewer-camera-controls'

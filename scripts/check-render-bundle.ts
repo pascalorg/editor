@@ -155,10 +155,10 @@ const result = await build({
       'render-consumer',
       `
     import { loadPlugin, roomCounts, useScene } from '@pascal-app/core';
-    import { createWalkthroughInput, GlbWalkthroughController, LiveWalkthroughController, familyForNode, sceneFamilies, VIEWER_FAMILIES, xrayActive, SectionGroup, sectionBounds, presetInstant, useFirstPersonHud, useViewer, Viewer } from '@pascal-app/viewer';
+    import { transitionTimeOfDay, filterSectionHits, filterXrayHits, isSectionObject, heldReasons, GlbScene, InteractiveSystem, createWalkthroughInput, GlbWalkthroughController, LiveWalkthroughController, familyForNode, sceneFamilies, VIEWER_FAMILIES, xrayActive, SectionGroup, sectionBounds, presetInstant, useFirstPersonHud, useViewer, Viewer } from '@pascal-app/viewer';
     import { renderPlugin } from '@pascal-app/nodes/render';
     import { WalkthroughTouchControls } from '@pascal-app/viewer/ui';
-    export { createWalkthroughInput, GlbWalkthroughController, WalkthroughTouchControls, LiveWalkthroughController, familyForNode, sceneFamilies, VIEWER_FAMILIES, xrayActive, SectionGroup, sectionBounds, presetInstant, roomCounts, useFirstPersonHud, useViewer, Viewer, renderPlugin };
+    export { transitionTimeOfDay, filterSectionHits, filterXrayHits, isSectionObject, heldReasons, GlbScene, InteractiveSystem, createWalkthroughInput, GlbWalkthroughController, WalkthroughTouchControls, LiveWalkthroughController, familyForNode, sceneFamilies, VIEWER_FAMILIES, xrayActive, SectionGroup, sectionBounds, presetInstant, roomCounts, useFirstPersonHud, useViewer, Viewer, renderPlugin };
     export async function hydrate(scene) {
       await loadPlugin(renderPlugin);
       useScene.getState().setScene(scene);
@@ -241,6 +241,13 @@ const consumer = resolve(root, 'packages/nodes/render-consumer.ts')
 const consumerSource = `
   import { roomCounts, type Plugin, type RoomCounts, type SceneGraph } from '@pascal-app/core';
   import { familyForNode, sceneFamilies, VIEWER_FAMILIES, xrayActive, SectionGroup, sectionBounds, presetInstant, useViewer, type SectionAxis, type DaylightSite, type TimeOfDay } from '@pascal-app/viewer';
+  import { transitionTimeOfDay, filterSectionHits, filterXrayHits, isSectionObject, heldReasons, GlbScene, InteractiveSystem, type GlbPickEvent, type SelectionCalloutProps, type CalloutAction } from '@pascal-app/viewer';
+  import type { ComponentProps } from 'react';
+  const renderCallout = (props: SelectionCalloutProps) => { const actions: CalloutAction[] = props.actions; return null; };
+  export const bakedProps: ComponentProps<typeof GlbScene> = { url: 'scene.glb', outlineSync: false, renderCallout, onPick: (event: GlbPickEvent) => { if (event.hitObject) heldReasons(event.hitObject); } };
+  export const liveProps: ComponentProps<typeof InteractiveSystem> = { renderCallout };
+  export const interactionApi = { transitionTimeOfDay, filterSectionHits, filterXrayHits, isSectionObject, heldReasons };
+  export const transition = () => transitionTimeOfDay('dawn', { durationMs: (delta) => Math.abs(delta) * 2, easing: (t) => t });
   const site: DaylightSite = { northRotation: 1, lat: 48.86, lng: 2.35 };
   const dawn: TimeOfDay = 'dawn';
   export const families = (graph: SceneGraph): string[] => sceneFamilies(graph);
@@ -278,7 +285,12 @@ const consumerSource = `
   export const rooms = { ParametricViewerRooms, RoomPillsLayer2D, RoomPillsLayer3D, ViewerRooms };
   import { FloorplanPreview, ViewerStage, ViewerStageSwitcher, type ViewerStageMode } from '@pascal-app/viewer/ui';
   import { ViewerCameraControls, ViewerOpeningCamera, parseOpeningCamera, savedSceneCamera, type ViewerCameraControlsProps, type ViewerOpeningCameraProps, type OpeningCameraPose } from '@pascal-app/viewer/ui';
-  const controlsProps: ViewerCameraControlsProps = {};
+  const controlsProps: ViewerCameraControlsProps = {
+    mouseButtons: { left: 'rotate', middle: 'dolly', right: 'pan' },
+    touches: { one: 'rotate', two: 'dolly-pan', three: 'none' },
+    limits: { minDistance: 1, maxDistance: 300, minPolarAngle: 0, maxPolarAngle: Math.PI },
+    smoothTime: 0.25, tap: { maxTravelPx: 7, maxDurationMs: 500 },
+  };
   const pose: OpeningCameraPose = { position: [30, 30, 30], target: [0, 0, 0] };
   const openingProps: ViewerOpeningCameraProps = { pose, ready: true, onApplied: () => {} };
   export const camera = { ViewerCameraControls, ViewerOpeningCamera, parseOpeningCamera, savedSceneCamera, controlsProps, openingProps };
