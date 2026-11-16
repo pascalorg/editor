@@ -2,7 +2,7 @@
 import { describe, expect, test } from 'bun:test'
 import { presetInstant, solarPosition } from '../../index'
 import { resolveLocation, siteLocation, timezoneLocation } from './location'
-import { solarLight } from './solar'
+import { skyPhase, solarClockMinutes, solarLight } from './solar'
 
 const PARIS = { lat: 48.86, lng: 2.35 }
 const JUNE = new Date(Date.UTC(2026, 5, 21))
@@ -46,6 +46,8 @@ describe('solar position', () => {
     expect(evening.azimuth).toBeGreaterThan(180)
     expect(Math.abs(morning.elevation - 6)).toBeLessThan(0.6)
     expect(Math.abs(morning.elevation - evening.elevation)).toBeLessThan(0.6)
+    expect(skyPhase(morning.elevation, solarClockMinutes(dawn, lng))).toBe('dawn')
+    expect(skyPhase(evening.elevation, solarClockMinutes(golden, lng))).toBe('golden')
   })
 
   test.each([5, 11])('unreachable dawn uses the closest polar elevation in month %s', (month) => {

@@ -18,11 +18,15 @@ import {
   SCENE_LAYER,
   SectionGroup,
   SITE_GROUND,
+  siteGround,
+  siteSurfaces,
+  temporarilyVeilGround,
   useViewer,
 } from '@pascal-app/viewer'
 import { act, create } from '@react-three/test-renderer'
 import { type Mesh, type Object3D, Vector3 } from 'three'
 import type { ClippingGroup } from 'three/webgpu'
+import { LiveFamilyVisibility } from '../../../viewer/dist/components/viewer/family-visibility'
 import { SiteRenderer } from './renderer'
 
 // `showGround: false` says other geometry (an authored landscape, on a level above the ground)
@@ -93,6 +97,68 @@ const surfaces = (root: Object3D, role: 'solid' | 'veil') => {
   return found
 }
 const drawn = (surface: Object3D) => surface.visible && surface.layers.isEnabled(SCENE_LAYER)
+
+test.each([false, true])(
+  'walls X-ray retains the live horizon and veil, hides the lot, and restores defaults (terrain: %p)',
+  async (terrain) => {
+    const restoreRegistry = nodeRegistry._snapshot()
+    nodeRegistry._register({
+      kind: 'site',
+      schemaVersion: 1,
+      extensions: { 'pascal:viewer': { family: 'site' } },
+    } as never)
+    setHouse(false)
+    showGroundFloor()
+    const site = lot(true, terrain)
+    useScene.setState({ nodes: { ...useScene.getState().nodes, [site.id]: site } })
+    useViewer.setState({ xrayFamily: null, walkthroughMode: false, groundWindowVeiled: false })
+    const renderer = await create(
+      <>
+        <LiveFamilyVisibility />
+        <SectionGroup>
+          <SiteRenderer node={site} />
+        </SectionGroup>
+      </>,
+    )
+    try {
+      for (const sectionEnabled of [false, true]) {
+        await act(async () => useViewer.setState({ sectionEnabled, xrayFamily: null }))
+        await renderer.advanceFrames(2, 0.05)
+        const ground = siteGround()
+        const horizon = ground.solid.find((mesh) => mesh.userData.pascalExport === 'strip')!
+        const veil = ground.veil.find(
+          (mesh) => (mesh as Mesh).geometry === (horizon as Mesh).geometry,
+        )!
+        const lotSurfaces = siteSurfaces().filter((mesh) => mesh !== horizon && mesh !== veil)
+        expect(lotSurfaces.length).toBeGreaterThan(0)
+        const defaults = [...lotSurfaces, horizon, veil].map((mesh) => [
+          mesh.visible,
+          mesh.layers.mask,
+        ])
+        await act(async () => useViewer.getState().setXrayFamily('walls'))
+        expect(drawn(horizon)).toBe(true)
+        expect(veil.layers.isEnabled(SCENE_LAYER)).toBe(true)
+        expect(veil.visible).toBe(false)
+        expect(lotSurfaces.every((mesh) => !mesh.layers.isEnabled(SCENE_LAYER))).toBe(true)
+        expect(siteGround()).toEqual(ground)
+        expect(siteSurfaces()).toContain(horizon)
+        const restoreCapture = temporarilyVeilGround(true)
+        expect(drawn(horizon)).toBe(false)
+        expect(drawn(veil)).toBe(true)
+        restoreCapture()
+        expect(drawn(horizon)).toBe(true)
+        expect(veil.visible).toBe(false)
+        await act(async () => useViewer.getState().setXrayFamily(null))
+        expect(
+          [...lotSurfaces, horizon, veil].map((mesh) => [mesh.visible, mesh.layers.mask]),
+        ).toEqual(defaults)
+      }
+    } finally {
+      await renderer.unmount()
+      restoreRegistry()
+    }
+  },
+)
 
 /** The level display shows the basement (the storeys above it hidden), as the editor sets it. */
 const showBasement = () => useViewer.setState({ belowGrade: true, gradeStanding: 'below-grade' })

@@ -310,6 +310,7 @@ export type { SectionAxis } from './lib/section'
 export { sectionBounds } from './lib/section-bounds'
 export {
   SITE_GROUND,
+  SITE_HORIZON,
   type SiteGroundRole,
   siteGround,
   siteSurfaces,

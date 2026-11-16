@@ -202,12 +202,12 @@ export function sunEvents(
 }
 
 /** The phase a moment of the day reads as, from the sun's elevation and the side of noon. */
-export type SkyPhase = 'night' | 'blue' | 'golden' | 'morning' | 'midday' | 'afternoon'
+export type SkyPhase = 'night' | 'blue' | 'dawn' | 'golden' | 'morning' | 'midday' | 'afternoon'
 
 export function skyPhase(elevation: number, minutes: number): SkyPhase {
   if (elevation < -6) return 'night'
   if (elevation < 0) return 'blue'
-  if (elevation < 10) return 'golden'
+  if (elevation < 10) return minutes < 12 * 60 ? 'dawn' : 'golden'
   if (minutes < 11 * 60) return 'morning'
   if (minutes > 14.5 * 60) return 'afternoon'
   return 'midday'

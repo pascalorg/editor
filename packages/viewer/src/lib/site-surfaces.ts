@@ -9,6 +9,9 @@ import { temporarilySetGroundAside } from './scene-visibility'
  */
 export const SITE_GROUND = 'siteGround'
 
+/** Presentation horizon and its veil keep capture ownership but never take an X-ray family. */
+export const SITE_HORIZON = 'siteHorizon'
+
 const ownerIds = new WeakMap<Object3D, string>()
 
 export const siteSurfaceOwnerId = (object: Object3D) => ownerIds.get(object)

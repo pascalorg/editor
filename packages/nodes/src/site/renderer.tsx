@@ -33,6 +33,7 @@ import {
   isDaylightAtmosphere,
   NodeRenderer,
   SITE_GROUND,
+  SITE_HORIZON,
   SiteSurfaceScope,
   siteGroundShown,
   UNDERGROUND_RIM,
@@ -773,12 +774,13 @@ export const SiteRenderer = ({ node }: { node: SiteNode }) => {
             raycast={noopRaycast}
             receiveShadow
             rotation={FLAT_ON_THE_GROUND}
-            userData={{ pascalExport: 'strip', [SITE_GROUND]: 'solid' }}
+            userData={{ pascalExport: 'strip', [SITE_GROUND]: 'solid', [SITE_HORIZON]: true }}
           />
         )}
         {showGround && !immersiveXR && horizonGeometry && horizonVeil && fadeBounds && (
           <GroundVeil
             geometry={horizonGeometry}
+            horizon
             material={horizonVeil}
             position={[fadeBounds.cx, horizonY, fadeBounds.cz]}
             rotation={FLAT_ON_THE_GROUND}

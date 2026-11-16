@@ -3,6 +3,7 @@ import type { BufferGeometry, Object3D } from 'three'
 import { familyForNode } from './scene-families'
 import { heldReasons, hideFromScene, showInScene } from './scene-visibility'
 import { type SectionState, sectionActive, sectionShadowSignature } from './section'
+import { SITE_HORIZON } from './site-surfaces'
 
 export type XrayState = { xrayFamily: string | null; walkthroughMode?: boolean }
 
@@ -82,7 +83,12 @@ export function createFamilyVisibility() {
         const draws = Boolean((object as Object3D & { geometry?: BufferGeometry }).geometry)
         const family = node && familyForNode(node, draws)
         // Collective draws have their own member filter / unmerged fallback.
-        if (!object.userData.glbBatch && family !== undefined && family !== state.xrayFamily) {
+        if (
+          !object.userData[SITE_HORIZON] &&
+          !object.userData.glbBatch &&
+          family !== undefined &&
+          family !== state.xrayFamily
+        ) {
           hideFromScene(object, 'xray')
           hidden.add(object)
         }

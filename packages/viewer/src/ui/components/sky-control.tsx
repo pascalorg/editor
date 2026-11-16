@@ -140,6 +140,8 @@ function phaseName(i18n: PascalI18n, phase: SkyPhase) {
       return presetName(i18n, 'night')
     case 'blue':
       return presetName(i18n, 'blue')
+    case 'dawn':
+      return presetName(i18n, 'dawn')
     case 'golden':
       return presetName(i18n, 'golden')
     case 'midday':
@@ -168,6 +170,7 @@ export function weatherName(i18n: PascalI18n, id: Weather) {
 const PHASE_SKY: Record<SkyPhase, [string, string]> = {
   night: ['#121a36', '#36406c'],
   blue: ['#263465', '#8c88b4'],
+  dawn: ['#8e98c6', '#f2cfb2'],
   golden: ['#8e98c6', '#f2cfb2'],
   morning: ['#6f9dd6', '#dbe7f2'],
   midday: ['#5a93d5', '#d3e4f3'],
@@ -465,10 +468,11 @@ export function SkyPanel({ sky }: { sky: ReturnType<typeof useSky> }) {
         </span>
       </div>
 
-      <div className="grid grid-cols-5 gap-2">
+      <div className="grid grid-cols-5 gap-1">
         {PRESETS.map((preset) => (
           <OptionCard
             active={sky.activePreset === preset.id}
+            compact
             detail={formatMinutes(sky.presets[preset.id])}
             icon={preset.icon}
             key={preset.id}
@@ -544,12 +548,14 @@ export function SkyPanel({ sky }: { sky: ReturnType<typeof useSky> }) {
 
 function OptionCard({
   active,
+  compact = false,
   detail,
   icon: Icon,
   name,
   onSelect,
 }: {
   active: boolean
+  compact?: boolean
   detail: string
   icon: typeof Sun
   name: string
@@ -559,7 +565,8 @@ function OptionCard({
     <button
       aria-pressed={active}
       className={cn(
-        'flex flex-col items-center gap-0.5 rounded-xl border px-1 py-2 text-center transition hover:bg-accent',
+        'flex flex-col items-center gap-0.5 rounded-xl border py-2 text-center transition hover:bg-accent',
+        compact ? 'min-w-0 px-0.5' : 'px-1',
         active
           ? 'border-violet-500 bg-violet-500/10 text-violet-700 dark:text-violet-300'
           : 'border-border text-foreground',
@@ -568,8 +575,23 @@ function OptionCard({
       type="button"
     >
       <Icon className={cn('mb-0.5 h-4 w-4', active ? '' : 'text-amber-600 dark:text-amber-400')} />
-      <span className="text-xs leading-tight">{name}</span>
-      <span className="font-mono text-[11px] text-muted-foreground tabular-nums">{detail}</span>
+      <span
+        className={
+          compact ? 'whitespace-nowrap text-[10px] leading-[15px]' : 'text-xs leading-tight'
+        }
+      >
+        {name}
+      </span>
+      <span
+        className={cn(
+          'text-muted-foreground tabular-nums',
+          compact
+            ? 'whitespace-nowrap font-mono text-[10px] leading-[16.5px]'
+            : 'font-mono text-[11px]',
+        )}
+      >
+        {detail}
+      </span>
     </button>
   )
 }
