@@ -57,7 +57,7 @@ import useViewer from '../../store/use-viewer'
 import { OPEN_SOUNDS, openingSound } from '../../systems/interactive/callout-actions'
 import { proceduralSettled } from '../../systems/interactive/opening-settled'
 import { useClipActions } from '../../systems/interactive/scripted-clips'
-import { resolveLevelVisibility } from '../../systems/level/level-utils'
+import { bakedLevelBaseY, resolveLevelVisibility } from '../../systems/level/level-utils'
 import { GlbInteractive, type GlbInteractiveItem } from './glb-interactive'
 import { bakedLoopMechanisms } from './glb-mechanisms'
 import { GlbReferenceNodes } from './glb-reference-nodes'
@@ -568,7 +568,7 @@ export function GlbScene({
         floors.push({
           id: extras.pascalId,
           node: object,
-          baseY: object.position.y,
+          baseY: bakedLevelBaseY(object),
         })
       }
       if (extras.kind === 'zone' && extras.polygon && extras.polygon.length >= 3) {

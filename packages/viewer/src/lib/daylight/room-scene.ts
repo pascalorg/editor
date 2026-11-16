@@ -12,6 +12,7 @@ import {
 import { Box3, Color, type Material, MathUtils, type Mesh, type Object3D, Vector3 } from 'three'
 import { materialEmissive, smoothstep, uniform, vec3 } from 'three/tsl'
 import { MeshStandardNodeMaterial } from 'three/webgpu'
+import { bakedLevelBaseY } from '../../systems/level/level-utils'
 import { isHighlight } from '../editor-highlight'
 import { setSurfaceRaycastLayers } from '../layers'
 import type { MapLevel } from './room-map'
@@ -241,6 +242,30 @@ function bakedLevels(root: Object3D): { objects: Object3D[]; levels: MapLevel[] 
 /** A baked artifact's level objects in the room system's level order. */
 export function bakedLevelObjects(root: Object3D | null): Object3D[] {
   return root ? bakedLevels(root).objects : []
+}
+
+/**
+ * Room rays and fed lamp positions must share the assembled frame. Only the first build may
+ * run before levels have ever stacked; restore presentation (including descendant matrices)
+ * synchronously, before the hook sends the live level offsets or anything renders.
+ */
+export function restRoomLevels(live: boolean, root: Object3D | null): () => void {
+  const elevations = live ? getLevelElevations(useScene.getState().nodes) : null
+  const ids = live ? liveLevels().ids : []
+  const objects = live ? ids.map((id) => sceneRegistry.nodes.get(id)) : bakedLevelObjects(root)
+  const moved: { object: Object3D; y: number }[] = []
+  for (const [index, object] of objects.entries()) {
+    if (!object) continue
+    const y = elevations ? (elevations.get(ids[index]!)?.baseY ?? 0) : bakedLevelBaseY(object)
+    if (object.position.y === y) continue
+    moved.push({ object, y: object.position.y })
+    object.position.y = y
+  }
+  for (const { object } of moved) object.updateWorldMatrix(true, true)
+  return () => {
+    for (const { object, y } of moved) object.position.y = y
+    for (const { object } of moved) object.updateWorldMatrix(true, true)
+  }
 }
 
 /** How open a live door is (0 closed … 1 fully open), the transient state first. */

@@ -13,6 +13,7 @@ import {
   liveDoorOpenness,
   liveLevelObjects,
   liveRoomScene,
+  restRoomLevels,
   syncLampEmitters,
 } from '../../lib/daylight/room-scene'
 import { daylightRooms } from '../../lib/daylight/rooms'
@@ -50,6 +51,7 @@ export function useDaylightRooms() {
   const nodesVersion = useRef(0)
   const state = useRef({
     signature: '',
+    built: false,
     pendingSince: -1,
     sinceCheck: CHECK_INTERVAL,
     /** Times the scene finished rebuilding geometry (no dirty nodes left), and whether it is now. */
@@ -118,29 +120,38 @@ export function useDaylightRooms() {
       const exploded = useViewer.getState().levelMode === 'exploded' || s.levelsMoved
       if (
         s.pendingSince >= REBUILD_DELAY &&
-        !exploded &&
+        (!exploded || !s.built) &&
         (!(s.live && dirty) || s.pendingSince > SETTLE_WAIT)
       ) {
         s.pendingSince = -1
-        const input = s.live
-          ? liveRoomScene(lampDefault)
-          : s.bakedRoot
-            ? bakedRoomScene(s.bakedRoot, lampDefault)
-            : null
-        daylightRooms.map.textureLimit = textureLimit(gl)
-        daylightRooms.build(
-          input ?? {
-            bounds: emptyBounds,
-            levels: [],
-            zones: [],
-            covers: [],
-            walls: [],
-            openings: [],
-            lamps: feedLamps(),
-            virtualLampsOn: lampDefault,
-          },
-        )
-        s.levelObjects = s.live ? liveLevelObjects() : bakedLevelObjects(s.bakedRoot)
+        // A viewer can open with its levels already displaced. Bootstrap in the same rest
+        // frame as a stacked build; subsequent edits keep the existing motion/explode gate.
+        const restore = !s.built ? restRoomLevels(s.live, s.bakedRoot) : undefined
+        try {
+          const input = s.live
+            ? liveRoomScene(lampDefault)
+            : s.bakedRoot
+              ? bakedRoomScene(s.bakedRoot, lampDefault)
+              : null
+          daylightRooms.map.textureLimit = textureLimit(gl)
+          daylightRooms.build(
+            input ?? {
+              bounds: emptyBounds,
+              levels: [],
+              zones: [],
+              covers: [],
+              walls: [],
+              openings: [],
+              lamps: feedLamps(),
+              virtualLampsOn: lampDefault,
+            },
+          )
+          s.levelObjects = s.live ? liveLevelObjects() : bakedLevelObjects(s.bakedRoot)
+          // An empty/loading scene must not consume the first real build's exception.
+          s.built ||= input !== null
+        } finally {
+          restore?.()
+        }
         // Built before the scene settled (a large scene still building walls and windows): build
         // again after the next wait while geometry keeps arriving, so the rooms catch up.
         if (s.live && dirty && dirtyNodes.size < s.builtDirty) {
