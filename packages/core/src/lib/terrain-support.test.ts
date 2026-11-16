@@ -112,6 +112,24 @@ describe('terrainSupportLift', () => {
     expect(terrainSupportLift(nodes, LEVEL_ID, 3, 3)).toBeNull()
   })
 
+  test('a building that names its ground level is carried by the ground wherever it is seated', () => {
+    // Seated 2.5 m up with the ground level named: the plateau is level with its base, the rest
+    // of the ground 2.5 m under it. An upper storey of the same building is still not carried.
+    const nodes = scene(
+      makeSite(),
+      makeBuilding({
+        position: [0, 2.5, 0],
+        groundLevelId: LEVEL_ID,
+        children: [LEVEL_ID, 'level_upper'],
+      }),
+      makeLevel(0),
+      makeLevel(1, 'level_upper'),
+    )
+    expect(terrainSupportLift(nodes, LEVEL_ID, 3, 3)).toBeCloseTo(0, 6)
+    expect(terrainSupportLift(nodes, LEVEL_ID, 0, 0)).toBeCloseTo(-2.5, 6)
+    expect(terrainSupportLift(nodes, 'level_upper', 3, 3)).toBeNull()
+  })
+
   test('level-local XZ goes through the building transform', () => {
     // Translated: local (0,0) sits over world (3,3) — on the plateau.
     const translated = scene(makeSite(), makeBuilding({ position: [3, 0, 3] }), makeLevel(0))

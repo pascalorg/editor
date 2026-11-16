@@ -1,10 +1,12 @@
+import type { TerrainBreakNode } from '../schema/nodes/terrain-break'
+import { type TerrainBreakSide, terrainBreakHeightAt, terrainBreakIsClosed } from './terrain-breaks'
+
 /**
- * The terrain heightfield: one regular grid of quantized heights, and the
- * only place terrain geometry is read from.
+ * Terrain read primitives for authored quantized grids and sparse virtual ground.
  *
  * Two invariants carry the whole design:
  *
- * 1. **Quantized to `Int16` multiples of `step`.** Heights are integers, so
+ * 1. **Authored heights are `Int16` multiples of `step`.** Heights are integers, so
  *    "is this ground flat?" is exact integer equality rather than an epsilon
  *    comparison. That is what lets the support election treat terrain as one
  *    discrete candidate (see `slab-support.ts`) instead of a float soup that
@@ -38,8 +40,28 @@ export type TerrainField = {
   readonly rows: number
   /** Metres per `heights` unit — the quantization ladder. */
   readonly step: number
-  /** Row-major quantized heights, length `cols * rows`. */
+  /** Dense row-major samples; sparse virtual fields may leave this buffer empty. */
   readonly heights: Int16Array
+  /** Virtual authority; its box may span sparse terrain without a dense buffer. */
+  readonly readHeightAt?: (x: number, z: number) => number
+  readonly terrainBreaks?: readonly TerrainBreakNode[]
+  readonly readHeightOnSide?: (
+    boundary: TerrainBreakNode,
+    side: TerrainBreakSide,
+    x: number,
+    z: number,
+  ) => number
+  readonly readHeightInRegion?: (originX: number, originZ: number, x: number, z: number) => number
+  /**
+   * The stored samples as written, where `readHeightAt` reads the ground beside a graded ramp as
+   * it was before the grading. A tile write seeds from this, so a write that touches a tile
+   * never puts the natural ground back under a corridor's edge samples.
+   */
+  readonly readStoredHeightAt?: (x: number, z: number) => number
+  /** Conservative vertical bounds, including the virtual continuation. */
+  readonly heightBounds?: readonly [number, number]
+  /** Horizontal far-context plane inferred from the frozen legacy base. */
+  readonly contextHeight?: number
 }
 
 /** A rectangular sub-block of samples — the unit of every terrain write. */
@@ -81,23 +103,30 @@ export function quantize(field: TerrainField, metres: number): number {
   return Math.max(-32768, Math.min(32767, raw))
 }
 
-/** Sample [c,r] in metres. Out-of-range indices clamp to the edge, so a
- * consumer reading just past the boundary gets the border height rather than
- * a hole — the same clamp-don't-ask rule the vertical model uses. */
+/** Sample [c,r] in metres. Dense grids clamp at their border; virtual grids
+ * delegate even out-of-box samples to the continuous authority. */
 export function heightAtSample(field: TerrainField, col: number, row: number): number {
+  if (field.readHeightAt) {
+    return field.readHeightAt(
+      field.origin[0] + Math.trunc(col) * field.spacing,
+      field.origin[1] + Math.trunc(row) * field.spacing,
+    )
+  }
   const c = Math.max(0, Math.min(field.cols - 1, Math.trunc(col)))
   const r = Math.max(0, Math.min(field.rows - 1, Math.trunc(row)))
   return (field.heights[r * field.cols + c] ?? 0) * field.step
 }
 
 /**
- * The ground height in metres at a world XZ, on the rendered triangle plane.
+ * The ground height in metres at a world XZ.
  *
  * This is the single read authority named in the plan. Each cell uses the same
- * `(c+1,r)`–`(c,r+1)` diagonal as `nodes/src/site/terrain-geometry.ts`, so
- * placement, picking, collision, draping, and pixels all answer the same height.
+ * `(c+1,r)`–`(c,r+1)` diagonal as authored terrain meshes. A virtual field can
+ * also provide analytic continuation, which presentation meshes approximate
+ * by sampling this same authority.
  */
 export function heightAt(field: TerrainField, x: number, z: number): number {
+  if (field.readHeightAt) return field.readHeightAt(x, z)
   if (field.cols < 2 || field.rows < 2) return heightAtSample(field, 0, 0)
 
   const u = Math.min(field.cols - 1, Math.max(0, (x - field.origin[0]) / field.spacing))
@@ -116,10 +145,15 @@ export function heightAt(field: TerrainField, x: number, z: number): number {
   return h11 + (h01 - h11) * (1 - tc) + (h10 - h11) * (1 - tr)
 }
 
+/** The ground a tile write starts from: the stored samples, not the ground beside a cut. */
+export function storedHeightAt(field: TerrainField, x: number, z: number): number {
+  return field.readStoredHeightAt ? field.readStoredHeightAt(x, z) : heightAt(field, x, z)
+}
+
 /**
  * Compatibility name for callers that explicitly describe a rendered surface.
- * There is intentionally no second interpolation model: `heightAt` is the
- * rendered triangle plane.
+ * There is intentionally no second read model: this delegates to the authored
+ * triangle surface or virtual continuation supplied by `heightAt`.
  */
 export function surfaceHeightAt(field: TerrainField, x: number, z: number): number {
   return heightAt(field, x, z)
@@ -132,10 +166,19 @@ export function surfaceHeightAt(field: TerrainField, x: number, z: number): numb
  * authority, so the normal is a property of the *field* and stays continuous
  * across triangle boundaries. Returns a unit vector, +Y up.
  */
-export function normalAt(field: TerrainField, x: number, z: number): [number, number, number] {
+function gradientAt(field: TerrainField, x: number, z: number): [number, number] {
   const d = field.spacing
-  const dhdx = (heightAt(field, x + d, z) - heightAt(field, x - d, z)) / (2 * d)
-  const dhdz = (heightAt(field, x, z + d) - heightAt(field, x, z - d)) / (2 * d)
+  const regionalRead = field.readHeightInRegion
+  const read = regionalRead
+    ? (px: number, pz: number) => regionalRead(x, z, px, pz)
+    : (px: number, pz: number) => heightAt(field, px, pz)
+  const dhdx = (read(x + d, z) - read(x - d, z)) / (2 * d)
+  const dhdz = (read(x, z + d) - read(x, z - d)) / (2 * d)
+  return [dhdx, dhdz]
+}
+
+export function normalAt(field: TerrainField, x: number, z: number): [number, number, number] {
+  const [dhdx, dhdz] = gradientAt(field, x, z)
   // Gradient (dh/dx, dh/dz) → normal (-dh/dx, 1, -dh/dz), normalized.
   const len = Math.hypot(dhdx, 1, dhdz)
   return [-dhdx / len, 1 / len, -dhdz / len]
@@ -143,21 +186,102 @@ export function normalAt(field: TerrainField, x: number, z: number): [number, nu
 
 /** Slope in radians from horizontal at a world XZ. 0 = flat, π/2 = vertical. */
 export function slopeAt(field: TerrainField, x: number, z: number): number {
-  const d = field.spacing
-  const dhdx = (heightAt(field, x + d, z) - heightAt(field, x - d, z)) / (2 * d)
-  const dhdz = (heightAt(field, x, z + d) - heightAt(field, x, z - d)) / (2 * d)
+  const [dhdx, dhdz] = gradientAt(field, x, z)
   return Math.atan(Math.hypot(dhdx, dhdz))
 }
 
+type TerrainRect = { minX: number; minZ: number; maxX: number; maxZ: number }
+type TerrainPoint = [number, number]
+
+function clipBreakToRect(
+  from: TerrainPoint,
+  to: TerrainPoint,
+  rect: TerrainRect,
+  infinite: boolean,
+): [TerrainPoint, TerrainPoint] | null {
+  let lo = infinite ? Number.NEGATIVE_INFINITY : 0
+  let hi = infinite ? Number.POSITIVE_INFINITY : 1
+  const dx = to[0] - from[0]
+  const dz = to[1] - from[1]
+  const axes: [number, number, number, number][] = [
+    [from[0], dx, rect.minX, rect.maxX],
+    [from[1], dz, rect.minZ, rect.maxZ],
+  ]
+  for (const [start, delta, min, max] of axes) {
+    if (delta === 0) {
+      if (start <= min || start >= max) return null
+      continue
+    }
+    const a = (min - start) / delta
+    const b = (max - start) / delta
+    lo = Math.max(lo, Math.min(a, b))
+    hi = Math.min(hi, Math.max(a, b))
+    if (lo >= hi) return null
+  }
+  return [
+    [from[0] + lo * dx, from[1] + lo * dz],
+    [from[0] + hi * dx, from[1] + hi * dz],
+  ]
+}
+
+function breakTracesAreLevel(
+  field: TerrainField,
+  boundary: TerrainBreakNode,
+  rect: TerrainRect,
+  level: number,
+): boolean {
+  const infinite = !terrainBreakIsClosed(boundary)
+  for (let i = 1; i < boundary.line.length; i++) {
+    const from = boundary.line[i - 1]
+    const to = boundary.line[i]
+    if (!from || !to || (infinite && i > 1)) continue
+    const span = clipBreakToRect(from, to, rect, infinite)
+    if (!span) continue
+    const [a, b] = span
+    const count = Math.max(2, Math.ceil(Math.hypot(b[0] - a[0], b[1] - a[1]) / field.spacing))
+    for (let j = 0; j <= count; j++) {
+      const x = a[0] + (b[0] - a[0]) * (j / count)
+      const z = a[1] + (b[1] - a[1]) * (j / count)
+      if (
+        terrainBreakHeightAt(field, boundary, 'left', x, z) !== level ||
+        terrainBreakHeightAt(field, boundary, 'right', x, z) !== level
+      )
+        return false
+    }
+  }
+  return true
+}
+
+function isFlatWithBreaks(field: TerrainField, rect: TerrainRect): boolean {
+  const { minX, minZ, maxX, maxZ } = rect
+  if (maxX < minX || maxZ < minZ) return true
+  const level = heightAt(field, minX, minZ)
+  if (
+    ![
+      [maxX, minZ],
+      [minX, maxZ],
+      [maxX, maxZ],
+    ].every(([x, z]) => x !== undefined && z !== undefined && heightAt(field, x, z) === level)
+  )
+    return false
+  if (!field.terrainBreaks?.every((boundary) => breakTracesAreLevel(field, boundary, rect, level)))
+    return false
+  const c0 = Math.ceil((minX - field.origin[0]) / field.spacing)
+  const r0 = Math.ceil((minZ - field.origin[1]) / field.spacing)
+  const c1 = Math.floor((maxX - field.origin[0]) / field.spacing)
+  const r1 = Math.floor((maxZ - field.origin[1]) / field.spacing)
+  for (let r = r0; r <= r1; r++)
+    for (let c = c0; c <= c1; c++) if (heightAtSample(field, c, r) !== level) return false
+  return true
+}
+
 /**
- * True when every sample under the world-XZ rect is at the identical quantized
+ * True when every authority sample under the world-XZ rect has the identical
  * height — the placement predicate for kinds that need level ground.
  *
- * Exact integer equality, which is only meaningful because heights are
- * quantized (invariant 1). A float field would need a tolerance here, and that
- * tolerance would then have to agree with the support election's own epsilon —
- * two tunables that could drift apart. Instead there is one ladder and no
- * tolerance.
+ * Authored grids compare heights on their quantization ladder. Analytic
+ * continuation uses the same exact equality, so a constant context plane is
+ * flat while any measured variation remains visible to the predicate.
  */
 export function isFlatOver(
   field: TerrainField,
@@ -166,17 +290,25 @@ export function isFlatOver(
   maxX: number,
   maxZ: number,
 ): boolean {
-  const c0 = Math.max(0, Math.floor((minX - field.origin[0]) / field.spacing))
-  const r0 = Math.max(0, Math.floor((minZ - field.origin[1]) / field.spacing))
-  const c1 = Math.min(field.cols - 1, Math.ceil((maxX - field.origin[0]) / field.spacing))
-  const r1 = Math.min(field.rows - 1, Math.ceil((maxZ - field.origin[1]) / field.spacing))
+  if (field.terrainBreaks?.length) return isFlatWithBreaks(field, { minX, minZ, maxX, maxZ })
+  const c0 = field.readHeightAt
+    ? Math.floor((minX - field.origin[0]) / field.spacing)
+    : Math.max(0, Math.floor((minX - field.origin[0]) / field.spacing))
+  const r0 = field.readHeightAt
+    ? Math.floor((minZ - field.origin[1]) / field.spacing)
+    : Math.max(0, Math.floor((minZ - field.origin[1]) / field.spacing))
+  const c1 = field.readHeightAt
+    ? Math.ceil((maxX - field.origin[0]) / field.spacing)
+    : Math.min(field.cols - 1, Math.ceil((maxX - field.origin[0]) / field.spacing))
+  const r1 = field.readHeightAt
+    ? Math.ceil((maxZ - field.origin[1]) / field.spacing)
+    : Math.min(field.rows - 1, Math.ceil((maxZ - field.origin[1]) / field.spacing))
   if (c1 < c0 || r1 < r0) return true
 
-  const first = field.heights[r0 * field.cols + c0] ?? 0
+  const first = heightAtSample(field, c0, r0)
   for (let r = r0; r <= r1; r++) {
-    const rowBase = r * field.cols
     for (let c = c0; c <= c1; c++) {
-      if ((field.heights[rowBase + c] ?? 0) !== first) return false
+      if (heightAtSample(field, c, r) !== first) return false
     }
   }
   return true
@@ -192,6 +324,7 @@ export function isFlatOver(
  * overhang the site, and clipping is the sane response.
  */
 export function applyHeightPatch(field: TerrainField, patch: HeightPatch): TerrainField {
+  if (field.readHeightAt) throw new Error('Materialize a bounded terrain edit field before writing')
   const heights = new Int16Array(field.heights)
   for (let pr = 0; pr < patch.rows; pr++) {
     const row = patch.row0 + pr

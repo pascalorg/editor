@@ -123,6 +123,13 @@ export function levelLocalToWorldXZ(
  * level at grade and its ground floor a storey up. When genuine below-grade
  * stacking lands, this rule tracks it with no change here — an excavated basement
  * will stop being at the datum, and stop being draped, on its own.
+ *
+ * **A building that names its ground level (`groundLevelId`) has said which storey
+ * stands on the ground, wherever it is seated.** Seating a house on a slope moves
+ * the building in height, so that storey's base leaves the datum; it is still the
+ * one the ground carries, and its lift is still measured from its own base. Without
+ * this, the steps, fences and posts around a seated house fell back to its flat
+ * plane, under the ground on one side of the slope and over it on the other.
  */
 function levelDatum(
   nodes: Record<string, AnyNode>,
@@ -136,7 +143,7 @@ function levelDatum(
     : null
   const datum = building?.position?.[1] ?? 0
   const baseWorldY = datum + elevation.baseY
-  if (!isSiteDatum(baseWorldY)) return null
+  if (!isSiteDatum(baseWorldY) && building?.groundLevelId !== levelId) return null
 
   return { building, baseWorldY }
 }
@@ -174,10 +181,13 @@ export function terrainSupportLift(
   levelId: string,
   x: number,
   z: number,
-  fieldOf: (site: SiteNode) => ReturnType<typeof persistedTerrainFieldOf> = persistedTerrainFieldOf,
+  fieldOf: (
+    site: SiteNode,
+    nodes: Record<string, AnyNode>,
+  ) => ReturnType<typeof persistedTerrainFieldOf> = persistedTerrainFieldOf,
 ): number | null {
   const site = siteOf(nodes)
-  const field = site ? fieldOf(site) : null
+  const field = site ? fieldOf(site, nodes) : null
   if (!field) return null
 
   const datum = levelDatum(nodes, levelId)
@@ -187,6 +197,35 @@ export function terrainSupportLift(
   // The lift is measured from the storey's own base, so a building sited on a
   // datum other than 0 does not double-count it.
   return heightAt(field, worldX, worldZ) - datum.baseWorldY
+}
+
+/**
+ * Where the ground is under a level-local point, in building-local metres: the frame a level's base
+ * is measured in. The sculpted terrain where the site has any, the flat datum elsewhere. Unlike
+ * {@link terrainSupportLift}, which says whether the ground *carries* what stands on a level (only
+ * the storey at the datum), this is answered for every level: a building on a plinth, an upper
+ * storey. What the ground does not carry still stands some distance from it, and that is a fact.
+ * Null when the level is unknown.
+ */
+export function groundHeightAt(
+  nodes: Record<string, AnyNode>,
+  levelId: string,
+  x: number,
+  z: number,
+  fieldOf: (
+    site: SiteNode,
+    nodes: Record<string, AnyNode>,
+  ) => ReturnType<typeof persistedTerrainFieldOf> = persistedTerrainFieldOf,
+): number | null {
+  const elevation = cachedLevelElevations(nodes).get(levelId)
+  if (!elevation) return null
+  const building = elevation.buildingId
+    ? ((nodes[elevation.buildingId] ?? null) as BuildingNode | null)
+    : null
+  const site = siteOf(nodes)
+  const field = site ? fieldOf(site, nodes) : null
+  const [worldX, worldZ] = levelLocalToWorldXZ(building, x, z)
+  return (field ? heightAt(field, worldX, worldZ) : SITE_DATUM_Y) - (building?.position?.[1] ?? 0)
 }
 
 /**

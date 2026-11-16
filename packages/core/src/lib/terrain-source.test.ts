@@ -84,12 +84,13 @@ describe('terrainFieldForEdit', () => {
 })
 
 describe('commitTerrainField', () => {
-  test('the encoded data reads back as the same field, without decoding', () => {
+  test('committed data retains sample storage and repeated reads share the cached authority', () => {
     const field = sculptedField()
     const data = commitTerrainField(field)
-    // Cache primed: the very next read is the identical object, so a stroke never
-    // pays for base64 at all.
-    expect(terrainFieldOf({ terrain: data })).toBe(field)
+    const resolved = terrainFieldOf({ terrain: data })
+    expect(resolved?.heights).toBe(field.heights)
+    expect(terrainFieldOf({ terrain: data })).toBe(resolved)
+    expect(heightAt(resolved as never, 3, 3)).toBe(2.5)
   })
 
   test('the encoded data is still independently decodable', () => {

@@ -320,6 +320,7 @@ export {
   railingWallDefaults,
   railingWallSlotDefault,
 } from './nodes/railing-wall'
+export { RampNode, RampSegment } from './nodes/ramp'
 // Nodes
 export {
   createDefaultRidgeVentsForSegment,
@@ -476,6 +477,15 @@ export {
 export { StructuralGridNode } from './nodes/structural-grid'
 export { SurfaceHoleMetadata } from './nodes/surface-hole-metadata'
 export { SurfacePaintRegion } from './nodes/surface-paint-region'
+export { TerrainBreakNode, type TerrainBreakNodeId } from './nodes/terrain-break'
+export {
+  TERRAIN_TILE_SAMPLES,
+  TERRAIN_TILE_SIZE,
+  TERRAIN_TILE_SPACING,
+  TerrainTileNode,
+  type TerrainTileNodeId,
+  TerrainTileNodeSchema,
+} from './nodes/terrain-tile'
 export { TurbineVentMaterialRole, TurbineVentNode } from './nodes/turbine-vent'
 export { DEFAULT_UNIT_COLOR, UNIT_KINDS, type UnitKind, UnitNode } from './nodes/unit'
 export type {

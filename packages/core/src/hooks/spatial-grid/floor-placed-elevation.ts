@@ -7,7 +7,7 @@ import type {
   FloorPlacedFootprintContext,
   FloorPlacedFootprintsResolver,
 } from '../../registry/types'
-import type { AnyNode, AnyNodeId, SlabNode } from '../../schema'
+import type { AnyNode, AnyNodeId } from '../../schema'
 import { getFloorPlacedFootprints } from './floor-placed-footprints'
 
 export { getFloorPlacedFootprints } from './floor-placed-footprints'
@@ -119,6 +119,7 @@ export function getFloorPlacedElevation({
   // Skipped entirely under a pointer cap: the cursor, not the stored
   // host, decides the target surface during a drag.
   const supportSlabId = (effectiveNode as { supportSlabId?: string | null }).supportSlabId
+  const anchor: [number, number] = [position[0], position[2]]
   if (maxElevation == null && supportSlabId) {
     if (supportSlabId === GROUND_SUPPORT_ID) return groundLift()
     const host = nodes[supportSlabId]
@@ -130,16 +131,15 @@ export function getFloorPlacedElevation({
             footprint.position ?? position,
             footprint.dimensions,
             footprint.rotation,
+            anchor,
           )
-          .map((candidate) => nodes[candidate.slabId])
-          .filter(
-            (candidate): candidate is SlabNode =>
-              candidate?.type === 'slab' && candidate.plateRole === 'platform',
-          )
-          .sort((a, b) => b.elevation - a.elevation)
+          .filter((candidate) => {
+            const slab = nodes[candidate.slabId]
+            return slab?.type === 'slab' && slab.plateRole === 'platform'
+          })
         const covering = coverings[0]
         if (covering)
-          return onFloor(covering.id, covering.elevation, footprint.position ?? position)
+          return onFloor(covering.slabId, covering.elevation, footprint.position ?? position)
       }
       const hosted = activeSpatialGrid().getHostSlabElevationForFootprint(
         resolvedLevelId,
@@ -147,6 +147,7 @@ export function getFloorPlacedElevation({
         footprint.position ?? position,
         footprint.dimensions,
         footprint.rotation,
+        anchor,
       )
       if (hosted !== null) return onFloor(supportSlabId, hosted, footprint.position ?? position)
     }
@@ -170,6 +171,7 @@ export function getFloorPlacedElevation({
       footprint.dimensions,
       footprint.rotation,
       maxElevation,
+      anchor,
     )
     const elevation =
       support.slabId === null

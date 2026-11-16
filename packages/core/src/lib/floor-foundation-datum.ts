@@ -1,6 +1,10 @@
 import { roofFaceShapes } from '../registry/roofs'
 import type { AnyNode, SlabNode } from '../schema'
-import { DEFAULT_SLAB_ELEVATION, MIN_SLAB_THICKNESS } from '../schema/nodes/slab'
+import {
+  DEFAULT_SLAB_ELEVATION,
+  DEFAULT_SLAB_THICKNESS,
+  MIN_SLAB_THICKNESS,
+} from '../schema/nodes/slab'
 import { wallOverlapsSlabFootprint } from '../systems/slab/slab-support'
 import { getWallArcData } from '../systems/wall/wall-curve'
 import { wallOpeningBand } from './floor-opening-footprints'
@@ -139,6 +143,22 @@ export function footprintLift(nodes: Readonly<Record<string, AnyNode>>, plate: S
     : plate.floorHeight !== undefined
       ? plate.floorHeight - automaticFloorHeight(nodes, plate)
       : 0
+}
+
+/**
+ * A plate that holds its underside, given a new top: a thicker or a thinner floor. A top put under
+ * the underside leaves no floor to thin, so the plate moves whole, as thick as it was (a stored
+ * plate thinner than a slab can be takes a slab's thickness): no write stores a floor with no
+ * thickness.
+ */
+export function upperFloorTopWrite(
+  plate: Pick<SlabNode, 'elevation' | 'floorHeight' | 'thickness'>,
+  nextTop: number,
+): { elevation: number; thickness: number } {
+  const round = (value: number) => Math.round(value * 1e6) / 1e6
+  const thinned = round(plate.thickness + nextTop - (plate.floorHeight ?? plate.elevation))
+  const whole = plate.thickness >= MIN_SLAB_THICKNESS ? plate.thickness : DEFAULT_SLAB_THICKNESS
+  return { elevation: round(nextTop), thickness: thinned >= MIN_SLAB_THICKNESS ? thinned : whole }
 }
 
 export function upperFloorHeightControl(

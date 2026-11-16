@@ -8,6 +8,7 @@ import {
   enableCompiledNodeParsers,
 } from '../../schema/compiled-node-parsers'
 import { ItemNode } from '../../schema/nodes/item'
+import { SiteNode } from '../../schema/nodes/site'
 import { SlabNode } from '../../schema/nodes/slab'
 import type { AnyNode } from '../../schema/types'
 import useScene from '../use-scene'
@@ -50,6 +51,18 @@ const child = ItemNode.parse({
   asset: { id: 'child', name: 'Child', category: 'decor', thumbnail: '', src: '/child.glb' },
 })
 function seed(node: AnyNode) {
+  if (node.type === 'terrain-break') {
+    const site = SiteNode.parse({ id: 'site_children', children: [node.id] })
+    useScene.setState({
+      nodes: {
+        [site.id]: site,
+        [node.id]: { ...node, parentId: site.id },
+        [child.id]: { ...child, parentId: node.id },
+      },
+      rootNodeIds: [site.id],
+    })
+    return
+  }
   useScene.setState({
     nodes: { [node.id]: node, [child.id]: { ...child, parentId: node.id } },
     rootNodeIds: [node.id],

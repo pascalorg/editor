@@ -7,6 +7,7 @@ import {
   polygonsOverlap,
 } from '../lib/polygon-relations'
 import { getRenderableSlabPolygon } from '../lib/slab-polygon'
+import { slabTerrainHeightAt } from '../lib/slab-terrain'
 import { levelBaseElevationAt } from '../lib/terrain-support-query'
 import { nodeRegistry } from '../registry/registry'
 import { getBlockFaceFrame } from '../schema/nodes/block'
@@ -113,12 +114,14 @@ function floorLift(node: AnyNode | ProceduralItemNode, nodes: QueryNodes): numbe
   )
   if (supportSlabId === 'ground') return ground
   const supportSlabs = slabs.map((slab) => liftedManualSlab(nodes as Record<string, AnyNode>, slab))
+  const elevationOf = (slab: SlabNode) =>
+    slabTerrainHeightAt(slab, nodes as Record<string, AnyNode>, position[0], position[2])
   const supportFor = (footprint: { position: Vec3; dimensions: Vec3; rotation: Vec3 }) =>
     selectSlabSupportForItem(
       supportSlabs,
       footprint,
       (slab) => getRenderableSlabPolygon(slab, { walls, siblingSlabs: supportSlabs }),
-      { preferredSlabId: supportSlabId },
+      { preferredSlabId: supportSlabId, elevationOf },
     )
   if (capability || node.type === 'cabinet' || node.type === 'cabinet-module') {
     const footprints = capability
@@ -133,9 +136,9 @@ function floorLift(node: AnyNode | ProceduralItemNode, nodes: QueryNodes): numbe
       (slab) =>
         slab && (slab.id === supportSlabId || (prefersBase && slab.plateRole === 'platform')),
     )
-    if (pinned) return pinned.elevation ?? 0.05
+    if (pinned) return elevationOf(pinned)
     return supports.length
-      ? Math.max(...supports.map((slab) => (slab ? (slab.elevation ?? 0.05) : ground)))
+      ? Math.max(...supports.map((slab) => (slab ? elevationOf(slab) : ground)))
       : ground
   }
   if (!(isProceduralItem(node) || node.type === 'item' || node.type === 'shelf')) return 0
@@ -150,7 +153,7 @@ function floorLift(node: AnyNode | ProceduralItemNode, nodes: QueryNodes): numbe
         rotation: node.rotation,
       }
   const support = supportFor(footprint)
-  return support ? (support.elevation ?? 0.05) : ground
+  return support ? elevationOf(support) : ground
 }
 function nodeParentFrame(
   node: AnyNode | ProceduralItemNode,

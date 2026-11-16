@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import type { HeightPatch, TerrainField } from '../lib/terrain-field'
+import { setTerrainLiveSource } from '../lib/terrain-source'
 
 /**
  * In-progress terrain edits, held as a live `TerrainField` rather than as node
@@ -24,6 +25,14 @@ import type { HeightPatch, TerrainField } from '../lib/terrain-field'
  */
 
 export type LiveTerrainStroke = {
+  /**
+   * Identity of this stroke, unique per `begin`. This is how a caller holding
+   * a stroke across an async gap (the sculpt tool between pointer-down and
+   * pointer-up) tells "my stroke is still the live one" from "my stroke was
+   * ended or superseded meanwhile" — the difference between committing and
+   * silently overwriting the write that replaced it.
+   */
+  readonly id: number
   /** The field as it was at pointer-down. Never mutated during the stroke. */
   readonly snapshot: TerrainField
   /** The field as of the most recent dab — what the renderer and readers see. */
@@ -61,7 +70,7 @@ type LiveTerrainState = {
    * only ever comes from a deliberate stroke boundary. Callers own the boundary —
    * `end` first, or don't begin.
    */
-  begin(siteId: string, field: TerrainField): void
+  begin(siteId: string, field: TerrainField): number
   /** Record a dab. `field` must be the result of applying `patch`. */
   advance(siteId: string, field: TerrainField, patch: HeightPatch): void
   /** The live field for a site, or undefined when no stroke is in flight. */
@@ -76,16 +85,21 @@ type LiveTerrainState = {
   endAll(): void
 }
 
+let nextStrokeId = 1
+
 const useLiveTerrain = create<LiveTerrainState>((set, get) => ({
   strokes: new Map(),
   remoteStrokes: new Map(),
 
-  begin: (siteId, field) =>
+  begin: (siteId, field) => {
+    const id = nextStrokeId++
     set((state) => {
       const next = new Map(state.strokes)
-      next.set(siteId, { snapshot: field, field, lastPatch: null })
+      next.set(siteId, { id, snapshot: field, field, lastPatch: null })
       return { strokes: next }
-    }),
+    })
+    return id
+  },
 
   advance: (siteId, field, patch) =>
     set((state) => {
@@ -95,7 +109,7 @@ const useLiveTerrain = create<LiveTerrainState>((set, get) => ({
       // model and reintroduce compounding.
       if (!current) return state
       const next = new Map(state.strokes)
-      next.set(siteId, { snapshot: current.snapshot, field, lastPatch: patch })
+      next.set(siteId, { id: current.id, snapshot: current.snapshot, field, lastPatch: patch })
       return { strokes: next }
     }),
 
@@ -142,5 +156,7 @@ const useLiveTerrain = create<LiveTerrainState>((set, get) => ({
         : { remoteStrokes: new Map(), strokes: new Map() },
     ),
 }))
+
+setTerrainLiveSource((siteId) => useLiveTerrain.getState().fieldOf(siteId))
 
 export default useLiveTerrain

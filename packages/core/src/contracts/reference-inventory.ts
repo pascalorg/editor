@@ -221,6 +221,24 @@ export const EXISTING_REFERENCES: readonly ExistingReference[] = [
     remaps: ['clone-scene-graph'],
     note: 'Only the whole-graph clone remaps `dormerId`.',
   }),
+  ...(['startTargetId', 'endTargetId'] as const).map((path) =>
+    row({
+      kind: 'ramp',
+      path,
+      ...policy('node', 'connection', 'freeze', 'strip'),
+      targetKinds: ['door', 'level'],
+      remaps: ['clone-scene-graph'],
+      note: 'The modeled endpoint a ramp is measured against, not its host. Missing targets remain unmatched diagnostics; the authored profile stays in place.',
+    }),
+  ),
+  row({
+    kind: 'ramp',
+    path: 'terrainEffect.siteId',
+    ...policy('node', 'internal', 'drop', 'strip'),
+    targetKinds: ['site'],
+    remaps: ['clone-scene-graph'],
+    note: 'The Site whose ground this grading receipt can restore. The receipt is scene-local ownership, not reusable preset content.',
+  }),
   row({
     kind: 'item',
     path: 'blockFaceId',

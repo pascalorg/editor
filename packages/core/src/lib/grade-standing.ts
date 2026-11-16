@@ -3,6 +3,7 @@ import {
   BELOW_GRADE_TOLERANCE,
   getLevelElevations,
   isLevelBelowGrade,
+  levelFloorWorldY,
   levelPlaneWorldY,
 } from '../services/storey'
 import { pointInPolygon } from '../systems/slab/slab-support'
@@ -67,6 +68,37 @@ export function levelGradeStanding(
 }
 
 /**
+ * Whether the ground stands over `levelId`'s floor at a plan point of the level (building-local
+ * metres): everywhere on a level below grade, nowhere on one at grade, and on a level only partly
+ * below grade the floor under the point judged against the terrain, or against the datum on a flat
+ * site (the sunken room of a split level), the reading `levelGradeStanding` makes of the whole
+ * floor. A wall or a room asks it where the level as a whole is only partly buried.
+ */
+export function groundCovers(
+  nodes: Record<AnyNodeId, AnyNode>,
+  levelId: string,
+): (x: number, z: number) => boolean {
+  const standing = levelGradeStanding(nodes, levelId)
+  const level = nodes[levelId as LevelNode['id']]
+  const floorY = levelFloorWorldY(nodes, levelId)
+  if (standing !== 'partly-below-grade' || level?.type !== 'level' || floorY === null) {
+    const covered = standing === 'below-grade'
+    return () => covered
+  }
+  const field = terrainFieldOverLevel(nodes, level)
+  const placed = placedBuilding(nodes, level)
+  const plane = levelPlaneWorldY(nodes, levelId)
+  const slabs = floorSlabsOf(nodes, level)
+  return (x, z) => {
+    const slab = plane === null ? undefined : slabs.find((s) => pointInPolygon(x, z, s.polygon))
+    const floor = plane !== null && slab ? plane + slab.elevation : floorY
+    if (!field) return floorBuriedOnFlatSite(floor)
+    const [worldX, worldZ] = levelLocalToWorldXZ(placed, x, z)
+    return heightAt(field, worldX, worldZ) - floor > BELOW_GRADE_TOLERANCE
+  }
+}
+
+/**
  * A flat site with no ground line named: the datum is the ground under every floor, and each floor
  * slab of the level is judged against it as the sampled path judges them against the field. A split
  * level whose raised part sits at grade is partly below grade over its sunken room, not at grade
@@ -100,7 +132,7 @@ const floorSlabsMemo = new WeakMap<object, Map<string, SlabNode[]>>()
  * level with rooms, under one of them. A slab outside every room (an entry pad, a stoop) is the
  * site's, as flatwork is, not a floor the ground can bury.
  */
-function floorSlabsOf(nodes: Record<AnyNodeId, AnyNode>, level: LevelNode): SlabNode[] {
+export function floorSlabsOf(nodes: Record<AnyNodeId, AnyNode>, level: LevelNode): SlabNode[] {
   let levels = floorSlabsMemo.get(nodes)
   if (!levels) {
     levels = new Map()
@@ -244,7 +276,7 @@ export function terrainFieldOverLevel(
   const site =
     (building?.parentId ? nodes[building.parentId as AnyNodeId] : undefined) ??
     Object.values(nodes).find((node) => node.type === 'site')
-  return site?.type === 'site' ? terrainFieldOf(site) : null
+  return site?.type === 'site' ? terrainFieldOf(site, nodes) : null
 }
 
 /**
@@ -283,6 +315,12 @@ export function footprintFloorSamples(
     }
   }
   return samples
+}
+
+function placedBuilding(nodes: Record<AnyNodeId, AnyNode>, level: LevelNode): BuildingNode | null {
+  const buildingId = getLevelElevations(nodes).get(level.id)?.buildingId
+  const building = buildingId ? nodes[buildingId as AnyNodeId] : undefined
+  return building?.type === 'building' ? (building as BuildingNode) : null
 }
 
 function slabSamples(polygon: Array<[number, number]>, spacing: number): Array<[number, number]> {

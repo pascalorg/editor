@@ -23,6 +23,7 @@ import {
   floorPlateHoldsUnderside,
   footprintSupportsNode,
   supportDerivedFloorHeight,
+  upperFloorTopWrite,
 } from './floor-foundation-datum'
 import {
   changedLevelConstructionDisplacements,
@@ -103,8 +104,7 @@ export function expandFloorIntentChanges(
         data: {
           ...update.data,
           floorHeight: undefined,
-          thickness: roundFloorElevation(plate.thickness + nextTop - currentTop),
-          elevation: roundFloorElevation(nextTop),
+          ...upperFloorTopWrite(plate, nextTop),
         } as Partial<AnyNode>,
       }
     }

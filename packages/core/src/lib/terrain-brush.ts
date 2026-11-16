@@ -286,8 +286,18 @@ function resolveSample(stroke: TerrainStroke, index: number, col: number, row: n
  * that is 4 225 entries at the default 65² size.
  */
 function smoothedSnapshot(stroke: TerrainStroke): Int16Array {
-  if (stroke.smoothed) return stroke.smoothed
-  const field = stroke.snapshot
+  if (!stroke.smoothed) stroke.smoothed = diffuseHeights(stroke.snapshot)
+  return stroke.smoothed
+}
+
+/**
+ * The whole field diffused in quantized units: `SMOOTH_ITERATIONS` Jacobi
+ * passes at λ = `SMOOTH_LAMBDA` on a 4-neighbour stencil, borders clamped.
+ * The one definition of "smoothed ground" — the brush's smooth dabs lerp
+ * toward it per stroke, and `shape_site_terrain`'s smooth verb lerps the
+ * samples in its area toward the same target, so the two cannot drift apart.
+ */
+export function diffuseHeights(field: TerrainField): Int16Array {
   let current = new Int16Array(field.heights)
   let next = new Int16Array(current.length)
   for (let iteration = 0; iteration < SMOOTH_ITERATIONS; iteration++) {
@@ -308,7 +318,6 @@ function smoothedSnapshot(stroke: TerrainStroke): Int16Array {
     current = next
     next = swap
   }
-  stroke.smoothed = current
   return current
 }
 

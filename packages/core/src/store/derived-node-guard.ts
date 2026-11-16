@@ -3,6 +3,7 @@ import {
   floorPlateAtGroundContact,
   floorPlateHoldsUnderside,
   supportDerivedFloorHeight,
+  upperFloorTopWrite,
 } from '../lib/floor-foundation-datum'
 import { expandFloorIntentChanges, floorIntentConflicts } from '../lib/floor-intent-changes'
 import { ownFloorIntentChanges } from '../lib/own-floor-intent'
@@ -124,11 +125,8 @@ export function derivedFieldViolations(
     floorPlateHoldsUnderside(nodes, current) &&
     typeof patch.elevation === 'number' &&
     typeof patch.thickness === 'number' &&
-    Math.abs(
-      patch.elevation -
-        patch.thickness -
-        ((current.floorHeight ?? current.elevation) - current.thickness),
-    ) <= 1e-6
+    // The top moved over a held underside, or put under it with the plate moved whole.
+    Math.abs(patch.thickness - upperFloorTopWrite(current, patch.elevation).thickness) <= 1e-6
   const violations = PROTECTED_FIELDS[current.type].filter(
     (field) =>
       Object.hasOwn(patch, field) &&

@@ -136,6 +136,7 @@ export function decodeHeightPatch(value: unknown): HeightPatch | null {
 }
 
 export function encodeTerrainField(field: TerrainField): TerrainData {
+  if (field.readHeightAt) throw new Error('Virtual terrain cannot be persisted as a legacy field')
   return {
     type: 'heightfield',
     origin: [field.origin[0], field.origin[1]],
@@ -201,6 +202,7 @@ export function decodeTerrainField(data: unknown): TerrainField | null {
  * undefined` instead of carrying ~11 KB of base64 zeroes in every saved scene.
  */
 export function isDatumField(field: TerrainField): boolean {
+  if (field.readHeightAt) return false
   for (let i = 0; i < field.heights.length; i++) {
     if (field.heights[i] !== 0) return false
   }

@@ -1,4 +1,6 @@
 import { z } from 'zod'
+import { encodeTerrainField } from '../../lib/terrain-codec'
+import { createTerrainField } from '../../lib/terrain-field'
 import { shelfRecipe } from '../../procedural-items/fixtures'
 import * as schema from '../index'
 import { AnyNode, type AnyNodeType, nodeKindOf } from '../types'
@@ -13,6 +15,18 @@ import { AnyNode, type AnyNodeType, nodeKindOf } from '../types'
 /** Fields a kind requires beyond the defaults its own schema fills in. */
 export const NODE_REQUIRED_FIELDS: Record<string, Record<string, unknown>> = {
   beam: { start: [0, 0], end: [4, 0] },
+  'terrain-break': {
+    parentId: 'site_terrain',
+    line: [[-15, 0], [15, 0]],
+    kind: 'cliff',
+    left: 2,
+    right: 'ground',
+  },
+  'terrain-tile': {
+    ix: 0,
+    iz: 0,
+    heights: encodeTerrainField(createTerrainField({ cols: 65, rows: 65, spacing: 0.5 })).heights,
+  },
   ceiling: {
     polygon: [
       [0, 0],
@@ -66,6 +80,11 @@ export const NODE_REQUIRED_FIELDS: Record<string, Record<string, unknown>> = {
     ],
   },
   'procedural-item': { recipe: shelfRecipe },
+  ramp: {
+    start: [0, 0],
+    segments: [{ type: 'line', end: [10, 0] }],
+    endHeight: -1,
+  },
   slab: {
     polygon: [
       [0, 0],

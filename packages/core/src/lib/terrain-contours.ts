@@ -12,7 +12,9 @@
  *
  * Drawn on the site plan at a user-selectable contour interval (6", 12", …).
  */
-import { heightAtSample, type TerrainField } from './terrain-field'
+import { segmentsIntersect } from './polygon-relations'
+import { terrainBreakIsClosed, terrainBreakSideAt } from './terrain-breaks'
+import { heightAt, heightAtSample, type TerrainField } from './terrain-field'
 
 export type Pt = readonly [number, number]
 
@@ -52,6 +54,37 @@ function cross(
   return [ax + (bx - ax) * t, az + (bz - az) * t]
 }
 
+function cellHasTerrainBreak(
+  field: TerrainField,
+  x0: number,
+  z0: number,
+  x1: number,
+  z1: number,
+): boolean {
+  const corners: [number, number][] = [
+    [x0, z0],
+    [x1, z0],
+    [x1, z1],
+    [x0, z1],
+  ]
+  return (field.terrainBreaks ?? []).some((terrainBreak) => {
+    const side = terrainBreakSideAt(terrainBreak, x0, z0)
+    if (corners.some(([x, z]) => terrainBreakSideAt(terrainBreak, x, z) !== side)) return true
+    if (!terrainBreakIsClosed(terrainBreak)) return false
+    if (terrainBreak.line.some(([x, z]) => x >= x0 && x <= x1 && z >= z0 && z <= z1)) return true
+    return terrainBreak.line.slice(1).some((to, index) => {
+      const from = terrainBreak.line[index]
+      return (
+        from &&
+        corners.some((start, corner) => {
+          const end = corners[(corner + 1) % corners.length]
+          return end && segmentsIntersect(from, to, start, end)
+        })
+      )
+    })
+  })
+}
+
 /** The segments of one level across the field (marching squares, 16 cases). */
 function levelSegments(field: TerrainField, level: number, lot: readonly Pt[]): Seg[] {
   const out: Seg[] = []
@@ -59,6 +92,11 @@ function levelSegments(field: TerrainField, level: number, lot: readonly Pt[]): 
   const [ox, oz] = field.origin
   for (let row = 0; row + 1 < rows; row++) {
     for (let col = 0; col + 1 < cols; col++) {
+      const x0 = ox + col * spacing
+      const x1 = x0 + spacing
+      const z0 = oz + row * spacing
+      const z1 = z0 + spacing
+      if (field.terrainBreaks?.length && cellHasTerrainBreak(field, x0, z0, x1, z1)) continue
       // corners: a = (col,row) b = (col+1,row) c = (col+1,row+1) d = (col,row+1)
       const ha = heightAtSample(field, col, row)
       const hb = heightAtSample(field, col + 1, row)
@@ -70,10 +108,6 @@ function levelSegments(field: TerrainField, level: number, lot: readonly Pt[]): 
         (hc >= level ? 2 : 0) |
         (hd >= level ? 1 : 0)
       if (code === 0 || code === 15) continue
-      const x0 = ox + col * spacing
-      const x1 = x0 + spacing
-      const z0 = oz + row * spacing
-      const z1 = z0 + spacing
       const top = () => cross(x0, z0, ha, x1, z0, hb, level)
       const right = () => cross(x1, z0, hb, x1, z1, hc, level)
       const bottom = () => cross(x0, z1, hd, x1, z1, hc, level)
@@ -182,7 +216,8 @@ function chain(segments: Seg[]): Pt[][] {
 
 /**
  * The contours of a field at `intervalM`, clipped to the lot. Every fifth
- * level (counted from zero) is an index contour.
+ * level (counted from zero) is an index contour. Large virtual extents use a
+ * coarser view grid, never more than 256² cells; stored terrain is not resampled.
  */
 export function terrainContours(
   field: TerrainField,
@@ -190,6 +225,7 @@ export function terrainContours(
   lot: readonly Pt[],
 ): Contour[] {
   if (!(intervalM > 0)) return []
+  field = contourSampleField(field)
   let lo = Number.POSITIVE_INFINITY
   let hi = Number.NEGATIVE_INFINITY
   for (let row = 0; row < field.rows; row++) {
@@ -214,4 +250,32 @@ export function terrainContours(
     }
   }
   return out
+}
+
+function contourSampleField(field: TerrainField): TerrainField {
+  const maxCells = 256 * 256
+  const cellsX = field.cols - 1
+  const cellsZ = field.rows - 1
+  if (!field.readHeightAt) return field
+  let stride = Math.max(
+    1,
+    Math.ceil(Math.sqrt((cellsX * cellsZ) / maxCells)),
+    Math.ceil(Math.max(cellsX, cellsZ) / maxCells),
+  )
+  while (Math.ceil(cellsX / stride) * Math.ceil(cellsZ / stride) > maxCells) stride *= 2
+  const samples = new Map<string, number>()
+  return {
+    ...field,
+    spacing: field.spacing * stride,
+    cols: Math.ceil(cellsX / stride) + 1,
+    rows: Math.ceil(cellsZ / stride) + 1,
+    readHeightAt: (x, z) => {
+      const key = `${x},${z}`
+      const cached = samples.get(key)
+      if (cached !== undefined) return cached
+      const height = heightAt(field, x, z)
+      samples.set(key, height)
+      return height
+    },
+  }
 }

@@ -551,6 +551,22 @@ export function getWallTop(
 }
 
 /**
+ * A wall's top where it is lowest: the height the whole wall clears. A flat top is the one top, so
+ * callers written before tops could slope (the realign's R&D-only checks) read it unchanged.
+ */
+export function getWallTopLowest(
+  wall: WallNode,
+  levelId: string,
+  nodes: Record<AnyNodeId, AnyNode>,
+  electedBase: number,
+): number {
+  return Math.min(
+    getWallTop(wall, levelId, nodes, electedBase, 0),
+    getWallTop(wall, levelId, nodes, electedBase, 1),
+  )
+}
+
+/**
  * The lowest point of {@link getWallTop} over arc-length stations `[left, right]`. A sloped top is
  * linear along the chord (the frame the viewer slopes the extrusion in), so it is lowest at one end.
  */

@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import { livePreviewsVisible } from './live-previews'
+import { livePreviewsVisible } from '../lib/live-previews'
 
 export type LiveNodeOverrides = Record<string, unknown>
 

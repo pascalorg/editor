@@ -12,6 +12,7 @@ import {
   supportIndexOf,
   withSpatialGrid,
 } from '../hooks/spatial-grid/spatial-grid-manager'
+import { withoutLivePreviews } from '../lib/live-previews'
 import { resolveLevelId } from '../lib/node-ancestry'
 import { getNodePluginId, nodeRegistry } from '../registry/registry'
 import type { AnyNode, AnyNodeId, Collection } from '../schema'
@@ -22,7 +23,6 @@ import {
 } from '../store/actions/node-actions'
 import { runSettlingDocument } from '../store/document-settling'
 import { pauseSceneHistory, resumeSceneHistory, type SceneSnapshot } from '../store/history-control'
-import { withoutLivePreviews } from '../store/live-previews'
 import { createSceneEnvironment, type SceneEnvironment } from '../store/scene-environment'
 import useScene, {
   createSceneStore,
