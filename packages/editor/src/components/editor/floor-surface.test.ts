@@ -101,6 +101,73 @@ test('on the ground level the site ground counts; on other levels it does not', 
   expect(topAt(surface, 3, 3, 2.71)).toBeNull()
 })
 
+test("sculpted ground in tiles is the site's ground too, and the surface says how high it stands", () => {
+  scene([
+    node(GROUND, 'level', null, { level: 0 }),
+    node(UPPER, 'level', null, { level: 1 }),
+    node('site_a', 'site', null),
+    node('tile_a', 'terrain-tile', 'site_a'),
+    node('building_a', 'building', 'site_a'),
+  ])
+  const site = new THREE.Group()
+  // A tile is a node of its own under the site, as a building is: its mesh is the ground.
+  const tile = new THREE.Group()
+  tile.add(slabMesh(3, 0.01))
+  const building = new THREE.Group()
+  building.add(slabMesh(8, 0.3))
+  site.add(tile, building)
+  register('tile_a', 'terrain-tile', tile)
+  register('building_a', 'building', building)
+  register('site_a', 'site', site)
+
+  const surface = new FloorSurface()
+  surface.levelId = GROUND
+  // The hill, 3 m over the level's floor, and not the building standing on the site.
+  expect(topAt(surface, 3, 3)).toBeCloseTo(3, 6)
+  expect(surface.reachY).toBeCloseTo(3, 6)
+  // Sculpted in place, it stands higher at once.
+  tile.children[0]!.position.y += 2.5
+  tile.updateMatrixWorld(true)
+  expect(surface.reachY).toBeCloseTo(5.5, 6)
+  // Another level's floor is not the ground.
+  surface.levelId = UPPER
+  expect(topAt(surface, 3, 3, 2.71)).toBeNull()
+  expect(surface.reachY).toBeNull()
+})
+
+test('past the property line the sculpted tiles are not the ground: nothing of them is drawn there', () => {
+  scene([
+    node(GROUND, 'level', null, { level: 0 }),
+    // A lot of 4 x 4 m on tiles that reach 5 m each way, as tiles do past any lot.
+    node('site_a', 'site', null, {
+      polygon: {
+        type: 'polygon',
+        points: [
+          [-2, -2],
+          [2, -2],
+          [2, 2],
+          [-2, 2],
+        ],
+      },
+    }),
+    node('tile_a', 'terrain-tile', 'site_a'),
+  ])
+  const site = new THREE.Group()
+  const tile = new THREE.Group()
+  tile.add(slabMesh(3, 0.01))
+  site.add(tile)
+  register('tile_a', 'terrain-tile', tile)
+  register('site_a', 'site', site)
+
+  const surface = new FloorSurface()
+  surface.levelId = GROUND
+  expect(topAt(surface, 1, 1)).toBeCloseTo(3, 6)
+  // Over the tile's own geometry still, but past the line: the hill is not drawn here, and an
+  // eye out there is not held over it.
+  expect(topAt(surface, 4, 1)).toBeNull()
+  expect(topAt(surface, -1, -4.5)).toBeNull()
+})
+
 test('rebuilding a slab in place moves the revision so a cached answer is refreshed', () => {
   scene([node(GROUND, 'level', null, { level: 0 }), node('slab_base', 'slab', GROUND)])
   const slab = slabMesh(0.05)

@@ -393,6 +393,32 @@ test('a camera that drops from high above straight under a raised floor is held 
   expect(controls.camera.position.y).toBeCloseTo(1 + GROUND_MIN_Y, 4)
 })
 
+test('a hill standing far over the level floor holds the eye, as a platform near it does', () => {
+  const hillside = (reachY?: number) => ({
+    revision: 0,
+    reachY,
+    // The pad the house stands on, and a hill 6 m high past x = -8.
+    topAt: (x: number) => (x < -8 ? 6 : 0),
+  })
+  const sweep = (surface: ReturnType<typeof hillside>) => {
+    const controls = groundFloorControls()
+    controls.floorSurface = surface
+    // A level orbit 5 m up, 16 m out, starting over the pad on the +x side.
+    controls.setLookAt(ROOM_CENTRE.x + 16, 5, ROOM_CENTRE.z, ROOM_CENTRE.x, 5, ROOM_CENTRE.z, false)
+    settleLong(controls)
+    expect(controls.camera.position.y).toBeCloseTo(5, 6)
+    // Half a turn takes the eye over the hill, a metre under its top.
+    controls.rotate(Math.PI, 0, false)
+    settleLong(controls, 240)
+    expect(controls.camera.position.x).toBeLessThan(-8)
+    return controls.camera.position.y
+  }
+  // The surface says how high it stands: the eye rides over the hill.
+  expect(sweep(hillside(6))).toBeCloseTo(6 + ORBIT_FLOOR_CLEARANCE, 4)
+  // A surface that says nothing is looked up near the level's floor only, as before.
+  expect(sweep(hillside())).toBeCloseTo(5, 6)
+})
+
 test('over a hole in the floor the camera keeps the floor it came from, not the level below', () => {
   // A stair void over z < 3; a 0.5 m floor elsewhere.
   const controls = groundFloorControls()
