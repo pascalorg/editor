@@ -97,58 +97,231 @@ test('installs the pointer filter only during a cut and restores the host filter
   }
 })
 
-test('the indexed zone pass retains section clipping ancestry for fills and borders', async () => {
-  const { LayerPassIndex, LayerPassNode } = await import('../../lib/layer-pass')
-  const { ZONE_LAYER } = await import('../../lib/layers')
-  const { Layers, PerspectiveCamera, Scene } = await import('three')
-  const { NodeFrame, PassNode } = await import('three/webgpu')
-  useViewer.setState({ sectionEnabled: true, sectionAxis: 'x', sectionPosition: 0 })
-  const renderer = await create(
-    <SectionGroup>
-      <mesh name="fill" layers={ZONE_LAYER} />
-      <mesh name="border" layers={ZONE_LAYER} />
-    </SectionGroup>,
-  )
-  const group = renderer.scene.children[0]!.instance as ClippingGroup
-  const scene = new Scene()
-  scene.add(group)
-  const index = new LayerPassIndex(scene, [ZONE_LAYER])
-  const camera = new PerspectiveCamera()
-  const main = new PassNode(PassNode.COLOR, scene, camera)
-  main.updateBefore = () => undefined
-  const pass = new LayerPassNode(index, camera, ZONE_LAYER, main)
-  const layers = new Layers()
-  layers.set(ZONE_LAYER)
-  pass.setLayers(layers)
-  const seen: string[] = []
-  const frame = new NodeFrame()
-  frame.renderer = {
-    getRenderTarget: () => null,
-    setRenderTarget() {},
-    getMRT: () => null,
-    setMRT() {},
-    getOutputRenderTarget: () => null,
-    getDrawingBufferSize: (size: any) => size.set(100, 100),
-    render(root: Scene) {
-      const visit = (object: any, context: ClippingContext) => {
-        if (object.isClippingGroup && object.enabled && camera.layers.test(object.layers))
-          context = context.getGroupContext(object)
-        if (object.isMesh && camera.layers.test(object.layers)) {
-          expect(context.unionPlanes).toHaveLength(1)
-          seen.push(object.name)
+test.each([
+  { kind: 'zone', axis: 'x' },
+  { kind: 'room', axis: 'x' },
+  { kind: 'room', axis: 'y' },
+] as const)(
+  'the indexed $kind pass retains $axis section clipping ancestry',
+  async ({ kind, axis }) => {
+    const { LayerPassIndex, LayerPassNode } = await import('../../lib/layer-pass')
+    const { ZONE_LAYER, OVERLAY_LAYER } = await import('../../lib/layers')
+    const { RoomAssemblyMesh, describeZoneOutline } = await import('../../ui')
+    const { ZoneNode } = await import('@pascal-app/core')
+    const { Object3D } = await import('three')
+    const layer = kind === 'zone' ? ZONE_LAYER : OVERLAY_LAYER
+    const room = describeZoneOutline(
+      'level_a',
+      ZoneNode.parse({
+        name: 'Room',
+        polygon: [
+          [-2, -2],
+          [2, -2],
+          [2, 2],
+          [-2, 2],
+        ],
+      }),
+    )
+    const level = new Object3D()
+    const { Layers, PerspectiveCamera, Scene } = await import('three')
+    const { NodeFrame, PassNode } = await import('three/webgpu')
+    useViewer.setState({
+      sectionEnabled: true,
+      sectionAxis: axis,
+      sectionPosition: axis === 'y' ? 1.2 : 0,
+    })
+    const renderer = await create(
+      kind === 'zone' ? (
+        <SectionGroup>
+          <mesh name="fill" layers={layer} />
+          <mesh name="border" layers={layer} />
+        </SectionGroup>
+      ) : (
+        <RoomAssemblyMesh
+          room={room}
+          heights={{
+            floorY: 0,
+            wallTops: new Map(),
+            ceiling: { polygon: room.polygon, holes: [], y: 3 },
+          }}
+          levelObject={() => level}
+        />
+      ),
+    )
+    const group = renderer.scene.children[0]!.instance as ClippingGroup
+    const scene = new Scene()
+    scene.add(group)
+    const index = new LayerPassIndex(scene, [layer])
+    const camera = new PerspectiveCamera()
+    const main = new PassNode(PassNode.COLOR, scene, camera)
+    main.updateBefore = () => undefined
+    const pass = new LayerPassNode(index, camera, layer, main)
+    const layers = new Layers()
+    layers.set(layer)
+    pass.setLayers(layers)
+    const seen: string[] = []
+    const frame = new NodeFrame()
+    frame.renderer = {
+      getRenderTarget: () => null,
+      setRenderTarget() {},
+      getMRT: () => null,
+      setMRT() {},
+      getOutputRenderTarget: () => null,
+      getDrawingBufferSize: (size: any) => size.set(100, 100),
+      render(root: Scene) {
+        const visit = (object: any, context: ClippingContext) => {
+          if (object.isClippingGroup && object.enabled && camera.layers.test(object.layers))
+            context = context.getGroupContext(object)
+          if ((object.isMesh || object.isLineSegments) && camera.layers.test(object.layers)) {
+            expect(context.unionPlanes).toHaveLength(1)
+            seen.push(object.name)
+          }
+          for (const child of object.children) visit(child, context)
         }
-        for (const child of object.children) visit(child, context)
-      }
-      visit(root, new ClippingContext())
-    },
-  } as any
+        visit(root, new ClippingContext())
+      },
+    } as any
+    try {
+      pass.updateBefore(frame)
+      if (kind === 'zone') expect(seen).toEqual(['fill', 'border'])
+      else expect(seen).toHaveLength(3)
+      const removed = new Vector3(0, 0, 0)
+      removed[axis] = 2
+      expect(group.clippingPlanes[0]!.distanceToPoint(removed)).toBeLessThan(0)
+      await act(async () => useViewer.getState().setSectionEnabled(false))
+      expect(group.enabled).toBe(false)
+    } finally {
+      index.dispose()
+      pass.dispose()
+      main.dispose()
+      await renderer.unmount()
+    }
+  },
+)
+
+test.each(['x', 'y', 'z'] as const)(
+  'baked %s cuts keep lot surfaces and capture ownership but clip a tree',
+  async (axis) => {
+    const { BakedSiteSurfaces, bakedSiteSurfaceScopes } = await import('./site-surface-scope')
+    const { BoxGeometry, Group, Mesh } = await import('three')
+    const { sceneRegistry } = await import('@pascal-app/core')
+    const { SITE_GROUND, siteGround, siteSurfaces, sectionBounds } = await import('../../index')
+    const { isSectionObject } = await import('./section-group')
+    const root = new Group()
+    const site = new Group()
+    site.userData = { kind: 'site', pascalId: 'site_baked_cut' }
+    site.position.set(4, 0, 2)
+    const ground = new Mesh(new BoxGeometry(1000, 1, 1000))
+    ground.userData[SITE_GROUND] = 'solid'
+    const line = new Mesh()
+    const tree = new Group()
+    tree.userData = { kind: 'item', pascalId: 'item_tree' }
+    tree.position.set(3, 2, 1)
+    const canopy = new Mesh(new BoxGeometry(2, 4, 2))
+    tree.add(canopy)
+    site.add(ground, line, tree)
+    root.add(site)
+    root.updateWorldMatrix(true, true)
+    const before = ground.matrixWorld.clone()
+    const bounds = sectionBounds(root)!.clone()
+    sceneRegistry.nodes.set('site_baked_cut', site)
+    sceneRegistry.byType.site!.add('site_baked_cut')
+    useViewer.setState({
+      sectionEnabled: true,
+      sectionAxis: axis,
+      sectionPosition: axis === 'y' ? -2 : 0,
+    })
+    const renderer = await create(
+      <SectionGroup name="baked-model-cut">
+        <primitive object={root} />
+        <BakedSiteSurfaces scopes={bakedSiteSurfaceScopes(root)} />
+      </SectionGroup>,
+    )
+    try {
+      await renderer.advanceFrames(1, 0.01)
+      ground.updateWorldMatrix(true, false)
+      expect(ground.matrixWorld.equals(before)).toBe(true)
+      expect(isSectionObject(ground)).toBe(false)
+      expect(isSectionObject(line)).toBe(false)
+      expect(isSectionObject(canopy)).toBe(true)
+      expect(sectionBounds(renderer.scene.instance as Object3D)!.equals(bounds)).toBe(true)
+      const plane = (
+        renderer.scene.findByProps({ name: 'baked-model-cut' }).instance as ClippingGroup
+      ).clippingPlanes[0]!
+      expect(plane.distanceToPoint(canopy.getWorldPosition(new Vector3()))).toBeLessThan(0)
+      expect(siteGround().solid).toContain(ground)
+      expect(siteSurfaces()).toEqual(expect.arrayContaining([ground, line]))
+      await act(async () => useViewer.getState().setSectionEnabled(false))
+      expect(site.children).toEqual([ground, line, tree])
+      await act(async () => useViewer.getState().setSectionEnabled(true))
+      expect(isSectionObject(ground)).toBe(false)
+      await act(async () => useViewer.getState().setExporting(true))
+      expect(site.children).toEqual([ground, line, tree])
+      await act(async () => useViewer.getState().setExporting(false))
+      expect(isSectionObject(ground)).toBe(false)
+    } finally {
+      await renderer.unmount()
+      expect(site.children).toEqual([ground, line, tree])
+      sceneRegistry.nodes.delete('site_baked_cut')
+      sceneRegistry.byType.site!.delete('site_baked_cut')
+    }
+  },
+)
+
+test('room labels update with the section and a moving level, then return to their resting anchor', async () => {
+  const { useSectionRoomLabel } = await import('../../ui/components/rooms/room-labels')
+  const { DEFAULT_LEVEL_HEIGHT } = await import('@pascal-app/core')
+  const { Object3D } = await import('three')
+  const level = new Object3D()
+  level.position.y = 4
+  const entry = {
+    zoneId: 'zone_label_cut',
+    polygon: [
+      [-2, -2],
+      [2, -2],
+      [2, 2],
+      [-2, 2],
+    ] as [number, number][],
+    holes: [],
+    area: 16,
+  }
+  function Label() {
+    const label = useSectionRoomLabel(entry, 0, 3, () => level)
+    return label ? <group name="room-label" position={label.position} /> : null
+  }
+  useViewer.setState({
+    sectionEnabled: false,
+    sectionAxis: 'y',
+    sectionPosition: 5.2,
+    sectionFlipped: false,
+  })
+  const renderer = await create(<Label />)
+  const position = () => renderer.scene.findByProps({ name: 'room-label' }).instance.position
+  const frame = () =>
+    act(async () => {
+      await renderer.advanceFrames(1, 0.01)
+    })
   try {
-    pass.updateBefore(frame)
-    expect(seen).toEqual(['fill', 'border'])
+    expect(position().y).toBe(DEFAULT_LEVEL_HEIGHT / 2)
+    await act(async () => useViewer.getState().setSectionEnabled(true))
+    await frame()
+    expect(position().y).toBeCloseTo(1.2)
+    level.position.y = 5
+    await frame()
+    expect(position().y).toBeCloseTo(0.2)
+    level.position.y = 6
+    await frame()
+    expect(renderer.scene.findAllByProps({ name: 'room-label' })).toHaveLength(0)
+    await act(async () => useViewer.getState().setWalkthroughMode(true))
+    await frame()
+    expect(position().y).toBe(DEFAULT_LEVEL_HEIGHT / 2)
+    await act(async () => {
+      useViewer.getState().setSectionEnabled(false)
+      useViewer.getState().setWalkthroughMode(false)
+    })
+    await frame()
+    expect(position().y).toBe(DEFAULT_LEVEL_HEIGHT / 2)
   } finally {
-    index.dispose()
-    pass.dispose()
-    main.dispose()
     await renderer.unmount()
   }
 })

@@ -33,16 +33,15 @@ import {
   isDaylightAtmosphere,
   NodeRenderer,
   SITE_GROUND,
+  SiteSurfaceScope,
   siteGroundShown,
   UNDERGROUND_RIM,
   useImmersiveXRPresentation,
   useNodeEvents,
   useSceneAtmosphere,
   useSceneGroundReplacement,
-  useSiteSurfaceOwner,
   useViewer,
 } from '@pascal-app/viewer'
-import { createPortal, useThree } from '@react-three/fiber'
 import { useEffect, useMemo, useRef } from 'react'
 import {
   BufferAttribute,
@@ -199,7 +198,6 @@ export const SiteRenderer = ({ node }: { node: SiteNode }) => {
 
   useRegistry(node.id, 'site', ref)
 
-  const scene = useThree((state) => state.scene)
   const theme = useViewer((state) => state.sceneAppearance)
   // The colored appearance's daylight look: a neutral parcel, lit by the sky (Standard), on a
   // squared ground whose horizon the atmosphere's fog blends into the sky.
@@ -710,8 +708,6 @@ export const SiteRenderer = ({ node }: { node: SiteNode }) => {
   // `showGround` hides both ground and horizon when authored geometry supplies them, unless a level
   // below grade is shown: the level display hides that geometry then, and the ground stands in.
   const showSiteSurfaces = node.visible !== false
-  const horizonRef = useRef<Group>(null)
-  useSiteSurfaceOwner(node.id, horizonRef)
   const showGround = siteGroundShown(node, { belowGrade })
 
   if (!(node && lineGeometry)) {
@@ -735,144 +731,148 @@ export const SiteRenderer = ({ node }: { node: SiteNode }) => {
         <NodeRenderer key={childId} nodeId={childId as AnyNodeId} />
       ))}
 
-      {/* Sculpted ground, when the site has terrain */}
-      {showSiteSurfaces && showGround && showTerrain && (
-        <TerrainRenderer
-          holes={holes}
-          material={groundMaterial}
-          polygon={polygonPoints}
-          site={node}
-          veil={groundVeil}
-        />
-      )}
-
-      {/* Ground fill: site polygon with slab holes, occludes below-grade geometry */}
-      {showSiteSurfaces && showGround && groundGeometry && !showTerrain && (
-        <>
-          <mesh
-            geometry={groundGeometry}
+      <SiteSurfaceScope siteId={node.id} object={() => ref.current}>
+        {/* Sculpted ground, when the site has terrain */}
+        {showSiteSurfaces && showGround && showTerrain && (
+          <TerrainRenderer
+            holes={holes}
             material={groundMaterial}
-            position={GROUND_FILL_POSITION}
-            receiveShadow
-            rotation={FLAT_ON_THE_GROUND}
-            userData={{ [SITE_GROUND]: 'solid' }}
+            polygon={polygonPoints}
+            site={node}
+            veil={groundVeil}
           />
-          <GroundVeil
-            geometry={groundGeometry}
-            material={groundVeil}
-            position={GROUND_FILL_POSITION}
-            rotation={FLAT_ON_THE_GROUND}
-          />
-        </>
-      )}
+        )}
 
-      {/* The horizon is world presentation, outside the model's section scope. */}
-      {createPortal(
-        <group ref={horizonRef}>
-          {/* Infinite-ground presentation disc fading into the sky at the horizon */}
-          {showGround && !immersiveXR && horizonGeometry && horizonMaterial && fadeBounds && (
+        {/* Ground fill: site polygon with slab holes, occludes below-grade geometry */}
+        {showSiteSurfaces && showGround && groundGeometry && !showTerrain && (
+          <>
             <mesh
-              geometry={horizonGeometry}
-              material={horizonMaterial}
-              position={[fadeBounds.cx, horizonY, fadeBounds.cz]}
-              raycast={noopRaycast}
+              geometry={groundGeometry}
+              material={groundMaterial}
+              position={GROUND_FILL_POSITION}
               receiveShadow
               rotation={FLAT_ON_THE_GROUND}
-              userData={{ pascalExport: 'strip', [SITE_GROUND]: 'solid' }}
+              userData={{ [SITE_GROUND]: 'solid' }}
             />
-          )}
-          {showGround && !immersiveXR && horizonGeometry && horizonVeil && fadeBounds && (
             <GroundVeil
-              geometry={horizonGeometry}
-              material={horizonVeil}
-              position={[fadeBounds.cx, horizonY, fadeBounds.cz]}
+              geometry={groundGeometry}
+              material={groundVeil}
+              position={GROUND_FILL_POSITION}
               rotation={FLAT_ON_THE_GROUND}
             />
-          )}
-        </group>,
-        scene,
-      )}
-
-      {showSiteSurfaces && ribbons && (
-        <>
-          {/* The property line: dark, thick, long dash + two dots, on the ground */}
+          </>
+        )}
+      </SiteSurfaceScope>
+      <SiteSurfaceScope siteId={node.id}>
+        {/* Infinite-ground presentation disc fading into the sky at the horizon */}
+        {showGround && !immersiveXR && horizonGeometry && horizonMaterial && fadeBounds && (
           <mesh
-            frustumCulled={false}
-            geometry={ribbons.property}
+            geometry={horizonGeometry}
+            material={horizonMaterial}
+            position={[fadeBounds.cx, horizonY, fadeBounds.cz]}
             raycast={noopRaycast}
-            renderOrder={9}
-          >
-            <meshBasicMaterial
-              color="#1c1917"
-              depthWrite={false}
-              side={DoubleSide}
-              toneMapped={false}
-            />
-          </mesh>
-          {/* The setback envelope: black dashes */}
-          {ribbons.envelope && (
+            receiveShadow
+            rotation={FLAT_ON_THE_GROUND}
+            userData={{ pascalExport: 'strip', [SITE_GROUND]: 'solid' }}
+          />
+        )}
+        {showGround && !immersiveXR && horizonGeometry && horizonVeil && fadeBounds && (
+          <GroundVeil
+            geometry={horizonGeometry}
+            material={horizonVeil}
+            position={[fadeBounds.cx, horizonY, fadeBounds.cz]}
+            rotation={FLAT_ON_THE_GROUND}
+          />
+        )}
+      </SiteSurfaceScope>
+      <SiteSurfaceScope siteId={node.id} object={() => ref.current}>
+        {showSiteSurfaces && ribbons && (
+          <>
+            {/* The property line: dark, thick, long dash + two dots, on the ground */}
             <mesh
               frustumCulled={false}
-              geometry={ribbons.envelope}
+              geometry={ribbons.property}
               raycast={noopRaycast}
               renderOrder={9}
             >
               <meshBasicMaterial
-                color="#000000"
+                color="#1c1917"
                 depthWrite={false}
-                opacity={0.85}
                 side={DoubleSide}
                 toneMapped={false}
-                transparent
               />
             </mesh>
-          )}
-          {/* The corner sight triangles */}
-          {ribbons.triangles.map((g, i) => (
-            <mesh frustumCulled={false} geometry={g} key={i} raycast={noopRaycast} renderOrder={9}>
-              <meshBasicMaterial
-                color="#000000"
-                depthWrite={false}
-                opacity={0.85}
-                side={DoubleSide}
-                toneMapped={false}
-                transparent
-              />
-            </mesh>
-          ))}
-          {/* The thin ring the sculpt tool moves live */}
-          {/* @ts-expect-error */}
-          <line frustumCulled={false} geometry={lineGeometry} renderOrder={8}>
-            <lineBasicMaterial color="#1c1917" opacity={0.5} transparent />
+            {/* The setback envelope: black dashes */}
+            {ribbons.envelope && (
+              <mesh
+                frustumCulled={false}
+                geometry={ribbons.envelope}
+                raycast={noopRaycast}
+                renderOrder={9}
+              >
+                <meshBasicMaterial
+                  color="#000000"
+                  depthWrite={false}
+                  opacity={0.85}
+                  side={DoubleSide}
+                  toneMapped={false}
+                  transparent
+                />
+              </mesh>
+            )}
+            {/* The corner sight triangles */}
+            {ribbons.triangles.map((g, i) => (
+              <mesh
+                frustumCulled={false}
+                geometry={g}
+                key={i}
+                raycast={noopRaycast}
+                renderOrder={9}
+              >
+                <meshBasicMaterial
+                  color="#000000"
+                  depthWrite={false}
+                  opacity={0.85}
+                  side={DoubleSide}
+                  toneMapped={false}
+                  transparent
+                />
+              </mesh>
+            ))}
+            {/* The thin ring the sculpt tool moves live */}
+            {/* @ts-expect-error */}
+            <line frustumCulled={false} geometry={lineGeometry} renderOrder={8}>
+              <lineBasicMaterial color="#1c1917" opacity={0.5} transparent />
+            </line>
+          </>
+        )}
+
+        {/* Simple boundary line */}
+        {showSiteSurfaces && !ribbons && (
+          // @ts-expect-error
+          <line frustumCulled={false} geometry={lineGeometry} renderOrder={9}>
+            <lineBasicMaterial color="#f59e0b" linewidth={2} opacity={0.6} transparent />
           </line>
-        </>
-      )}
+        )}
 
-      {/* Simple boundary line */}
-      {showSiteSurfaces && !ribbons && (
-        // @ts-expect-error
-        <line frustumCulled={false} geometry={lineGeometry} renderOrder={9}>
-          <lineBasicMaterial color="#f59e0b" linewidth={2} opacity={0.6} transparent />
-        </line>
-      )}
-
-      {/* The contour lines: thin, translucent, barely black, on the ground */}
-      {showSiteSurfaces && contourGeometry && (
-        <lineSegments
-          frustumCulled={false}
-          geometry={contourGeometry}
-          raycast={noopRaycast}
-          renderOrder={8}
-        >
-          <lineBasicMaterial
-            color="#000000"
-            depthWrite={false}
-            opacity={0.22}
-            toneMapped={false}
-            transparent
-          />
-        </lineSegments>
-      )}
+        {/* The contour lines: thin, translucent, barely black, on the ground */}
+        {showSiteSurfaces && contourGeometry && (
+          <lineSegments
+            frustumCulled={false}
+            geometry={contourGeometry}
+            raycast={noopRaycast}
+            renderOrder={8}
+          >
+            <lineBasicMaterial
+              color="#000000"
+              depthWrite={false}
+              opacity={0.22}
+              toneMapped={false}
+              transparent
+            />
+          </lineSegments>
+        )}
+      </SiteSurfaceScope>
     </group>
   )
 }

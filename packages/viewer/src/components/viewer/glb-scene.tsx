@@ -56,8 +56,9 @@ import { GlbReplaceInstances } from './glb-replace-instances'
 import { bindGlbShutters, isGlbShutterHit, toggleGlbShutters } from './glb-scene-motion'
 import { GlbSelectionCallout } from './glb-selection-callout'
 import { useSceneAtmosphere } from './scene-atmosphere'
-import { SectionGroup } from './section-group'
+import { isSectionObject, SectionGroup } from './section-group'
 import type { CalloutSound } from './selection-callout'
+import { BakedSiteSurfaces, bakedSiteSurfaceScopes } from './site-surface-scope'
 
 /** Baked `kind` → surface role, so monochrome can recolor by role like the
  *  parametric viewer (textures-off collapses each face to its themed clay). */
@@ -383,6 +384,7 @@ export function GlbScene({
     )
     return { entries, mixer, actions: proceduralActions }
   }, [gltf.scene, gltf.animations])
+  const siteSurfaceScopes = useMemo(() => bakedSiteSurfaceScopes(gltf.scene), [gltf.scene])
   const camera = useThree((state) => state.camera)
   const controls = useThree((state) => state.controls) as LookAtControls | null
   const walkthroughMode = useViewer((s) => s.walkthroughMode)
@@ -1196,7 +1198,9 @@ export function GlbScene({
       if (walkthroughMode || !onPick) return
       const pick = resolveGlbPick(
         filterXrayHits(
-          filterSectionHits(event.intersections, useViewer.getState()),
+          filterSectionHits(event.intersections, useViewer.getState(), (hit) =>
+            isSectionObject(hit.object),
+          ),
           useViewer.getState(),
         ),
         identity,
@@ -1227,7 +1231,9 @@ export function GlbScene({
       if (walkthroughMode || !onPick) return
       const pick = resolveGlbPick(
         filterXrayHits(
-          filterSectionHits(event.intersections, useViewer.getState()),
+          filterSectionHits(event.intersections, useViewer.getState(), (hit) =>
+            isSectionObject(hit.object),
+          ),
           useViewer.getState(),
         ),
         identity,
@@ -1262,6 +1268,7 @@ export function GlbScene({
     <group ref={rootRef}>
       {walkingOnFoot && shuttersInView ? <GlbShuttersPrompt /> : null}
       <SectionGroup>
+        <BakedSiteSurfaces scopes={siteSurfaceScopes} />
         <primitive
           object={gltf.scene}
           onClick={handleClick}
@@ -1293,7 +1300,7 @@ export function GlbScene({
         sceneNodes={sceneNodes}
         toggleOpen={toggleOpenable}
       />
-      <GlbDaylightGround root={gltf.scene} />
+      <GlbDaylightGround scopes={siteSurfaceScopes} />
     </group>
   )
 }
@@ -1345,7 +1352,7 @@ function disposeBatchLook(batch: THREE.Mesh) {
  * disc): the squared daylight ground just under the baked site fill, so the parcel keeps its own
  * surface; the atmosphere's fog takes it to the horizon.
  */
-function GlbDaylightGround({ root }: { root: THREE.Object3D }) {
+function GlbDaylightGround({ scopes }: { scopes: ReturnType<typeof bakedSiteSurfaceScopes> }) {
   const atmosphere = useSceneAtmosphere()
   const daylight = isDaylightAtmosphere(atmosphere)
   // The baked site fill (the site's own opaque surface) becomes the daylight parcel: a neutral,
@@ -1354,9 +1361,9 @@ function GlbDaylightGround({ root }: { root: THREE.Object3D }) {
     if (!daylight) return
     const parcel = createDaylightGroundMaterial(false, { color: DAYLIGHT_PARCEL })
     const swapped: [THREE.Mesh, THREE.Material | THREE.Material[]][] = []
-    root.traverse((object) => {
-      if ((object.userData as PascalExtras).kind !== 'site') return
-      for (const child of object.children) {
+    for (const { parent, objects } of scopes) {
+      if ((parent.userData as PascalExtras).kind !== 'site') continue
+      for (const child of objects) {
         const mesh = child as THREE.Mesh
         const material = mesh.material as THREE.Material | undefined
         if (!mesh.isMesh || (mesh.userData as PascalExtras).pascalId || !material) continue
@@ -1364,12 +1371,12 @@ function GlbDaylightGround({ root }: { root: THREE.Object3D }) {
         swapped.push([mesh, mesh.material])
         mesh.material = parcel
       }
-    })
+    }
     return () => {
       for (const [mesh, material] of swapped) mesh.material = material
       parcel.dispose()
     }
-  }, [daylight, root])
+  }, [daylight, scopes])
   const solid = useViewer((state) => state.shading === 'solid')
   const material = useMemo(() => {
     if (!daylight) return null

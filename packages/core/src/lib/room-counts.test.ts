@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test'
+import { readRooms } from '../agent-operations'
 import { LevelNode, roomCounts, type SceneGraph, ZoneNode } from '../index'
 
 const square: [number, number][] = [
@@ -84,14 +85,14 @@ describe('roomCounts', () => {
     expect(roomCounts(graph([[...outdoor, room()]]))).toMatchObject({ modelledAreaM2: 16 })
   })
 
-  test('generic and legacy default zones are unclassified, even when named Bedroom', () => {
+  test('legacy and generic level zones count as rooms, like the viewer list', () => {
     const legacy = ZoneNode.parse({ name: 'Bedroom', polygon: square })
     const explicit = room('Bedroom', { spaceRole: 'generic' })
     expect(roomCounts(graph([[legacy, explicit]]))).toEqual({
-      rooms: 0,
-      bedrooms: null,
-      modelledAreaM2: null,
-      unclassifiedZones: 2,
+      rooms: 2,
+      bedrooms: 2,
+      modelledAreaM2: 16,
+      unclassifiedZones: 0,
     })
   })
 
@@ -121,3 +122,40 @@ test('a hidden site keeps the bedrooms in its visible buildings counted', async 
   scene.rootNodeIds = [site.id]
   expect(roomCounts(scene)).toMatchObject({ rooms: 1, bedrooms: 1, modelledAreaM2: 16 })
 })
+
+const translatedBedrooms = [
+  ['Dormitorio 1', ['Armario del dormitorio', 'Pasillo del dormitorio', 'Baño del dormitorio']],
+  [
+    'Schlafzimmer 1',
+    ['Schlafzimmer Ankleidezimmer', 'Schlafzimmer Flur', 'Schlafzimmer Badezimmer'],
+  ],
+  [
+    'Camera da letto 1',
+    [
+      'Guardaroba della camera da letto',
+      'Corridoio della camera da letto',
+      'Bagno della camera da letto',
+    ],
+  ],
+  [
+    'Quarto 1',
+    ['Armário do quarto', 'Corredor do quarto', 'Banheiro do quarto', 'Quarto de banho'],
+  ],
+  ['Slaapkamer 1', ['Slaapkamer inloopkast', 'Slaapkamer gang', 'Slaapkamer badkamer']],
+  ['Спальня 1', ['Гардеробная спальни', 'Коридор спальни', 'Ванная спальни']],
+  ['卧室1', ['卧室衣柜', '卧室走廊', '卧室卫生间']],
+  ['寝室1', ['寝室のクローゼット', '寝室の廊下', '寝室の浴室']],
+] as const
+
+test.each(translatedBedrooms)(
+  '%s is a bedroom in facts and room readings; its annexes are not',
+  (name, annexes) => {
+    expect(roomCounts(graph([[room(name)]]))).toMatchObject({ bedrooms: 1 })
+    for (const annex of annexes)
+      expect(roomCounts(graph([[room(annex)]]))).toMatchObject({ bedrooms: 0 })
+    const readings = readRooms(graph([[room(name), ...annexes.map((annex) => room(annex))]]).nodes)
+    expect(readings.find((reading) => reading.name === name)?.use).toBe('bedroom')
+    for (const annex of annexes)
+      expect(readings.find((reading) => reading.name === annex)?.use).not.toBe('bedroom')
+  },
+)

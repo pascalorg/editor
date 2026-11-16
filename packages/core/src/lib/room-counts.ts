@@ -1,5 +1,5 @@
 import { isOutdoorRoom, roomUseOfName } from '../building/room-use'
-import type { AnyNodeId } from '../schema'
+import type { AnyNodeId, ZoneNode } from '../schema'
 import type { SceneGraph } from '../utils/clone-scene-graph'
 import { hidesDescendants } from './node-visibility'
 import { area, type Polygon, union } from './polygon-boolean'
@@ -9,6 +9,11 @@ export type RoomCounts = {
   bedrooms: number | null
   modelledAreaM2: number | null
   unclassifiedZones: number
+}
+
+/** The viewer lists visible zones with a usable outline, including legacy generic zones. */
+export function isRoomZone(zone: Pick<ZoneNode, 'polygon'> & { visible?: boolean }): boolean {
+  return zone.visible !== false && zone.polygon.length >= 3
 }
 
 /** Counts visible, reachable rooms; area is the indoor footprint union on each level, in m². */
@@ -27,8 +32,12 @@ export function roomCounts(graph: SceneGraph): RoomCounts {
     if (!node || (node.visible === false && hidesDescendants(node))) continue
     const level = node.type === 'level' ? node.id : entry.level
     if (node.type === 'zone') {
-      // The schema's legacy default is generic, not room: missing roles remain unclassified.
-      if (node.spaceRole !== 'room') unclassifiedZones++
+      if (
+        !isRoomZone(node) ||
+        !node.parentId ||
+        graph.nodes[node.parentId as AnyNodeId]?.type !== 'level'
+      )
+        unclassifiedZones++
       else {
         rooms++
         if (roomUseOfName(node.name) === 'bedroom') bedrooms++

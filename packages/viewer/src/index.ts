@@ -84,6 +84,7 @@ export {
   type CalloutText,
   SelectionCallout,
 } from './components/viewer/selection-callout'
+export { SiteSurfaceScope } from './components/viewer/site-surface-scope'
 export { applyWalkthroughCameraClipping } from './components/viewer/viewer-camera'
 export {
   isViewerPresentationTextureBorrowed,

@@ -5,7 +5,10 @@ import {
   BuildingNode,
   createTerrainField,
   encodeTerrainField,
+  ItemNode,
   LevelNode,
+  nodeRegistry,
+  registerNode,
   SiteNode,
   SlabNode,
   useScene,
@@ -18,7 +21,8 @@ import {
   useViewer,
 } from '@pascal-app/viewer'
 import { act, create } from '@react-three/test-renderer'
-import type { Mesh, Object3D } from 'three'
+import { type Mesh, type Object3D, Vector3 } from 'three'
+import type { ClippingGroup } from 'three/webgpu'
 import { SiteRenderer } from './renderer'
 
 // `showGround: false` says other geometry (an authored landscape, on a level above the ground)
@@ -164,30 +168,78 @@ test('the stand-in follows the level display live: it comes with the basement an
   }
 })
 
-test('a section clips the parcel while the horizon remains world presentation', async () => {
-  setHouse(false)
-  showGroundFloor()
-  useViewer.getState().setSectionEnabled(true)
-  const renderer = await create(
-    <SectionGroup name="cut-model">
-      <SiteRenderer node={lot(true)} />
-    </SectionGroup>,
-  )
-  try {
-    const scene = renderer.scene.instance as Object3D
-    const scope = renderer.scene.findByProps({ name: 'cut-model' }).instance
-    const isInside = (object: Object3D) => {
-      for (let ancestor: Object3D | null = object; ancestor; ancestor = ancestor.parent) {
-        if (ancestor === scope) return true
+test.each(['x', 'y', 'z'] as const)(
+  'a %s cut leaves all site surfaces outside the model scope',
+  async (axis) => {
+    setHouse(false)
+    showGroundFloor()
+    useViewer.setState({
+      sectionEnabled: true,
+      sectionAxis: axis,
+      sectionPosition: axis === 'y' ? -2 : 0,
+    })
+    const restoreRegistry = nodeRegistry._snapshot()
+    registerNode({
+      kind: 'item',
+      schemaVersion: 1,
+      schema: ItemNode,
+      category: 'furnish',
+      defaults: () => ({}) as never,
+      capabilities: {},
+      renderer: {
+        kind: 'parametric',
+        module: async () => ({ default: () => <mesh name="tree-on-lot" position={[3, 2, 1]} /> }),
+      },
+    })
+    const site = lot(true)
+    const tree = { id: 'item_cut_tree', type: 'item', parentId: site.id, visible: true } as AnyNode
+    site.children = [tree.id]
+    useScene.setState({ nodes: { ...useScene.getState().nodes, [tree.id]: tree } })
+    const renderer = await create(
+      <SectionGroup name="cut-model">
+        <SiteRenderer node={site} />
+      </SectionGroup>,
+    )
+    try {
+      const scene = renderer.scene.instance as Object3D
+      const scope = renderer.scene.findByProps({ name: 'cut-model' }).instance
+      const isInside = (object: Object3D) => {
+        for (let ancestor: Object3D | null = object; ancestor; ancestor = ancestor.parent) {
+          if (ancestor === scope) return true
+        }
+        return false
       }
-      return false
+      const treeMesh = renderer.scene.findByProps({ name: 'tree-on-lot' }).instance as Object3D
+      expect(isInside(treeMesh)).toBe(true)
+      expect(
+        (scope as ClippingGroup).clippingPlanes[0]!.distanceToPoint(
+          treeMesh.getWorldPosition(new Vector3()),
+        ),
+      ).toBeLessThan(0)
+      const ground = surfaces(scene, 'solid')
+      const horizon = ground.filter((mesh) => mesh.userData.pascalExport === 'strip')
+      expect(horizon).toHaveLength(1)
+      expect(horizon.every((mesh) => !isInside(mesh))).toBe(true)
+      expect(
+        ground.filter((mesh) => !horizon.includes(mesh)).every((mesh) => !isInside(mesh)),
+      ).toBe(true)
+      const lines: Object3D[] = []
+      scene.traverse((object) => {
+        if (object.type === 'Line' || object.renderOrder === 9) lines.push(object)
+      })
+      expect(lines.length).toBeGreaterThan(0)
+      expect(lines.every((line) => !isInside(line))).toBe(true)
+      await act(async () => useViewer.getState().setExporting(true))
+      // The exporter clones the model root after this commit, with the full lot under its site.
+      const exportedGround = surfaces(scope, 'solid').filter(
+        (mesh) => mesh.userData.pascalExport !== 'strip',
+      )
+      expect(exportedGround).toHaveLength(1)
+      await act(async () => useViewer.getState().setExporting(false))
+      expect(surfaces(scope, 'solid')).toHaveLength(0)
+    } finally {
+      await renderer.unmount()
+      restoreRegistry()
     }
-    const ground = surfaces(scene, 'solid')
-    const horizon = ground.filter((mesh) => mesh.userData.pascalExport === 'strip')
-    expect(horizon).toHaveLength(1)
-    expect(horizon.every((mesh) => !isInside(mesh))).toBe(true)
-    expect(ground.filter((mesh) => !horizon.includes(mesh)).every(isInside)).toBe(true)
-  } finally {
-    await renderer.unmount()
-  }
-})
+  },
+)
