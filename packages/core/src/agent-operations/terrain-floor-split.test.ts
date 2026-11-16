@@ -256,6 +256,44 @@ describe('a split floor is said (D41)', () => {
     const facts = run.tool('read_terrain_facts', {}) as unknown as Facts
     expect(facts.open.filter((finding) => finding.code === 'floor_split')).toEqual([])
   })
+
+  test('a gentle rise splits the floor less, and is said all the same', () => {
+    const run = pureRunner(emptyLot())
+    const shellId = neutralHouse(run.tool)
+    // 5 %: the floor that rests on the ground follows it to about 0.45 m; the room stays at 0.05.
+    run.tool('set_terrain_plane', {
+      ...HILL,
+      through: [
+        { at: [0, 10], heightM: -0.5 },
+        { at: [0, -10], heightM: 0.5 },
+      ],
+    })
+    const facts = run.tool('read_terrain_facts', {}) as unknown as Facts
+    const split = facts.open.find((finding) => finding.id === shellId)
+    expect(split?.code).toBe('floor_split')
+    expect(split?.value).toBeCloseTo(0.4, 1)
+  })
+
+  test('a detached shed on the same level is another floor, not a split one', () => {
+    const run = pureRunner(emptyLot())
+    for (const [name, polygon] of ROOMS) run.tool('create_room', { levelId: LEVEL, name, polygon })
+    run.tool('create_room', { levelId: LEVEL, name: 'Living', polygon: LIVING })
+    run.tool('create_room', {
+      levelId: LEVEL,
+      name: 'Shed',
+      polygon: [
+        [9, -2],
+        [12, -2],
+        [12, 1],
+        [9, 1],
+      ],
+    })
+    run.tool('set_terrain_plane', HILL)
+    const tops = new Set(basePlates(run.nodes()).map((plate) => plate.elevation.toFixed(2)))
+    expect(tops.size).toBe(2)
+    const facts = run.tool('read_terrain_facts', {}) as unknown as Facts
+    expect(facts.open.filter((finding) => finding.code === 'floor_split')).toEqual([])
+  })
 })
 
 describe('a room with no floor plate is read and named by the terraforming tools (D43)', () => {

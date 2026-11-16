@@ -84,11 +84,6 @@ export const TERRAIN_FACT_LIMITS = {
   walkPercent: 12.5,
   /** The end of a flight or a ramp this far from the ground or the sill misses it. */
   meetM: 0.05,
-  /**
-   * A room's stored floor elevation this far off the floor that the ground has moved: the stored
-   * figure is level-local and did not follow the ground (three risers; a deliberate step is less).
-   */
-  floorSplitM: 0.45,
   /** A house this close to the top of a face this high stands at the edge of a drop. */
   dropEdgeM: 2,
   dropHeightM: 1,
@@ -814,11 +809,20 @@ function houseFacts(
   }
 }
 
+/** Whether two outlines touch or come within a wall's thickness of each other. */
+function touches(a: Pt[], b: Pt[]): boolean {
+  const reach = 0.35
+  return (
+    a.some(([x, z]) => inOrNear(x, z, b, reach)) || b.some(([x, z]) => inOrNear(x, z, a, reach))
+  )
+}
+
 /**
  * What splits the floor of a house's ground level, and the rooms the house holds with no floor:
- * - shared base plates (not a room's own keyed floor) standing at different heights;
- * - a room whose stored floor elevation (level-local) stays where it was while the ground moved
- *   the floor that follows it: the room gets a plate of its own that far off the rest;
+ * - shared base plates (not a room's own keyed floor) of one house, joined by a room or touching,
+ *   standing at different heights (a detached shed on the same level is another floor);
+ * - a room with a floor elevation of its own (level-local, written once) off the floor that the
+ *   ground has moved: it stands on a plate of its own that far off the rest;
  * - a room with no floor plate: no seat moves it, its walls stand on their own foot.
  */
 function floorFindings(house: HouseGroundFacts, nodes: SceneNodes): TerrainFinding[] {
@@ -839,22 +843,39 @@ function floorFindings(house: HouseGroundFacts, nodes: SceneNodes): TerrainFindi
       slab.plateRole === 'base' && !(slab.zoneIds ?? []).some((id) => zoneOf(id)?.floor?.footprint),
   )
   const tops = shared.map((slab) => ({ slab, top: plane + floorTopOf(nodes, slab) }))
-  const high = Math.max(...tops.map((each) => each.top))
-  const low = Math.min(...tops.map((each) => each.top))
-  if (tops.length > 1 && high - low > L.meetM)
-    findings.push({
-      code: 'floor_split',
-      id: level.id,
-      value: round(high - low),
-      message: `The floor of ${level.id} is split into ${tops.length} plates at different heights: ${tops
-        .map(
-          ({ slab, top }) =>
-            `${slab.id} at ${top.toFixed(2)} m (${(slab.zoneIds ?? [])
-              .map((id) => zoneOf(id)?.name ?? id)
-              .join(', ')})`,
-        )
-        .join('; ')}.`,
-    })
+  // The plates of one house: joined by a room of the level (with a floor or without) or touching.
+  const rooms = level.children.flatMap((id) => {
+    const zone = zoneOf(id)
+    return zone?.spaceRole === 'room' && zone.polygon.length >= 3 ? [zone.polygon as Pt[]] : []
+  })
+  const joined = (a: SlabNode, b: SlabNode) =>
+    touches(a.polygon as Pt[], b.polygon as Pt[]) ||
+    rooms.some((room) => touches(room, a.polygon as Pt[]) && touches(room, b.polygon as Pt[]))
+  const groups: (typeof tops)[] = []
+  for (const each of tops) {
+    const linked = groups.filter((group) => group.some((other) => joined(other.slab, each.slab)))
+    const merged = [...linked.flat(), each]
+    for (const group of linked) groups.splice(groups.indexOf(group), 1)
+    groups.push(merged)
+  }
+  for (const group of groups) {
+    const high = Math.max(...group.map((each) => each.top))
+    const low = Math.min(...group.map((each) => each.top))
+    if (group.length > 1 && high - low > L.meetM)
+      findings.push({
+        code: 'floor_split',
+        id: level.id,
+        value: round(high - low),
+        message: `The floor of ${level.id} is split into ${group.length} plates at different heights: ${group
+          .map(
+            ({ slab, top }) =>
+              `${slab.id} at ${top.toFixed(2)} m (${(slab.zoneIds ?? [])
+                .map((id) => zoneOf(id)?.name ?? id)
+                .join(', ')})`,
+          )
+          .join('; ')}.`,
+      })
+  }
   for (const { slab, top } of tops) {
     if (!followsGround(nodes, slab) || top - plane - DEFAULT_SLAB_ELEVATION <= L.floorLiftM)
       continue
@@ -866,7 +887,7 @@ function floorFindings(house: HouseGroundFacts, nodes: SceneNodes): TerrainFindi
         stored === undefined ||
         zone.hasFloor === false ||
         zone.floor?.support === 'open' ||
-        Math.abs(plane + stored - top) <= L.floorSplitM
+        Math.abs(plane + stored - top) <= L.floorLiftM
       )
         continue
       const step = plane + stored - top
@@ -874,7 +895,7 @@ function floorFindings(house: HouseGroundFacts, nodes: SceneNodes): TerrainFindi
         code: 'floor_split',
         id: zone.id,
         value: round(Math.abs(step)),
-        message: `${nameOf(zone)} keeps its stored floor elevation (${stored.toFixed(2)} m over the level's base) while the floor that rests on the ground has followed it to ${top.toFixed(2)} m: its floor stands ${Math.abs(step).toFixed(2)} m ${step < 0 ? 'under' : 'over'} the rest of the floor, on a plate of its own.`,
+        message: `${nameOf(zone)} has a floor elevation of its own (${stored.toFixed(2)} m over the level's base), ${Math.abs(step).toFixed(2)} m ${step < 0 ? 'under' : 'over'} the floor that rests on the ground and follows it (${top.toFixed(2)} m): it stands on a plate of its own. A stored floor elevation stays where it is written when the ground moves.`,
       })
     }
   }
