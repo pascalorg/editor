@@ -783,12 +783,14 @@ const LevelItem = memo(function LevelItem({
   }
 
   const handleDuplicateLevel = (preset: LevelDuplicatePreset = 'everything') => {
-    const { createOps, newLevelId, updateOps } = buildLevelDuplicateCreateOps({
+    const duplicate = buildLevelDuplicateCreateOps({
       nodes: useScene.getState().nodes,
       level,
       levels,
       preset,
     })
+    if ('kind' in duplicate) return
+    const { createOps, newLevelId, updateOps } = duplicate
 
     applyNodeChanges({ create: createOps, update: updateOps })
     selectLevel(newLevelId as LevelNode['id'], false)

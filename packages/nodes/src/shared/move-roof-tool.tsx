@@ -575,9 +575,6 @@ export const MoveRoofTool: React.FC<{
       if (!hasMoved) return
       const [localX, , localZ] = lastLocalPosition
 
-      useAlignmentGuides.getState().clear()
-      wasCommitted = true
-
       const position: [number, number, number] = [localX, movingNode.position[1], localZ]
       const effectiveNode = {
         ...movingNode,
@@ -601,25 +598,26 @@ export const MoveRoofTool: React.FC<{
             length: surfaceSnap.length,
             stepCount: surfaceSnap.stepCount,
           })
-        committedId =
-          commitFreshPlacementSubtree(movingNode.id as AnyNodeId, {
-            position,
-            rotation: pendingRotation,
-            metadata: committedMeta,
-            visible: true,
-            ...supportPatch,
-            ...(surfaceSnap
-              ? {
-                  totalRise: surfaceSnap.totalRise,
-                  stepCount: surfaceSnap.stepCount,
-                  slabOpeningMode: 'none' as const,
-                  destinationSurfaceId: surfaceSnap.surfaceId,
-                  railingMode: 'none' as const,
-                }
-              : movingNode.type === 'stair' && movingNode.destinationSurfaceId
-                ? { destinationSurfaceId: undefined }
-                : {}),
-          }) ?? committedId
+        const placedId = commitFreshPlacementSubtree(movingNode.id as AnyNodeId, {
+          position,
+          rotation: pendingRotation,
+          metadata: committedMeta,
+          visible: true,
+          ...supportPatch,
+          ...(surfaceSnap
+            ? {
+                totalRise: surfaceSnap.totalRise,
+                stepCount: surfaceSnap.stepCount,
+                slabOpeningMode: 'none' as const,
+                destinationSurfaceId: surfaceSnap.surfaceId,
+                railingMode: 'none' as const,
+              }
+            : movingNode.type === 'stair' && movingNode.destinationSurfaceId
+              ? { destinationSurfaceId: undefined }
+              : {}),
+        })
+        if (!placedId) return
+        committedId = placedId
       } else {
         // The store still holds the original values (we didn't update during drag).
         // Resume temporal and apply the final state as a single undoable step.
@@ -629,7 +627,6 @@ export const MoveRoofTool: React.FC<{
           metadata: committedMeta,
           ...supportPatch,
         }
-        useScene.temporal.getState().resume()
         if (movingNode.type === 'roof' || movingNode.type === 'roof-segment') {
           // Moved or turned onto the walls that carry it, a roof goes to the level above them.
           const scene = useScene.getState()
@@ -639,8 +636,12 @@ export const MoveRoofTool: React.FC<{
             { id: movingNode.id, data: { ...patch, ...own } },
             ...thicknesses.filter(({ id }) => id !== movingNode.id),
           ]
-          scene.applyNodeChanges(seatRoofs(scene.nodes, { update }).changes)
+          const seated = seatRoofs(scene.nodes, { update })
+          if ('kind' in seated) return
+          useScene.temporal.getState().resume()
+          scene.applyNodeChanges(seated.changes)
         } else {
+          useScene.temporal.getState().resume()
           useScene.getState().updateNodes([
             {
               id: movingNode.id,
@@ -679,6 +680,8 @@ export const MoveRoofTool: React.FC<{
         useScene.temporal.getState().pause()
       }
 
+      wasCommitted = true
+      useAlignmentGuides.getState().clear()
       triggerSFX('sfx:item-place')
       selectPlacedNode(committedId)
       clearHostedPreview()

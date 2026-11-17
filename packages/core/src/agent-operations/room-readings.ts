@@ -12,7 +12,6 @@ import { roomFloorPlate } from '../lib/room-floor-plate'
 import {
   type AnyNode,
   getScaledDimensions,
-  getWallTrimFaces,
   type ItemNode,
   type SceneMaterial,
   type SlabNode,
@@ -21,6 +20,7 @@ import {
   type ZoneNode,
 } from '../schema'
 import { getWallZoneSpans } from '../systems/wall/wall-finish'
+import { wallTrimRanges } from '../systems/wall/wall-trim'
 import { itemLevelPose } from './item-space'
 import { pointInPolygon } from './plan-geometry'
 import { roomWallFaces } from './room-faces'
@@ -178,12 +178,19 @@ function readWalls(
   let faces = 0
   let withSkirting = 0
   const seen = new Set<string>()
-  for (const { wallId, face } of roomWallFaces(nodes, zone)) {
+  const stretches = roomWallFaces(nodes, zone)
+  for (const { wallId, face } of stretches) {
     if (seen.has(`${wallId}/${face}`)) continue
     seen.add(`${wallId}/${face}`)
     const wall = nodes[wallId] as WallNode
     faces += 1
-    if (wall.skirting?.enabled && getWallTrimFaces(wall.skirting.sides).includes(face))
+    const length = Math.hypot(wall.end[0] - wall.start[0], wall.end[1] - wall.start[1])
+    const ranges = wallTrimRanges(wall.skirting, face, length)
+    if (
+      stretches
+        .filter((span) => span.wallId === wallId && span.face === face)
+        .every((span) => ranges.some(([a, b]) => a <= span.u0 + 1e-6 && b >= span.u1 - 1e-6))
+    )
       withSkirting += 1
     for (const region of wall.faceRegions ?? []) {
       if (region.face !== face) continue

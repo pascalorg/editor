@@ -19,7 +19,7 @@ import { WallNode } from './schema'
 
 export const wallRenderDefinition: NodeRenderDefinition<typeof WallNode> & { kind: 'wall' } = {
   kind: 'wall',
-  schemaVersion: 10,
+  schemaVersion: 11,
   schema: WallNode,
   category: 'structure',
   surfaceRole: 'wall',

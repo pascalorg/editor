@@ -1118,6 +1118,7 @@ msgstr "別のセッションが先に保存しました。更新しますか？
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Build"
+#: apps/editor/app/fixtures/delivery/fixture-client.tsx
 #: apps/editor/components/scene-loader.tsx
 #, fuzzy
 msgid "app.sceneLoader.build"
@@ -3843,6 +3844,426 @@ msgstr "閉じる"
 #, fuzzy
 msgid "editor.dismissCameraControlsHint"
 msgstr "カメラ操作のヒントを閉じる"
+
+# Review: required
+# Source-Hash: 70f8eb319a09abd1
+# AI-Provider: openai
+# AI-Model: gpt-6-astra
+# English: "Feature wall"
+#: packages/editor/src/components/ui/panels/room-dressing.tsx
+#, fuzzy
+msgid "editor.dressing.accent"
+msgstr "アクセントウォール"
+
+# Review: required
+# Source-Hash: afcc2dbfb01b5e3f
+# AI-Provider: openai
+# AI-Model: gpt-6-astra
+# English: "Add layer"
+#: packages/editor/src/components/ui/panels/room-dressing.tsx
+#, fuzzy
+msgid "editor.dressing.add"
+msgstr "レイヤーを追加"
+
+# Review: required
+# Source-Hash: 95309dea75b11de5
+# AI-Provider: openai
+# AI-Model: gpt-6-astra
+# English: "No selection means all room walls; feature walls require a selection."
+#: packages/editor/src/components/ui/panels/room-dressing.tsx
+#, fuzzy
+msgid "editor.dressing.allWalls"
+msgstr "何も選択しない場合は部屋のすべての壁が対象になります。アクセントウォールには壁の選択が必要です。"
+
+# Review: required
+# Source-Hash: 41305e4ff35d38b3
+# AI-Provider: openai
+# AI-Model: gpt-6-astra
+# English: "Along cabinet run"
+#: packages/editor/src/components/ui/panels/room-dressing.tsx
+#, fuzzy
+msgid "editor.dressing.alongRun"
+msgstr "キャビネットの並びに沿って"
+
+# Review: required
+# Source-Hash: 1fb20983290d7a6f
+# AI-Provider: openai
+# AI-Model: gpt-6-astra
+# English: "Room dressing applied."
+#: packages/editor/src/components/ui/panels/room-dressing.tsx
+#, fuzzy
+msgid "editor.dressing.applied"
+msgstr "部屋の仕上げを適用しました。"
+
+# Review: required
+# Source-Hash: 417cf9c08b0b8d6c
+# AI-Provider: openai
+# AI-Model: gpt-6-astra
+# English: "Apply"
+#: packages/editor/src/components/ui/panels/room-dressing.tsx
+#, fuzzy
+msgid "editor.dressing.apply"
+msgstr "適用"
+
+# Review: required
+# Source-Hash: 36bb7c2a6edcd792
+# AI-Provider: openai
+# AI-Model: gpt-6-astra
+# English: "Around fixtures"
+#: packages/editor/src/components/ui/panels/room-dressing.tsx
+#, fuzzy
+msgid "editor.dressing.around"
+msgstr "設備の周囲"
+
+# Review: required
+# Source-Hash: aae6cc2a23aeb0e1
+# AI-Provider: openai
+# AI-Model: gpt-6-astra
+# English: "ceiling"
+#: packages/editor/src/components/ui/panels/room-dressing.tsx
+#, fuzzy
+msgid "editor.dressing.ceiling"
+msgstr "天井"
+
+# Review: required
+# Source-Hash: 32d0bfee628c42a5
+# AI-Provider: openai
+# AI-Model: gpt-6-astra
+# English: "Chair rail"
+#: packages/editor/src/components/ui/panels/room-dressing.tsx
+#, fuzzy
+msgid "editor.dressing.chairRail"
+msgstr "チェアレール"
+
+# Review: required
+# Source-Hash: 42c592c36ce5b481
+# AI-Provider: openai
+# AI-Model: gpt-6-astra
+# English: "Choose a base run"
+#: packages/editor/src/components/ui/panels/room-dressing.tsx
+#, fuzzy
+msgid "editor.dressing.chooseRun"
+msgstr "下部キャビネットの並びを選択"
+
+# Review: required
+# Source-Hash: 49643244a196a45d
+# AI-Provider: openai
+# AI-Model: gpt-6-astra
+# English: "Crown"
+#: packages/editor/src/components/ui/panels/room-dressing.tsx
+#, fuzzy
+msgid "editor.dressing.crown"
+msgstr "廻り縁"
+
+# Review: required
+# Source-Hash: 99ac4d03c3061f3a
+# AI-Provider: openai
+# AI-Model: gpt-6-astra
+# English: "Depth"
+#: packages/editor/src/components/ui/panels/room-dressing.tsx
+#, fuzzy
+msgid "editor.dressing.depth"
+msgstr "奥行き"
+
+# Review: required
+# Source-Hash: a06a50e63f0c240e
+# AI-Provider: openai
+# AI-Model: gpt-6-astra
+# English: "Move down"
+#: packages/editor/src/components/ui/panels/room-dressing.tsx
+#, fuzzy
+msgid "editor.dressing.down"
+msgstr "下へ移動"
+
+# Review: required
+# Source-Hash: 2c4e1ee5b5ddee36
+# AI-Provider: openai
+# AI-Model: gpt-6-astra
+# English: "Existing or default"
+#: packages/editor/src/components/ui/panels/room-dressing.tsx
+#, fuzzy
+msgid "editor.dressing.existing"
+msgstr "既存または既定"
+
+# Review: required
+# Source-Hash: 29fb2ac4894d511b
+# AI-Provider: openai
+# AI-Model: gpt-6-astra
+# English: "The room could not be dressed. No changes were applied."
+#: packages/editor/src/components/ui/panels/room-dressing.tsx
+#, fuzzy
+msgid "editor.dressing.failed"
+msgstr "部屋の仕上げを適用できませんでした。変更は加えられていません。"
+
+# Review: required
+# Source-Hash: b3907da0ad234f10
+# AI-Provider: openai
+# AI-Model: gpt-6-astra
+# English: "Finish"
+#: packages/editor/src/components/ui/panels/room-dressing.tsx
+#, fuzzy
+msgid "editor.dressing.finish"
+msgstr "仕上げ"
+
+# Review: required
+# Source-Hash: 6a842dc873ae0b7b
+# AI-Provider: openai
+# AI-Model: gpt-6-astra
+# English: "library:… / scene:… / #rrggbb"
+#: packages/editor/src/components/ui/panels/room-dressing.tsx
+#, fuzzy
+msgid "editor.dressing.finishPlaceholder"
+msgstr "library:… / scene:… / #rrggbb"
+
+# Review: required
+# Source-Hash: 702140636ff3977a
+# AI-Provider: openai
+# AI-Model: gpt-6-astra
+# English: "From"
+#: packages/editor/src/components/ui/panels/room-dressing.tsx
+#, fuzzy
+msgid "editor.dressing.from"
+msgstr "開始位置"
+
+# Review: required
+# Source-Hash: 131bac2467f4fdf6
+# AI-Provider: openai
+# AI-Model: gpt-6-astra
+# English: "Full height"
+#: packages/editor/src/components/ui/panels/room-dressing.tsx
+#, fuzzy
+msgid "editor.dressing.full"
+msgstr "全高"
+
+# Review: required
+# Source-Hash: 646ef0fbcbc58edf
+# AI-Provider: openai
+# AI-Model: gpt-6-astra
+# English: "Height"
+#: packages/editor/src/components/ui/panels/room-dressing.tsx
+#, fuzzy
+msgid "editor.dressing.height"
+msgstr "高さ"
+
+# Review: required
+# Source-Hash: fc318493e95f53dc
+# AI-Provider: openai
+# AI-Model: gpt-6-astra
+# English: "Layer type"
+#: packages/editor/src/components/ui/panels/room-dressing.tsx
+#, fuzzy
+msgid "editor.dressing.kind"
+msgstr "レイヤーの種類"
+
+# Review: required
+# Source-Hash: 8d484577c8370d12
+# AI-Provider: openai
+# AI-Model: gpt-6-astra
+# English: "Layer {number}"
+#: packages/editor/src/components/ui/panels/room-dressing.tsx
+#, fuzzy
+msgid "editor.dressing.layer"
+msgstr "レイヤー {number}"
+
+# Review: required
+# Source-Hash: ac333c71ced986e1
+# AI-Provider: openai
+# AI-Model: gpt-6-astra
+# English: "Margin"
+#: packages/editor/src/components/ui/panels/room-dressing.tsx
+#, fuzzy
+msgid "editor.dressing.margin"
+msgstr "余白"
+
+# Review: required
+# Source-Hash: 0f0e13abf9b2bb67
+# AI-Provider: openai
+# AI-Model: gpt-6-astra
+# English: "Offset"
+#: packages/editor/src/components/ui/panels/room-dressing.tsx
+#, fuzzy
+msgid "editor.dressing.offset"
+msgstr "オフセット"
+
+# Review: required
+# Source-Hash: b3be684ac62fbf53
+# AI-Provider: openai
+# AI-Model: gpt-6-astra
+# English: "Placement"
+#: packages/editor/src/components/ui/panels/room-dressing.tsx
+#, fuzzy
+msgid "editor.dressing.placement"
+msgstr "配置"
+
+# Review: required
+# Source-Hash: 20226b68d5467072
+# AI-Provider: openai
+# AI-Model: gpt-6-astra
+# English: "Preview"
+#: packages/editor/src/components/ui/panels/room-dressing.tsx
+#, fuzzy
+msgid "editor.dressing.preview"
+msgstr "プレビュー"
+
+# Review: required
+# Source-Hash: 4d29461a2bbbde99
+# AI-Provider: openai
+# AI-Model: gpt-6-astra
+# English: "Preview only — nothing changed."
+#: packages/editor/src/components/ui/panels/room-dressing.tsx
+#, fuzzy
+msgid "editor.dressing.previewOnly"
+msgstr "プレビューのみ — 変更はありません。"
+
+# Review: required
+# Source-Hash: 96ad4bd0f7baa40e
+# AI-Provider: openai
+# AI-Model: gpt-6-astra
+# English: "Profile"
+#: packages/editor/src/components/ui/panels/room-dressing.tsx
+#, fuzzy
+msgid "editor.dressing.profile"
+msgstr "断面形状"
+
+# Review: required
+# Source-Hash: 9f0722e1b1299f59
+# AI-Provider: openai
+# AI-Model: gpt-6-astra
+# English: "{count} of 8 face regions"
+#: packages/editor/src/components/ui/panels/room-dressing.tsx
+#, fuzzy
+msgid "editor.dressing.regionCount"
+msgstr "壁面領域 {count}/8"
+
+# Review: required
+# Source-Hash: 19e68acf5a0b92e9
+# AI-Provider: openai
+# AI-Model: gpt-6-astra
+# English: "Along {start}–{end}; height {bottom}–{top}"
+#: packages/editor/src/components/ui/panels/room-dressing.tsx
+#, fuzzy
+msgid "editor.dressing.regionExtent"
+msgstr "壁に沿う範囲 {start}–{end}、高さ {bottom}–{top}"
+
+# Review: required
+# Source-Hash: ca36e9fd7fba1fce
+# AI-Provider: openai
+# AI-Model: gpt-6-astra
+# English: "Remove layer"
+#: packages/editor/src/components/ui/panels/room-dressing.tsx
+#, fuzzy
+msgid "editor.dressing.remove"
+msgstr "レイヤーを削除"
+
+# Review: required
+# Source-Hash: 7bd836108a92cf75
+# AI-Provider: openai
+# AI-Model: gpt-6-astra
+# English: "Apply replaces this room’s previous dressing regions, not hand paint. An empty stack removes those regions; trims stay. Lengths are in metres."
+#: packages/editor/src/components/ui/panels/room-dressing.tsx
+#, fuzzy
+msgid "editor.dressing.replaces"
+msgstr "適用すると、この部屋の以前の仕上げ領域が置き換わります。手動で塗装した部分は変更されません。レイヤーが空の場合は仕上げ領域が削除されますが、モールディングは残ります。長さの単位はメートルです。"
+
+# Review: required
+# Source-Hash: 58327a6cea2d37de
+# AI-Provider: openai
+# AI-Model: gpt-6-astra
+# English: "Selected walls"
+#: packages/editor/src/components/ui/panels/room-dressing.tsx
+#, fuzzy
+msgid "editor.dressing.selectedWalls"
+msgstr "選択した壁"
+
+# Review: required
+# Source-Hash: d9d55c5883a53789
+# AI-Provider: openai
+# AI-Model: gpt-6-astra
+# English: "Skirting"
+#: packages/editor/src/components/ui/panels/room-dressing.tsx
+#, fuzzy
+msgid "editor.dressing.skirting"
+msgstr "幅木"
+
+# Review: required
+# Source-Hash: 6cf2493608aab3fb
+# AI-Provider: openai
+# AI-Model: gpt-6-astra
+# English: "Splashback"
+#: packages/editor/src/components/ui/panels/room-dressing.tsx
+#, fuzzy
+msgid "editor.dressing.splashback"
+msgstr "防汚パネル"
+
+# Review: required
+# Source-Hash: 590dc223596c70b5
+# AI-Provider: openai
+# AI-Model: gpt-6-astra
+# English: "Tiles"
+#: packages/editor/src/components/ui/panels/room-dressing.tsx
+#, fuzzy
+msgid "editor.dressing.tiles"
+msgstr "タイル"
+
+# Review: required
+# Source-Hash: de8b1eec4e822619
+# AI-Provider: openai
+# AI-Model: gpt-6-astra
+# English: "Dress room"
+#: packages/editor/src/components/ui/panels/room-dressing.tsx
+#, fuzzy
+msgid "editor.dressing.title"
+msgstr "部屋の仕上げ"
+
+# Review: required
+# Source-Hash: b3214a20e45a7aed
+# AI-Provider: openai
+# AI-Model: gpt-6-astra
+# English: "To"
+#: packages/editor/src/components/ui/panels/room-dressing.tsx
+#, fuzzy
+msgid "editor.dressing.to"
+msgstr "終了位置"
+
+# Review: required
+# Source-Hash: d49ea60a2312df2f
+# AI-Provider: openai
+# AI-Model: gpt-6-astra
+# English: "Move up"
+#: packages/editor/src/components/ui/panels/room-dressing.tsx
+#, fuzzy
+msgid "editor.dressing.up"
+msgstr "上へ移動"
+
+# Review: required
+# Source-Hash: 7bf994f4d164e33a
+# AI-Provider: openai
+# AI-Model: gpt-6-astra
+# English: "Wainscot"
+#: packages/editor/src/components/ui/panels/room-dressing.tsx
+#, fuzzy
+msgid "editor.dressing.wainscot"
+msgstr "腰壁"
+
+# Review: required
+# Source-Hash: ae801874723635b1
+# AI-Provider: openai
+# AI-Model: gpt-6-astra
+# English: "wall end"
+#: packages/editor/src/components/ui/panels/room-dressing.tsx
+#, fuzzy
+msgid "editor.dressing.wallEnd"
+msgstr "壁の端"
+
+# Review: required
+# Source-Hash: aac9a732d2159ccc
+# AI-Provider: openai
+# AI-Model: gpt-6-astra
+# English: "Walls"
+#: packages/editor/src/components/ui/panels/room-dressing.tsx
+#, fuzzy
+msgid "editor.dressing.walls"
+msgstr "壁"
 
 # Source-Hash: aeac665749d3101d
 # Review: required
@@ -8244,6 +8665,14 @@ msgstr "コンクリートパッド"
 #, fuzzy
 msgid "editor.inspector.option.condenser.a74nps"
 msgstr "室外機"
+
+# English: "Conical"
+# Review: required
+# Source-Hash: 3241ecabee8221a1
+#: packages/nodes/src/i18n/definition-messages.ts
+#, fuzzy
+msgid "editor.inspector.option.conical.1d9dreq"
+msgstr "円錐"
 
 # Source-Hash: 6786ac75cbe9af57
 # Review: required
@@ -30172,6 +30601,7 @@ msgstr "切り詰め版"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Conical"
+#: packages/nodes/src/dormer/panel.tsx
 #: packages/nodes/src/roof-segment/panel.tsx
 #, fuzzy
 msgid "node.roofSegment.panel.conical"
@@ -36627,6 +37057,7 @@ msgstr "参照"
 # AI-Model: claude-opus-5-5
 # English: "Remove"
 #: packages/nodes/src/wall/panel.tsx
+#: packages/nodes/src/wall/trim-bounds.tsx
 #, fuzzy
 msgid "node.wall.panel.remove"
 msgstr "削除"
@@ -37021,6 +37452,36 @@ msgstr "外側の面"
 msgid "node.wall.reference.right"
 msgstr "右"
 
+# Review: required
+# Source-Hash: 8758d464002c7f66
+# AI-Provider: openai
+# AI-Model: gpt-6-astra
+# English: "Add stretch"
+#: packages/nodes/src/wall/trim-bounds.tsx
+#, fuzzy
+msgid "node.wall.trim.addStretch"
+msgstr "区間を追加"
+
+# Review: required
+# Source-Hash: 135874d189176d13
+# AI-Provider: openai
+# AI-Model: gpt-6-astra
+# English: "End"
+#: packages/nodes/src/wall/trim-bounds.tsx
+#, fuzzy
+msgid "node.wall.trim.end"
+msgstr "終了位置"
+
+# Review: required
+# Source-Hash: 15110f0ffc1f837a
+# AI-Provider: openai
+# AI-Model: gpt-6-astra
+# English: "Trim face"
+#: packages/nodes/src/wall/trim-bounds.tsx
+#, fuzzy
+msgid "node.wall.trim.face"
+msgstr "モールディングの設置面"
+
 # Source-Hash: eac63d14f275db3d
 # Review: required
 # AI-Provider: claude-code
@@ -37040,6 +37501,26 @@ msgstr "{trim, select, skirting {幅木を隠す} crown {廻り縁を隠す} oth
 #, fuzzy
 msgid "node.wall.trim.show"
 msgstr "{trim, select, skirting {幅木を表示} crown {廻り縁を表示} other {チェアレールを表示}}"
+
+# Review: required
+# Source-Hash: 0a26a1e61c825660
+# AI-Provider: openai
+# AI-Model: gpt-6-astra
+# English: "Start"
+#: packages/nodes/src/wall/trim-bounds.tsx
+#, fuzzy
+msgid "node.wall.trim.start"
+msgstr "開始位置"
+
+# Review: required
+# Source-Hash: 6971027ba43d911a
+# AI-Provider: openai
+# AI-Model: gpt-6-astra
+# English: "Whole face"
+#: packages/nodes/src/wall/trim-bounds.tsx
+#, fuzzy
+msgid "node.wall.trim.wholeFace"
+msgstr "壁面全体"
 
 # Source-Hash: b1757d76048706b7
 # Review: required

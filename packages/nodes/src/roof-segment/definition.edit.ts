@@ -20,6 +20,7 @@ import {
 } from '@pascal-app/editor'
 import type { NodeEditContribution } from '../definition-contributions'
 import { roofFloorplanAffectedIds } from '../roof/floorplan-overrides'
+import { prepareSeatedRoofEdit } from '../roof/roof-level-target'
 import {
   bearingWallThickness,
   catchRoofSideOnWalls,
@@ -325,7 +326,26 @@ function resolveRoofSegmentHandles(
   node: RoofSegmentNodeType,
 ): HandleDescriptor<RoofSegmentNodeType>[] {
   if (node.managedByParent) return []
-  return node.roofType === 'conical' ? conicalRoofSegmentHandles : roofSegmentHandles
+  const handles = node.roofType === 'conical' ? conicalRoofSegmentHandles : roofSegmentHandles
+  return handles.map((handle) =>
+    handle.kind === 'linear-resize' ||
+    handle.kind === 'radial-resize' ||
+    handle.kind === 'arc-resize'
+      ? {
+          ...handle,
+          prepareCommit: (
+            initial: RoofSegmentNodeType,
+            patch: Partial<RoofSegmentNodeType>,
+            scene: SceneApi,
+          ) => {
+            const prepared = prepareSeatedRoofEdit(scene, {
+              update: [{ id: initial.id, data: patch }],
+            })
+            return typeof prepared === 'function' ? prepared : null
+          },
+        }
+      : handle,
+  )
 }
 
 export const roofSegmentEditContribution: NodeEditContribution<typeof RoofSegmentNode> = {

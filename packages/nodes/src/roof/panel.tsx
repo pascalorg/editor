@@ -172,6 +172,7 @@ export default function RoofPanel() {
       if (!node || !isRoofOnStoreyWalls(s.nodes, node.id)) return null
       const level = s.nodes[node.parentId as AnyNodeId] as LevelNode
       const above = roofLevelAbove(s.nodes, level.id)
+      if (above.kind === 'refuse') return null
       return {
         storey: localizedLevelName(level, i18n, locale),
         label:
@@ -193,7 +194,7 @@ export default function RoofPanel() {
   const handleMoveOffStorey = useCallback(() => {
     if (!node?.parentId) return
     const move = planRoofsOffStorey(useScene.getState().nodes, node.parentId)
-    if (!move) return
+    if (!move || 'kind' in move) return
     triggerSFX('sfx:item-place')
     useScene.getState().applyNodeChanges({
       create: move.changes.create.map((op) => ({

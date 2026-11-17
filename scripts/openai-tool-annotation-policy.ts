@@ -15,12 +15,15 @@ const policy = (
 
 export const EXPECTED_OPENAI_TOOL_ANNOTATIONS = {
   add_door: policy(false, false, false),
+  add_dormer: policy(false, false, false),
   add_fence: policy(false, false, false),
   add_hedge: policy(false, true, false),
   add_level: policy(false, false, false),
   add_planting: policy(false, true, false),
   add_rock: policy(false, true, false),
+  add_roof_element: policy(false, false, false),
   add_wall: policy(false, false, false),
+  set_wall_trim: policy(false, true, false),
   set_wall_type: policy(false, true, false),
   add_corner_window: policy(false, false, false),
   add_window: policy(false, false, false),
@@ -53,6 +56,7 @@ export const EXPECTED_OPENAI_TOOL_ANNOTATIONS = {
   delete_zone: policy(false, true, false),
   design_brief: policy(false, false, false),
   divide_zone: policy(false, true, false),
+  dress_room: policy(false, true, false),
   set_ground_level: policy(false, true, false),
   duplicate_level: policy(false, false, false),
   duplicate_node: policy(false, false, false),

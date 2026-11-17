@@ -1,5 +1,5 @@
 import type { SceneNodes } from '../../lib/structure-kernel'
-import type { WallNode } from '../../schema/nodes/wall'
+import type { WallNode, WallTrimConfig } from '../../schema/nodes/wall'
 import { getWallArcData } from './wall-curve'
 import type { Point2D } from './wall-mitering'
 
@@ -130,10 +130,21 @@ function swapFaceSlotKey(key: string): string {
 // Legacy semantic sides draw on their canonical face (interior → a), so they turn too.
 const TRIM_FACE: Record<string, 'a' | 'b'> = { a: 'a', interior: 'a', b: 'b', exterior: 'b' }
 
-function reverseTrim<T extends { sides?: string } | undefined>(trim: T): T {
+function reverseTrim(trim: WallTrimConfig, length: number): WallTrimConfig {
   const face = trim?.sides ? TRIM_FACE[trim.sides] : undefined
-  if (!(trim && face)) return trim
-  return { ...trim, sides: swapFace(face) }
+  return {
+    ...trim,
+    ...(face ? { sides: swapFace(face) } : {}),
+    ...(trim.spans === undefined
+      ? {}
+      : {
+          spans: trim.spans.map(({ face, u0, u1 }) => ({
+            face: swapFace(face),
+            ...(u1 === undefined ? {} : { u0: Math.max(0, length - u1) }),
+            ...(u0 === undefined ? {} : { u1: Math.max(0, length - u0) }),
+          })),
+        }),
+  }
 }
 
 /**
@@ -194,9 +205,9 @@ export function reverseWallDirection(wall: WallNode): Partial<WallNode> {
             ...(wall.finishScripts.a === undefined ? {} : { b: wall.finishScripts.a }),
           },
         }),
-    ...(wall.skirting === undefined ? {} : { skirting: reverseTrim(wall.skirting) }),
-    ...(wall.crown === undefined ? {} : { crown: reverseTrim(wall.crown) }),
-    ...(wall.chairRail === undefined ? {} : { chairRail: reverseTrim(wall.chairRail) }),
+    ...(wall.skirting === undefined ? {} : { skirting: reverseTrim(wall.skirting, length) }),
+    ...(wall.crown === undefined ? {} : { crown: reverseTrim(wall.crown, length) }),
+    ...(wall.chairRail === undefined ? {} : { chairRail: reverseTrim(wall.chairRail, length) }),
   }
 }
 

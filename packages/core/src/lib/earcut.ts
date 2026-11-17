@@ -1,5 +1,5 @@
 /*
- * The outer-ring path of mapbox/earcut 3.0.2, the copy three.js r186 ships in
+ * The outer-ring path of mapbox/earcut 3.0.2, the copy three.js r187 ships in
  * src/extras/lib/earcut.js and ShapeUtils.triangulateShape calls, ported to
  * TypeScript without the hole handling. Kept line for line so a plan polygon
  * gets the very diagonals the viewer drew it with before core triangulated it.

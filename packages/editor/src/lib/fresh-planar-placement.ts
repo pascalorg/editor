@@ -177,6 +177,7 @@ export function createFreshPlacementSubtree(
     rootId,
     parentId,
   })
+  cloned.nodes = cloned.nodes.map((node) => remapNodeReferences(node, cloned.idMap))
 
   scene.applyNodeChanges({
     create: copyCreateOps(cloned, parentId),
@@ -306,6 +307,7 @@ export function commitFreshPlacementSubtree(
   )
   const parentId = parentIdOf(root)
   const cloned = cloneNodesInto([root, ...descendants], { rootId, parentId })
+  cloned.nodes = cloned.nodes.map((node) => remapNodeReferences(node, cloned.idMap))
   // The drafts' memberships, read before they are deleted.
   const create = copyCreateOps(cloned, parentId)
   const updates = surfaceAttachmentUpdates(rootId, null, null)
@@ -322,7 +324,9 @@ export function commitFreshPlacementSubtree(
     if (!updates.some((entry) => entry.id === update.id)) updates.push(update)
 
   // A roof dropped onto the walls that carry it goes to the level above them, in the same step.
-  const seated = seatRoofs(scene.nodes, { create, update: updates, delete: [rootId] }).changes
+  const seat = seatRoofs(scene.nodes, { create, update: updates, delete: [rootId] })
+  if ('kind' in seat) return null
+  const seated = seat.changes
 
   const scope = useInteractionScope.getState()
   const factoryCreated =

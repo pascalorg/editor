@@ -12,7 +12,7 @@ import { triggerSFX } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { RoofAttachmentFallbackPreview } from '../shared/roof-attachment-fallback-preview'
-import { resolveRoofSegmentHit } from '../shared/roof-segment-hit'
+import { resolveRoofSegmentHit, roofEventWitness } from '../shared/roof-segment-hit'
 import {
   clearRoofSurfacePlacementGuides,
   publishRoofSurfacePlacementGuides,
@@ -78,6 +78,7 @@ const GutterTool = () => {
         event.position[0],
         event.position[1],
         event.position[2],
+        roofEventWitness(event),
       )
       if (!hit) return
 
@@ -121,6 +122,7 @@ const GutterTool = () => {
         event.position[0],
         event.position[1],
         event.position[2],
+        roofEventWitness(event),
       )
       if (!hit) return
       const state = useScene.getState()

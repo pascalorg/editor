@@ -1,6 +1,7 @@
 import type { AnyNode, WallNode } from '../../schema'
-import { getWallArcData, getWallCurveLength } from '../../systems/wall/wall-curve'
+import { getWallArcData, getWallCurveLength, isCurvedWall } from '../../systems/wall/wall-curve'
 import { buildMergedWallAttachmentUpdates } from '../../systems/wall/wall-merge'
+import { wallTrimPiece } from '../../systems/wall/wall-trim'
 import { at, type Point, type StructureMintId, type StructureNodes } from './shared'
 
 export function wallStation(wall: Pick<WallNode, 'start' | 'end'>, point: Point) {
@@ -38,6 +39,19 @@ export function wallSlice(
   id: string,
   range?: [number, number],
 ): WallNode {
+  const curved = isCurvedWall(wall)
+  const partial = range
+    ? range[0] > 1e-6 || range[1] < 1 - 1e-6
+    : Math.hypot(start[0] - wall.start[0], start[1] - wall.start[1]) > 1e-6 ||
+      Math.hypot(end[0] - wall.end[0], end[1] - wall.end[1]) > 1e-6
+  if (
+    curved &&
+    partial &&
+    (['skirting', 'crown', 'chairRail'] as const).some((kind) => wall[kind]?.spans !== undefined)
+  )
+    throw Error(
+      `Cannot slice curved wall ${wall.id} with bounded trim: its chord frame would change.`,
+    )
   const length = getWallCurveLength(wall)
   const offset = (range?.[0] ?? wallStation(wall, start)) * length
   const sliceLength = range
@@ -60,6 +74,7 @@ export function wallSlice(
   })
   return {
     ...wall,
+    ...(!curved ? wallTrimPiece(wall, offset, offset + sliceLength) : {}),
     id: id as WallNode['id'],
     start,
     end,

@@ -17,7 +17,14 @@ import {
   ZoneNode,
 } from '../schema'
 import { assertDerivedNodeWrites, filterDerivedNodeWrites } from '../store/derived-node-guard'
-import { buildLevelDuplicateCreateOps } from './level-duplication'
+import { buildLevelDuplicateCreateOps as planLevelDuplicate } from './level-duplication'
+
+// These existing construction/name cases are positive controls, not refusal cases.
+function buildLevelDuplicateCreateOps(...args: Parameters<typeof planLevelDuplicate>) {
+  const result = planLevelDuplicate(...args)
+  if ('kind' in result) throw new Error('Unexpected duplicate refusal')
+  return result
+}
 
 describe('buildLevelDuplicateCreateOps', () => {
   test('parents a duplicated bootstrap level back to its building', () => {

@@ -46,6 +46,19 @@
       }
     },
     {
+      "name": "add_dormer",
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "openWorldHint": false
+      },
+      "justifications": {
+        "readOnlyHint": "Creates one native dormer and its hosted window in the connected Pascal scene.",
+        "destructiveHint": "Adds the complete subtree without replacing or deleting existing authored scene nodes.",
+        "openWorldHint": "Uses only the connected scene and its configured material library without accessing the public internet."
+      }
+    },
+    {
       "name": "add_fence",
       "annotations": {
         "readOnlyHint": false,
@@ -121,6 +134,19 @@
         "readOnlyHint": "Adds a rock to a Site, or changes the fields given of an existing one, in the connected Pascal scene.",
         "destructiveHint": "Changing a rock replaces its outline, height, seed or looks; undo restores them. Floors it passes through derive their holes and are not edited.",
         "openWorldHint": "It operates on the connected Pascal scene and its persisted terrain without accessing the public internet."
+      }
+    },
+    {
+      "name": "add_roof_element",
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "openWorldHint": false
+      },
+      "justifications": {
+        "readOnlyHint": "Creates one native roof accessory in the connected Pascal scene.",
+        "destructiveHint": "Adds one accessory without replacing or deleting existing scene nodes.",
+        "openWorldHint": "Uses only the connected scene without network access."
       }
     },
     {
@@ -420,6 +446,19 @@
         "readOnlyHint": "Updates room intent and reconciles construction in the connected scene.",
         "destructiveHint": "Can replace room intent or boundaries and retire derived construction.",
         "openWorldHint": "Uses only the connected scene; no public internet access."
+      }
+    },
+    {
+      "name": "dress_room",
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": true,
+        "openWorldHint": false
+      },
+      "justifications": {
+        "readOnlyHint": "Writes wall finish layers and native trims for selected rooms; an optional dry run does not make the tool read-only.",
+        "destructiveHint": "Replaces the selected rooms' previously owned paint regions and can replace existing trim settings or finishes; empty layers remove owned regions.",
+        "openWorldHint": "Uses only the connected scene and its configured material library, without accessing the public internet."
       }
     },
     {
@@ -1096,6 +1135,19 @@
         "readOnlyHint": "It is not read-only because it rewrites the member zone list of an existing unit in the connected Pascal scene.",
         "destructiveHint": "It replaces the unit's whole member list, so a wrong call can drop zones from the unit; it never deletes zones or other modeled state.",
         "openWorldHint": "It operates on the connected Pascal scene, project, and configured catalog data without accessing the public internet."
+      }
+    },
+    {
+      "name": "set_wall_trim",
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": true,
+        "openWorldHint": false
+      },
+      "justifications": {
+        "readOnlyHint": "Writes native wall trim dimensions, coverage, visibility and finishes in the connected scene.",
+        "destructiveHint": "Can replace existing trim settings or finishes and hide existing trim; undo restores the previous state.",
+        "openWorldHint": "Uses only the connected scene and its configured material library, without accessing the public internet."
       }
     },
     {

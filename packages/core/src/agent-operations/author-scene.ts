@@ -92,6 +92,7 @@ import { authoredSceneChanges } from './authored-scene-merge'
 import { createStair } from './create-stair'
 import { paint } from './paint'
 import { pointInPolygon, projectWorldPointToWallLocalX, type Vec2 } from './plan-geometry'
+import { refuseRoofHost } from './roof-writes'
 import { type ColorSurface, exactColorMaterial, exactScriptSlots, MATTE } from './scene-materials'
 import { queryNodes } from './scene-queries'
 import type { AgentContext, AgentOperationOutcome, SceneChanges, SceneNodes } from './types'
@@ -2367,6 +2368,7 @@ export function authorScene(
     const peak = Math.max(0, ...segments.map((segment) => getActiveRoofHeight(segment)))
     // Nothing stands above the payload's top level in its candidate: the plan is a roof level.
     const plan = planRoofLevel(written, top.id, peak)
+    if (plan.kind === 'refuse') refuseRoofHost(plan)
     const created = plan.kind === 'roof' ? plan.create : null
     const levelId = created ? mint('level', 'level/roof') : plan.levelId
     if (created)

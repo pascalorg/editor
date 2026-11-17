@@ -14,7 +14,13 @@ import {
 } from '../schema'
 import { resolveRoofElevation, roofWallTop } from '../systems/roof/roof-elevation'
 import { segmentBearing } from './roof-bearing'
-import { coveredStoreyId, planRoofLevel, type RoofLevelPlan, servesAsRoofLevel } from './roof-level'
+import {
+  coveredStoreyId,
+  planRoofLevel,
+  type RoofHostRefusal,
+  type RoofLevelPlan,
+  servesAsRoofLevel,
+} from './roof-level'
 import { getLevelBelow, getLevelElevations, type LevelElevation } from './storey'
 
 /**
@@ -84,7 +90,7 @@ export function isRoofOnStoreyWalls(nodes: Nodes, roofId: string): boolean {
 }
 
 export type RoofMove = {
-  plan: RoofLevelPlan
+  plan: Exclude<RoofLevelPlan, RoofHostRefusal>
   changes: Required<Pick<SceneChanges, 'create' | 'update'>>
 }
 
@@ -94,7 +100,11 @@ export type RoofMove = {
  * following where the follow there reads the storey's walls, at the height it gives; elsewhere (over
  * a support level or a level still to be built) it keeps its height instead.
  */
-function planRoofMove(nodes: Nodes, storeyId: string, roofs: RoofNode[]): RoofMove {
+function planRoofMove(
+  nodes: Nodes,
+  storeyId: string,
+  roofs: RoofNode[],
+): RoofMove | RoofHostRefusal {
   const segmentRise = (segment: RoofSegmentNode) =>
     (segment.wallHeight ?? 0) + getActiveRoofHeight(segment)
   // How high each of a roof's segments and faces tops out over its container.
@@ -110,6 +120,7 @@ function planRoofMove(nodes: Nodes, storeyId: string, roofs: RoofNode[]): RoofMo
     ]),
   )
   const planned = planRoofLevel(nodes, storeyId, rise)
+  if (planned.kind === 'refuse') return planned
   const made = planned.kind === 'roof' ? planned.create : null
   const declares = planned.kind === 'roof' ? planned.update : []
   const ids = roofs.map((roof) => roof.id)
@@ -163,7 +174,10 @@ function planRoofMove(nodes: Nodes, storeyId: string, roofs: RoofNode[]): RoofMo
  * each goes to the level the rule gives it, standing where it stood (`planRoofMove`). Null when the
  * storey holds no such roof. Pure: one set of changes, so one undo step.
  */
-export function planRoofsOffStorey(nodes: Nodes, storeyId: string): RoofMove | null {
+export function planRoofsOffStorey(
+  nodes: Nodes,
+  storeyId: string,
+): RoofMove | RoofHostRefusal | null {
   const storey = nodes[storeyId]
   if (storey?.type !== 'level') return null
   const roofs = storey.children
@@ -297,7 +311,7 @@ export type RoofSeat = {
  * move planned on the scene with the earlier ones applied, so one write makes one roof level per
  * building. Null when no roof needs it.
  */
-export function planRoofSeats(before: Nodes, after: Nodes): RoofSeat | null {
+export function planRoofSeats(before: Nodes, after: Nodes): RoofSeat | RoofHostRefusal | null {
   const byStorey = new Map<string, RoofNode[]>()
   for (const node of queryNodes<RoofNode>(after as SceneNodes, { type: 'roof' })) {
     if (!node.parentId) continue
@@ -317,11 +331,13 @@ export function planRoofSeats(before: Nodes, after: Nodes): RoofSeat | null {
   const update: RoofSeat['changes']['update'] = []
   const notes: string[] = []
   for (const [storeyId, roofs] of byStorey) {
-    const { plan, changes } = planRoofMove(
+    const move = planRoofMove(
       scene,
       storeyId,
       roofs.map((roof) => scene[roof.id] as RoofNode),
     )
+    if ('kind' in move) return move
+    const { plan, changes } = move
     scene = applySceneChanges(scene, changes)
     create.push(...changes.create)
     update.push(...changes.update)
@@ -368,7 +384,7 @@ type NodeChanges = {
 export function seatRoofs<C extends NodeChanges>(
   nodes: Nodes,
   changes: C,
-): { changes: C; notes: string[] } {
+): { changes: C; notes: string[] } | RoofHostRefusal {
   const parsed = (changes.create ?? []).map(({ node, parentId }) => {
     const result = parseNode(node)
     return { node: result.success ? result.data : node, parentId }
@@ -382,6 +398,7 @@ export function seatRoofs<C extends NodeChanges>(
     }),
   )
   if (!seat) return { changes, notes: [] }
+  if ('kind' in seat) return seat
   const written = new Map<string, Record<string, unknown>>(
     seat.changes.update.map(({ id, data }) => [id, data]),
   )

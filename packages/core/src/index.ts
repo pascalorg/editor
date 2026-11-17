@@ -276,6 +276,21 @@ export {
   SECTIONAL_GARAGE_RENDER_OPEN_SCALE,
 } from './lib/door-operation'
 export {
+  type DormerCreationOptions,
+  type DormerCreationPlan,
+  type DormerCreationResult,
+  type DormerPlacement,
+  type DormerPlacementFailure,
+  type DormerPlacementResult,
+  planDormerCreation,
+  validateDormerPlacement,
+} from './lib/dormer-placement'
+export type {
+  DormerExposureContext,
+  DormerWindowExposure,
+} from './lib/dormer-roof-context'
+export { triangulatePlanPolygon } from './lib/earcut'
+export {
   resolveElevatorNodeSupportY,
   resolveElevatorSupportLevelId,
   resolveElevatorSupportY,
@@ -688,6 +703,17 @@ export {
   SOFFIT_THICKNESS,
 } from './lib/roof-eave'
 export {
+  getRoofSegmentDownSlopeYaw,
+  getRoofSegmentSurfaceNormal,
+} from './lib/roof-element-orientation'
+export { roofSegmentFrame } from './lib/roof-frame'
+export {
+  clipRoofTrianglesByTrim,
+  getRoofSegmentTrimCuts,
+  ROOF_TRIM_CUT_EPSILON,
+  type RoofTrimCut,
+} from './lib/roof-outline'
+export {
   compareRoofOverlapIdentity,
   getRoofPlanBounds,
   type RoofOverlapEntry,
@@ -698,6 +724,43 @@ export {
   roofPlanBoundsOverlap,
   roofPlanOverlapEntryOwns,
 } from './lib/roof-overlap'
+export { type RidgeSnap, resolveRidgeSnap } from './lib/roof-ridge-snap'
+export {
+  getShedBandFacetCount,
+  getShedFootprintPieces,
+  getShedRenderOutlines,
+  getShedRenderPieces,
+  type ShedPlanPolygon,
+  type ShedRenderPiece,
+  sanitizeRoofPlanPolygon,
+} from './lib/roof-shed-pieces'
+export {
+  bendShedBandPoint,
+  getShedEdgeSibling,
+  getShedPieceSurface,
+  getShedSiblingTopY,
+} from './lib/roof-shed-surface'
+export {
+  getRoofSegmentCoveringSeat,
+  getRoofSegmentShellSeat,
+  getRoofSegmentShellSupport,
+  pickRoofCoveringSeat,
+  type RoofShellSupport,
+  type RoofSurfaceResult,
+  type RoofSurfaceSeat,
+} from './lib/roof-surface'
+export {
+  buildRoofSegmentCoveringTriangles,
+  buildRoofSegmentShellTriangles,
+  getRoofShingleModules,
+  type RoofModuleInput,
+  type RoofSurfaceTriangle,
+} from './lib/roof-surface-geometry'
+export {
+  getDutchRakeBoardTops,
+  getRoofFasciaBoardFaces,
+  wearsRoofFascia,
+} from './lib/roof-trim-faces'
 export { type RoomDrawnFloor, roomDrawnFloor } from './lib/room-drawn-floor'
 export { type RoomFloorChoice, roomFloorChoices } from './lib/room-floor-choices'
 export * from './lib/room-floor-elevation'
@@ -961,6 +1024,7 @@ export * from './registry'
 // and must stay free of React imports.
 export { useRegistryVersion } from './registry/use-registry-version'
 export * from './schema'
+export { getDormerWindowExposure } from './schema/nodes/dormer'
 export * from './schema/nodes/stair-defaults'
 export * from './services'
 export {
@@ -1081,6 +1145,8 @@ export {
   sceneHistoryDraftRevertUpdates,
   settleSceneHistoryDrafts,
 } from './store/use-scene'
+export * from './systems/cabinet/run-coordinates'
+export * from './systems/cabinet/run-spans'
 export { resolveElevatorDispatchTarget } from './systems/elevator/elevator-dispatch'
 export {
   ELEVATOR_MIN_CAB_DIMENSION,
@@ -1472,7 +1538,7 @@ export {
   type WallJoinResult,
   type WallTopologyChanges,
 } from './systems/wall/wall-topology'
-export { wallTrimPatch } from './systems/wall/wall-trim'
+export { subtractTrimSpans, wallTrimPatch, wallTrimRanges } from './systems/wall/wall-trim'
 export type { SceneGraph } from './utils/clone-scene-graph'
 export { cloneLevelSubtree, cloneSceneGraph, forkSceneGraph } from './utils/clone-scene-graph'
 export * from './utils/measurement-format'
