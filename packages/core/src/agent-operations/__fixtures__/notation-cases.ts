@@ -319,25 +319,124 @@ export const NOTATION_CASES: NotationCase[] = [
       ['2.6 cm', 26],
     ],
   },
+  {
+    tool: 'add_ramp',
+    field: 'start[]',
+    readings: [
+      [1, 1],
+      ['100 cm', 1],
+    ],
+  },
+  {
+    tool: 'add_ramp',
+    field: 'segments[].end[]',
+    readings: [
+      [2, 2],
+      ['200 cm', 2],
+    ],
+  },
+  {
+    tool: 'add_ramp',
+    field: 'segments[].center[]',
+    readings: [
+      [-1, -1],
+      ['-100 cm', -1],
+    ],
+  },
+  {
+    tool: 'add_ramp',
+    field: 'segments[].sweep',
+    readings: [
+      [-QUARTER_TURN, -QUARTER_TURN],
+      ['180 deg', Math.PI],
+    ],
+  },
+  {
+    tool: 'add_ramp',
+    field: 'width',
+    readings: [
+      [1, 1],
+      ['100 cm', 1],
+    ],
+  },
+  {
+    tool: 'add_ramp',
+    field: 'startHeight',
+    readings: [
+      [0, 0],
+      ['50 cm', 0.5],
+    ],
+  },
+  {
+    tool: 'add_ramp',
+    field: 'endHeight',
+    readings: [
+      [-1, -1],
+      ['-150 cm', -1.5],
+    ],
+  },
+  {
+    tool: 'add_ramp',
+    field: 'thickness',
+    readings: [
+      [0.2, 0.2],
+      ['20 cm', 0.2],
+    ],
+  },
+  {
+    tool: 'add_ramp',
+    field: 'startTransition',
+    readings: [
+      [0, 0],
+      ['150 cm', 1.5],
+    ],
+  },
+  {
+    tool: 'add_ramp',
+    field: 'endTransition',
+    readings: [
+      [0, 0],
+      ['200 cm', 2],
+    ],
+  },
+  {
+    tool: 'add_ramp',
+    field: 'retainingHeight',
+    readings: [
+      [0, 0],
+      ['75 cm', 0.75],
+    ],
+  },
+  {
+    tool: 'shape_site_terrain',
+    field: 'area.radiusM',
+    readings: [
+      [2, 2],
+      ['250 cm', 2.5],
+    ],
+  },
+  {
+    tool: 'shape_site_terrain',
+    field: 'heightM',
+    readings: [
+      [-0.5, -0.5],
+      ['50 cm', 0.5],
+    ],
+  },
+  {
+    tool: 'shape_site_terrain',
+    field: 'softness',
+    readings: [
+      [0, 0],
+      ['25 cm', 0.25],
+    ],
+  },
 ]
 
 /**
- * The terrain and ramp tools whose lengths still read their own unit only (metres): the one notation (N1)
- * is owed on them. Their bare numbers are not listed one by one.
- */
-export const METRES_ONLY_TOOLS = new Set([
-  'add_ramp',
-  'add_terrain_break',
-  'read_site_terrain',
-  'read_terrain_contours',
-  'sample_terrain_line',
-  'shape_site_terrain',
-])
-
-/**
- * Every other number a shared tool takes by name, none of them a length or an angle. Numbers in
- * an array are coordinates (points, outlines, vectors) and whole numbers are counts, indices or
- * pixels, so neither is listed; a length or an angle added as a bare number fails the test.
+ * Every other number a shared tool takes by name, including the explicitly recorded notation
+ * debts below. Numbers in an array are coordinates (points, outlines, vectors) and whole numbers
+ * are counts, indices or pixels, so neither is listed; a new bare length or angle fails the test.
  */
 export const NOT_LENGTHS = new Set([
   'add_window.rollerShutterOpen',
@@ -353,6 +452,12 @@ export const NOT_LENGTHS = new Set([
   // says; the one notation (N1) is still owed on them.
   'move_node.y',
   'move_node.rotation',
+  // Terrain input schemas still take these elevations and sampling distances in metres only.
+  'add_terrain_break.left',
+  'add_terrain_break.right',
+  'read_site_terrain.cellM',
+  'read_terrain_contours.intervalM',
+  'sample_terrain_line.stepM',
   // Coordinates, in level metres.
   'add_column.x',
   'add_column.y',
@@ -370,6 +475,8 @@ export const NOT_LENGTHS = new Set([
   'place_in_room.clearanceAreas[].maxZ',
   'pull_site_data.latitude',
   'pull_site_data.longitude',
+  'shape_site_terrain.area.x',
+  'shape_site_terrain.area.z',
   // Fractions along a wall or an edge.
   'add_door.t',
   'add_door.position',
@@ -378,6 +485,7 @@ export const NOT_LENGTHS = new Set([
   'create_room.doors[].t',
   'create_room.windows[].t',
   // Ratios, a material's own properties, a duration.
+  'shape_site_terrain.strength',
   // A batter's run: horizontal metres per metre of height (2 is 1:2), a ratio.
   'grade_around_house.run',
   'seat_house.run',
@@ -385,6 +493,7 @@ export const NOT_LENGTHS = new Set([
   'add_terraces.run',
   'add_terraces.stepsAt',
   // A fall or a grade, in percent.
+  'add_ramp.maxSlopePercent',
   'seat_house.padFallPercent',
   'grade_along_line.maxSlopePercent',
   'view_scene.camera.aspect',
