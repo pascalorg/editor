@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
+import { afterEach, beforeEach, describe, expect, spyOn, test } from 'bun:test'
 import {
   BuildingNode,
   clearSceneHistory,
@@ -6,11 +6,19 @@ import {
   endScenePreview,
   isScenePreviewing,
   LevelNode,
+  type PointAskSubmit,
   registerPointAskHandler,
   useScene,
   WallNode,
 } from '@pascal-app/core'
+import { useViewer } from '@pascal-app/viewer'
+import { PerspectiveCamera, Raycaster } from 'three'
+import {
+  getEditorThreeContext,
+  setEditorThreeContext,
+} from '../../components/editor/three-context-bridge'
 import { asksWait, type BubbleTarget, usePointAsk } from '../../store/use-point-ask'
+import * as enrichedCapture from '../enriched-capture/enrich'
 import { setPointAskBehindQueue, setPointAskBusy } from './host-api'
 import { endCompare, sendBubble, startCompare, startPointAskSession } from './session'
 
@@ -132,6 +140,223 @@ function leftoverPause(write: () => void) {
 }
 
 const wallHeight = () => (useScene.getState().nodes[wall.id] as { height: number }).height
+
+describe('ordinary submissions without enriched capture', () => {
+  test('a region reaches the host with only the original ranking and crop keys', async () => {
+    const received: PointAskSubmit[] = []
+    unregisterHandler()
+    unregisterHandler = registerPointAskHandler(async (submit) => {
+      received.push(submit)
+      return { ok: true }
+    })
+    usePointAsk.getState().openBubble({
+      targets: [],
+      anchor: [2, 1, 0],
+      hit: { point: [2, 1, 0], normal: [0, 0, 1] },
+      gesture: 'region',
+      capturedAt: '2026-11-01T12:00:00.000Z',
+      camera: null,
+      region: [0.2, 0.2, 0.6, 0.6],
+      area: {
+        rect: { x0: 20, y0: 20, x1: 60, y1: 60 },
+        click: { x: 40, y: 40 },
+        ids: [wall.id],
+        more: 0,
+      },
+      crop: {
+        state: 'ready',
+        dataUrl: 'data:image/png;base64,AAAA',
+        width: 512,
+        height: 512,
+        marked: false,
+      },
+      draft: '',
+      error: null,
+    })
+    await sendBubble('what is here?', { x: 0, y: 0, width: 10, height: 10 })
+
+    expect(received).toHaveLength(1)
+    const context = received[0]!.context
+    expect(context.targets).toEqual([])
+    expect(context.inRegion).toEqual({ ids: [wall.id], more: 0 })
+    expect(Object.keys(context.inRegion!).sort()).toEqual(['ids', 'more'])
+    expect(context.image).toEqual({
+      dataUrl: 'data:image/png;base64,AAAA',
+      width: 512,
+      height: 512,
+      marked: false,
+    })
+    expect(Object.keys(context.image!).sort()).toEqual(['dataUrl', 'height', 'marked', 'width'])
+  })
+})
+
+test('sending during a cold enriched capture waits beyond the ordinary crop budget', async () => {
+  // Only the async renderer boundary and clock are controlled. Pointer handling, pending-crop
+  // retention, bubble closure, context construction and the host submission are real.
+  const received: PointAskSubmit[] = []
+  const previousThree = getEditorThreeContext()
+  const previousViewer = useViewer.getState()
+  const previousPoint = usePointAsk.getState()
+  const previousTimeout = globalThis.setTimeout
+  const previousClearTimeout = globalThis.clearTimeout
+  const listeners = new Map<string, Set<EventListener>>()
+  const timers = new Map<number, { at: number; run: () => void }>()
+  let now = 0
+  let timerId = 0
+  const advanceTo = (time: number) => {
+    now = time
+    for (const [id, timer] of [...timers]) {
+      if (timer.at > now) continue
+      timers.delete(id)
+      timer.run()
+    }
+  }
+  let fulfill!: (capture: enrichedCapture.EnrichedCapture) => void
+  const deferred = new Promise<enrichedCapture.EnrichedCapture>((resolve) => {
+    fulfill = resolve
+  })
+  const capture = spyOn(enrichedCapture, 'captureEnrichedRegion').mockReturnValue(deferred)
+  stopSession()
+  unregisterHandler()
+  unregisterHandler = registerPointAskHandler(async (submit) => {
+    received.push(submit)
+    return { ok: true }
+  })
+  try {
+    globalThis.setTimeout = ((callback: () => void, delay = 0) => {
+      const id = ++timerId
+      timers.set(id, { at: now + delay, run: callback })
+      return id
+    }) as unknown as typeof setTimeout
+    globalThis.clearTimeout = ((id: number) => timers.delete(id)) as unknown as typeof clearTimeout
+    globalThis.window = {
+      innerWidth: 100,
+      innerHeight: 100,
+      addEventListener(type: string, listener: EventListener) {
+        if (!listeners.has(type)) listeners.set(type, new Set())
+        listeners.get(type)!.add(listener)
+      },
+      removeEventListener(type: string, listener: EventListener) {
+        listeners.get(type)?.delete(listener)
+      },
+    } as never
+    const canvas = {
+      style: {},
+      getBoundingClientRect: () => ({
+        left: 0,
+        top: 0,
+        right: 100,
+        bottom: 100,
+        width: 100,
+        height: 100,
+      }),
+    } as unknown as HTMLCanvasElement
+    const camera = new PerspectiveCamera(60, 1, 0.1, 100)
+    camera.position.set(2, 3, 7)
+    camera.lookAt(2, 1, 0)
+    camera.updateMatrixWorld(true)
+    setEditorThreeContext({ camera, raycaster: new Raycaster(), domElement: canvas })
+    const hidden = WallNode.parse({
+      id: 'wall_hidden',
+      parentId: level.id,
+      start: [0, -1],
+      end: [4, -1],
+      height: 2.6,
+    })
+    useScene.setState({ nodes: { ...useScene.getState().nodes, [hidden.id]: hidden } })
+    useViewer.setState({ selection: { ...previousViewer.selection, levelId: level.id } })
+    stopSession = startPointAskSession({ enrichedRegions: true })
+    usePointAsk.setState({ active: true, playful: false, hover: null })
+    const pointer = (type: string, x: number, y: number) => {
+      const event = {
+        target: canvas,
+        button: 0,
+        pointerType: 'mouse',
+        clientX: x,
+        clientY: y,
+        shiftKey: false,
+        timeStamp: now,
+        preventDefault() {},
+        stopImmediatePropagation() {},
+      } as unknown as Event
+      for (const listener of listeners.get(type) ?? []) listener(event)
+    }
+    pointer('pointerdown', 10, 10)
+    pointer('pointermove', 90, 90)
+    pointer('pointerup', 90, 90)
+    expect(capture).toHaveBeenCalledTimes(1)
+    expect(usePointAsk.getState().bubble?.area?.ids).toContain(hidden.id)
+    expect(usePointAsk.getState().bubble?.crop.state).toBe('pending')
+
+    const sending = sendBubble('what is visible?', { x: 0, y: 0, width: 10, height: 10 })
+    expect(usePointAsk.getState().bubble).toBeNull()
+    advanceTo(2_000)
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(received).toHaveLength(0)
+
+    const result: enrichedCapture.EnrichedCapture = {
+      crop: { dataUrl: 'data:image/jpeg;base64,CROP', width: 512, height: 512 },
+      camera: {
+        position: [2, 3, 7],
+        target: [2, 1, 0],
+        fov: 60,
+        aspect: 1,
+        projection: 'perspective',
+      },
+      region: {
+        canvasRect: { x0: 10, y0: 10, x1: 90, y1: 90 },
+        cropRect: { x0: 0, y0: 0, x1: 512, y1: 512 },
+      },
+      world: {
+        center: [2, 1, 0],
+        topLeft: null,
+        topRight: null,
+        bottomLeft: null,
+        bottomRight: null,
+      },
+      visible: [
+        { id: wall.id, share: 0.75 },
+        { class: 'background', share: 0.25 },
+      ],
+      rooms: [],
+      legend: [],
+      legendText: 'Visible wall and sky',
+      segmented: { dataUrl: 'data:image/png;base64,MAP', width: 512, height: 512 },
+    }
+    advanceTo(4_200)
+    fulfill(result)
+    await sending
+
+    expect(received).toHaveLength(1)
+    expect(received[0]!.context.inRegion).toEqual({
+      ids: [wall.id],
+      more: 0,
+      visible: result.visible,
+      world: result.world,
+      rooms: [],
+    })
+    expect(received[0]!.context.image).toEqual({
+      ...result.crop,
+      marked: false,
+      segmented: result.segmented,
+      legend: [],
+      legendText: result.legendText,
+    })
+    const pin = usePointAsk.getState().pins[received[0]!.askId]!
+    expect(pin.model.targetIds).toEqual([wall.id])
+    expect(pin.anchor).toEqual([2, 1, 0])
+    expect(pin.before?.dataUrl).toBe(result.crop.dataUrl)
+  } finally {
+    capture.mockRestore()
+    stopSession()
+    globalThis.setTimeout = previousTimeout
+    globalThis.clearTimeout = previousClearTimeout
+    setEditorThreeContext(previousThree)
+    useViewer.setState(previousViewer, true)
+    usePointAsk.setState(previousPoint, true)
+  }
+})
 
 describe('a history left untracked after the turn', () => {
   test('refuses the hold, and the card is told why (it was silent: the owner, 12 October)', async () => {

@@ -2,6 +2,7 @@
 
 import type { PointAskSubmit, PointCamera } from '@pascal-app/core'
 import { create } from 'zustand'
+import type { EnrichedCapture } from '../lib/enriched-capture/enrich'
 import type { CompareRefusal } from '../lib/point-ask/compare'
 import { createPin, type PinEvent, type PinModel, reducePin } from '../lib/point-ask/pin-machine'
 import type { PointTarget, Rect, ScreenPoint } from '../lib/point-ask/types'
@@ -33,6 +34,7 @@ export type PointCrop = {
   width?: number
   height?: number
   marked?: boolean
+  enriched?: EnrichedCapture
 }
 
 /** A dragged rectangle (spec 2.3): drawn while the person drags, then settled until the ask goes or is dismissed. */

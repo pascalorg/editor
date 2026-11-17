@@ -39,6 +39,7 @@ import {
 } from '../../store/use-point-ask'
 import { isViewVisible, VIEW_3D } from '../../store/view-layout'
 import { keyCyclableContinuationContext } from '../continuation'
+import { captureEnrichedRegion, type EnrichedCapture } from '../enriched-capture/enrich'
 import { resolveCanvasSelectionNode } from '../selection-routing'
 import { triggerSFX } from '../sfx-bus'
 import { buildPointContext } from './build-context'
@@ -76,6 +77,9 @@ import type { Rect } from './types'
 // no pixels: the overlay draws from `usePointAsk`, this module writes to it.
 
 const CROP_WAIT_MS = 1_500
+const ENRICHED_CROP_WAIT_MS = 12_000
+type SessionCrop = CapturedCrop & { enriched?: EnrichedCapture }
+let enrichedRegions = false
 
 type Down = {
   x: number
@@ -84,7 +88,7 @@ type Down = {
   hover: PointHover | null
   capturedAt: string
   camera: PointCamera | null
-  crop: Promise<CapturedCrop | null>
+  crop: Promise<SessionCrop | null>
   shift: boolean
 }
 
@@ -323,9 +327,21 @@ function openBubble(
                 width: value.width,
                 height: value.height,
                 marked: false,
+                ...(value.enriched ? { enriched: value.enriched } : {}),
               }
             : { state: 'failed' },
+          ...(value?.enriched && current.area
+            ? {
+                area: { ...current.area, ids: visibleNodeIds(value.enriched), more: 0 },
+                camera: value.enriched.camera,
+                ...(value.enriched.world.center ? { anchor: value.enriched.world.center } : {}),
+              }
+            : {}),
         })
+        if (value?.enriched && current.area) {
+          const ids = visibleNodeIds(value.enriched)
+          useViewer.getState().setPointedIds(ids.length ? (ids as never) : null)
+        }
       },
       () => undefined,
     )
@@ -334,7 +350,11 @@ function openBubble(
 }
 
 /** The pending crop of each bubble, kept so a send can wait for it. */
-const downCrops = new Map<string, Promise<CapturedCrop | null>>()
+const downCrops = new Map<string, Promise<SessionCrop | null>>()
+
+function visibleNodeIds(capture: EnrichedCapture): string[] {
+  return [...new Set(capture.visible.flatMap((entry) => (entry.id ? [entry.id] : [])))]
+}
 
 export function closeBubble(kind: 'send' | 'dismiss' = 'dismiss') {
   const state = usePointAsk.getState()
@@ -557,7 +577,10 @@ function finishRegion(press: Down, event: PointerEvent) {
   const rect = region.rect
   state.setRegion({ ...region, settled: true, flashKey: region.flashKey + 1 })
   if (state.playful) triggerSFX('sfx:snapshot-capture')
-  const crop = captureViewCrop(rect, { pad: 0 }).then(
+  const capture: Promise<SessionCrop> = enrichedRegions
+    ? captureEnrichedRegion(rect, { pad: 0 }).then((enriched) => ({ ...enriched.crop, enriched }))
+    : captureViewCrop(rect, { pad: 0 })
+  const crop = capture.then(
     (value) => value,
     (error) => {
       console.debug(
@@ -826,8 +849,8 @@ const askMarks = new Map<
 
 /**
  * Sends the bubble's ask: the pin plants on the frame of Enter and the bubble folds into it; the
- * handoff to the chat follows (after the crop, up to 1.5 s), and a refusal brings the bubble back
- * with its words and the reason.
+ * handoff to the chat follows (after the crop, up to 1.5 s ordinarily or 12 s for an enriched
+ * region), and a refusal brings the bubble back with its words and the reason.
  */
 export async function sendBubble(
   text: string,
@@ -841,6 +864,8 @@ export async function sendBubble(
   const nodes = useScene.getState().nodes as Record<string, AnyNode>
   const first = bubble.targets[0]
   const area = bubble.area
+  // closeBubble releases its pending crop; retain this enriched region's promise for the handoff.
+  const regionCrop = area && enrichedRegions ? downCrops.get(bubble.capturedAt) : undefined
   const object = first ? sceneRegistry.nodes.get(first.id) : undefined
   let local: PinRecord['local'] = null
   if (object && first) {
@@ -877,15 +902,21 @@ export async function sendBubble(
   closeBubble('send')
   state.dispatchPin(askId, { type: 'sent' })
 
-  // The crop is usually ready by now (it started at pointer-down); wait for it only briefly.
+  // Ordinary crops wait briefly; enriched regions allow their full correlated capture budget.
   let crop = bubble.crop
   if (crop.state === 'pending') {
-    const pending = downCrops.get(bubble.capturedAt)
+    const pending = regionCrop ?? downCrops.get(bubble.capturedAt)
+    let timer: ReturnType<typeof setTimeout> | undefined
     const waited = pending
       ? await Promise.race([
           pending,
-          new Promise<null>((resolve) => setTimeout(() => resolve(null), CROP_WAIT_MS)),
-        ])
+          new Promise<null>((resolve) => {
+            timer = setTimeout(
+              () => resolve(null),
+              regionCrop ? ENRICHED_CROP_WAIT_MS : CROP_WAIT_MS,
+            )
+          }),
+        ]).finally(() => clearTimeout(timer))
       : null
     crop = waited
       ? {
@@ -894,8 +925,29 @@ export async function sendBubble(
           width: waited.width,
           height: waited.height,
           marked: false,
+          ...(waited.enriched ? { enriched: waited.enriched } : {}),
         }
       : { state: 'failed' }
+  }
+  const enriched = area && crop.state === 'ready' ? crop.enriched : undefined
+  if (enriched) {
+    const ids = visibleNodeIds(enriched)
+    usePointAsk.setState((state) => {
+      const pin = state.pins[askId]
+      if (!pin) return state
+      return {
+        pins: {
+          ...state.pins,
+          [askId]: {
+            ...pin,
+            model: { ...pin.model, targetIds: ids },
+            anchor: enriched.world.center ?? pin.anchor,
+            label: regionLabel(ids.length),
+            before: crop,
+          },
+        },
+      }
+    })
   }
   const firstNode = first ? nodes[first.id] : undefined
   const levelId =
@@ -908,8 +960,21 @@ export async function sendBubble(
     nodes: nodes as Record<string, AnyNode>,
     levelId,
     targets: bubble.targets.map((t, i) => ({ id: t.id, ...(i === 0 ? { hit: bubble.hit } : {}) })),
-    ...(area ? { inRegion: { ids: area.ids, more: area.more } } : {}),
-    camera: bubble.camera ??
+    ...(area
+      ? {
+          inRegion: enriched
+            ? {
+                ids: visibleNodeIds(enriched),
+                more: 0,
+                visible: enriched.visible,
+                world: enriched.world,
+                rooms: enriched.rooms,
+              }
+            : { ids: area.ids, more: area.more },
+        }
+      : {}),
+    camera: enriched?.camera ??
+      bubble.camera ??
       currentCamera() ?? {
         position: [0, 5, 5],
         target: [0, 0, 0],
@@ -925,6 +990,13 @@ export async function sendBubble(
             width: crop.width ?? 0,
             height: crop.height ?? 0,
             marked: false,
+            ...(enriched
+              ? {
+                  segmented: enriched.segmented,
+                  legend: enriched.legend,
+                  legendText: enriched.legendText,
+                }
+              : {}),
           },
         }
       : {}),
@@ -1297,8 +1369,9 @@ export function handEditsSince(askId: string): number {
 // ─── lifecycle ──────────────────────────────────────────────────────────────
 
 /** Starts listening for the keys, the pointer, the chat's statuses and the scene's commits. */
-export function startPointAskSession(): () => void {
+export function startPointAskSession(options: { enrichedRegions?: boolean } = {}): () => void {
   if (stopSession) return stopSession
+  enrichedRegions = options.enrichedRegions === true
   const offs: (() => void)[] = []
   const listen = <K extends keyof WindowEventMap>(
     type: K,
@@ -1375,6 +1448,7 @@ export function startPointAskSession(): () => void {
     for (const off of offs) off()
     leavePointMode()
     runningAskId = null
+    enrichedRegions = false
     stopSession = null
   }
   return stopSession

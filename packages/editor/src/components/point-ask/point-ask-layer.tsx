@@ -33,14 +33,14 @@ const CALM_CSS = `
  * where a host has registered a handler for asks (the open-source editor has no chat), though pins
  * already planted stay until they retire.
  */
-export function PointAskLayer() {
+export function PointAskLayer({ enrichedRegions = false }: { enrichedRegions?: boolean }) {
   const available = useHasPointAskHandler()
   const hasPins = usePointAsk((s) => s.pinOrder.length > 0)
   const active = usePointAsk((s) => s.active)
   const region = usePointAsk((s) => s.region)
   const calm = usePointMotionCalm()
 
-  useEffect(() => startPointAskSession(), [])
+  useEffect(() => startPointAskSession({ enrichedRegions }), [enrichedRegions])
 
   // A test door in development only, like the camera controls': a page script registers a fake
   // chat and plays its statuses, so the scene side can be driven without a model.

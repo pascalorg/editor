@@ -225,6 +225,8 @@ function initializeEditorRuntime(): () => void {
 export interface EditorProps {
   /** UI locale. Hosts may also call `setLocale` before mounting. */
   locale?: string
+  /** Opt-in pixel evidence for regions only. Click and multi-target asks keep their existing bytes. */
+  pointAsk?: { enrichedRegions?: boolean }
   // Layout version — 'v1' (default) or 'v2' (navbar + two-column)
   layoutVersion?: 'v1' | 'v2'
   // Viewport edge the tool menu docks to (desktop only; mobile stays at the bottom)
@@ -1232,6 +1234,7 @@ const ViewerCanvas = memo(function ViewerCanvas({
   disablePostFx = false,
   immersive,
   hintBelowTopMenu = false,
+  pointAsk,
 }: {
   isVersionPreviewMode: boolean
   isLoading: boolean
@@ -1252,6 +1255,7 @@ const ViewerCanvas = memo(function ViewerCanvas({
   disablePostFx?: boolean
   immersive?: ViewerImmersiveSession
   hintBelowTopMenu?: boolean
+  pointAsk?: EditorProps['pointAsk']
 }) {
   const layout = useActiveViewLayout()
   const views = useEditorViews()
@@ -1392,7 +1396,9 @@ const ViewerCanvas = memo(function ViewerCanvas({
                 containerRef={viewer3dRef}
                 isVersionPreviewMode={isVersionPreviewMode}
               />
-              {!isVersionPreviewMode && <PointAskLayer />}
+              {!isVersionPreviewMode && (
+                <PointAskLayer enrichedRegions={pointAsk?.enrichedRegions} />
+              )}
               {!showLoader && isCameraControlsHintVisible && !isFirstPersonMode ? (
                 <ViewerCanvasControlsHint
                   belowTopMenu={hintBelowTopMenu}
@@ -1550,6 +1556,7 @@ function PreviewStage({
 
 function EditorContent({
   guardAgainstSceneWipe,
+  pointAsk,
   layoutVersion = 'v1',
   actionMenuPlacement,
   appMenuButton,
@@ -1939,6 +1946,7 @@ function EditorContent({
   const viewerCanvas = (
     <ViewerCanvas
       disablePostFx={disablePostFx}
+      pointAsk={pointAsk}
       hintBelowTopMenu={topMenuShown}
       hasLoadedInitialScene={hasLoadedInitialScene}
       isFirstPersonMode={isFirstPersonMode}

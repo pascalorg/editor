@@ -55,4 +55,28 @@ describe('vector edges skip what draws nothing', () => {
     show()
     expect(proxy.visible).toBe(true)
   })
+
+  test('suppressing an invisible pick root preserves its visible opening descendants', () => {
+    const { scene, house, proxy } = sceneWithProxy()
+    scene.remove(house)
+    proxy.add(house)
+    scene.updateMatrixWorld(true)
+    const camera = new THREE.OrthographicCamera(-10, 10, 10, -10, 0.1, 100)
+    const before = candidateEdges(scene, camera, 20, 400_000)
+    expect(before).toHaveLength(BOX_EDGE_FLOATS)
+
+    const restore = hideUndrawnMeshes(scene)
+    try {
+      // The frame remains render-traversable beneath its no-draw picking mesh.
+      expect(candidateEdges(scene, camera, 20, 400_000)).toEqual(before)
+      const traversed: THREE.Object3D[] = []
+      scene.traverseVisible((object) => traversed.push(object))
+      expect(traversed).toContain(house)
+    } finally {
+      restore()
+    }
+
+    expect(candidateEdges(scene, camera, 20, 400_000)).toEqual(before)
+    expect(house.parent).toBe(proxy)
+  })
 })
