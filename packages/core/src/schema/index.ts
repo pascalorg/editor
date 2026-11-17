@@ -337,6 +337,7 @@ export {
   type RidgeVentLine,
   RidgeVentNode,
 } from './nodes/ridge-vent'
+export { RockNode } from './nodes/rock'
 export type { RoofSupport, RoofSurfaceMaterialRole, RoofSurfaceMaterialSpec } from './nodes/roof'
 export { getEffectiveRoofSurfaceMaterial, RoofNode } from './nodes/roof'
 export {

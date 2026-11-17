@@ -37,6 +37,7 @@ import { PipeSegmentNode } from './nodes/pipe-segment'
 import { PipeTrapNode } from './nodes/pipe-trap'
 import { PlantingNode } from './nodes/planting'
 import { RidgeVentNode } from './nodes/ridge-vent'
+import { RockNode } from './nodes/rock'
 import { RoofNode } from './nodes/roof'
 import { RoofSegmentNode } from './nodes/roof-segment'
 import { ScanNode } from './nodes/scan'
@@ -117,6 +118,7 @@ export const AnyNode = nodeUnion([
   SlabNode,
   HedgeNode,
   PlantingNode,
+  RockNode,
   CeilingNode,
   RoofNode,
   RoofSegmentNode,
