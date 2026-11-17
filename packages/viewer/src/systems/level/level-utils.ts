@@ -9,6 +9,7 @@ import {
   type SceneViewPresentation,
   sceneViewPresentationLevel,
 } from '@pascal-app/core/agent-operations'
+import type { Object3D } from 'three'
 import {
   temporarilyHideFromScene,
   temporarilyShowPresentation,
@@ -18,6 +19,18 @@ import { applyShadowOnly, clearShadowOnly } from '../../lib/shadow-only'
 import { shadowOnlyLevels } from './shadow-only-levels'
 
 export { EXPLODED_GAP } from '@pascal-app/core'
+
+const bakedBaseY = new WeakMap<Object3D, number>()
+
+/** Capture on artifact mount, before presentation moves the baked level. */
+export function bakedLevelBaseY(object: Object3D): number {
+  let y = bakedBaseY.get(object)
+  if (y === undefined) {
+    y = object.position.y
+    bakedBaseY.set(object, y)
+  }
+  return y
+}
 
 /**
  * The Y a level settles at under the given presentation mode — its stacked

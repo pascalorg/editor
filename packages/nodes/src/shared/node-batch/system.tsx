@@ -10,12 +10,14 @@ import {
   useScene,
 } from '@pascal-app/core'
 import {
+  familyForNode,
   getPendingWallRebuildCount,
   isIsolationActive,
   isNodeRevealing,
   publishPerfBatchStats,
   registerMaterialCacheCleanup,
   useViewer,
+  xrayActive,
 } from '@pascal-app/viewer'
 import { useFrame, useThree } from '@react-three/fiber'
 import { useEffect, useRef } from 'react'
@@ -127,6 +129,8 @@ function appearanceChanged(): boolean {
 }
 
 export function resetNodeBatchState() {
+  visibilityFamily = undefined
+  visibilityNodes = undefined
   releaseAll()
   changedNodes.clear()
   surfaceLevelReadyAt.clear()
@@ -179,6 +183,27 @@ function releaseAll() {
   revealAllBatchedHolds()
 }
 
+let visibilityFamily: string | null | undefined
+let visibilityNodes: unknown
+
+function updateBatchVisibility() {
+  const viewer = useViewer.getState()
+  const nodes = useScene.getState().nodes
+  const family = xrayActive(viewer) ? viewer.xrayFamily : null
+  if (family === visibilityFamily && (family === null || nodes === visibilityNodes)) return
+  visibilityFamily = family
+  visibilityNodes = nodes
+  store.setVisibility(
+    family !== null
+      ? (id) => {
+          const node = nodes[id as AnyNodeId]
+          const family = node && familyForNode(node)
+          return family === undefined || family === viewer.xrayFamily
+        }
+      : null,
+  )
+}
+
 export function subscribeBatchInteractions(invalidate: () => void): () => void {
   // A gesture or release on a host moves what it carries too.
   const changed = (nodeId: string) => {
@@ -193,6 +218,16 @@ export function subscribeBatchInteractions(invalidate: () => void): () => void {
     }
     invalidate()
   }
+  // The viewport draws at priority 1, before the priority-5 join/release pass.
+  const unsubscribeFamily = useViewer.subscribe((state, previous) => {
+    if (
+      state.xrayFamily !== previous.xrayFamily ||
+      state.walkthroughMode !== previous.walkthroughMode
+    ) {
+      updateBatchVisibility()
+      invalidate()
+    }
+  })
   const unsubscribeTransforms = useLiveTransforms.subscribe((state, previous) => {
     for (const nodeId of state.transforms.keys()) {
       if (!previous.transforms.has(nodeId)) changed(nodeId)
@@ -209,6 +244,7 @@ export function subscribeBatchInteractions(invalidate: () => void): () => void {
     invalidate()
   })
   return () => {
+    unsubscribeFamily()
     unsubscribeTransforms()
     unsubscribePreviews()
     unsubscribeReleases()
@@ -238,6 +274,7 @@ export function runBatchFrame(
   try {
     processBatchFrame(invalidate, wakeRef)
   } finally {
+    updateBatchVisibility()
     store.flushReleases()
     const emptyPending = store.pruneEmpty(
       performance.now(),

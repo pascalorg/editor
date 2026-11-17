@@ -581,6 +581,7 @@ export {
   roofPlanBoundsOverlap,
   roofPlanOverlapEntryOwns,
 } from './lib/roof-overlap'
+export { isRoomZone, type RoomCounts, roomCounts } from './lib/room-counts'
 export { type RoomDrawnFloor, roomDrawnFloor } from './lib/room-drawn-floor'
 export { type RoomFloorChoice, roomFloorChoices } from './lib/room-floor-choices'
 export * from './lib/room-floor-elevation'

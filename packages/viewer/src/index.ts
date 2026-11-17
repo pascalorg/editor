@@ -53,6 +53,7 @@ export {
   CROUCH_WALK_SPEED,
   EYE_LERP_SPEED,
   GlbWalkthroughController,
+  type GlbWalkthroughControllerProps,
   STAND_CAPSULE,
   STAND_CLEARANCE,
   STAND_FLOAT_HEIGHT,
@@ -78,11 +79,14 @@ export {
   SceneGroundReplacement,
   useSceneGroundReplacement,
 } from './components/viewer/scene-ground-replacement'
+export { isSectionObject, SectionGroup } from './components/viewer/section-group'
 export {
   type CalloutAction,
   type CalloutText,
   SelectionCallout,
+  type SelectionCalloutProps,
 } from './components/viewer/selection-callout'
+export { SiteSurfaceScope } from './components/viewer/site-surface-scope'
 export { applyWalkthroughCameraClipping } from './components/viewer/viewer-camera'
 export {
   isViewerPresentationTextureBorrowed,
@@ -125,6 +129,7 @@ export {
   daylightGroundColor,
 } from './lib/daylight/ground'
 export {
+  type DaylightSite,
   type LatLng,
   type LocationSource,
   requestDeviceLocation,
@@ -141,7 +146,13 @@ export {
   solarPosition,
   sunEvents,
   type TimeOfDay,
+  type TimeTarget,
 } from './lib/daylight/solar'
+export {
+  type TimeTransitionOptions,
+  timeTargetMinutes,
+  transitionTimeOfDay,
+} from './lib/daylight/time-transition'
 export type { DisplayState } from './lib/display-state'
 export { disposeObject3DResources } from './lib/dispose-object3d'
 export {
@@ -283,6 +294,11 @@ export {
   revealTimingAt,
 } from './lib/reveal-schedule'
 export { planRevealWindows, type RevealWindow } from './lib/reveal-windows'
+export {
+  familyForNode,
+  sceneFamilies,
+  VIEWER_FAMILIES,
+} from './lib/scene-families'
 export { createSceneSupportHeightSampler } from './lib/scene-support-height'
 export {
   getSceneTheme,
@@ -292,17 +308,22 @@ export {
 } from './lib/scene-themes'
 export {
   type HiddenReason,
+  heldReasons,
   hideFromScene,
   showInScene,
   temporarilyShowPresentation,
   temporarilyShowShadowOnly,
 } from './lib/scene-visibility'
 export { SCRIPTED_MODEL_FLAG } from './lib/scripted-opening'
+export { filterSectionHits, type SectionAxis, type SectionShadows } from './lib/section'
+export { sectionBounds } from './lib/section-bounds'
 export {
   SITE_GROUND,
+  SITE_HORIZON,
   type SiteGroundRole,
   siteGround,
   siteSurfaces,
+  temporarilyHideSiteSurfaces,
   temporarilyVeilGround,
 } from './lib/site-surfaces'
 export {
@@ -354,11 +375,19 @@ export {
   getViewerConfig,
   type ViewerConfig,
 } from './lib/viewer-config'
+export { createWalkthroughInput, type WalkthroughInput } from './lib/walkthrough-input'
+export {
+  WALKTHROUGH_DEFAULT_SPEEDS,
+  WALKTHROUGH_SEE_DISTANCE,
+  type WalkthroughSpeeds,
+} from './lib/walkthrough-settings'
+export { filterXrayHits, xrayActive } from './lib/xray'
 export { createZoneShape, createZoneWallGeometry } from './lib/zone-geometry'
 export {
   type FirstPersonHudState,
   useFirstPersonHud,
   type WalkthroughInteract,
+  type WalkthroughSeenInteract,
 } from './store/use-first-person-hud'
 export type { LightSource } from './store/use-item-light-pool'
 export { catalogLightSource, useItemLightPool } from './store/use-item-light-pool'
@@ -441,7 +470,10 @@ export {
   useGeometryStatus,
 } from './systems/geometry/geometry-status'
 export { GuideSystem } from './systems/guide/guide-system'
-export { InteractiveSystem } from './systems/interactive/interactive-system'
+export {
+  InteractiveSystem,
+  type InteractiveSystemProps,
+} from './systems/interactive/interactive-system'
 export { openingSettled, proceduralSettled } from './systems/interactive/opening-settled'
 export {
   type ScriptedClipActions,

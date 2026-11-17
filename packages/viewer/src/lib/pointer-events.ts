@@ -48,7 +48,10 @@ import {
 } from '@react-three/fiber'
 import * as THREE from 'three'
 import { acceleratedRaycast } from 'three-mesh-bvh'
+import { isSectionObject } from '../components/viewer/section-group'
 import useViewer from '../store/use-viewer'
+import { filterSectionHits } from './section'
+import { filterXrayHits } from './xray'
 
 /** A diagnostic the viewer hands its host, shaped for an error reporter's breadcrumb trail. */
 export type ViewerBreadcrumb = {
@@ -559,7 +562,10 @@ function createEvents(store: RootStore, onBreadcrumb?: ViewerBreadcrumbHandler) 
       collectionDepth--
     }
 
-    hits = hits
+    hits = filterXrayHits(
+      filterSectionHits(hits, useViewer.getState(), (hit) => isSectionObject(hit.object)),
+      useViewer.getState(),
+    )
       .sort((a, b) => {
         const aState = getRootState(a.object)
         const bState = getRootState(b.object)

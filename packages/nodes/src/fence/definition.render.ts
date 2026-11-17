@@ -57,6 +57,7 @@ export function fenceBaseElevation(
 
 export const fenceRenderDefinition: NodeRenderDefinition<typeof FenceNode> & { kind: 'fence' } = {
   kind: 'fence',
+  extensions: { 'pascal:viewer': { family: 'site' } },
   schemaVersion: 3,
   schema: FenceNode,
   category: 'structure',

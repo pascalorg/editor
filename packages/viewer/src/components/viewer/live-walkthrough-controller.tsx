@@ -66,6 +66,10 @@ import {
 } from 'three'
 import { acceleratedRaycast, computeBoundsTree, disposeBoundsTree } from 'three-mesh-bvh'
 import {
+  useWalkthroughInputLifecycle,
+  useWalkthroughJump,
+} from '../../hooks/use-walkthrough-input-lifecycle'
+import {
   createDroneInput,
   DRONE_SLOW_MULTIPLIER,
   type DroneLook,
@@ -75,10 +79,20 @@ import {
 } from '../../lib/drone-flight'
 import { setSurfaceRaycastLayers } from '../../lib/layers'
 import { isTypingTarget } from '../../lib/typing-target'
+import {
+  consumeWalkthroughClose,
+  consumeWalkthroughFrame,
+  consumeWalkthroughInteract,
+} from '../../lib/walkthrough-input'
+import {
+  WALKTHROUGH_DEFAULT_SPEEDS,
+  WALKTHROUGH_SEE_DISTANCE,
+  type WalkthroughSpeeds,
+} from '../../lib/walkthrough-settings'
 import { useFirstPersonHud, type WalkthroughInteract } from '../../store/use-first-person-hud'
 import useViewer from '../../store/use-viewer'
 import { openingSettled, proceduralSettled } from '../../systems/interactive/opening-settled'
-import BVHEcctrl, { type BVHEcctrlApi, type MovementInput } from './bvh-ecctrl'
+import BVHEcctrl, { type BVHEcctrlApi, characterStatus, type MovementInput } from './bvh-ecctrl'
 import {
   buildFirstPersonColliderWorldFromRegistry,
   deriveFirstPersonSpawn,
@@ -232,7 +246,7 @@ type ElevatorColliderMesh = Mesh & {
   userData: Mesh['userData'] & ElevatorColliderUserData
 }
 
-type FirstPersonInteractableTarget =
+type FirstPersonInteractableTarget = (
   | {
       id: AnyNodeId
       type: 'door' | 'window'
@@ -258,6 +272,7 @@ type FirstPersonInteractableTarget =
       levelId?: AnyNodeId
       type: 'elevator'
     }
+) & { distance?: number }
 
 type ElevatorButtonTarget = {
   action: 'open-door' | 'request-level'
@@ -749,6 +764,9 @@ const resolvePlacedSpawnNode = (nodes: ReturnType<typeof useScene.getState>['nod
 }
 
 export type LiveWalkthroughControllerProps = {
+  speeds?: WalkthroughSpeeds
+  /** Identification range in metres, independent of the existing 2.5 m activation reach. */
+  seeDistance?: number
   /** Freeze movement and look while a host renders a still. */
   paused?: boolean
   /**
@@ -773,6 +791,8 @@ export function LiveWalkthroughController(props: LiveWalkthroughControllerProps)
 }
 
 function LiveWalkthroughSession({
+  speeds,
+  seeDistance = WALKTHROUGH_SEE_DISTANCE,
   paused = false,
   externalFov = noExternalFov,
   pointerInteraction = true,
@@ -787,6 +807,9 @@ function LiveWalkthroughSession({
     hostRef.current.onExit?.()
   }, [])
   const { camera, gl } = useThree()
+  const touch = useViewer((state) => state.walkthroughInputMode === 'touch')
+  useWalkthroughInputLifecycle()
+  const resolveJump = useWalkthroughJump()
   const placedSpawnNode = useScene((state) => resolvePlacedSpawnNode(state.nodes))
   const isDroneMode = useViewer((state) => state.walkthroughMovement === 'drone')
   const controllerRef = useRef<BVHEcctrlApi | null>(null)
@@ -887,143 +910,148 @@ function LiveWalkthroughSession({
     }
   }, [])
 
-  const resolveInteractableDoorId = useCallback((): AnyNodeId | null => {
-    const nodes = useScene.getState().nodes
-    camera.updateMatrixWorld(true)
-    doorInteractionRaycaster.setFromCamera(centerScreenPoint, camera)
+  const resolveInteractableDoorId = useCallback(
+    (distance = DOOR_INTERACTION_DISTANCE): FirstPersonInteractableTarget | null => {
+      const nodes = useScene.getState().nodes
+      camera.updateMatrixWorld(true)
+      doorInteractionRaycaster.setFromCamera(centerScreenPoint, camera)
 
-    let closestDoorId: AnyNodeId | null = null
-    let closestDistance = DOOR_INTERACTION_DISTANCE
+      let closestDoorId: AnyNodeId | null = null
+      let closestDistance = distance
 
-    for (const doorId of sceneRegistry.byType.door!) {
-      const node = nodes[doorId as AnyNodeId]
-      if (node?.type !== 'door') continue
-      if (node.openingKind === 'opening') continue
-      if (!hasNativeLeaf(node)) continue
-      if (node.segments.every((segment) => segment.type === 'empty')) continue
+      for (const doorId of sceneRegistry.byType.door!) {
+        const node = nodes[doorId as AnyNodeId]
+        if (node?.type !== 'door') continue
+        if (node.openingKind === 'opening') continue
+        if (!hasNativeLeaf(node)) continue
+        if (node.segments.every((segment) => segment.type === 'empty')) continue
 
-      const object = sceneRegistry.nodes.get(doorId)
-      if (!object) continue
+        const object = sceneRegistry.nodes.get(doorId)
+        if (!object) continue
 
-      object.updateWorldMatrix(true, true)
+        object.updateWorldMatrix(true, true)
 
-      const placementHit = doorInteractionRaycaster
-        .intersectObject(object, true)
-        .find((intersection) => intersection.distance <= DOOR_INTERACTION_DISTANCE)
-      if (placementHit && placementHit.distance < closestDistance) {
-        closestDoorId = doorId as AnyNodeId
-        closestDistance = placementHit.distance
-      }
-
-      const leafW = node.width - 2 * node.frameThickness
-      const leafH = node.height - node.frameThickness
-      if (leafW <= 0 || leafH <= 0) continue
-
-      const leafCenterY = -node.frameThickness / 2
-
-      if (isOperationDoorType(node.doorType)) {
-        doorOpeningMatrix
-          .copy(object.matrixWorld)
-          .multiply(new Matrix4().makeTranslation(0, leafCenterY, 0))
-        doorOpeningInverseMatrix.copy(doorOpeningMatrix).invert()
-        doorOpeningBox.min.set(-leafW / 2, -leafH / 2, -DOOR_LEAF_INTERACTION_DEPTH / 2)
-        doorOpeningBox.max.set(leafW / 2, leafH / 2, DOOR_LEAF_INTERACTION_DEPTH / 2)
-        doorOpeningLocalRay
-          .copy(doorInteractionRaycaster.ray)
-          .applyMatrix4(doorOpeningInverseMatrix)
-
-        const localOpeningHit = doorOpeningLocalRay.intersectBox(
-          doorOpeningBox,
-          doorOpeningLocalHit,
-        )
-        if (!localOpeningHit) continue
-
-        doorOpeningWorldHit.copy(localOpeningHit).applyMatrix4(doorOpeningMatrix)
-        const openingHitDistance = doorOpeningWorldHit.distanceTo(
-          doorInteractionRaycaster.ray.origin,
-        )
-
-        if (
-          openingHitDistance <= DOOR_INTERACTION_DISTANCE &&
-          openingHitDistance < closestDistance
-        ) {
+        const placementHit = doorInteractionRaycaster
+          .intersectObject(object, true)
+          .find((intersection) => intersection.distance <= distance)
+        if (placementHit && placementHit.distance < closestDistance) {
           closestDoorId = doorId as AnyNodeId
-          closestDistance = openingHitDistance
+          closestDistance = placementHit.distance
         }
-        continue
+
+        const leafW = node.width - 2 * node.frameThickness
+        const leafH = node.height - node.frameThickness
+        if (leafW <= 0 || leafH <= 0) continue
+
+        const leafCenterY = -node.frameThickness / 2
+
+        if (isOperationDoorType(node.doorType)) {
+          doorOpeningMatrix
+            .copy(object.matrixWorld)
+            .multiply(new Matrix4().makeTranslation(0, leafCenterY, 0))
+          doorOpeningInverseMatrix.copy(doorOpeningMatrix).invert()
+          doorOpeningBox.min.set(-leafW / 2, -leafH / 2, -DOOR_LEAF_INTERACTION_DEPTH / 2)
+          doorOpeningBox.max.set(leafW / 2, leafH / 2, DOOR_LEAF_INTERACTION_DEPTH / 2)
+          doorOpeningLocalRay
+            .copy(doorInteractionRaycaster.ray)
+            .applyMatrix4(doorOpeningInverseMatrix)
+
+          const localOpeningHit = doorOpeningLocalRay.intersectBox(
+            doorOpeningBox,
+            doorOpeningLocalHit,
+          )
+          if (!localOpeningHit) continue
+
+          doorOpeningWorldHit.copy(localOpeningHit).applyMatrix4(doorOpeningMatrix)
+          const openingHitDistance = doorOpeningWorldHit.distanceTo(
+            doorInteractionRaycaster.ray.origin,
+          )
+
+          if (openingHitDistance <= distance && openingHitDistance < closestDistance) {
+            closestDoorId = doorId as AnyNodeId
+            closestDistance = openingHitDistance
+          }
+          continue
+        }
+
+        const hingeX = node.hingesSide === 'right' ? leafW / 2 : -leafW / 2
+        const swingDirectionSign = node.swingDirection === 'inward' ? 1 : -1
+        const hingeDirectionSign = node.hingesSide === 'right' ? 1 : -1
+        const currentSwingAngle =
+          useInteractive.getState().doors[doorId as AnyNodeId]?.swingAngle ?? node.swingAngle ?? 0
+        const clampedSwingAngle = Math.max(0, Math.min(DOOR_SWING_OPEN_ANGLE, currentSwingAngle))
+        const leafSwingRotation = clampedSwingAngle * swingDirectionSign * hingeDirectionSign
+
+        doorLeafMatrix
+          .copy(object.matrixWorld)
+          .multiply(new Matrix4().makeTranslation(hingeX, 0, 0))
+          .multiply(new Matrix4().makeRotationY(leafSwingRotation))
+          .multiply(new Matrix4().makeTranslation(-hingeX, leafCenterY, 0))
+        doorLeafInverseMatrix.copy(doorLeafMatrix).invert()
+        doorLeafBox.min.set(-leafW / 2, -leafH / 2, -DOOR_LEAF_INTERACTION_DEPTH / 2)
+        doorLeafBox.max.set(leafW / 2, leafH / 2, DOOR_LEAF_INTERACTION_DEPTH / 2)
+        doorLeafLocalRay.copy(doorInteractionRaycaster.ray).applyMatrix4(doorLeafInverseMatrix)
+
+        const localHit = doorLeafLocalRay.intersectBox(doorLeafBox, doorLeafLocalHit)
+        if (!localHit) continue
+
+        doorLeafWorldHit.copy(localHit).applyMatrix4(doorLeafMatrix)
+        const hitDistance = doorLeafWorldHit.distanceTo(doorInteractionRaycaster.ray.origin)
+
+        if (hitDistance <= distance && hitDistance < closestDistance) {
+          closestDoorId = doorId as AnyNodeId
+          closestDistance = hitDistance
+        }
       }
 
-      const hingeX = node.hingesSide === 'right' ? leafW / 2 : -leafW / 2
-      const swingDirectionSign = node.swingDirection === 'inward' ? 1 : -1
-      const hingeDirectionSign = node.hingesSide === 'right' ? 1 : -1
-      const currentSwingAngle =
-        useInteractive.getState().doors[doorId as AnyNodeId]?.swingAngle ?? node.swingAngle ?? 0
-      const clampedSwingAngle = Math.max(0, Math.min(DOOR_SWING_OPEN_ANGLE, currentSwingAngle))
-      const leafSwingRotation = clampedSwingAngle * swingDirectionSign * hingeDirectionSign
+      return closestDoorId ? { id: closestDoorId, type: 'door', distance: closestDistance } : null
+    },
+    [camera],
+  )
 
-      doorLeafMatrix
-        .copy(object.matrixWorld)
-        .multiply(new Matrix4().makeTranslation(hingeX, 0, 0))
-        .multiply(new Matrix4().makeRotationY(leafSwingRotation))
-        .multiply(new Matrix4().makeTranslation(-hingeX, leafCenterY, 0))
-      doorLeafInverseMatrix.copy(doorLeafMatrix).invert()
-      doorLeafBox.min.set(-leafW / 2, -leafH / 2, -DOOR_LEAF_INTERACTION_DEPTH / 2)
-      doorLeafBox.max.set(leafW / 2, leafH / 2, DOOR_LEAF_INTERACTION_DEPTH / 2)
-      doorLeafLocalRay.copy(doorInteractionRaycaster.ray).applyMatrix4(doorLeafInverseMatrix)
+  const resolveInteractableWindowId = useCallback(
+    (distance = DOOR_INTERACTION_DISTANCE): FirstPersonInteractableTarget | null => {
+      const nodes = useScene.getState().nodes
+      camera.updateMatrixWorld(true)
+      windowInteractionRaycaster.setFromCamera(centerScreenPoint, camera)
 
-      const localHit = doorLeafLocalRay.intersectBox(doorLeafBox, doorLeafLocalHit)
-      if (!localHit) continue
+      let closestWindowId: AnyNodeId | null = null
+      let closestDistance = distance
 
-      doorLeafWorldHit.copy(localHit).applyMatrix4(doorLeafMatrix)
-      const hitDistance = doorLeafWorldHit.distanceTo(doorInteractionRaycaster.ray.origin)
+      for (const windowId of sceneRegistry.byType.window!) {
+        const node = nodes[windowId as AnyNodeId]
+        if (node?.type !== 'window') continue
+        if (node.openingKind === 'opening') continue
+        if (!hasNativeLeaf(node)) continue
+        if (!isOperableWindowType(node.windowType)) continue
 
-      if (hitDistance <= DOOR_INTERACTION_DISTANCE && hitDistance < closestDistance) {
-        closestDoorId = doorId as AnyNodeId
-        closestDistance = hitDistance
+        const object = sceneRegistry.nodes.get(windowId)
+        if (!object) continue
+
+        const hit = windowInteractionRaycaster
+          .intersectObject(object, true)
+          .find((intersection) => intersection.distance <= distance)
+        if (!(hit && hit.distance < closestDistance)) continue
+
+        closestWindowId = windowId as AnyNodeId
+        closestDistance = hit.distance
       }
-    }
 
-    return closestDoorId
-  }, [camera])
+      return closestWindowId
+        ? { id: closestWindowId, type: 'window', distance: closestDistance }
+        : null
+    },
+    [camera],
+  )
 
-  const resolveInteractableWindowId = useCallback((): AnyNodeId | null => {
-    const nodes = useScene.getState().nodes
-    camera.updateMatrixWorld(true)
-    windowInteractionRaycaster.setFromCamera(centerScreenPoint, camera)
-
-    let closestWindowId: AnyNodeId | null = null
-    let closestDistance = DOOR_INTERACTION_DISTANCE
-
-    for (const windowId of sceneRegistry.byType.window!) {
-      const node = nodes[windowId as AnyNodeId]
-      if (node?.type !== 'window') continue
-      if (node.openingKind === 'opening') continue
-      if (!hasNativeLeaf(node)) continue
-      if (!isOperableWindowType(node.windowType)) continue
-
-      const object = sceneRegistry.nodes.get(windowId)
-      if (!object) continue
-
-      const hit = windowInteractionRaycaster
-        .intersectObject(object, true)
-        .find((intersection) => intersection.distance <= DOOR_INTERACTION_DISTANCE)
-      if (!(hit && hit.distance < closestDistance)) continue
-
-      closestWindowId = windowId as AnyNodeId
-      closestDistance = hit.distance
-    }
-
-    return closestWindowId
-  }, [camera])
-
-  const resolveInteractableElevatorTarget =
-    useCallback((): FirstPersonInteractableTarget | null => {
+  const resolveInteractableElevatorTarget = useCallback(
+    (distance = DOOR_INTERACTION_DISTANCE): FirstPersonInteractableTarget | null => {
       const nodes = useScene.getState().nodes
       camera.updateMatrixWorld(true)
       elevatorInteractionRaycaster.setFromCamera(centerScreenPoint, camera)
 
       let closestTarget: FirstPersonInteractableTarget | null = null
-      let closestDistance = DOOR_INTERACTION_DISTANCE
+      let closestDistance = distance
 
       for (const elevatorId of sceneRegistry.byType.elevator!) {
         const typedElevatorId = elevatorId as AnyNodeId
@@ -1059,121 +1087,135 @@ function LiveWalkthroughSession({
             id: target.elevatorId,
             levelId: target.levelId,
             type: 'elevator',
+            distance: intersection.distance,
           }
           closestDistance = intersection.distance
         }
       }
 
       return closestTarget
-    }, [camera])
+    },
+    [camera],
+  )
 
-  const resolveInteractableTarget = useCallback((): FirstPersonInteractableTarget | null => {
-    const elevatorTarget = resolveInteractableElevatorTarget()
-    if (elevatorTarget) return elevatorTarget
+  const resolveInteractableTarget = useCallback(
+    (distance = DOOR_INTERACTION_DISTANCE): FirstPersonInteractableTarget | null => {
+      const elevatorTarget = resolveInteractableElevatorTarget(distance)
+      if (elevatorTarget && distance === DOOR_INTERACTION_DISTANCE) return elevatorTarget
 
-    const doorId = resolveInteractableDoorId()
-    if (doorId) return { id: doorId, type: 'door' }
+      const door = resolveInteractableDoorId(distance)
+      if (door && distance === DOOR_INTERACTION_DISTANCE) return door
 
-    const windowId = resolveInteractableWindowId()
-    if (windowId) return { id: windowId, type: 'window' }
+      const window = resolveInteractableWindowId(distance)
+      if (window && distance === DOOR_INTERACTION_DISTANCE) return window
 
-    camera.updateMatrixWorld(true)
-    proceduralInteractionRaycaster.setFromCamera(centerScreenPoint, camera)
-    proceduralInteractionRaycaster.far = DOOR_INTERACTION_DISTANCE
-    let closest: FirstPersonInteractableTarget | null = null
-    let closestDistance = DOOR_INTERACTION_DISTANCE
-    const nodes = useScene.getState().nodes
-    const covered = new Set<string>()
-    for (const rawId of sceneRegistry.byType['procedural-item'] ?? []) {
-      covered.add(rawId)
-      const id = rawId as AnyNodeId
-      const node = nodes[id]
-      if (node?.type !== 'procedural-item') continue
-      const procedural = node as ProceduralItemNode
-      if (
-        !operableParts(procedural.recipe).length &&
-        !procedural.recipe.parts.some((part) => part.light)
-      )
-        continue
-      const object = sceneRegistry.nodes.get(id)
-      if (!object) continue
-      for (const hit of proceduralInteractionRaycaster.intersectObject(object, true)) {
-        if (hit.distance >= closestDistance) break
-        // Skip what is not drawn: a joint tree's inactive rest or joint meshes.
-        let drawn = true
-        for (let at: Object3D | null = hit.object; at && at !== object; at = at.parent)
-          if (!at.visible) drawn = false
-        if (!drawn) continue
-        let ancestor: Object3D | null = hit.object
-        while (ancestor && ancestor !== object && !ancestor.userData.proceduralMotion)
-          ancestor = ancestor.parent
-        let motion = ancestor?.userData.proceduralMotion as
-          | { nodeId?: string; partId?: string; kind?: 'hinge' | 'slide' | 'spin' }
-          | undefined
-        // An idle joint tree draws one merged mesh per slot; its face ranges name the part.
-        const ranges = hit.object.userData.proceduralRanges as
-          | { end: number; partId: string }[]
-          | undefined
-        if (!motion && ranges && hit.faceIndex != null) {
-          const face = hit.faceIndex
-          const partId = ranges.find((range) => face < range.end)?.partId
-          const part = partId ? operablePartFor(procedural.recipe, partId) : undefined
-          if (part) motion = { nodeId: id, partId: part.id, kind: part.kind }
+      camera.updateMatrixWorld(true)
+      proceduralInteractionRaycaster.setFromCamera(centerScreenPoint, camera)
+      proceduralInteractionRaycaster.far = distance
+      let closest: FirstPersonInteractableTarget | null =
+        [elevatorTarget, door, window]
+          .filter((target) => target !== null)
+          .sort((a, b) => a.distance! - b.distance!)[0] ?? null
+      let closestDistance = closest?.distance ?? distance
+      const nodes = useScene.getState().nodes
+      const covered = new Set<string>()
+      for (const rawId of sceneRegistry.byType['procedural-item'] ?? []) {
+        covered.add(rawId)
+        const id = rawId as AnyNodeId
+        const node = nodes[id]
+        if (node?.type !== 'procedural-item') continue
+        const procedural = node as ProceduralItemNode
+        if (
+          !operableParts(procedural.recipe).length &&
+          !procedural.recipe.parts.some((part) => part.light)
+        )
+          continue
+        const object = sceneRegistry.nodes.get(id)
+        if (!object) continue
+        for (const hit of proceduralInteractionRaycaster.intersectObject(object, true)) {
+          if (hit.distance >= closestDistance) break
+          // Skip what is not drawn: a joint tree's inactive rest or joint meshes.
+          let drawn = true
+          for (let at: Object3D | null = hit.object; at && at !== object; at = at.parent)
+            if (!at.visible) drawn = false
+          if (!drawn) continue
+          let ancestor: Object3D | null = hit.object
+          while (ancestor && ancestor !== object && !ancestor.userData.proceduralMotion)
+            ancestor = ancestor.parent
+          let motion = ancestor?.userData.proceduralMotion as
+            | { nodeId?: string; partId?: string; kind?: 'hinge' | 'slide' | 'spin' }
+            | undefined
+          // An idle joint tree draws one merged mesh per slot; its face ranges name the part.
+          const ranges = hit.object.userData.proceduralRanges as
+            | { end: number; partId: string }[]
+            | undefined
+          if (!motion && ranges && hit.faceIndex != null) {
+            const face = hit.faceIndex
+            const partId = ranges.find((range) => face < range.end)?.partId
+            const part = partId ? operablePartFor(procedural.recipe, partId) : undefined
+            if (part) motion = { nodeId: id, partId: part.id, kind: part.kind }
+          }
+          closest =
+            motion?.nodeId === id && motion.partId
+              ? { id, partId: motion.partId, kind: motion.kind, type: 'procedural' }
+              : { id, type: 'procedural' }
+          closest.distance = hit.distance
+          closestDistance = hit.distance
+          break
         }
-        closest =
-          motion?.nodeId === id && motion.partId
-            ? { id, partId: motion.partId, kind: motion.kind, type: 'procedural' }
-            : { id, type: 'procedural' }
-        closestDistance = hit.distance
-        break
       }
-    }
-    for (const rawId of sceneRegistry.byType.item ?? []) {
-      covered.add(rawId)
-      const id = rawId as AnyNodeId
-      const node = nodes[id]
-      if (
-        node?.type !== 'item' ||
-        !node.asset.interactive?.controls.some((control) => control.kind === 'toggle')
-      )
-        continue
-      const object = sceneRegistry.nodes.get(id)
-      if (!object) continue
-      const hit = proceduralInteractionRaycaster.intersectObject(object, true)[0]
-      if (hit && hit.distance < closestDistance) {
-        closest = { id, type: 'item' }
-        closestDistance = hit.distance
+      for (const rawId of sceneRegistry.byType.item ?? []) {
+        covered.add(rawId)
+        const id = rawId as AnyNodeId
+        const node = nodes[id]
+        if (
+          node?.type !== 'item' ||
+          !node.asset.interactive?.controls.some((control) => control.kind === 'toggle')
+        )
+          continue
+        const object = sceneRegistry.nodes.get(id)
+        if (!object) continue
+        const hit = proceduralInteractionRaycaster.intersectObject(object, true)[0]
+        if (hit && hit.distance < closestDistance) {
+          closest = { id, type: 'item' }
+          closest.distance = hit.distance
+          closestDistance = hit.distance
+        }
       }
-    }
-    // Doors and windows have their own walkthrough targets (resolveInteractable*Id), except those
-    // built from a script: their clips run through the mechanism target below.
-    for (const id of nativeOpeningIds()) covered.add(id)
-    for (const id of mechanismTargetIds(covered)) {
-      const object = sceneRegistry.nodes.get(id)
-      const hit = object && proceduralInteractionRaycaster.intersectObject(object, true)[0]
-      if (hit && hit.distance < closestDistance) {
-        closest = { id, type: 'mechanism' }
-        closestDistance = hit.distance
+      // Doors and windows have their own walkthrough targets (resolveInteractable*Id), except those
+      // built from a script: their clips run through the mechanism target below.
+      for (const id of nativeOpeningIds()) covered.add(id)
+      for (const id of mechanismTargetIds(covered)) {
+        const object = sceneRegistry.nodes.get(id)
+        const hit = object && proceduralInteractionRaycaster.intersectObject(object, true)[0]
+        if (hit && hit.distance < closestDistance) {
+          closest = { id, type: 'mechanism' }
+          closest.distance = hit.distance
+          closestDistance = hit.distance
+        }
       }
-    }
-    if (!closest) {
-      const selectedId = useViewer.getState().selection.selectedIds.at(-1) as AnyNodeId | undefined
-      const selected = selectedId ? nodes[selectedId] : undefined
-      if (
-        selected?.type === 'item' &&
-        selected.asset.interactive?.controls.some((control) => control.kind === 'toggle')
-      )
-        return { id: selected.id, type: 'item' }
-    }
-    if (closest) return closest
+      if (!closest && distance === DOOR_INTERACTION_DISTANCE) {
+        const selectedId = useViewer.getState().selection.selectedIds.at(-1) as
+          | AnyNodeId
+          | undefined
+        const selected = selectedId ? nodes[selectedId] : undefined
+        if (
+          selected?.type === 'item' &&
+          selected.asset.interactive?.controls.some((control) => control.kind === 'toggle')
+        )
+          return { id: selected.id, type: 'item' }
+      }
+      if (closest) return closest
 
-    return null
-  }, [
-    camera,
-    resolveInteractableDoorId,
-    resolveInteractableElevatorTarget,
-    resolveInteractableWindowId,
-  ])
+      return null
+    },
+    [
+      camera,
+      resolveInteractableDoorId,
+      resolveInteractableElevatorTarget,
+      resolveInteractableWindowId,
+    ],
+  )
 
   const toggleInteractableTarget = useCallback(() => {
     if (isDroneMode) return
@@ -1423,6 +1465,7 @@ function LiveWalkthroughSession({
   }, [toggleInteractableTarget])
 
   useEffect(() => {
+    if (touch) return
     const canvas = gl.domElement
     const handleMouseMove = (e: MouseEvent) => {
       if (document.pointerLockElement !== canvas) return
@@ -1503,12 +1546,13 @@ function LiveWalkthroughSession({
         document.exitPointerLock()
       }
     }
-  }, [exit, gl])
+  }, [exit, gl, touch])
 
   useEffect(() => {
     const canvas = gl.domElement
 
     const applyMovementKey = (event: KeyboardEvent, active: boolean) => {
+      if (useViewer.getState().walkthroughInputMode === 'touch') return false
       if (isTypingTarget(event.target)) return false
 
       const movement = getMovementInputForKey(event.code, active)
@@ -1521,6 +1565,10 @@ function LiveWalkthroughSession({
     }
 
     const handleKeyDown = (event: KeyboardEvent) => {
+      if (useViewer.getState().walkthroughInputMode === 'touch') {
+        if (event.code === 'Escape') exit()
+        return
+      }
       const handledMovement = applyMovementKey(event, true)
       if (handledMovement) return
 
@@ -1619,6 +1667,26 @@ function LiveWalkthroughSession({
       window.removeEventListener('blur', handleBlur)
     }
   }, [closeInteractableTarget, exit, gl, isDroneMode, toggleInteractableTarget])
+
+  // biome-ignore lint/correctness/useExhaustiveDependencies: drop held input whenever the input mode changes
+  useEffect(() => {
+    Object.assign(movementInputRef.current, inactiveMovementInput)
+    controllerRef.current?.setMovement({ ...inactiveMovementInput, joystick: { x: 0, y: 0 } })
+    crouchKeyRef.current = false
+    suspendRef.current = false
+  }, [touch])
+
+  useFrame(() => {
+    if (!touch || isDroneMode || !controllerRef.current) return
+    const input = consumeWalkthroughFrame()
+    if (hostRef.current.paused) return
+    crouchKeyRef.current = input.crouch
+    input.jump = resolveJump(input.jump, characterStatus.isOnGround, characterStatus.linvel.y)
+    controllerRef.current.setMovement(input)
+    turnFirstPersonLook(lookRef.current, input.dx, input.dy)
+    if (consumeWalkthroughInteract()) toggleInteractableTargetRef.current()
+    if (consumeWalkthroughClose()) closeInteractableTarget()
+  }, -1)
 
   const syncElevatorColliderMeshes = useCallback(() => {
     const nodes = useScene.getState().nodes
@@ -1931,8 +1999,35 @@ function LiveWalkthroughSession({
       useViewer.getState().setHoveredId(nextInteractableTarget?.id ?? null)
     }
 
+    const seen =
+      nextInteractableTarget || seeDistance <= DOOR_INTERACTION_DISTANCE
+        ? null
+        : resolveInteractableTarget(seeDistance)
+    const seenPrompt = seen && resolveHudInteract(seen)
+    // Activation retains its existing targets. Distant identification additionally respects
+    // the static building's walls so it cannot invite the user toward an unseen object.
+    const blocker =
+      seen &&
+      worldRef.current &&
+      doorInteractionRaycaster.intersectObject(worldRef.current.mesh, false)[0]
+    const seenVisible =
+      seen?.distance != null &&
+      seen.distance > DOOR_INTERACTION_DISTANCE &&
+      (!blocker || blocker.distance >= seen.distance - 0.01)
     useFirstPersonHud.getState().setHud({
+      seenInteract:
+        seen && seenPrompt && seenVisible
+          ? {
+              ...seenPrompt,
+              kind: useScene.getState().nodes[seen.id]?.type ?? seen.type,
+              distance: seen.distance!,
+            }
+          : null,
       interact: resolveHudInteract(nextInteractableTarget),
+      canClose:
+        !!nextInteractableTarget &&
+        ['mechanism', 'procedural', 'window', 'door'].includes(nextInteractableTarget.type),
+      shuttersInView: false,
     })
 
     hudLabelFrameRef.current += 1
@@ -1963,7 +2058,7 @@ function LiveWalkthroughSession({
   return (
     <>
       {controllerStart && (
-        <KeyboardControls map={keyboardMap}>
+        <KeyboardControls map={touch ? [] : keyboardMap}>
           <BVHEcctrl
             acceleration={26}
             airDragFactor={0.3}
@@ -1985,9 +2080,13 @@ function LiveWalkthroughSession({
             gravity={9.81}
             jumpVel={5}
             key="first-person-controller"
-            maxRunSpeed={crouched ? CROUCH_RUN_SPEED : 5}
+            maxRunSpeed={
+              crouched ? CROUCH_RUN_SPEED : (speeds?.run ?? WALKTHROUGH_DEFAULT_SPEEDS.run)
+            }
             maxSlope={1.2}
-            maxWalkSpeed={crouched ? CROUCH_WALK_SPEED : 2}
+            maxWalkSpeed={
+              crouched ? CROUCH_WALK_SPEED : (speeds?.walk ?? WALKTHROUGH_DEFAULT_SPEEDS.walk)
+            }
             paused={isElevatorRideLocked || paused}
             position={controllerStart.position}
             ref={setControllerApi}

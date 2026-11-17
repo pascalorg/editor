@@ -1,8 +1,9 @@
 'use client'
 
 import { type AnyNode, type AnyNodeId, useInteractive } from '@pascal-app/core'
-import { useCallback } from 'react'
+import { type ReactNode, useCallback } from 'react'
 import type { Object3D } from 'three'
+import { familyForNode } from '../../lib/scene-families'
 import useViewer from '../../store/use-viewer'
 import {
   type CalloutActionInput,
@@ -17,7 +18,11 @@ import {
 } from '../../systems/interactive/callout-actions'
 import type { GlbInteractiveItem } from './glb-interactive'
 import { toggleGlbShutters } from './glb-scene-motion'
-import { type CalloutAction, SelectionCallout } from './selection-callout'
+import {
+  type CalloutAction,
+  SelectionCallout,
+  type SelectionCalloutProps,
+} from './selection-callout'
 
 type BakedExtras = {
   pascalId?: string
@@ -33,6 +38,7 @@ type BakedExtras = {
  * the same baked clips and interactive state the walkthrough does.
  */
 export function GlbSelectionCallout({
+  renderCallout,
   identity,
   items,
   sceneNodes,
@@ -40,6 +46,7 @@ export function GlbSelectionCallout({
   isOpen,
   toggleOpen,
 }: {
+  renderCallout?: (props: SelectionCalloutProps) => ReactNode
   identity: ReadonlyMap<string, Object3D>
   items: GlbInteractiveItem[] | undefined
   sceneNodes: Readonly<Record<string, AnyNode>> | undefined
@@ -49,6 +56,7 @@ export function GlbSelectionCallout({
   toggleOpen: (object: Object3D) => void | Promise<void>
 }) {
   const selectedIds = useViewer((s) => s.selection.selectedIds)
+  const family = useViewer((state) => state.xrayFamily)
   const walkthrough = useViewer((s) => s.walkthroughMode)
   const id = selectedIds.length === 1 ? selectedIds[0]! : null
   const object = id ? identity.get(id) : undefined
@@ -62,6 +70,10 @@ export function GlbSelectionCallout({
   const extras = object.userData as BakedExtras
   if (!hasCallout(extras.kind)) return null
   const node = sceneNodes?.[id]
+  if (family !== null && node) {
+    const classification = familyForNode(node)
+    if (classification !== undefined && classification !== family) return null
+  }
   const title = extras.label ?? node?.name ?? 'Item'
   const opening = (node ?? { type: extras.kind ?? 'item' }) as CalloutActionInput
 
@@ -127,14 +139,12 @@ export function GlbSelectionCallout({
       ),
     )
 
-  return (
-    <SelectionCallout
-      actions={actions}
-      key={id}
-      object={object}
-      onDismiss={dismiss}
-      subtitle={calloutSubtitle(node ?? ({ type: extras.kind } as AnyNode), title)}
-      title={title}
-    />
-  )
+  const props: SelectionCalloutProps = {
+    actions,
+    object,
+    onDismiss: dismiss,
+    subtitle: calloutSubtitle(node ?? ({ type: extras.kind } as AnyNode), title),
+    title,
+  }
+  return renderCallout ? renderCallout(props) : <SelectionCallout key={id} {...props} />
 }

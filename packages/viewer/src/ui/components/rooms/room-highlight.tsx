@@ -10,6 +10,7 @@ import {
   type Object3D,
 } from 'three'
 import { LineBasicNodeMaterial, MeshBasicNodeMaterial } from 'three/webgpu'
+import { SectionGroup } from '../../../components/viewer/section-group'
 import { OVERLAY_LAYER } from '../../../lib/layers'
 import { getRoomAssembly, type RoomAssemblyHeights } from '../../lib/room-assembly-overlay'
 import type { RoomSelectionRecord } from '../../lib/room-selection'
@@ -74,31 +75,34 @@ export function RoomAssemblyMesh({
     if (level) {
       level.updateWorldMatrix(true, false)
       ref.current.matrix.copy(level.matrixWorld)
+      ref.current.matrixWorldNeedsUpdate = true
     }
   })
   return (
-    <group matrixAutoUpdate={false} ref={ref}>
-      <mesh
-        geometry={geometry.floor}
-        layers={OVERLAY_LAYER}
-        material={floorMaterial}
-        raycast={noRaycast}
-        renderOrder={100}
-      />
-      <mesh
-        geometry={geometry.surfaces}
-        layers={OVERLAY_LAYER}
-        material={surfaceMaterial}
-        raycast={noRaycast}
-        renderOrder={100}
-      />
-      <lineSegments
-        geometry={geometry.outline}
-        layers={OVERLAY_LAYER}
-        material={outlineMaterial}
-        raycast={noRaycast}
-        renderOrder={101}
-      />
-    </group>
+    <SectionGroup>
+      <group matrixAutoUpdate={false} ref={ref}>
+        <mesh
+          geometry={geometry.floor}
+          layers={OVERLAY_LAYER}
+          material={floorMaterial}
+          raycast={noRaycast}
+          renderOrder={100}
+        />
+        <mesh
+          geometry={geometry.surfaces}
+          layers={OVERLAY_LAYER}
+          material={surfaceMaterial}
+          raycast={noRaycast}
+          renderOrder={100}
+        />
+        <lineSegments
+          geometry={geometry.outline}
+          layers={OVERLAY_LAYER}
+          material={outlineMaterial}
+          raycast={noRaycast}
+          renderOrder={101}
+        />
+      </group>
+    </SectionGroup>
   )
 }

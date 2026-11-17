@@ -15628,6 +15628,11 @@ msgstr "Blue hour"
 
 #: packages/viewer/src/ui/components/render-settings-menu.tsx
 #: packages/viewer/src/ui/components/sky-control.tsx
+msgid "viewer.daylight.time.dawn"
+msgstr "Dawn"
+
+#: packages/viewer/src/ui/components/render-settings-menu.tsx
+#: packages/viewer/src/ui/components/sky-control.tsx
 msgid "viewer.daylight.time.golden"
 msgstr "Golden hour"
 
@@ -15856,8 +15861,29 @@ msgstr "Walkthrough: {state}"
 
 #: packages/viewer/src/components/viewer/glb-scene.tsx
 #: packages/viewer/src/systems/interactive/callout-actions.ts
+#: packages/viewer/src/ui/components/walkthrough-touch-controls.tsx
 msgid "viewer.walkthrough.shutters"
 msgstr "Shutters"
+
+#: packages/viewer/src/ui/components/walkthrough-touch-controls.tsx
+msgid "viewer.walkthroughTouch.close"
+msgstr "Close"
+
+#: packages/viewer/src/ui/components/walkthrough-touch-controls.tsx
+msgid "viewer.walkthroughTouch.crouch"
+msgstr "Crouch"
+
+#: packages/viewer/src/ui/components/walkthrough-touch-controls.tsx
+msgid "viewer.walkthroughTouch.exit"
+msgstr "Exit"
+
+#: packages/viewer/src/ui/components/walkthrough-touch-controls.tsx
+msgid "viewer.walkthroughTouch.interact"
+msgstr "Interact"
+
+#: packages/viewer/src/ui/components/walkthrough-touch-controls.tsx
+msgid "viewer.walkthroughTouch.jump"
+msgstr "Jump"
 
 #: packages/viewer/src/ui/components/viewer-controls-bar.tsx
 msgid "viewer.walls.cutaway"

@@ -154,10 +154,11 @@ const result = await build({
     virtualModule(
       'render-consumer',
       `
-    import { loadPlugin, useScene } from '@pascal-app/core';
-    import { LiveWalkthroughController, useFirstPersonHud, Viewer } from '@pascal-app/viewer';
+    import { loadPlugin, roomCounts, useScene } from '@pascal-app/core';
+    import { timeTargetMinutes, transitionTimeOfDay, filterSectionHits, filterXrayHits, isSectionObject, heldReasons, GlbScene, InteractiveSystem, createWalkthroughInput, WALKTHROUGH_DEFAULT_SPEEDS, WALKTHROUGH_SEE_DISTANCE, GlbWalkthroughController, LiveWalkthroughController, familyForNode, sceneFamilies, VIEWER_FAMILIES, xrayActive, SectionGroup, sectionBounds, presetInstant, useFirstPersonHud, useViewer, Viewer } from '@pascal-app/viewer';
     import { renderPlugin } from '@pascal-app/nodes/render';
-    export { LiveWalkthroughController, useFirstPersonHud, Viewer, renderPlugin };
+    import { WalkthroughTouchControls } from '@pascal-app/viewer/ui';
+    export { timeTargetMinutes, transitionTimeOfDay, filterSectionHits, filterXrayHits, isSectionObject, heldReasons, GlbScene, InteractiveSystem, createWalkthroughInput, WALKTHROUGH_DEFAULT_SPEEDS, WALKTHROUGH_SEE_DISTANCE, GlbWalkthroughController, WalkthroughTouchControls, LiveWalkthroughController, familyForNode, sceneFamilies, VIEWER_FAMILIES, xrayActive, SectionGroup, sectionBounds, presetInstant, roomCounts, useFirstPersonHud, useViewer, Viewer, renderPlugin };
     export async function hydrate(scene) {
       await loadPlugin(renderPlugin);
       useScene.getState().setScene(scene);
@@ -238,22 +239,72 @@ console.log(`Render bundle including all lazy chunks: ${bytes} bytes across ${fi
 // A declaration consumer gets no editor/Next resolution, even in this development workspace.
 const consumer = resolve(root, 'packages/nodes/render-consumer.ts')
 const consumerSource = `
-  import type { Plugin } from '@pascal-app/core';
+  import { roomCounts, type Plugin, type RoomCounts, type SceneGraph } from '@pascal-app/core';
+  import { familyForNode, sceneFamilies, VIEWER_FAMILIES, xrayActive, SectionGroup, sectionBounds, presetInstant, useViewer, type SectionAxis, type SectionShadows, type DaylightSite, type TimeOfDay } from '@pascal-app/viewer';
+  import { timeTargetMinutes, transitionTimeOfDay, filterSectionHits, filterXrayHits, isSectionObject, heldReasons, GlbScene, InteractiveSystem, type TimeTarget, type TimeTransitionOptions, type GlbPickEvent, type SelectionCalloutProps, type CalloutAction } from '@pascal-app/viewer';
+  import type { ComponentProps } from 'react';
+  const renderCallout = (props: SelectionCalloutProps) => { const actions: CalloutAction[] = props.actions; return null; };
+  export const bakedProps: ComponentProps<typeof GlbScene> = { url: 'scene.glb', outlineSync: false, renderCallout, onPick: (event: GlbPickEvent) => { if (event.hitObject) heldReasons(event.hitObject); } };
+  export const liveProps: ComponentProps<typeof InteractiveSystem> = { renderCallout };
+  export const interactionApi = { transitionTimeOfDay, filterSectionHits, filterXrayHits, isSectionObject, heldReasons };
+  export const transition = () => transitionTimeOfDay('dawn', { durationMs: (delta) => Math.abs(delta) * 2, easing: (t) => t });
+  const elevationTarget: TimeTarget = { elevation: -2.5, side: 'setting' };
+  const transitionOptions: TimeTransitionOptions = { durationMs: 0 };
+  export const elevationTransition = (): (() => void) => transitionTimeOfDay(elevationTarget, transitionOptions);
+  export const risingTransition = () => transitionTimeOfDay({ elevation: 6, side: 'rising' });
+  export const targetMinutes: number = timeTargetMinutes(elevationTarget);
+  export const presetMinutes: number = timeTargetMinutes('dawn');
+  const site: DaylightSite = { northRotation: 1, lat: 48.86, lng: 2.35 };
+  const dawn: TimeOfDay = 'dawn';
+  export const families = (graph: SceneGraph): string[] => sceneFamilies(graph);
+  export const familyApi = { familyForNode, VIEWER_FAMILIES, xrayActive };
+  useViewer.getState().setXrayFamily('items');
+  export const xray: string | null = useViewer.getState().xrayFamily;
+  const axis: SectionAxis = 'y';
+  useViewer.getState().setSectionEnabled(true);
+  useViewer.getState().setSectionAxis(axis);
+  useViewer.getState().setSectionPosition(2);
+  useViewer.getState().setSectionFlipped(false);
+  const shadows: SectionShadows = 'full';
+  useViewer.getState().setSectionShadows(shadows);
+  export const section = { SectionGroup, sectionBounds, extent: sectionBounds() }; 
+  export const daylight = { instant: presetInstant(new Date(), site.lat!, site.lng!, dawn), site };
+  useViewer.getState().setDaylightSite(site);
+  export const counts = (graph: SceneGraph): RoomCounts => roomCounts(graph);
   import { LiveWalkthroughController, useFirstPersonHud, type LiveWalkthroughControllerProps } from '@pascal-app/viewer';
-  const walkProps: LiveWalkthroughControllerProps = { paused: false };
+  import { createWalkthroughInput, GlbWalkthroughController, type GlbWalkthroughControllerProps, type WalkthroughInput, type WalkthroughSpeeds, type WalkthroughSeenInteract, WALKTHROUGH_DEFAULT_SPEEDS, WALKTHROUGH_SEE_DISTANCE } from '@pascal-app/viewer';
+  const input: WalkthroughInput = createWalkthroughInput();
+  input.setMove(1, 0); input.addLook(12, 4); input.requestJump(); input.requestInteract(); input.clear();
+  useViewer.getState().setWalkthroughInputMode('touch');
+  export const touchMode: 'desktop' | 'touch' = useViewer.getState().walkthroughInputMode;
+  export { GlbWalkthroughController };
+  const speeds: WalkthroughSpeeds = { walk: 1.8, run: 2.8 };
+  const walkProps: LiveWalkthroughControllerProps = { paused: false, speeds, seeDistance: 16 };
+  export const bakedWalkProps: GlbWalkthroughControllerProps = { url: 'scene.glb', speeds, seeDistance: 6 };
+  export const seenInteract: WalkthroughSeenInteract = useFirstPersonHud.getState().seenInteract;
+  export const walkthroughDefaults = { WALKTHROUGH_DEFAULT_SPEEDS, WALKTHROUGH_SEE_DISTANCE };
   export const walkthrough = { LiveWalkthroughController, useFirstPersonHud, walkProps };
   import { renderPlugin } from '@pascal-app/nodes/render';
   import { playSound, initInteractionSounds, useAudioSettings, type SoundName } from '@pascal-app/viewer/sfx';
   const sound: SoundName = 'menuClick';
   export const play = () => playSound(sound);
   export { initInteractionSounds, useAudioSettings };
-  import { ParametricViewerRooms, RoomPillsLayer2D, RoomPillsLayer3D, SceneLoader, ViewerControlsBar, ViewerRooms, ViewerSceneHeader, WalkthroughHud, type ViewerLinkProps } from '@pascal-app/viewer/ui';
+  import { ParametricViewerRooms, RoomPillsLayer2D, RoomPillsLayer3D, SceneLoader, ViewerControlsBar, ViewerRooms, ViewerSceneHeader, WalkthroughHud, WalkthroughTouchControls, type WalkthroughHudProps, type WalkthroughTouchControlsProps, type WalkthroughSeenInteract as UiSeenInteract, type ViewerLinkProps } from '@pascal-app/viewer/ui';
+  const uiSeen: UiSeenInteract = seenInteract;
+  export const hudProps: WalkthroughHudProps = { seenInteract: uiSeen, comeCloserLabel: 'Come a little closer' };
+  export const touchProps: WalkthroughTouchControlsProps = { className: 'host-skin' };
+  export { WalkthroughTouchControls };
   const link = (props: ViewerLinkProps) => props.href;
   export const ui = { SceneLoader, ViewerControlsBar, ViewerSceneHeader, WalkthroughHud, link };
   export const rooms = { ParametricViewerRooms, RoomPillsLayer2D, RoomPillsLayer3D, ViewerRooms };
   import { FloorplanPreview, ViewerStage, ViewerStageSwitcher, type ViewerStageMode } from '@pascal-app/viewer/ui';
   import { ViewerCameraControls, ViewerOpeningCamera, parseOpeningCamera, savedSceneCamera, type ViewerCameraControlsProps, type ViewerOpeningCameraProps, type OpeningCameraPose } from '@pascal-app/viewer/ui';
-  const controlsProps: ViewerCameraControlsProps = {};
+  const controlsProps: ViewerCameraControlsProps = {
+    mouseButtons: { left: 'rotate', middle: 'dolly', right: 'pan' },
+    touches: { one: 'rotate', two: 'dolly-pan', three: 'none' },
+    limits: { minDistance: 1, maxDistance: 300, minPolarAngle: 0, maxPolarAngle: Math.PI },
+    smoothTime: 0.25, tap: { maxTravelPx: 7, maxDurationMs: 500 },
+  };
   const pose: OpeningCameraPose = { position: [30, 30, 30], target: [0, 0, 0] };
   const openingProps: ViewerOpeningCameraProps = { pose, ready: true, onApplied: () => {} };
   export const camera = { ViewerCameraControls, ViewerOpeningCamera, parseOpeningCamera, savedSceneCamera, controlsProps, openingProps };

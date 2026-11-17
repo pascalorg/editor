@@ -6,6 +6,7 @@ export const measurementRenderDefinition: NodeRenderDefinition<typeof Measuremen
   kind: 'measurement'
 } = {
   kind: 'measurement',
+  extensions: { 'pascal:viewer': { family: null } },
   bake: 'strip',
   schemaVersion: 2,
   schema: MeasurementNode,

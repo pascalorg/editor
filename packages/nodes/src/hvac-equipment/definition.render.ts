@@ -8,6 +8,7 @@ export const hvacEquipmentRenderDefinition: NodeRenderDefinition<typeof HvacEqui
   kind: 'hvac-equipment'
 } = {
   kind: 'hvac-equipment',
+  extensions: { 'pascal:viewer': { family: 'hvac' } },
   schemaVersion: 1,
   schema: HvacEquipmentNode,
   category: 'utility',

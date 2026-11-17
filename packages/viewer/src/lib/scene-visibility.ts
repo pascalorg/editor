@@ -10,7 +10,14 @@ import { BATCHED_LAYER, SCENE_LAYER, SHADOW_ONLY_LAYER } from './layers'
  * - `ground-aside` — the site's ground while a level below grade is active: the floor is seen,
  *   and clicked, where the ground was.
  */
-export type HiddenReason = 'isolated' | 'shadow-only' | 'batched' | 'wall-batched' | 'ground-aside'
+export type HiddenReason =
+  | 'isolated'
+  | 'shadow-only'
+  | 'batched'
+  | 'wall-batched'
+  | 'ground-aside'
+  | 'xray'
+  | 'unmerged'
 
 /**
  * Single owner of `Object3D.layers` for every feature that hides an object.
@@ -56,6 +63,11 @@ export function showInScene(obj: Object3D, reason: HiddenReason): void {
 
   obj.layers.mask = hold.original
   delete holder[HOLD]
+}
+
+/** Layer eligibility before isolation, solo, batching or X-ray presentation holds. */
+export function modelLayerMask(obj: Object3D): number {
+  return (obj as Holder)[HOLD]?.original ?? obj.layers.mask
 }
 
 /** The reasons `obj` is held off the scene layer, if any. */
@@ -140,12 +152,17 @@ function applyHold(obj: Object3D, hold: Hold): void {
   // A batched wall is both drawn and shadowed by the merged mesh, so it stays
   // out of the shadow pass too — enabling the shadow-only bit would submit its
   // triangles a second time, on top of the copy the batch already casts.
-  if (hold.reasons.has('isolated')) obj.layers.disable(SHADOW_ONLY_LAYER)
+  if (hold.reasons.has('isolated') || hold.reasons.has('xray') || hold.reasons.has('unmerged'))
+    obj.layers.disable(SHADOW_ONLY_LAYER)
 
   if (hold.reasons.has('batched') || hold.reasons.has('wall-batched')) {
     obj.layers.enable(BATCHED_LAYER)
   } else if (!hold.reasons.has('isolated') && hold.reasons.has('shadow-only')) {
     obj.layers.enable(SHADOW_ONLY_LAYER)
+  }
+  if (hold.reasons.has('xray') || hold.reasons.has('unmerged')) {
+    obj.layers.disable(SHADOW_ONLY_LAYER)
+    obj.layers.disable(BATCHED_LAYER)
   }
   hold.applied = obj.layers.mask
 }

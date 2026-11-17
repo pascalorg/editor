@@ -4,6 +4,7 @@ import { BeamNode } from './schema'
 
 export const beamRenderDefinition: NodeRenderDefinition<typeof BeamNode> & { kind: 'beam' } = {
   kind: 'beam',
+  extensions: { 'pascal:viewer': { family: 'structure' } },
   schemaVersion: 1,
   schema: BeamNode,
   category: 'structure',

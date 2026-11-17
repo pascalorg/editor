@@ -8,6 +8,7 @@ export const importedMeshRenderDefinition: NodeRenderDefinition<typeof ImportedM
   kind: 'imported-mesh'
 } = {
   kind: 'imported-mesh',
+  extensions: { 'pascal:viewer': { family: 'other' } },
   schemaVersion: 1,
   schema: ImportedMeshNode,
   category: 'structure',

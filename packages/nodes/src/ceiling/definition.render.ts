@@ -14,6 +14,7 @@ export const ceilingRenderDefinition: NodeRenderDefinition<typeof CeilingNode> &
   kind: 'ceiling'
 } = {
   kind: 'ceiling',
+  extensions: { 'pascal:viewer': { family: 'roofs' } },
   schemaVersion: 1,
   schema: CeilingNode,
   category: 'structure',

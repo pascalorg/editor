@@ -624,6 +624,7 @@ export const cabinetRenderDefinition: NodeRenderDefinition<typeof CabinetNode> &
   kind: 'cabinet'
 } = {
   kind: 'cabinet',
+  extensions: { 'pascal:viewer': { family: 'items' } },
   schemaVersion: 8,
   schema: CabinetNode,
   category: 'furnish',
@@ -797,6 +798,7 @@ export const cabinetModuleRenderDefinition: NodeRenderDefinition<typeof CabinetM
   kind: 'cabinet-module'
 } = {
   kind: 'cabinet-module',
+  extensions: { 'pascal:viewer': { family: 'items' } },
   schemaVersion: 5,
   schema: CabinetModuleNode,
   category: 'furnish',

@@ -38930,6 +38930,15 @@ msgstr "Ciel"
 msgid "viewer.daylight.time.blue"
 msgstr "Heure bleue"
 
+# Source-Hash: bbe32d215ec26c48
+# Review: required
+# English: "Dawn"
+#: packages/viewer/src/ui/components/render-settings-menu.tsx
+#: packages/viewer/src/ui/components/sky-control.tsx
+#, fuzzy
+msgid "viewer.daylight.time.dawn"
+msgstr "Aube"
+
 # Source-Hash: cbeb868b31e2efcb
 # Review: required
 # AI-Provider: claude-code
@@ -39358,9 +39367,50 @@ msgstr "Visite : {state}"
 # English: "Shutters"
 #: packages/viewer/src/components/viewer/glb-scene.tsx
 #: packages/viewer/src/systems/interactive/callout-actions.ts
+#: packages/viewer/src/ui/components/walkthrough-touch-controls.tsx
 #, fuzzy
 msgid "viewer.walkthrough.shutters"
 msgstr "Volets"
+
+# English: "Close"
+# Source-Hash: d7cf5045c01b2eb9
+# Review: required
+#: packages/viewer/src/ui/components/walkthrough-touch-controls.tsx
+#, fuzzy
+msgid "viewer.walkthroughTouch.close"
+msgstr "Fermer"
+
+# English: "Crouch"
+# Source-Hash: f6bb8786828d83ab
+# Review: required
+#: packages/viewer/src/ui/components/walkthrough-touch-controls.tsx
+#, fuzzy
+msgid "viewer.walkthroughTouch.crouch"
+msgstr "S’accroupir"
+
+# Source-Hash: 938aacb119b29dc1
+# Review: required
+# English: "Exit"
+#: packages/viewer/src/ui/components/walkthrough-touch-controls.tsx
+#, fuzzy
+msgid "viewer.walkthroughTouch.exit"
+msgstr "Quitter"
+
+# Source-Hash: 8f7bdd564c509359
+# Review: required
+# English: "Interact"
+#: packages/viewer/src/ui/components/walkthrough-touch-controls.tsx
+#, fuzzy
+msgid "viewer.walkthroughTouch.interact"
+msgstr "Interagir"
+
+# Source-Hash: d2be4c4b179a0f21
+# Review: required
+# English: "Jump"
+#: packages/viewer/src/ui/components/walkthrough-touch-controls.tsx
+#, fuzzy
+msgid "viewer.walkthroughTouch.jump"
+msgstr "Sauter"
 
 # Source-Hash: 4da8b3678ed77b45
 # Review: human

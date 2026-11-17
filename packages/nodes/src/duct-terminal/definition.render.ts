@@ -8,6 +8,7 @@ export const ductTerminalRenderDefinition: NodeRenderDefinition<typeof DuctTermi
   kind: 'duct-terminal'
 } = {
   kind: 'duct-terminal',
+  extensions: { 'pascal:viewer': { family: 'hvac' } },
   schemaVersion: 1,
   schema: DuctTerminalNode,
   category: 'utility',

@@ -8,6 +8,7 @@ export const leanToExtensionRenderDefinition: NodeRenderDefinition<typeof LeanTo
   kind: 'lean-to-extension'
 } = {
   kind: 'lean-to-extension',
+  extensions: { 'pascal:viewer': { family: 'roofs' } },
   schemaVersion: 13,
   schema: LeanToExtensionNode,
   category: 'structure',

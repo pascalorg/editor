@@ -5,6 +5,7 @@ import { SiteNode } from './schema'
 
 export const siteRenderDefinition: NodeRenderDefinition<typeof SiteNode> & { kind: 'site' } = {
   kind: 'site',
+  extensions: { 'pascal:viewer': { family: 'site' } },
   schemaVersion: 1,
   schema: SiteNode,
   category: 'site',

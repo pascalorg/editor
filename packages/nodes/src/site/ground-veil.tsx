@@ -2,6 +2,7 @@ import {
   groundWindowEnabledNode,
   inGroundWindowNode,
   SITE_GROUND,
+  SITE_HORIZON,
   useViewer,
 } from '@pascal-app/viewer'
 import { type BufferGeometry, DoubleSide, type Material } from 'three'
@@ -79,11 +80,13 @@ export function horizonVeilMaterial(
  */
 export function GroundVeil({
   geometry,
+  horizon = false,
   material,
   position,
   rotation,
 }: {
   geometry: BufferGeometry
+  horizon?: boolean
   material: Material
   position?: [number, number, number]
   rotation?: [number, number, number]
@@ -96,7 +99,11 @@ export function GroundVeil({
       position={position}
       raycast={noopRaycast}
       rotation={rotation}
-      userData={{ [SITE_GROUND]: 'veil', pascalExport: 'strip' }}
+      userData={{
+        [SITE_GROUND]: 'veil',
+        pascalExport: 'strip',
+        ...(horizon && { [SITE_HORIZON]: true }),
+      }}
       visible={veiled}
     />
   )

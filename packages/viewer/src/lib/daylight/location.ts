@@ -7,7 +7,10 @@
 export type LatLng = { lat: number; lng: number }
 export type LocationSource = 'site' | 'device' | 'timezone' | 'default'
 
+export type DaylightSite = { northRotation: number; lat?: number; lng?: number }
+
 type SiteLike = {
+  northRotation?: number
   parcel?: { originLngLat?: readonly [number, number] | null } | null
   dossier?: { point?: { lat?: number; lng?: number } | null } | null
 }
@@ -88,4 +91,17 @@ export function requestDeviceLocation(): Promise<LatLng> {
       { enableHighAccuracy: false, maximumAge: 24 * 3_600_000, timeout: 10_000 },
     )
   })
+}
+
+/** A baked host's site replaces graph facts; missing coordinates keep the usual location fallback. */
+export function resolveDaylightSite(
+  site: SiteLike | null | undefined,
+  override: DaylightSite | null,
+  device: LatLng | null | undefined,
+): { northRotation: number; location: LatLng; source: LocationSource } {
+  if (override) {
+    const point = { dossier: { point: { lat: override.lat, lng: override.lng } } }
+    return { northRotation: override.northRotation, ...resolveLocation(point, device) }
+  }
+  return { northRotation: site?.northRotation ?? 0, ...resolveLocation(site, device) }
 }

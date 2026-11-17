@@ -12,10 +12,9 @@ import type {
   ZoneNode,
 } from '@pascal-app/core'
 import type { Object3D } from 'three'
-
 import { create } from 'zustand'
 import { createJSONStorage, persist } from 'zustand/middleware'
-import type { LatLng } from '../lib/daylight/location'
+import type { DaylightSite, LatLng } from '../lib/daylight/location'
 import type { Weather } from '../lib/daylight/sky'
 import type { TimeOfDay } from '../lib/daylight/solar'
 import type { EdgeMode } from '../lib/edge-style'
@@ -26,7 +25,9 @@ import {
   SCENE_THEME_IDS,
   type SceneTheme,
 } from '../lib/scene-themes'
+import { SECTION_DEFAULTS, type SectionAxis, type SectionShadows } from '../lib/section'
 import { viewerPreferenceStorage } from '../lib/viewer-preference-storage'
+import { createWalkthroughInput } from '../lib/walkthrough-input'
 
 export type RenderContext = 'editor' | 'viewer'
 export type RenderQuality = 'low' | 'medium' | 'high'
@@ -277,6 +278,9 @@ type ViewerState = {
   /** Colored appearance: cloud cover preset. */
   weather: Weather
   setWeather: (weather: Weather) => void
+  /** Transient site facts for baked hosts; null reads the scene. */
+  daylightSite: DaylightSite | null
+  setDaylightSite: (site: DaylightSite | null) => void
   /** A device position the user chose to share; used when the site has no geocoded point. */
   deviceLocation: LatLng | null
   setDeviceLocation: (location: LatLng | null) => void
@@ -326,7 +330,24 @@ type ViewerState = {
   debugColors: boolean
   setDebugColors: (enabled: boolean) => void
 
-  /** A first-person camera is active (walk or drone): orbit controls and selection stand aside. */
+  /** Transient family isolation; null leaves the normal presentation intact. */
+  xrayFamily: string | null
+  setXrayFamily: (family: string | null) => void
+
+  sectionShadows: SectionShadows
+  setSectionShadows: (shadows: SectionShadows) => void
+  sectionEnabled: boolean
+  setSectionEnabled: (enabled: boolean) => void
+  sectionAxis: SectionAxis
+  setSectionAxis: (axis: SectionAxis) => void
+  sectionPosition: number
+  setSectionPosition: (position: number) => void
+  sectionFlipped: boolean
+  setSectionFlipped: (flipped: boolean) => void
+
+  walkthroughInputMode: 'desktop' | 'touch'
+  setWalkthroughInputMode: (mode: 'desktop' | 'touch') => void
+
   walkthroughMode: boolean
   setWalkthroughMode: (mode: boolean) => void
   /** How the first-person camera moves: on foot (collision, doors) or as a free-flying drone.
@@ -381,7 +402,7 @@ type PersistedViewerState = Partial<
   >
 >
 
-const TIMES_OF_DAY = ['golden', 'midday', 'blue', 'night'] as const
+const TIMES_OF_DAY = ['dawn', 'golden', 'midday', 'blue', 'night'] as const
 const WEATHERS = ['clear', 'fair', 'cloudy', 'overcast'] as const
 const RENDER_QUALITY_CHOICES = ['auto', 'low', 'medium', 'high'] as const
 
@@ -630,7 +651,7 @@ function chooseLook(state: ViewerState, look: LocalLook): Partial<ViewerState> {
 
 const useViewer = create<ViewerState>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       selection: { buildingId: null, levelId: null, zoneId: null, selectedIds: [] },
       focusedUnitId: null,
       setFocusedUnit: (focusedUnitId) => set({ focusedUnitId }),
@@ -846,6 +867,8 @@ const useViewer = create<ViewerState>()(
       setSkyLive: (skyLive) => set({ skyLive }),
       weather: 'fair',
       setWeather: (weather) => set({ weather }),
+      daylightSite: null,
+      setDaylightSite: (daylightSite) => set({ daylightSite }),
       deviceLocation: null,
       setDeviceLocation: (deviceLocation) => set({ deviceLocation }),
       renderQuality: provisionalRenderQuality(),
@@ -871,12 +894,17 @@ const useViewer = create<ViewerState>()(
       setProjectId: (id) =>
         set((state) => {
           if (id === state.projectId) return state
+          createWalkthroughInput().clear()
           const prefs = (id && state.projectPreferences?.[id]) || {}
           const { '': _unscoped, ...projectPreferences } = state.projectPreferences
           return resolveLook(state, {
             projectId: id,
+            walkthroughInputMode: 'desktop',
             projectPreferences,
             projectPresentation: undefined,
+            daylightSite: null,
+            ...SECTION_DEFAULTS,
+            xrayFamily: null,
             previewSceneTheme: null,
             framingOnly: false,
             framingShown: false,
@@ -931,13 +959,30 @@ const useViewer = create<ViewerState>()(
       debugColors: false,
       setDebugColors: (enabled) => set({ debugColors: enabled }),
 
+      xrayFamily: null,
+      setXrayFamily: (xrayFamily) => set({ xrayFamily }),
+      ...SECTION_DEFAULTS,
+      setSectionShadows: (sectionShadows) => set({ sectionShadows }),
+      setSectionEnabled: (sectionEnabled) => set({ sectionEnabled }),
+      setSectionAxis: (sectionAxis) => set({ sectionAxis }),
+      setSectionPosition: (sectionPosition) => set({ sectionPosition }),
+      setSectionFlipped: (sectionFlipped) => set({ sectionFlipped }),
+
+      walkthroughInputMode: 'desktop',
+      setWalkthroughInputMode: (walkthroughInputMode) => {
+        if (walkthroughInputMode === get().walkthroughInputMode) return
+        createWalkthroughInput().clear()
+        set({ walkthroughInputMode, walkthroughSuspended: false })
+      },
       walkthroughMode: false,
-      setWalkthroughMode: (mode) =>
+      setWalkthroughMode: (mode) => {
+        if (!mode) createWalkthroughInput().clear()
         set(
           mode
             ? { walkthroughMode: true, walkthroughSuspended: false }
             : { walkthroughMode: false, walkthroughSuspended: false, walkthroughMovement: 'walk' },
-        ),
+        )
+      },
       walkthroughMovement: 'walk',
       setWalkthroughMovement: (movement) => set({ walkthroughMovement: movement }),
 

@@ -4,6 +4,7 @@ import { GuideNode } from './schema'
 
 export const guideRenderDefinition: NodeRenderDefinition<typeof GuideNode> & { kind: 'guide' } = {
   kind: 'guide',
+  extensions: { 'pascal:viewer': { family: null } },
   // Floorplan image reference: stripped from the bake, re-added live from
   // scene_graph in the viewer (see plans → Part D; glb-reference-nodes.tsx).
   bake: 'strip',

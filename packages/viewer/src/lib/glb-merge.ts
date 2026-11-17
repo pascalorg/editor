@@ -40,6 +40,7 @@ export type GlbMerge = {
   merged: number
   /** Changes when any merged original is shown or hidden on its own (the merge is then stale). */
   visibilitySignature(): number
+  setUnmerged(active: boolean): void
   dispose(): void
 }
 
@@ -167,6 +168,7 @@ export function mergeBakedStatic(
     }
   }
 
+  let unmerged = false
   return {
     batches,
     merged: originals.length,
@@ -183,6 +185,18 @@ export function mergeBakedStatic(
         if (shown) h += (i % 97) + 1
       }
       return h
+    },
+    setUnmerged(active) {
+      if (active === unmerged) return
+      unmerged = active
+      for (const batch of batches) {
+        if (active) hideFromScene(batch, 'unmerged')
+        else showInScene(batch, 'unmerged')
+      }
+      for (const mesh of originals) {
+        if (active) showInScene(mesh, 'batched')
+        else hideFromScene(mesh, 'batched')
+      }
     },
     dispose() {
       for (const batch of batches) {

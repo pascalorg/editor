@@ -41,6 +41,7 @@ export const fenceGateRenderDefinition: NodeRenderDefinition<
   },
   geometry: buildFenceFeatureGeometry,
   kind: 'fence-gate',
+  extensions: { 'pascal:viewer': { family: 'site' } },
   schema: FenceGateNode,
   exportAnimation: ({ node, object }) =>
     node.type === 'fence-gate' ? bakeFenceGateClip(node.id, object) : null,
@@ -70,6 +71,7 @@ export const fenceOpeningRenderDefinition: NodeRenderDefinition<
   },
   geometry: buildFenceFeatureGeometry,
   kind: 'fence-opening',
+  extensions: { 'pascal:viewer': { family: 'site' } },
   schema: FenceOpeningNode,
   defaults: () => {
     const { id, type, ...rest } = FenceOpeningNode.parse({})
