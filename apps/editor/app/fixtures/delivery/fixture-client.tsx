@@ -1,12 +1,19 @@
 'use client'
 
-import { runAsSingleSceneHistoryStep, sceneRegistry, useScene } from '@pascal-app/core'
+import {
+  type AnyNodeId,
+  runAsSingleSceneHistoryStep,
+  sceneRegistry,
+  usePascalI18n,
+  useScene,
+} from '@pascal-app/core'
 import { AGENT_OPERATIONS, applyAgentOutcome } from '@pascal-app/core/agent-operations'
 import { AGENT_TOOL_CONTRACTS } from '@pascal-app/core/agent-tools'
 import { createAgentHost, liveSceneRuntime } from '@pascal-app/core/runtime'
 import {
   applySceneGraphToEditor,
   Editor,
+  getMovingNode,
   getSavedSceneDocument,
   type SceneGraph,
   selectPlacedNode,
@@ -27,16 +34,24 @@ import {
   type Material,
   type Mesh,
   type Object3D,
+  Raycaster,
   type Texture,
+  Vector2,
   Vector3,
 } from 'three'
 import type { WebGPURenderer } from 'three/webgpu'
 import { z } from 'zod'
+import { BuildTab } from '@/components/build-tab'
 import { type RoofFixtureCase, roofFixture, roofFixtureCases } from './roof-scene'
 import { deliveryScene } from './scene'
 
 type Point = [number, number, number]
 type Pose = { position: Point; target: Point }
+type RoofPointer = {
+  x: number
+  y: number
+  hit: { point: Point; normal: Point | null; mesh: string; faceIndex: number | null } | null
+}
 type Controls = { setLookAt: (...args: [...Point, ...Point, boolean]) => Promise<void> }
 type Probe = {
   frame: number
@@ -82,6 +97,9 @@ type Bridge = {
   camera: (pose: Pose) => Promise<void>
   roofCases: readonly RoofFixtureCase[]
   loadRoof: typeof loadRoof
+  selectNode: (id: string) => void
+  interaction: () => { mode: string; tool: string | null; movingNodeId: string | null }
+  roofPointer: (roofId: string, point: Point) => RoofPointer
 }
 
 declare global {
@@ -156,6 +174,37 @@ function FixtureProbe({ bridge }: { bridge: Bridge }) {
   const frame = useRef(0)
 
   useEffect(() => {
+    // Read-only camera/ray observation. Never dispatch an event or call a placement helper.
+    bridge.roofPointer = (roofId, point) => {
+      const rect = gl.domElement.getBoundingClientRect()
+      const projected = new Vector3(...point).project(camera)
+      const x = rect.left + ((projected.x + 1) / 2) * rect.width
+      const y = rect.top + ((1 - projected.y) / 2) * rect.height
+      const ray = new Raycaster()
+      ray.setFromCamera(new Vector2(projected.x, projected.y), camera)
+      const root = sceneRegistry.nodes.get(roofId as AnyNodeId)
+      const meshes: Object3D[] = []
+      root?.traverseVisible((object) => {
+        const mesh = object as Mesh
+        if (mesh.isMesh && !mesh.geometry.userData.placeholder && mesh.layers.test(camera.layers))
+          meshes.push(mesh)
+      })
+      const hit = ray.intersectObjects(meshes, false)[0]
+      return {
+        x,
+        y,
+        hit: hit
+          ? {
+              point: hit.point.toArray(),
+              normal: hit.face
+                ? hit.face.normal.clone().transformDirection(hit.object.matrixWorld).toArray()
+                : null,
+              mesh: hit.object.uuid,
+              faceIndex: hit.faceIndex ?? null,
+            }
+          : null,
+      }
+    }
     bridge.camera = async ({ position, target }) => {
       if (!controls) throw new Error('Camera controls not mounted')
       await controls.setLookAt(...position, ...target, false)
@@ -420,6 +469,14 @@ function FixtureProbe({ bridge }: { bridge: Bridge }) {
 }
 
 export default function DeliveryFixture() {
+  const i18n = usePascalI18n()
+  const fixtureTabs = [
+    {
+      id: 'build',
+      label: i18n._({ id: 'app.sceneLoader.build', message: 'Build' }),
+      component: BuildTab,
+    },
+  ]
   const [mounted, setMounted] = useState(false)
   const [bridge] = useState<Bridge>(() => ({
     probe: null,
@@ -440,6 +497,18 @@ export default function DeliveryFixture() {
     },
     roofCases: roofFixtureCases,
     loadRoof,
+    selectNode: (id) => {
+      useEditor.getState().armToolMode({ mode: 'select' })
+      selectPlacedNode(id as AnyNodeId)
+    },
+    interaction: () => ({
+      mode: useEditor.getState().mode,
+      tool: useEditor.getState().tool,
+      movingNodeId: getMovingNode()?.id ?? null,
+    }),
+    roofPointer: () => {
+      throw new Error('Scene probe not mounted')
+    },
     camera: async () => {
       throw new Error('Camera controls not mounted')
     },
@@ -458,6 +527,7 @@ export default function DeliveryFixture() {
       <Editor
         layoutVersion="v2"
         locale="en"
+        sidebarTabs={fixtureTabs}
         projectId="delivery-fixture"
         onLoad={loadFixture}
         onSave={saveFixture}

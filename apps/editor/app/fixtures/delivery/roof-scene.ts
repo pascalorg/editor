@@ -2,6 +2,20 @@ import { BuildingNode, LevelNode, RoofNode, RoofSegmentNode } from '@pascal-app/
 import type { SceneGraph } from '@pascal-app/editor'
 
 const cases = {
+  // Small analytical tool scenes; the existing R1 picture matrix stays unchanged.
+  'tools-gable': { roofType: 'gable' },
+  'tools-hip': { roofType: 'hip' },
+  'tools-barrel': { roofType: 'barrel', barrelRise: 2, barrelSegments: 7 },
+  'tools-trimmed': { roofType: 'gable', trim: { left: 2 } },
+  'tools-glazed': {
+    roofType: 'gable',
+    roofSystem: 'glazed',
+    glazing: {
+      across: { layout: 'count', count: 1 },
+      along: { layout: 'count', count: 1 },
+      panels: [{ face: 'front', column: 0, row: 0, type: 'empty' }],
+    },
+  },
   hip: { roofType: 'hip' },
   gable: { roofType: 'gable' },
   shed: { roofType: 'shed' },
@@ -80,6 +94,17 @@ export function roofFixture(caseId: RoofFixtureCase) {
     deckThickness: 0.1,
     shingleThickness: 0.05,
     overhang: 0.3,
+    ...(caseId.startsWith('tools-')
+      ? {
+          width: 12,
+          depth: 8,
+          pitch: 45,
+          wallHeight: 2,
+          wallThickness: 0,
+          overhang: 0,
+          gableOverhang: 0,
+        }
+      : {}),
     ...cases[caseId],
     position: transformed ? [-1, 0.75, 1] : [0, 0, 0],
     rotation: transformed ? -Math.PI / 4 : 0,
