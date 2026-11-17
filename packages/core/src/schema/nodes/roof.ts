@@ -5,6 +5,7 @@ import { Assembly } from '../assembly'
 import { BaseNode, nodeType, objectId } from '../base'
 import type { MaterialSchema as MaterialSchemaType } from '../material'
 import { MaterialSchema } from '../material'
+import { RoofCovering } from './roof-covering'
 import { RoofSegmentNode } from './roof-segment'
 
 export type RoofSurfaceMaterialRole = 'top' | 'edge' | 'wall'
@@ -35,6 +36,7 @@ export const RoofNode = BaseNode.extend({
   materialPreset: z.string().optional(),
   topMaterial: MaterialSchema.optional(),
   topMaterialPreset: z.string().optional(),
+  covering: RoofCovering.optional(),
   edgeMaterial: MaterialSchema.optional(),
   edgeMaterialPreset: z.string().optional(),
   wallMaterial: MaterialSchema.optional(),

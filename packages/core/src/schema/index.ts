@@ -340,6 +340,7 @@ export {
 export { RockNode } from './nodes/rock'
 export type { RoofSupport, RoofSurfaceMaterialRole, RoofSurfaceMaterialSpec } from './nodes/roof'
 export { getEffectiveRoofSurfaceMaterial, RoofNode } from './nodes/roof'
+export { RoofCovering } from './nodes/roof-covering'
 export {
   buildRoofElementNode,
   type RoofElementNode,
