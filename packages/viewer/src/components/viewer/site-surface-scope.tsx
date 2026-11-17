@@ -22,6 +22,7 @@ export function SiteSurfaceScope(props: SiteSurfaceScopeProps) {
 
 function PortaledSiteSurfaces({ siteId, object, objects, children }: SiteSurfaceScopeProps) {
   const scene = useThree((state) => state.scene)
+  const parent = objects ? object?.() : undefined
   const ref = useRef<Group>(null)
   useSiteSurfaceOwner(siteId, ref)
   const carriers = useRef<{ surface: Object3D; carrier: Group }[]>([])
@@ -52,7 +53,7 @@ function PortaledSiteSurfaces({ siteId, object, objects, children }: SiteSurface
     if (!group || !objects) return
     const originals = objects.map((surface) => ({
       surface,
-      parent: object?.() ?? surface.parent!,
+      parent: parent ?? surface.parent!,
       mountParent: surface.parent!,
       index: surface.parent!.children.indexOf(surface),
     }))
@@ -87,7 +88,7 @@ function PortaledSiteSurfaces({ siteId, object, objects, children }: SiteSurface
         parent.children.splice(index, 0, surface)
       }
     }
-  }, [objects, object])
+  }, [objects, parent])
   return createPortal(
     <group matrixAutoUpdate={false} ref={ref} userData={{ kind: 'site', pascalId: siteId }}>
       {children}

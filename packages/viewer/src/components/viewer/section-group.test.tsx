@@ -295,6 +295,70 @@ test.each(['x', 'y', 'z'] as const)(
   },
 )
 
+test.each(['baked', 'live'] as const)(
+  '%s site surfaces do not move on unchanged host rerenders during a cut',
+  async (mode) => {
+    const { BakedSiteSurfaces, bakedSiteSurfaceScopes, SiteSurfaceScope } = await import(
+      './site-surface-scope'
+    )
+    const { Group, Mesh } = await import('three')
+    const root = new Group()
+    const site = new Group()
+    site.userData = { kind: 'site', pascalId: 'site_rerender' }
+    const ground = new Mesh()
+    const horizon = new Mesh()
+    const tree = new Group()
+    tree.userData = { kind: 'item', pascalId: 'item_rerender' }
+    ground.add(tree)
+    if (mode === 'baked') site.add(ground, horizon)
+    root.add(site)
+    const scopes = bakedSiteSurfaceScopes(root)
+    function Host() {
+      return (
+        <SectionGroup>
+          <primitive object={root} />
+          {mode === 'baked' ? (
+            <BakedSiteSurfaces scopes={scopes} />
+          ) : (
+            <SiteSurfaceScope siteId="site_rerender" object={() => site}>
+              <primitive object={ground} />
+              <primitive object={horizon} />
+            </SiteSurfaceScope>
+          )}
+        </SectionGroup>
+      )
+    }
+    useViewer.setState({ sectionEnabled: true, isExporting: false })
+    const renderer = await create(<Host />)
+    let moves = 0
+    const moved = () => moves++
+    const objects = new Set([root, site, ground, horizon, tree, ground.parent!, tree.parent!])
+    const hierarchy = [...objects].map((object) => ({
+      object,
+      parent: object.parent,
+      children: object.children.map((child) => child.uuid),
+    }))
+    for (const object of objects) {
+      object.addEventListener('added', moved)
+      object.addEventListener('removed', moved)
+    }
+    try {
+      for (let render = 0; render < 5; render++) await renderer.update(<Host />)
+      expect(moves).toBe(0)
+      for (const { object, parent, children } of hierarchy) {
+        expect(object.parent).toBe(parent)
+        expect(object.children.map((child) => child.uuid)).toEqual(children)
+      }
+    } finally {
+      for (const object of objects) {
+        object.removeEventListener('added', moved)
+        object.removeEventListener('removed', moved)
+      }
+      await renderer.unmount()
+    }
+  },
+)
+
 test('room labels update with the section and a moving level, then return to their resting anchor', async () => {
   const { useSectionRoomLabel, RoomLabelSection } = await import(
     '../../ui/components/rooms/room-labels'
