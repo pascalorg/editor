@@ -115,6 +115,10 @@ Do not mutate just to make a report unless the user authorizes a temporary or sa
 
 When a requested deliverable is unsupported, return `partial` or `failed` with the tool status and the next supported action. Do not substitute an invented file, URL, or capability.
 
+## Native wall trim
+
+`set_wall_trim({ kind, wallIds?, zoneIds?, roomId?, height?, depth?, offsetY?, profile?, faces?, finish?, enabled? })` edits native skirting, crown or chairRail. Wall and room targets form a union; an explicit wall covers its selected faces whole, while a room covers only its inward stretches of shared walls. `faces` filters a room's inward faces, never selects its outside. `offsetY: 0` is valid; `finish` uses `paint` semantics on only the targeted trim slots. Hiding preserves settings. Another retained stretch's shared dimensions or same-face finish cannot silently change (`trim_conflict`); target all affected rooms together or keep their settings. Curtain and railing walls refuse; bounded room trims on curves refuse. Select a wall's trim panel to edit the same settings and Start/End bounds manually.
+
 ## Greenhouse and barrel roofs
 
 Use `create_roof` with `roofSystem: "glazed"` for a gable, straight shed or barrel greenhouse roof. For a barrel roof, `depth` is the span and `barrelRise` is the arch rise, no more than half the span. `barrelSegments` controls faceting. `glazing` sets frame dimensions, glass appearance, grid layouts, glazed ends and individual glass, solid or empty panels. Standard barrel construction uses a solid covering.

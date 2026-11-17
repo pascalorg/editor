@@ -67,6 +67,7 @@ import {
   setCheckpointTool,
   setGroundLevelTool,
   setUnitMembersTool,
+  setWallTrimTool,
   setWallTypeTool,
   surfaceDescription,
   validateDesignTool,
@@ -376,6 +377,19 @@ const SHARED_TOOLS: SharedTool[] = [
     contract: setWallTypeTool,
     operation: AGENT_OPERATIONS.set_wall_type,
     annotations: DESTRUCTIVE_TOOL_ANNOTATIONS,
+  },
+  {
+    contract: setWallTrimTool,
+    operation: AGENT_OPERATIONS.set_wall_trim,
+    annotations: DESTRUCTIVE_TOOL_ANNOTATIONS,
+    outputSchema: {
+      ok: z.literal(true),
+      kind: z.enum(['skirting', 'crown', 'chairRail']),
+      walls: z.array(jsonObject),
+      note: z.string().optional(),
+      ...achievedOutput,
+      ...liveSyncOutput,
+    },
   },
   {
     contract: addFenceTool,

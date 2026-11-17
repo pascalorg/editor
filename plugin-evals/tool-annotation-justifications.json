@@ -1060,6 +1060,19 @@
       }
     },
     {
+      "name": "set_wall_trim",
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": true,
+        "openWorldHint": false
+      },
+      "justifications": {
+        "readOnlyHint": "Writes native wall trim dimensions, coverage, visibility and finishes in the connected scene.",
+        "destructiveHint": "Can replace existing trim settings or finishes and hide existing trim; undo restores the previous state.",
+        "openWorldHint": "Uses only the connected scene and its configured material library, without accessing the public internet."
+      }
+    },
+    {
       "name": "set_wall_type",
       "annotations": {
         "readOnlyHint": false,

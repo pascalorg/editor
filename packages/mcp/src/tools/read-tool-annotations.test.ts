@@ -108,6 +108,7 @@ const TOOL_POLICIES = [
       'add_object',
       'author_scene',
       'add_column',
+      'set_wall_trim',
       'set_wall_type',
       'edit_collection',
       'create_from_template',

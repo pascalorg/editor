@@ -20,6 +20,7 @@ export const BATCHABLE_TOOLS = [
   'create_roof',
   'add_wall',
   'set_wall_type',
+  'set_wall_trim',
   'add_fence',
   'add_level',
   'create_unit',

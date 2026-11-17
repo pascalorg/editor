@@ -516,6 +516,7 @@ export {
   WallNode,
   WallTreatmentSide,
   WallTrimProfile,
+  WallTrimSpan,
 } from './nodes/wall'
 export {
   WindowConstructionType,

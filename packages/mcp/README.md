@@ -479,6 +479,23 @@ returns an error with the code `tool_retired`, the tool that replaced it
 
 ### Examples
 
+`set_wall_trim` sets native `skirting`, `crown` or `chairRail` on the union of
+`wallIds` and rooms (`zoneIds`, or `roomId`). Room trim stops at the room's
+inward stretch of a shared wall; explicitly naming that wall covers its
+selected face whole. `faces` filters inward faces for rooms. `height` and
+`depth` size the moulding; chair-rail `offsetY` accepts zero. `profile` selects
+the moulding shape and `finish` paints only selected trim slots with `paint`
+semantics. `enabled: false` hides the target while retaining its settings.
+The result reports `{ ok, kind, walls: [{ id, faces, targetFaces, enabled,
+height, depth, profile, offsetY?, spans?, finishes }], note?, achieved }`,
+including actual stored settings and per-face finish refs. Another retained stretch's wall-wide settings or same-face
+finish cannot silently change (`trim_conflict`); target all affected rooms
+together or retain the settings. Curtain and railing walls refuse, as do
+bounded room trims on curves. The wall trim panel exposes the same settings
+and editable Start/End stretch bounds. Bounded trims survive straight wall
+splits, compatible merges and reversal; incompatible trim settings refuse a
+merge rather than losing their stretches.
+
 ```jsonc
 // The lot before the house: frontage, depth, each buildable edge as a front, the ground
 { "name": "get_site", "arguments": {} }

@@ -38,6 +38,7 @@ import { UNIT_TOOL_CONTRACTS } from './units'
 import { verifySceneTool } from './verify-scene'
 import { viewSceneTool } from './view-scene'
 import { addDoorTool, addWindowTool } from './wall-openings'
+import { setWallTrimTool } from './wall-trim'
 import { addWallTool, setWallTypeTool } from './walls'
 
 export * from './achieved'
@@ -76,6 +77,7 @@ export * from './units'
 export * from './verify-scene'
 export * from './view-scene'
 export * from './wall-openings'
+export * from './wall-trim'
 export * from './walls'
 export * from './write-target'
 
@@ -104,6 +106,7 @@ export const AGENT_TOOL_CONTRACTS = [
   validateDesignTool,
   addWallTool,
   setWallTypeTool,
+  setWallTrimTool,
   addFenceTool,
   addCornerWindowTool,
   mergeWindowsTool,

@@ -29,6 +29,7 @@ import {
   wallDoorStepRuns,
   wallFaceBaseOffset,
   wallFaceScriptSkirtingGap,
+  wallTrimRanges,
 } from '@pascal-app/core'
 import {
   baseMaterial,
@@ -619,20 +620,23 @@ export function buildTrimGeometry(
         ? wallFaceScriptSkirtingGap(faceScript, bottom + height - wallFaceBaseOffset(support, face))
         : null
     if (scripted) openingRanges.push(scripted)
-    return subtractOpeningRanges([[stationX(base.start), stationX(base.end)]], openingRanges).map(
-      ([start, end]) => ({
-        start,
-        end,
-        bottom,
-        slopeStart: kind === 'crown' ? 0 : stationX(base.start),
-        slope:
-          kind === 'crown'
-            ? crownSlope
-            : base.endElevation === undefined
-              ? 0
-              : (base.endElevation - base.elevation) / (stationX(base.end) - stationX(base.start)),
-      }),
-    )
+    const bounded = wallTrimRanges(trim, side, wallLength).flatMap(([a, b]): [number, number][] => {
+      const start = Math.max(stationX(base.start), a)
+      const end = Math.min(stationX(base.end), b)
+      return end - start > EPS ? [[start, end]] : []
+    })
+    return subtractOpeningRanges(bounded, openingRanges).map(([start, end]) => ({
+      start,
+      end,
+      bottom,
+      slopeStart: kind === 'crown' ? 0 : stationX(base.start),
+      slope:
+        kind === 'crown'
+          ? crownSlope
+          : base.endElevation === undefined
+            ? 0
+            : (base.endElevation - base.elevation) / (stationX(base.end) - stationX(base.start)),
+    }))
   })
   if (runs.length === 0) return null
 
