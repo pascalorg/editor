@@ -250,6 +250,7 @@ export {
   isAutoGutterEnabled,
   isDefaultGutterNode,
 } from './nodes/gutter'
+export { HEDGE_LIMITS, HedgeGap, HedgeNode } from './nodes/hedge'
 export { HvacEquipmentNode } from './nodes/hvac-equipment'
 export {
   ImportedMeshNode,
@@ -302,6 +303,12 @@ export {
 export { PipeFittingNode } from './nodes/pipe-fitting'
 export { PipeSegmentNode } from './nodes/pipe-segment'
 export { PipeTrapNode } from './nodes/pipe-trap'
+export {
+  PLANTING_DEFAULT_PLANTS,
+  PLANTING_LIMITS,
+  PlantingNode,
+  PlantingSpecies,
+} from './nodes/planting'
 export {
   DEFAULT_RAILING_WALL,
   getRailingWallConfig,

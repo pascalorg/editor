@@ -1314,6 +1314,12 @@ export type NodeDefinition<S extends ZodObject<any>> = {
    */
   floorplanScope?: FloorplanScope
   /**
+   * Opt site-scoped floor-plan geometry into automatic site-plan document
+   * contributions. Defaults to off; omit when a plugin registers its own
+   * site-plan contributor so the same geometry is not contributed twice.
+   */
+  readonly sitePlan?: boolean
+  /**
    * Levels other than its own whose plans also draw this node: a stair that
    * climbs to an upper floor shows on that floor's plan too. The plan builds
    * it with `ctx.parent` set to the drawn level.
