@@ -29,6 +29,7 @@ import { paint } from './paint'
 import { placeInRoom } from './place-in-room'
 import { placeItems } from './place-items'
 import { addPlanting } from './planting'
+import { addRock } from './rock'
 import { ROOM_OPERATIONS } from './room-structure'
 import { searchAssets } from './search-assets'
 import { searchMaterials } from './search-materials'
@@ -40,6 +41,7 @@ import type { AgentOperation, AgentOperationSteps, AgentOperations } from './typ
 import { createUnit, listUnits, setUnitMembers } from './units'
 import { verifyScene, verifySceneSteps } from './verify-scene'
 import { setWallType } from './wall-type'
+import './rock-checks'
 import './room-checks'
 import './unreachable-rooms-check'
 import './usage-checks'
@@ -94,6 +96,7 @@ export * from './plan-geometry'
 export * from './planting'
 export * from './point-context'
 export * from './project-files'
+export * from './rock'
 export * from './roof-writes'
 export { ROOM_CHECK_CODES } from './room-checks'
 export * from './room-floor-script'
@@ -137,6 +140,7 @@ const SINGLE_OPERATIONS = {
   add_fence: addFence,
   add_hedge: addHedge,
   add_planting: addPlanting,
+  add_rock: addRock,
   add_corner_window: addCornerWindow,
   merge_windows: mergeWindowsOperation,
   add_level: addLevel,

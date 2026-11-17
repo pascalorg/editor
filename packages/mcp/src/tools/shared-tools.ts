@@ -29,6 +29,7 @@ import {
   addLevelTool,
   addObjectTool,
   addPlantingTool,
+  addRockTool,
   addWallTool,
   createRoofTool,
   createRoomTool,
@@ -392,6 +393,11 @@ const SHARED_TOOLS: SharedTool[] = [
   {
     contract: addPlantingTool,
     operation: AGENT_OPERATIONS.add_planting,
+    annotations: DESTRUCTIVE_TOOL_ANNOTATIONS,
+  },
+  {
+    contract: addRockTool,
+    operation: AGENT_OPERATIONS.add_rock,
     annotations: DESTRUCTIVE_TOOL_ANNOTATIONS,
   },
   {

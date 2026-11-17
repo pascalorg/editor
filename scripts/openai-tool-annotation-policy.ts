@@ -19,6 +19,7 @@ export const EXPECTED_OPENAI_TOOL_ANNOTATIONS = {
   add_hedge: policy(false, true, false),
   add_level: policy(false, false, false),
   add_planting: policy(false, true, false),
+  add_rock: policy(false, true, false),
   add_wall: policy(false, false, false),
   set_wall_type: policy(false, true, false),
   add_corner_window: policy(false, false, false),

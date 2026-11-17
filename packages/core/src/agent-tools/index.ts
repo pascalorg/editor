@@ -31,6 +31,7 @@ import { paintTool } from './paint'
 import { placeInRoomTool } from './place-in-room'
 import { placeItemsTool } from './place-items'
 import { addPlantingTool } from './planting'
+import { addRockTool } from './rock'
 import { createRoofTool, moveRoofsToRoofLevelTool } from './roofs'
 import { ROOM_TOOL_CONTRACTS } from './room-structure'
 import { searchMaterialsTool } from './search-materials'
@@ -70,6 +71,7 @@ export * from './planting'
 export * from './project-files'
 export * from './refusal'
 export * from './retired'
+export * from './rock'
 export * from './roofs'
 export * from './room-structure'
 export * from './search-materials'
@@ -111,6 +113,7 @@ export const AGENT_TOOL_CONTRACTS = [
   addFenceTool,
   addHedgeTool,
   addPlantingTool,
+  addRockTool,
   addCornerWindowTool,
   mergeWindowsTool,
   addLevelTool,

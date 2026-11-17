@@ -639,6 +639,38 @@ export {
   porchFramingSettings,
 } from './lib/porch-framing'
 export { type PorchPartMetadata, porchPartOf } from './lib/porch-framing-sync'
+export { buildRock, planRock, type RockPlan, rockCurrentGen, rockFormFor } from './lib/rock-build'
+export { rockHolesIn, rockSlabHoles, rocksOf } from './lib/rock-cuts'
+export { type RockFacts, rockFacts } from './lib/rock-facts'
+export { rockFootprint } from './lib/rock-footprint'
+export {
+  ROCK_MAX_FAR_TRIANGLES,
+  ROCK_MAX_NEAR_TRIANGLES,
+  ROCK_MAX_TRIANGLES,
+  type RockEstimate,
+  type RockForm,
+  type RockFormInput,
+  type RockLevel,
+  type RockLevelEstimate,
+  type RockMesh,
+  type RockShapeInput,
+} from './lib/rock-form'
+export {
+  highestGroundUnder,
+  lowestGroundUnder,
+  ROCK_EMBED,
+  type RockSpan,
+  rockSpan,
+} from './lib/rock-ground'
+export { effectiveBuilding, effectiveRock } from './lib/rock-live'
+export {
+  outlineProblem,
+  ROCK_RINGS,
+  rockCentre,
+  rockRings,
+  rockSection,
+  rockSections,
+} from './lib/rock-shape'
 export {
   type EavePoint,
   eaveContains,
