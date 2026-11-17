@@ -131,6 +131,11 @@ function roomFixture(path: 'live' | 'baked') {
       const type = object.userData.kind as string
       sceneRegistry.byType[type]!.add(id)
     }
+    // Live useRegistry does not stamp baked identity metadata on any descendant.
+    root.traverse((object) => {
+      delete object.userData.pascalId
+      delete object.userData.kind
+    })
   } else useScene.setState({ nodes: {}, dirtyNodes: new Set() })
   const feed = {
     lights: () =>
@@ -342,8 +347,8 @@ test('exploded mid-load rooms catch up with late walls and openings without stac
     await stacked.close()
   }
   const scene = await mountedRooms('live', 'exploded')
-  const late = [...scene.objects].filter(([, object]) =>
-    ['wall', 'window'].includes(object.userData.kind),
+  const late = [...scene.objects].filter(([id]) =>
+    ['wall', 'window'].includes(useScene.getState().nodes[id as never]!.type),
   )
   const children = late.map(([, object]) => [...object.children])
   try {

@@ -36,19 +36,23 @@ export function useSiteSurfaceOwner(siteId: string, ref: RefObject<Object3D | nu
 }
 
 /** Own drawables can be nested in a baked site or escaped into a section portal. */
-function siteDrawables(siteId: string): Object3D[] {
+function siteDrawables(siteId: string, owners: ReadonlyMap<Object3D, string>): Object3D[] {
   const surfaces = new Set<Object3D>()
-  const visit = (object: Object3D) => {
-    const owner = object.userData.pascalId
-    if (owner && owner !== siteId) return
+  const visit = (object: Object3D, inheritedOwner: string) => {
+    // Live renderers register their roots without stamping baked identity metadata.
+    const owner =
+      owners.get(object) ?? ownerIds.get(object) ?? object.userData.pascalId ?? inheritedOwner
+    if (owner !== siteId) return
     if ('geometry' in object) surfaces.add(object)
-    for (const child of object.children) visit(child)
+    for (const child of object.children) visit(child, owner)
   }
   const site = sceneRegistry.nodes.get(siteId)
-  if (site) visit(site)
-  for (const root of ownedRoots.get(siteId) ?? []) visit(root)
+  if (site) visit(site, siteId)
+  for (const root of ownedRoots.get(siteId) ?? []) visit(root, siteId)
   return [...surfaces]
 }
+
+const registeredOwners = () => new Map([...sceneRegistry.nodes].map(([id, object]) => [object, id]))
 
 /**
  * `solid`: the lot's fill, its sculpted terrain, the horizon disc. `veil`: what is drawn in their
@@ -58,12 +62,13 @@ export type SiteGroundRole = 'solid' | 'veil'
 
 /**
  * The site's own shown surfaces (ground, horizon disc, property and setback lines, contours), not
- * its registered children (buildings, items), which are groups.
+ * its registered children (buildings, items), whether their roots are groups or meshes.
  */
 export function siteSurfaces(): Object3D[] {
   const surfaces: Object3D[] = []
+  const owners = registeredOwners()
   for (const siteId of sceneRegistry.byType.site ?? []) {
-    for (const child of siteDrawables(siteId)) {
+    for (const child of siteDrawables(siteId, owners)) {
       if (child.visible) {
         surfaces.push(child)
       }
@@ -75,13 +80,20 @@ export function siteSurfaces(): Object3D[] {
 /** The site's ground by role, shown or not: the veil is hidden until a level below grade is shown. */
 export function siteGround(): Record<SiteGroundRole, Object3D[]> {
   const ground: Record<SiteGroundRole, Object3D[]> = { solid: [], veil: [] }
+  const owners = registeredOwners()
   for (const siteId of sceneRegistry.byType.site ?? []) {
-    for (const child of siteDrawables(siteId)) {
+    for (const child of siteDrawables(siteId, owners)) {
       const role: unknown = child.userData[SITE_GROUND]
       if (role === 'solid' || role === 'veil') ground[role].push(child)
     }
   }
   return ground
+}
+
+/** The studio thumbnail replaces only the site's own shown draws with its backdrop. */
+export function temporarilyHideSiteSurfaces(): () => void {
+  // A baked site can itself be a mesh with building children: layers do not cascade.
+  return temporarilySetGroundAside(siteSurfaces(), true)
 }
 
 /**

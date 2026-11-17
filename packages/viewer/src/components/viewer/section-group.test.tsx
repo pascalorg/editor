@@ -366,8 +366,14 @@ test.each([false, true])(
     const { isSectionObject } = await import('./section-group')
     const { Group, Mesh, BoxGeometry } = await import('three')
     const { sceneRegistry } = await import('@pascal-app/core')
-    const { SITE_GROUND, siteGround, siteSurfaces, temporarilyVeilGround, SCENE_LAYER } =
-      await import('../../index')
+    const {
+      SITE_GROUND,
+      siteGround,
+      siteSurfaces,
+      temporarilyHideSiteSurfaces,
+      temporarilyVeilGround,
+      SCENE_LAYER,
+    } = await import('../../index')
     const root = new Group()
     const site = siteMesh ? new Mesh(new BoxGeometry()) : new Group()
     site.userData = { kind: 'site', pascalId: 'site_nested' }
@@ -413,6 +419,17 @@ test.each([false, true])(
       }
       for (const surface of solid) expect(surface.layers.isEnabled(SCENE_LAYER)).toBe(true)
       expect(veil.visible).toBe(false)
+      const restoreThumbnail = temporarilyHideSiteSurfaces()
+      try {
+        expect(solid.filter((surface) => !surface.layers.isEnabled(SCENE_LAYER))).toHaveLength(
+          solid.length,
+        )
+        expect(canopy.layers.isEnabled(SCENE_LAYER)).toBe(true)
+        for (let object = canopy.parent; object; object = object.parent)
+          expect(object.visible).toBe(true)
+      } finally {
+        restoreThumbnail()
+      }
     }
     try {
       check()

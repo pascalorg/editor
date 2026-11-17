@@ -323,6 +323,7 @@ export {
   type SiteGroundRole,
   siteGround,
   siteSurfaces,
+  temporarilyHideSiteSurfaces,
   temporarilyVeilGround,
 } from './lib/site-surfaces'
 export {
