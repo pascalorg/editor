@@ -275,6 +275,20 @@ export {
   isOperationDoorType,
   SECTIONAL_GARAGE_RENDER_OPEN_SCALE,
 } from './lib/door-operation'
+export {
+  type DormerCreationOptions,
+  type DormerCreationPlan,
+  type DormerCreationResult,
+  type DormerPlacement,
+  type DormerPlacementFailure,
+  type DormerPlacementResult,
+  planDormerCreation,
+  validateDormerPlacement,
+} from './lib/dormer-placement'
+export type {
+  DormerExposureContext,
+  DormerWindowExposure,
+} from './lib/dormer-roof-context'
 export { triangulatePlanPolygon } from './lib/earcut'
 export {
   resolveElevatorNodeSupportY,
@@ -893,6 +907,7 @@ export * from './registry'
 // and must stay free of React imports.
 export { useRegistryVersion } from './registry/use-registry-version'
 export * from './schema'
+export { getDormerWindowExposure } from './schema/nodes/dormer'
 export * from './schema/nodes/stair-defaults'
 export * from './services'
 export {
