@@ -867,6 +867,11 @@ function LinearArrow({
       return {
         overrideId,
         commit: linearBinding?.commit,
+        prepareCommit:
+          linearBinding?.prepareCommit ??
+          (descriptor.prepareCommit
+            ? (patch: Partial<AnyNode>) => descriptor.prepareCommit!(initialNode, patch, sceneApi)
+            : undefined),
         onBegin: () => {
           // Always claim the handle-drag scope so the HUD knows a resize is the
           // active interaction (keeps the idle select hints off-screen). The
@@ -1374,6 +1379,9 @@ function ArcArrow({
       }
 
       return {
+        prepareCommit: descriptor.prepareCommit
+          ? (patch: Partial<AnyNode>) => descriptor.prepareCommit!(initialNode, patch, sceneApi)
+          : undefined,
         onEnd: () => {
           setRotationDelta(null)
           if (isRotateShape) {

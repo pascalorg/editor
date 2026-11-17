@@ -345,6 +345,7 @@ export const commitRoofPlacement = (
       depth: diameter,
       roofType,
     })
+    if ('kind' in target) return null
     const resolved = resolveConicalRoofPlacement({
       nodes: target.nodes,
       levelId: target.levelId,
@@ -432,9 +433,10 @@ export const commitRoofPlacement = (
     })
     const segment = onBearingWalls(drawn, targetRoof, roofCatchWalls(nodes, targetRoof.parentId))
 
-    writeSeatedRoofEdit(sceneApi, {
+    const refusal = writeSeatedRoofEdit(sceneApi, {
       create: [{ node: segment, parentId: targetRoofId as AnyNode['id'] }],
     })
+    if (refusal) return null
     triggerSFX('sfx:structure-build')
     return segment.id // Returns segment ID so it can be selected immediately
   }
@@ -484,6 +486,7 @@ export const commitRoofPlacement = (
     segment.wallHeight + getActiveRoofHeight(segment),
     { center: [centerX, centerZ], width: footprintWidth, depth: footprintDepth, roofType },
   )
+  if ('kind' in target) return null
   const support = drawnRoofSupport(target, levelId)
   // Create the roof container. Segment-shaped params (roofType, pitch, …) are
   // dropped by the RoofNode schema; surface materials in `defaults` carry over.
@@ -556,6 +559,7 @@ export const commitRoofFootprint = (
     ...settleSegmentOnEdges(pickedRoof, picked, roofCatchWalls(nodes, wallsLevelId)),
   })
   const level = roofLevelTarget(nodes, wallsLevelId, getActiveRoofHeight(segment))
+  if ('kind' in level) return null
   const roof = RoofNode.parse({
     ...defaults,
     name: `Roof ${roofCount + 1}`,
@@ -786,6 +790,7 @@ export const RoofTool: React.FC = () => {
           depth: diameter,
           roofType,
         })
+        if ('kind' in target) return
         const placement = resolveConicalRoofPlacement({
           nodes: target.nodes,
           levelId: target.levelId,
@@ -1116,8 +1121,8 @@ export const RoofTool: React.FC = () => {
         : null
 
   // A roof drawn over the armed level's walls lands on the level above them; its ghost does too.
-  const drawTarget = useMemo(
-    () =>
+  const drawTarget = useMemo(() => {
+    const target =
       currentLevelId && footprintSource === 'draw' && previewDimensions
         ? drawnRoofLevelTarget(nodes, currentLevelId, 0, {
             center: [previewDimensions.centerX, previewDimensions.centerZ],
@@ -1125,9 +1130,9 @@ export const RoofTool: React.FC = () => {
             depth: previewDimensions.width,
             roofType,
           })
-        : null,
-    [currentLevelId, footprintSource, nodes, previewDimensions, roofType],
-  )
+        : null
+    return target && 'kind' in target ? null : target
+  }, [currentLevelId, footprintSource, nodes, previewDimensions, roofType])
   const drawLift =
     drawTarget && currentLevelId ? roofLevelTargetOffset(drawTarget, currentLevelId) : 0
 
