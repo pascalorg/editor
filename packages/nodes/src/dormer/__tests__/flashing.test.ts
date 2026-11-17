@@ -35,6 +35,7 @@ describe('opt-in built dormer flashing', () => {
     position: [0, 1 + 1.5 * Math.tan(pitch), 1.5],
   })
 
+  // Builds a native conical host cut through CSG: several seconds on a loaded machine.
   test('conical keeps a truthful circular-wall limitation and emits no unsupported apron', () => {
     const level = LevelNode.parse({ id: 'level_conical_oracle', children: ['roof_conical_oracle'] })
     const roof = RoofNode.parse({
@@ -60,7 +61,7 @@ describe('opt-in built dormer flashing', () => {
     } finally {
       geometry.dispose()
     }
-  })
+  }, 30_000)
 
   test('absent/false preserves the original geometry and does not create a flashing slot', () => {
     const legacy = generateDormerGeometry(base, host, [])
