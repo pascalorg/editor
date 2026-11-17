@@ -55,6 +55,20 @@ export const BASE_BUILD_TYPES: BuildType[] = [
     section: 'outdoor',
   },
   {
+    id: 'hedge',
+    label: /* i18n */ { id: 'app.lib.buildPalette.hedge', message: 'Hedge' },
+    iconSrc: '/icons/tree.webp',
+    kind: 'hedge',
+    section: 'outdoor',
+  },
+  {
+    id: 'planting',
+    label: /* i18n */ { id: 'app.lib.buildPalette.planting', message: 'Planting bed' },
+    iconSrc: '/icons/tree.webp',
+    kind: 'planting',
+    section: 'outdoor',
+  },
+  {
     id: 'slab',
     label: /* i18n */ { id: 'app.lib.buildPalette.slab', message: 'Slab' },
     iconSrc: '/icons/floor.webp',

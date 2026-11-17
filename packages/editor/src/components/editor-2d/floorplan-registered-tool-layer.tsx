@@ -12,7 +12,9 @@ import {
   type FloorplanMode,
   isFloorplanToolAvailableInMode,
 } from '../../lib/floorplan/floorplan-mode'
+import { useSitePlanAvailable } from '../../lib/floorplan/site-plan/drawing-type-switch'
 import { selectPlacedNode } from '../../lib/level-selection'
+import useDrawingView from '../../store/use-drawing-view'
 import useEditor from '../../store/use-editor'
 import useFloorplanMode from '../../store/use-floorplan-mode'
 import useInteractionScope, { useReshapingNode } from '../../store/use-interaction-scope'
@@ -62,6 +64,9 @@ export function FloorplanRegisteredToolLayer() {
   )
   const reshapingNode = useReshapingNode()
   const activeLevelId = useViewer((state) => state.selection.levelId)
+  const storedDrawingType = useDrawingView((state) => state.drawingType)
+  const sitePlanAvailable = useSitePlanAvailable()
+  const drawingType = sitePlanAvailable ? storedDrawingType : 'floor-plan'
   const unit = useViewer((state) => state.unit)
   const metricNotation = useViewer((state) => state.metricNotation)
   const sceneApi = useMemo(() => createSceneApi(useScene), [])
@@ -82,6 +87,7 @@ export function FloorplanRegisteredToolLayer() {
     <Suspense fallback={null}>
       <Active
         activeLevelId={activeLevelId}
+        drawingType={drawingType}
         finishTool={finishTool}
         gridSnapStep={gridSnapStep}
         metricNotation={metricNotation}
