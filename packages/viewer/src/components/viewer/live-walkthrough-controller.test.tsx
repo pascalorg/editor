@@ -16,7 +16,7 @@ import {
   useFirstPersonHud,
   useViewer,
 } from '@pascal-app/viewer'
-import { useFirstPersonHud as uiHud } from '@pascal-app/viewer/ui'
+import { useFirstPersonHud as uiHud, WalkthroughTouchControls } from '@pascal-app/viewer/ui'
 import { useGLTF } from '@react-three/drei'
 import { act, create } from '@react-three/test-renderer'
 import {
@@ -308,6 +308,24 @@ for (const kind of ['live', 'baked'] as const) {
     expect(useScene.getState().nodes).toBe(nodes)
   })
 
+  test(`${kind}: touch crouch reaches the capsule and release restores standing`, async () => {
+    const camera = await mountWalk(kind)
+    await frames(120)
+    const standing = camera.position.y
+    createWalkthroughInput().setCrouch(true)
+    await act(async () => {
+      await frames(1)
+    })
+    await frames(60)
+    expect(camera.position.y).toBeLessThan(standing - 0.3)
+    createWalkthroughInput().setCrouch(false)
+    await act(async () => {
+      await frames(1)
+    })
+    await frames(60)
+    expect(camera.position.y).toBeCloseTo(standing, 1)
+  })
+
   test(`${kind}: desktop ignores the touch channel`, async () => {
     const camera = await mountWalk(kind, false)
     const input = createWalkthroughInput()
@@ -418,6 +436,69 @@ test('live touch Interact operates the reticle target exactly once', async () =>
   await frames(20)
   expect(useInteractive.getState().doorAnimations[door.id]).toBe(opened)
   useInteractive.getState().cancelDoorAnimation(door.id)
+  useInteractive.getState().setDoorOpenState(door.id, { swingAngle: 1 })
+  expect(useFirstPersonHud.getState().canClose).toBe(true)
+  createWalkthroughInput().requestClose()
+  await frames(1)
+  const closed = useInteractive.getState().doorAnimations[door.id]
+  expect(closed?.to).toBe(0)
+  expect(closed?.persist).toBe(false)
+  await frames(20)
+  expect(useInteractive.getState().doorAnimations[door.id]).toBe(closed)
+  useInteractive.getState().cancelDoorAnimation(door.id)
+})
+
+test('baked touch shutters toggle once, clear targeting out of reach and never mount a key prompt', async () => {
+  useViewer.getState().setWalkthroughInputMode('touch')
+  useViewer.getState().setWalkthroughMode(true)
+  const scene = new Group()
+  const window = new Mesh(new BoxGeometry(1, 2.5, 0.1), new MeshBasicMaterial())
+  window.name = 'touchShutters'
+  window.position.set(0, 1.2, -1)
+  window.userData = {
+    pascalId: 'window_touch_shutters',
+    kind: 'window',
+    shutters: true,
+    shuttersOpen: 0,
+    clips: ['window_touch_shutters: shutters'],
+  }
+  scene.add(window)
+  scene.updateMatrixWorld(true)
+  seedGltf('baked-touch-shutters', scene, [
+    new AnimationClip('window_touch_shutters: shutters', 1, [
+      new NumberKeyframeTrack('touchShutters.rotation[y]', [0, 1], [0, 0.1]),
+    ]),
+  ])
+  const camera = new PerspectiveCamera()
+  camera.position.set(0, 1.2, 0)
+  renderer = await create(<GlbScene url="baked-touch-shutters" />, { camera })
+  await act(async () => {
+    await frames(1)
+  })
+  expect(useFirstPersonHud.getState().shuttersInView).toBe(true)
+  // Html key prompts require a DOM: this DOM-free fixture also guards their absence.
+  const state = () => useInteractive.getState().mechanismParts['window_touch_shutters:shutters']
+  expect(state()).toBe(false)
+  createWalkthroughInput().requestShutters()
+  await frames(1)
+  expect(state()).toBe(true)
+  await frames(20)
+  expect(state()).toBe(true)
+  expect(window.rotation.y).toBeGreaterThan(0)
+  createWalkthroughInput().requestShutters()
+  await frames(1)
+  expect(state()).toBe(false)
+  window.position.z = -4
+  window.updateMatrixWorld(true)
+  await act(async () => {
+    await frames(1)
+  })
+  expect(useFirstPersonHud.getState().shuttersInView).toBe(false)
+  createWalkthroughInput().requestShutters()
+  await frames(1)
+  expect(state()).toBe(false)
+  await act(async () => useViewer.getState().setWalkthroughMode(false))
+  expect(useFirstPersonHud.getState().shuttersInView).toBe(false)
 })
 
 test('baked touch Interact reaches GlbScene activation and publishes its target to the shared HUD', async () => {
@@ -790,4 +871,105 @@ test('seen HUD equality includes kind and distance, and reset clears it', () => 
   expect(useFirstPersonHud.getState().seenInteract?.distance).toBe(5)
   uiHud.getState().reset()
   expect(useFirstPersonHud.getState().seenInteract).toBeNull()
+})
+
+test('shutters button and desktop F activate the same toggle and show only usable prompts', async () => {
+  // Keep the chrome renderer's module replacement out of the full suite's module cache.
+  if (!process.env.WALKTHROUGH_ACTION_FIXTURE) {
+    const child = Bun.spawnSync({
+      cmd: [
+        process.execPath,
+        'test',
+        '--preload',
+        new URL('./__tests__/walkthrough-chrome.tsx', import.meta.url).pathname,
+        import.meta.path,
+        '--test-name-pattern',
+        'shutters button and desktop F',
+      ],
+      env: { ...process.env, WALKTHROUGH_ACTION_FIXTURE: '1' },
+    })
+    if (child.exitCode !== 0) throw new Error(child.stderr.toString())
+    return
+  }
+  useViewer.getState().setWalkthroughInputMode('touch')
+  useViewer.getState().setWalkthroughMode(true)
+  const scene = new Group()
+  const window = new Mesh(new BoxGeometry(1, 2.5, 0.1), new MeshBasicMaterial())
+  window.name = 'shutterControls'
+  window.position.set(0, 1.2, -1)
+  window.userData = {
+    pascalId: 'window_controls',
+    kind: 'window',
+    shutters: true,
+    shuttersOpen: 0,
+    clips: ['window_controls: shutters'],
+  }
+  scene.add(window)
+  scene.updateMatrixWorld(true)
+  seedGltf('shutter-controls', scene, [
+    new AnimationClip('window_controls: shutters', 1, [
+      new NumberKeyframeTrack('shutterControls.rotation[y]', [0, 1], [0, 0.1]),
+    ]),
+  ])
+  const camera = new PerspectiveCamera()
+  camera.position.set(0, 1.2, 0)
+  renderer = await create(
+    <>
+      <GlbScene url="shutter-controls" />
+      <WalkthroughTouchControls />
+    </>,
+    { camera },
+  )
+  const frame = () =>
+    act(async () => {
+      await frames(1)
+    })
+  const buttons = () => renderer!.scene.findAllByType('button')
+  const shuttersButton = () =>
+    buttons().find((button) => button.props['data-walkthrough-shutters'] === '')
+  const prompts = () => renderer!.scene.findAll((node) => !!node.props.userData?.html)
+  const state = () => useInteractive.getState().mechanismParts['window_controls:shutters']
+  const pointer = { pointerId: 1, preventDefault() {}, currentTarget: { setPointerCapture() {} } }
+  await frame()
+  expect(shuttersButton()).toBeDefined()
+  expect(prompts()).toHaveLength(0)
+  await renderer.fireEvent(shuttersButton()!, 'pointerDown', pointer)
+  await renderer.fireEvent(shuttersButton()!, 'pointerDown', pointer)
+  await frame()
+  expect(state()).toBe(true)
+  await frames(10)
+  expect(state()).toBe(true)
+  await renderer.fireEvent(
+    renderer.scene.findByProps({ 'data-walkthrough-touch-controls': '' }),
+    'pointerUp',
+    pointer,
+  )
+  await renderer.fireEvent(shuttersButton()!, 'pointerDown', pointer)
+  await frame()
+  expect(state()).toBe(false)
+  window.position.z = -4
+  window.updateMatrixWorld(true)
+  await frame()
+  expect(shuttersButton()).toBeUndefined()
+  await act(async () => useViewer.getState().setWalkthroughInputMode('desktop'))
+  window.position.z = -1
+  window.updateMatrixWorld(true)
+  await frame()
+  expect(buttons()).toHaveLength(0)
+  expect(prompts()).toHaveLength(1)
+  expect(prompts()[0]!.props.userData.html).toMatch(/<kbd[^>]*>F<\/kbd>/)
+  const pressF = (repeat = false) =>
+    globalThis.window.dispatchEvent(Object.assign(new Event('keydown'), { key: 'f', repeat }))
+  pressF()
+  expect(state()).toBe(true)
+  pressF(true)
+  expect(state()).toBe(true)
+  pressF()
+  expect(state()).toBe(false)
+  createWalkthroughInput().requestShutters()
+  await frame()
+  expect(state()).toBe(false)
+  await act(async () => useViewer.getState().setWalkthroughInputMode('touch'))
+  await frame()
+  expect(prompts()).toHaveLength(0)
 })

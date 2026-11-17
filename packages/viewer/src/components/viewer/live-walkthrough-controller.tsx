@@ -79,7 +79,11 @@ import {
 } from '../../lib/drone-flight'
 import { setSurfaceRaycastLayers } from '../../lib/layers'
 import { isTypingTarget } from '../../lib/typing-target'
-import { consumeWalkthroughFrame, consumeWalkthroughInteract } from '../../lib/walkthrough-input'
+import {
+  consumeWalkthroughClose,
+  consumeWalkthroughFrame,
+  consumeWalkthroughInteract,
+} from '../../lib/walkthrough-input'
 import {
   WALKTHROUGH_DEFAULT_SPEEDS,
   WALKTHROUGH_SEE_DISTANCE,
@@ -1676,10 +1680,12 @@ function LiveWalkthroughSession({
     if (!touch || isDroneMode || !controllerRef.current) return
     const input = consumeWalkthroughFrame()
     if (hostRef.current.paused) return
+    crouchKeyRef.current = input.crouch
     input.jump = resolveJump(input.jump, characterStatus.isOnGround, characterStatus.linvel.y)
     controllerRef.current.setMovement(input)
     turnFirstPersonLook(lookRef.current, input.dx, input.dy)
     if (consumeWalkthroughInteract()) toggleInteractableTargetRef.current()
+    if (consumeWalkthroughClose()) closeInteractableTarget()
   }, -1)
 
   const syncElevatorColliderMeshes = useCallback(() => {
@@ -2018,6 +2024,10 @@ function LiveWalkthroughSession({
             }
           : null,
       interact: resolveHudInteract(nextInteractableTarget),
+      canClose:
+        !!nextInteractableTarget &&
+        ['mechanism', 'procedural', 'window', 'door'].includes(nextInteractableTarget.type),
+      shuttersInView: false,
     })
 
     hudLabelFrameRef.current += 1

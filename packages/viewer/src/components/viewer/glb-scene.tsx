@@ -50,7 +50,7 @@ import {
 import { tapAllowsClick } from '../../lib/pointer-gesture'
 import { filterSectionHits, sectionActive } from '../../lib/section'
 import { applyShadowOnly, clearShadowOnly } from '../../lib/shadow-only'
-import { consumeWalkthroughInteract } from '../../lib/walkthrough-input'
+import { consumeWalkthroughInteract, consumeWalkthroughShutters } from '../../lib/walkthrough-input'
 import { bakedWalkthroughSettings } from '../../lib/walkthrough-settings'
 import { createFamilyVisibility, filterXrayHits, xrayActive } from '../../lib/xray'
 import { useFirstPersonHud } from '../../store/use-first-person-hud'
@@ -1049,7 +1049,8 @@ export function GlbScene({
 
   // ── Walkthrough: first-person HUD + interaction ────────────────────────────
   const raycastOpenings = useMemo(() => createGlbOpeningRaycast(identity), [identity])
-  const [shuttersInView, setShuttersInView] = useState(false)
+  const shuttersInView = useFirstPersonHud((state) => state.shuttersInView)
+  const touch = useViewer((state) => state.walkthroughInputMode === 'touch')
   const walkDoorRef = useRef<{ hit: THREE.Object3D; node: THREE.Object3D } | null>(null)
   const walkPromptRef = useRef<{ isOpen: boolean; verb?: string } | null>(null)
   const lastWalkKey = useRef<string | null>(null)
@@ -1143,15 +1144,15 @@ export function GlbScene({
             distance: hit.distance,
           }
         : null
-    setShuttersInView(
-      inReach && Boolean((doorNode?.node.userData as PascalExtras | undefined)?.shutters),
-    )
     walkDoorRef.current = inReach ? doorNode : null
     walkPromptRef.current = inReach ? door : null
     if (!inReach) door = null
 
     useFirstPersonHud.getState().setHud({
       seenInteract,
+      shuttersInView:
+        inReach && Boolean((doorNode?.node.userData as PascalExtras | undefined)?.shutters),
+      canClose: false,
       zoneLabel: zone?.label ?? null,
       floorLabel,
       interact: door
@@ -1214,13 +1215,16 @@ export function GlbScene({
     },
     [sceneNodes, toggleableItem, toggleLoopMechanism, toggleOpenable, toggleProcedural],
   )
+  const activateWalkShutters = useCallback(() => {
+    const shutters = walkDoorRef.current?.node
+    if (!shutters?.userData.shutters) return
+    playShutterSound(shutters)
+    toggleGlbShutters(shutters)
+  }, [])
   useFrame(() => {
-    if (
-      walkingOnFoot &&
-      useViewer.getState().walkthroughInputMode === 'touch' &&
-      consumeWalkthroughInteract()
-    )
-      activateWalkDoor()
+    if (!walkingOnFoot || useViewer.getState().walkthroughInputMode !== 'touch') return
+    if (consumeWalkthroughInteract()) activateWalkDoor()
+    if (consumeWalkthroughShutters()) activateWalkShutters()
   })
 
   useEffect(() => {
@@ -1228,11 +1232,7 @@ export function GlbScene({
     const onKey = (event: KeyboardEvent) => {
       if (useViewer.getState().walkthroughInputMode === 'touch') return
       if (event.key.toLowerCase() === 'e') activateWalkDoor()
-      const shutters = walkDoorRef.current?.node
-      if (event.key.toLowerCase() === 'f' && !event.repeat && shutters?.userData.shutters) {
-        playShutterSound(shutters)
-        toggleGlbShutters(shutters)
-      }
+      if (event.key.toLowerCase() === 'f' && !event.repeat) activateWalkShutters()
     }
     const canvas = document.querySelector('canvas')
     window.addEventListener('keydown', onKey)
@@ -1244,12 +1244,11 @@ export function GlbScene({
       window.removeEventListener('keydown', onKey)
       canvas?.removeEventListener('click', onClick)
     }
-  }, [walkingOnFoot, activateWalkDoor])
+  }, [walkingOnFoot, activateWalkDoor, activateWalkShutters])
 
   // Clear the HUD (and stale targeting) whenever the walk ends, or turns into a drone flight.
   useEffect(() => {
     if (walkingOnFoot) return
-    setShuttersInView(false)
     walkDoorRef.current = null
     lastWalkKey.current = null
     useFirstPersonHud.getState().reset()
@@ -1345,7 +1344,7 @@ export function GlbScene({
 
   return (
     <group ref={rootRef}>
-      {walkingOnFoot && shuttersInView ? <GlbShuttersPrompt /> : null}
+      {walkingOnFoot && shuttersInView && !touch ? <GlbShuttersPrompt /> : null}
       <SectionGroup>
         <BakedSiteSurfaces scopes={siteSurfaceScopes} />
         <primitive

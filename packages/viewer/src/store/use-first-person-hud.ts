@@ -15,9 +15,16 @@ export type FirstPersonHudState = {
   zoneLabel: string | null
   interact: WalkthroughInteract
   seenInteract: WalkthroughSeenInteract
+  /** An in-reach target with a separate shutters action. */
+  shuttersInView: boolean
+  /** The controller supports explicitly closing the current target. */
+  canClose: boolean
   setHud: (
     hud: Partial<
-      Pick<FirstPersonHudState, 'floorLabel' | 'zoneLabel' | 'interact' | 'seenInteract'>
+      Pick<
+        FirstPersonHudState,
+        'floorLabel' | 'zoneLabel' | 'interact' | 'seenInteract' | 'shuttersInView' | 'canClose'
+      >
     >,
   ) => void
   reset: () => void
@@ -28,6 +35,8 @@ export const useFirstPersonHud = create<FirstPersonHudState>((set) => ({
   zoneLabel: null,
   interact: null,
   seenInteract: null,
+  shuttersInView: false,
+  canClose: false,
   setHud: (hud) =>
     set((state) => {
       const floorLabel = hud.floorLabel === undefined ? state.floorLabel : hud.floorLabel
@@ -36,7 +45,12 @@ export const useFirstPersonHud = create<FirstPersonHudState>((set) => ({
 
       const seenInteract = hud.seenInteract === undefined ? state.seenInteract : hud.seenInteract
 
+      const shuttersInView = hud.shuttersInView ?? state.shuttersInView
+      const canClose = hud.canClose ?? state.canClose
+
       if (
+        shuttersInView === state.shuttersInView &&
+        canClose === state.canClose &&
         floorLabel === state.floorLabel &&
         zoneLabel === state.zoneLabel &&
         interact?.label === state.interact?.label &&
@@ -49,15 +63,24 @@ export const useFirstPersonHud = create<FirstPersonHudState>((set) => ({
         return state
       }
 
-      return { floorLabel, zoneLabel, interact, seenInteract }
+      return { floorLabel, zoneLabel, interact, seenInteract, shuttersInView, canClose }
     }),
   reset: () =>
     set((state) =>
       state.floorLabel === null &&
       state.zoneLabel === null &&
       state.interact === null &&
-      state.seenInteract === null
+      state.seenInteract === null &&
+      !state.shuttersInView &&
+      !state.canClose
         ? state
-        : { floorLabel: null, zoneLabel: null, interact: null, seenInteract: null },
+        : {
+            floorLabel: null,
+            zoneLabel: null,
+            interact: null,
+            seenInteract: null,
+            shuttersInView: false,
+            canClose: false,
+          },
     ),
 }))

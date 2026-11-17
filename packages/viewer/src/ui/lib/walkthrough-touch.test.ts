@@ -68,3 +68,34 @@ test('Exit leaves walkthrough through the viewer action', () => {
   createWalkthroughTouchGestures(() => {}).exit()
   expect(useViewer.getState().walkthroughMode).toBe(false)
 })
+
+test('crouch holds until its own pointer releases; cancellation and capture loss clear it', () => {
+  const pointer = (pointerId: number) => ({
+    pointerId,
+    clientX: 0,
+    clientY: 0,
+    preventDefault() {},
+    currentTarget: { setPointerCapture() {} },
+  })
+  const gestures = createWalkthroughTouchGestures(() => {})
+  const off = onWalkthroughInputClear(gestures.reset)
+  try {
+    gestures.crouchDown(pointer(1))
+    expect(consumeWalkthroughFrame().crouch).toBe(true)
+    gestures.crouchDown(pointer(2))
+    gestures.up(pointer(2))
+    expect(consumeWalkthroughFrame().crouch).toBe(true)
+    gestures.up(pointer(1))
+    expect(consumeWalkthroughFrame().crouch).toBe(false)
+    gestures.crouchDown(pointer(3))
+    gestures.lost(pointer(3))
+    expect(consumeWalkthroughFrame().crouch).toBe(false)
+    gestures.crouchDown(pointer(4))
+    gestures.cancel()
+    expect(consumeWalkthroughFrame().crouch).toBe(false)
+    gestures.crouchDown(pointer(5))
+    expect(consumeWalkthroughFrame().crouch).toBe(true)
+  } finally {
+    off()
+  }
+})

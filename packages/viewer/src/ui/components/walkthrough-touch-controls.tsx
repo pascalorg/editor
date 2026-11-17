@@ -22,6 +22,8 @@ export function WalkthroughTouchControls(props: WalkthroughTouchControlsProps) {
 function TouchSession({ className }: WalkthroughTouchControlsProps) {
   const i18n = usePascalI18n()
   const target = useFirstPersonHud((state) => state.interact)
+  const shuttersInView = useFirstPersonHud((state) => state.shuttersInView)
+  const canClose = useFirstPersonHud((state) => state.canClose)
   const stickRef = useRef<HTMLDivElement>(null)
   const knobRef = useRef<HTMLDivElement>(null)
   const gestures = useMemo(
@@ -76,7 +78,33 @@ function TouchSession({ className }: WalkthroughTouchControlsProps) {
           ref={knobRef}
         />
       </div>
-      <div className="pointer-events-none absolute right-[max(1.5rem,env(safe-area-inset-right))] bottom-[max(1.5rem,env(safe-area-inset-bottom))] flex gap-3">
+      <div className="pointer-events-none absolute right-[max(1.5rem,env(safe-area-inset-right))] bottom-[max(1.5rem,env(safe-area-inset-bottom))] flex max-w-[calc(100%-3rem)] flex-wrap justify-end gap-3">
+        {shuttersInView && (
+          <button
+            className={buttonClass}
+            data-walkthrough-shutters=""
+            onPointerDown={(event) => {
+              if (gestures.buttonDown(event)) input.requestShutters()
+            }}
+            type="button"
+          >
+            {i18n._({ id: 'viewer.walkthrough.shutters', message: 'Shutters' })}
+          </button>
+        )}
+        {canClose && (
+          <button
+            className={buttonClass}
+            onPointerDown={(event) => {
+              if (gestures.buttonDown(event)) input.requestClose()
+            }}
+            type="button"
+          >
+            {i18n._({ id: 'viewer.walkthroughTouch.close', message: 'Close' })}
+          </button>
+        )}
+        <button className={buttonClass} onPointerDown={gestures.crouchDown} type="button">
+          {i18n._({ id: 'viewer.walkthroughTouch.crouch', message: 'Crouch' })}
+        </button>
         <button
           className={buttonClass}
           onPointerDown={(event) => {

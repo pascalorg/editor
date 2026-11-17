@@ -31,6 +31,7 @@ export function createWalkthroughTouchGestures(drawStick: (visual: StickVisual) 
   let stick: Point | null = null
   let look: Point | null = null
   const buttons = new Set<number>()
+  let crouchPointer: number | null = null
   const take = (event: Pointer) => {
     event.preventDefault()
     event.currentTarget.setPointerCapture(event.pointerId)
@@ -41,6 +42,7 @@ export function createWalkthroughTouchGestures(drawStick: (visual: StickVisual) 
       stick = null
       look = null
       buttons.clear()
+      crouchPointer = null
       drawStick(null)
     },
     stickDown(event: Pointer) {
@@ -70,7 +72,18 @@ export function createWalkthroughTouchGestures(drawStick: (visual: StickVisual) 
       buttons.add(event.pointerId)
       return true
     },
+    crouchDown(event: Pointer) {
+      if (crouchPointer !== null || buttons.has(event.pointerId)) return
+      take(event)
+      buttons.add(event.pointerId)
+      crouchPointer = event.pointerId
+      input.setCrouch(true)
+    },
     up(event: Pointer) {
+      if (crouchPointer === event.pointerId) {
+        crouchPointer = null
+        input.setCrouch(false)
+      }
       if (stick?.id === event.pointerId) {
         stick = null
         input.setMove(0, 0)

@@ -39367,9 +39367,26 @@ msgstr "Visite : {state}"
 # English: "Shutters"
 #: packages/viewer/src/components/viewer/glb-scene.tsx
 #: packages/viewer/src/systems/interactive/callout-actions.ts
+#: packages/viewer/src/ui/components/walkthrough-touch-controls.tsx
 #, fuzzy
 msgid "viewer.walkthrough.shutters"
 msgstr "Volets"
+
+# English: "Close"
+# Source-Hash: d7cf5045c01b2eb9
+# Review: required
+#: packages/viewer/src/ui/components/walkthrough-touch-controls.tsx
+#, fuzzy
+msgid "viewer.walkthroughTouch.close"
+msgstr "Fermer"
+
+# English: "Crouch"
+# Source-Hash: f6bb8786828d83ab
+# Review: required
+#: packages/viewer/src/ui/components/walkthrough-touch-controls.tsx
+#, fuzzy
+msgid "viewer.walkthroughTouch.crouch"
+msgstr "S’accroupir"
 
 # Source-Hash: 938aacb119b29dc1
 # Review: required

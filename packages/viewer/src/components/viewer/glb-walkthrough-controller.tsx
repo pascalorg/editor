@@ -484,6 +484,7 @@ export function GlbWalkthroughController({
   useFrame(() => {
     if (!touch || !controllerRef.current) return
     const input = consumeWalkthroughFrame()
+    crouchKeyRef.current = input.crouch
     input.jump = resolveJump(input.jump, characterStatus.isOnGround, characterStatus.linvel.y)
     controllerRef.current.setMovement(input)
     turnFirstPersonLook(lookRef.current, input.dx, input.dy)

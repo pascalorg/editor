@@ -167,6 +167,22 @@ is lost (Escape with a free cursor exits). `onExit` runs after the controller cl
 For baked scenes, continue using `GlbWalkthroughController`; `DroneController` also works with
 either scene source when only free flight is needed.
 
+For touch walking, choose `useViewer.getState().setWalkthroughInputMode('touch')` before entering
+and mount `WalkthroughTouchControls` from `@pascal-app/viewer/ui` outside the canvas. It provides
+movement/look surfaces, Jump, held Crouch, Interact, Exit, and contextual Shutters (baked) and
+Close (live) buttons. Touch has no sprint or pointer lock; releasing the gestures stops input.
+`WalkthroughHud` hides keyboard prompts in touch mode.
+
+Custom touch HUDs use `createWalkthroughInput()` from `@pascal-app/viewer`: `setMove(x, y)`,
+`addLook(dx, dy)`, `setCrouch(held)`, `requestJump()`, `requestInteract()`, `requestShutters()`,
+`requestClose()` and `clear()`. Requests are delivered once per press; held crouch and movement
+must be released or cleared on cancellation. Read `useFirstPersonHud(s => s.shuttersInView)`
+(`boolean`, initially/reset to `false`) for the same targeting state as the baked F prompt,
+`interact` (`{ label: string; verb: string } | null`) for Interact, and `canClose` (`boolean`)
+for the live T action. Both viewer entries export this same store and `FirstPersonHudState`.
+Live walkthrough has E/R and T actions, but no F/shutters action; live shutters remain available
+through selection callouts. The baked desktop F binding and prompt are unchanged.
+
 ## Custom Camera Controls
 
 ```typescript
