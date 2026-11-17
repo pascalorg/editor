@@ -19,8 +19,9 @@ import {
   getRoofPlanBounds,
   getRoofSegmentDeckReach,
   getRoofSegmentSurfaceY,
-  getRoofShapeInsets,
+  getRoofSegmentTrimCuts,
   getRoofShapeRatios,
+  getRoofShingleModules,
   getSegmentSlopeFrame,
   getShedBandFacetCount,
   getShedEdgeSibling,
@@ -40,6 +41,7 @@ import {
   type RoofNode,
   type RoofPlanBounds,
   type RoofSegmentNode,
+  type RoofTrimCut,
   type RoofType,
   roofOverlapEntryOwns,
   roofPlanBoundsOverlap,
@@ -1202,7 +1204,6 @@ function remapDutchRakeBoardMaterials(geometry: THREE.BufferGeometry) {
 const SHINGLE_SURFACE_EPSILON = 0.02
 const RAKE_FACE_NORMAL_EPSILON = 0.3
 const RAKE_FACE_ALIGNMENT_EPSILON = 0.35
-const TRIM_CUT_EPSILON = 0.002
 const ROOF_EDGE_MATERIAL_INDEX = 0
 const ROOF_INSET_WALL_MATERIAL_INDEX = 2
 const DUTCH_RAKE_SIDE_MATERIAL_INDEX = 1
@@ -1331,54 +1332,11 @@ function buildTrimCutBrush(
   return cut
 }
 
-type TrimPlanPoint = readonly [number, number]
-
-function buildDiagonalTrimCutBrush(
-  bounds: {
-    minX: number
-    maxX: number
-    minZ: number
-    maxZ: number
-    minY: number
-    maxY: number
-  },
-  lineA: TrimPlanPoint,
-  lineB: TrimPlanPoint,
-  outsidePoint: TrimPlanPoint,
-): Brush | null {
-  const dx = lineB[0] - lineA[0]
-  const dz = lineB[1] - lineA[1]
-  const lineLength = Math.hypot(dx, dz)
-  const height = bounds.maxY - bounds.minY
-  if (!(lineLength > 0 && height > 0)) return null
-
-  const ux = dx / lineLength
-  const uz = dz / lineLength
-  let nx = -uz
-  let nz = ux
-  const midX = (lineA[0] + lineB[0]) / 2
-  const midZ = (lineA[1] + lineB[1]) / 2
-  const toOutsideX = outsidePoint[0] - midX
-  const toOutsideZ = outsidePoint[1] - midZ
-  let normalFlipped = false
-  if (nx * toOutsideX + nz * toOutsideZ < 0) {
-    nx *= -1
-    nz *= -1
-    normalFlipped = true
-  }
-
-  const boundsDiagonal = Math.hypot(bounds.maxX - bounds.minX, bounds.maxZ - bounds.minZ)
-  const cutterLength = Math.max(lineLength, boundsDiagonal) * 2
-  const cutterDepth = boundsDiagonal * 2
-  const centerX = midX + nx * (cutterDepth / 2 - TRIM_CUT_EPSILON)
-  const centerZ = midZ + nz * (cutterDepth / 2 - TRIM_CUT_EPSILON)
-  const yaw = Math.atan2(-uz, ux) + (normalFlipped ? Math.PI : 0)
-
-  const geometry = new THREE.BoxGeometry(cutterLength, height, cutterDepth)
-  geometry.rotateY(yaw)
-  geometry.translate(centerX, (bounds.minY + bounds.maxY) / 2, centerZ)
-  // World-metre UVs so the diagonal cut's interior face inherits tiled UVs.
-  applyWorldScaleBoxUVs(geometry, cutterLength, height, cutterDepth)
+function buildRoofTrimCutBrush({ center, size, rotation }: RoofTrimCut): Brush {
+  const geometry = new THREE.BoxGeometry(...size)
+  geometry.rotateY(rotation)
+  geometry.translate(...center)
+  applyWorldScaleBoxUVs(geometry, ...size)
   assignTrimCutterSlot(geometry)
   ensureRenderableGeometryAttributes(geometry)
   computeGeometryBoundsTree(geometry)
@@ -1398,109 +1356,7 @@ function subtractCutFromSegmentBrushes(brushes: RoofSegmentBrushSet, cut: Brush)
 }
 
 function buildSegmentTrimCutBrushes(segment: RoofSegmentNode): Brush[] {
-  const trim = normalizeRoofSegmentTrim(segment)
-  if (
-    trim.left === 0 &&
-    trim.right === 0 &&
-    trim.front === 0 &&
-    trim.back === 0 &&
-    trim.frontLeft === 0 &&
-    trim.frontRight === 0 &&
-    trim.backLeft === 0 &&
-    trim.backRight === 0 &&
-    trim.frontLeftX === 0 &&
-    trim.frontLeftZ === 0 &&
-    trim.frontRightX === 0 &&
-    trim.frontRightZ === 0 &&
-    trim.backLeftX === 0 &&
-    trim.backLeftZ === 0 &&
-    trim.backRightX === 0 &&
-    trim.backRightZ === 0
-  ) {
-    return []
-  }
-
-  const { activeRh } = getSegmentSlopeFrame(segment)
-  const extra =
-    segment.wallThickness +
-    segment.overhang +
-    (segment.gableOverhang ?? 0) +
-    segment.deckThickness +
-    segment.shingleThickness +
-    2
-  const minX = -segment.width / 2 - extra
-  const maxX = segment.width / 2 + extra
-  const minZ = -segment.depth / 2 - extra
-  const maxZ = segment.depth / 2 + extra
-  const minY = -2
-  const maxY = segment.wallHeight + activeRh + segment.deckThickness + segment.shingleThickness + 2
-
-  const cuts: Brush[] = []
-
-  if (trim.left > 0) {
-    const planeX = -segment.width / 2 + trim.left
-    const cut = buildTrimCutBrush(minX, planeX + TRIM_CUT_EPSILON, minZ, maxZ, minY, maxY)
-    if (cut) cuts.push(cut)
-  }
-  if (trim.right > 0) {
-    const planeX = segment.width / 2 - trim.right
-    const cut = buildTrimCutBrush(planeX - TRIM_CUT_EPSILON, maxX, minZ, maxZ, minY, maxY)
-    if (cut) cuts.push(cut)
-  }
-  if (trim.front > 0) {
-    const planeZ = segment.depth / 2 - trim.front
-    const cut = buildTrimCutBrush(minX, maxX, planeZ - TRIM_CUT_EPSILON, maxZ, minY, maxY)
-    if (cut) cuts.push(cut)
-  }
-  if (trim.back > 0) {
-    const planeZ = -segment.depth / 2 + trim.back
-    const cut = buildTrimCutBrush(minX, maxX, minZ, planeZ + TRIM_CUT_EPSILON, minY, maxY)
-    if (cut) cuts.push(cut)
-  }
-
-  const leftX = -segment.width / 2 + trim.left
-  const rightX = segment.width / 2 - trim.right
-  const frontZ = segment.depth / 2 - trim.front
-  const backZ = -segment.depth / 2 + trim.back
-
-  if (trim.frontLeftX > 0 && trim.frontLeftZ > 0) {
-    const cut = buildDiagonalTrimCutBrush(
-      { minX, maxX, minZ, maxZ, minY, maxY },
-      [leftX + trim.frontLeftX + TRIM_CUT_EPSILON, frontZ],
-      [leftX, frontZ - trim.frontLeftZ - TRIM_CUT_EPSILON],
-      [minX, maxZ],
-    )
-    if (cut) cuts.push(cut)
-  }
-  if (trim.frontRightX > 0 && trim.frontRightZ > 0) {
-    const cut = buildDiagonalTrimCutBrush(
-      { minX, maxX, minZ, maxZ, minY, maxY },
-      [rightX, frontZ - trim.frontRightZ - TRIM_CUT_EPSILON],
-      [rightX - trim.frontRightX - TRIM_CUT_EPSILON, frontZ],
-      [maxX, maxZ],
-    )
-    if (cut) cuts.push(cut)
-  }
-  if (trim.backLeftX > 0 && trim.backLeftZ > 0) {
-    const cut = buildDiagonalTrimCutBrush(
-      { minX, maxX, minZ, maxZ, minY, maxY },
-      [leftX, backZ + trim.backLeftZ + TRIM_CUT_EPSILON],
-      [leftX + trim.backLeftX + TRIM_CUT_EPSILON, backZ],
-      [minX, minZ],
-    )
-    if (cut) cuts.push(cut)
-  }
-  if (trim.backRightX > 0 && trim.backRightZ > 0) {
-    const cut = buildDiagonalTrimCutBrush(
-      { minX, maxX, minZ, maxZ, minY, maxY },
-      [rightX - trim.backRightX - TRIM_CUT_EPSILON, backZ],
-      [rightX, backZ + trim.backRightZ + TRIM_CUT_EPSILON],
-      [maxX, minZ],
-    )
-    if (cut) cuts.push(cut)
-  }
-
-  return cuts
+  return getRoofSegmentTrimCuts(segment).map(buildRoofTrimCutBrush)
 }
 
 function subtractSegmentTrimCuts(brushes: RoofSegmentBrushSet, segment: RoofSegmentNode) {
@@ -1756,7 +1612,7 @@ export function getRoofSegmentBrushes(
     node
   const conicalCoverage = getConicalRoofCoverage(node)
 
-  const { activeRh, tanTheta, cosTheta, sinTheta } = getSegmentSlopeFrame(node)
+  const { activeRh, tanTheta, cosTheta } = getSegmentSlopeFrame(node)
   const shapeRatios = getRoofShapeRatios({
     gambrelLowerWidthRatio: node.gambrelLowerWidthRatio,
     mansardSteepWidthRatio: node.mansardSteepWidthRatio,
@@ -1928,118 +1784,22 @@ export function getRoofSegmentBrushes(
     )
   }
 
-  const stSin = shingleThickness * sinTheta
-  const stCos = shingleThickness * cosTheta
-
-  const shinBotW = Math.max(0.01, width + 2 * reach.x)
-  const shinBotD = Math.max(0.01, depth + 2 * deckExt)
-
-  const deckDrop = deckExt * tanTheta
-  const shinBotWh = wallHeight - deckDrop + verticalRt
-
-  let shinBotRh = activeRh
-  if (activeRh > 0) {
-    shinBotRh = activeRh + deckDrop
-    if (roofType === 'shed') shinBotRh = activeRh + 2 * deckDrop
-  }
-
-  let shinTopW = shinBotW
-  let shinTopD = shinBotD
-  let transZ = 0
-
-  if (['hip', 'mansard', 'dutch', 'conical'].includes(roofType)) {
-    shinTopW += 2 * stSin
-    shinTopD += 2 * stSin
-  } else if (['gable', 'gambrel'].includes(roofType)) {
-    shinTopD += 2 * stSin
-  } else if (roofType === 'shed') {
-    shinTopD += stSin
-    transZ = stSin / 2
-  }
-
-  const shinTopWh = shinBotWh + stCos
-
-  let shinTopRh = shinBotRh
-  if (activeRh > 0) {
-    shinTopRh = shinBotRh + stSin * tanTheta
-  }
-
-  const availableR = (Math.min(shinBotW, shinBotD) / 2) * 0.95
-  const maxDrop = tanTheta > 0.001 ? availableR / tanTheta : 2.0
-  const dropTop = Math.min(1.0, maxDrop * 0.4)
-  const dropBot = Math.min(2.0, maxDrop * 0.8)
-
-  const topBaseY = shinBotWh - dropTop
-  const botBaseY = shinBotWh - dropBot
-
-  const insetsBot = getRoofShapeInsets({
-    roofType,
-    width,
-    depth,
-    wh: shinBotWh,
-    baseY: botBaseY,
-    isVoid: true,
-    brushW: shinBotW,
-    brushD: shinBotD,
-    tanTheta,
-    shingleThickness,
-    dutchHipWidthRatio: node.dutchHipWidthRatio,
-  })
-  const insetsTop = getRoofShapeInsets({
-    roofType,
-    width,
-    depth,
-    wh: shinTopWh,
-    baseY: topBaseY,
-    isVoid: false,
-    brushW: shinTopW,
-    brushD: shinTopD,
-    tanTheta,
-    shingleThickness,
-    dutchHipWidthRatio: node.dutchHipWidthRatio,
-  })
-
-  const botFaces = getRoofModuleFaces({
-    type: roofType,
-    w: shinBotW,
-    d: shinBotD,
-    wh: shinBotWh,
-    rh: shinBotRh,
-    baseY: botBaseY,
-    insets: insetsBot,
-    baseW: width,
-    baseD: depth,
-    tanTheta,
-    shapeRatios,
-    dutchTopRakeThickness: node.dutchTopRakeThickness,
-    conicalStartAngle: conicalCoverage.startAngle,
-    conicalSweepAngle: conicalCoverage.sweepAngle,
-  }).map((face) => face.map((point) => new THREE.Vector3(point.x, point.y, point.z)))
-  const topFaces = getRoofModuleFaces({
-    type: roofType,
-    w: shinTopW,
-    d: shinTopD,
-    wh: shinTopWh,
-    rh: shinTopRh,
-    baseY: topBaseY,
-    insets: insetsTop,
-    baseW: width,
-    baseD: depth,
-    tanTheta,
-    shapeRatios,
-    dutchTopRakeThickness: node.dutchTopRakeThickness,
-    conicalStartAngle: conicalCoverage.startAngle,
-    conicalSweepAngle: conicalCoverage.sweepAngle,
-  }).map((face) => face.map((point) => new THREE.Vector3(point.x, point.y, point.z)))
+  const { bottom: shingleBottom, top: shingleTop, shiftZ: transZ } = getRoofShingleModules(node)
+  const botFaces = getRoofModuleFaces(shingleBottom).map((face) =>
+    face.map((point) => new THREE.Vector3(point.x, point.y, point.z)),
+  )
+  const topFaces = getRoofModuleFaces(shingleTop).map((face) =>
+    face.map((point) => new THREE.Vector3(point.x, point.y, point.z)),
+  )
 
   let rakeBoards: THREE.BufferGeometry | null = null
-  if (roofType === 'dutch' && insetsTop.dutchI !== undefined) {
+  if (roofType === 'dutch' && shingleTop.insets.dutchI !== undefined) {
     rakeBoards = buildDutchRakeBoards(
-      shinTopW,
-      shinTopD,
-      shinTopWh,
-      shinTopRh,
-      insetsTop.dutchI,
+      shingleTop.w,
+      shingleTop.d,
+      shingleTop.wh,
+      shingleTop.rh,
+      shingleTop.insets.dutchI,
       shapeRatios,
       node.dutchGabletRake ?? ROOF_SHAPE_DEFAULTS.dutchGabletRake,
       node.dutchTopRakeThickness ?? ROOF_SHAPE_DEFAULTS.dutchTopRakeThickness,
@@ -2108,8 +1868,8 @@ export function getRoofSegmentBrushes(
   const framingBrush = framingGeo ? toBrush(framingGeo) : null
   if (framingGeo && !framingBrush) framingGeo.dispose()
   if (shinBotBrush) {
-    const wV = shinBotW
-    const dV = shinBotD
+    const wV = shingleBottom.w
+    const dV = shingleBottom.d
     shinBotBrush.scale.set(1 + eps / wV, 1, 1 + eps / dV)
     shinBotBrush.updateMatrixWorld()
   }

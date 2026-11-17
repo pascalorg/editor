@@ -571,6 +571,13 @@ export {
   roofSegmentEaveProfile,
   SOFFIT_THICKNESS,
 } from './lib/roof-eave'
+export { roofSegmentFrame } from './lib/roof-frame'
+export {
+  clipRoofTrianglesByTrim,
+  getRoofSegmentTrimCuts,
+  ROOF_TRIM_CUT_EPSILON,
+  type RoofTrimCut,
+} from './lib/roof-outline'
 export {
   compareRoofOverlapIdentity,
   getRoofPlanBounds,
@@ -595,6 +602,13 @@ export {
   getShedPieceSurface,
   getShedSiblingTopY,
 } from './lib/roof-shed-surface'
+export {
+  buildRoofSegmentCoveringTriangles,
+  buildRoofSegmentShellTriangles,
+  getRoofShingleModules,
+  type RoofModuleInput,
+  type RoofSurfaceTriangle,
+} from './lib/roof-surface-geometry'
 export {
   getDutchRakeBoardTops,
   getRoofFasciaBoardFaces,
