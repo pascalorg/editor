@@ -216,9 +216,9 @@ export default function RoofPanel() {
 
   const handleUpdate = useCallback(
     (updates: Partial<RoofNode>) => {
-      if (!selectedId) return
+      if (!selectedId) return null
       // Moved or turned onto the walls that carry it, it goes to the level above them.
-      commitSeatedRoofEdit(
+      return commitSeatedRoofEdit(
         parametricNodeUpdates(selectedId as AnyNode['id'], updates),
         selectedId as AnyNode['id'],
       )
@@ -516,15 +516,15 @@ export default function RoofPanel() {
           <ActionButton
             label="-45°"
             onClick={() => {
+              if (handleUpdate({ rotation: node.rotation - Math.PI / 4 })) return
               triggerSFX('sfx:item-rotate')
-              handleUpdate({ rotation: node.rotation - Math.PI / 4 })
             }}
           />
           <ActionButton
             label="+45°"
             onClick={() => {
+              if (handleUpdate({ rotation: node.rotation + Math.PI / 4 })) return
               triggerSFX('sfx:item-rotate')
-              handleUpdate({ rotation: node.rotation + Math.PI / 4 })
             }}
           />
         </div>
