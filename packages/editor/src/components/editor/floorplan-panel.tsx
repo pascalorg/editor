@@ -10131,52 +10131,43 @@ export function FloorplanPanel({
         ? (createdWall.end as WallPlanPoint)
         : (publishedNextStart ?? point)
 
-      const levelWalls = Object.values(useScene.getState().nodes).filter(
-        (node): node is WallNode => node?.type === 'wall' && node.parentId === levelId,
-      )
-      const isTransit =
-        !createdWall &&
-        getWallLineKind() !== 'invisible' &&
-        wallSegmentsCoverSegment(draftStart, point, levelWalls)
-
-      if (
-        !isTransit &&
-        wallChainFirstVertex &&
-        isWithinWallJoinSnapRadius(nextStart, wallChainFirstVertex)
-      ) {
-        clearWallPlacementDraft()
-        setCursorPoint(null)
-        return
-      }
-
-      if (createdWall) {
-        // 2D-only committer: mirror the 3D tool's auto-close. Stop when the
-        // segment seals a room against the wall network, or when its resolved
-        // end tees into wall geometry outside the chain — continuing from a
-        // T-junction only drafts on top of existing walls.
-        if (
-          chainEndJoinsExistingWall(
-            createdWall.end as WallPlanPoint,
-            levelWalls,
-            wallChainWallIdsRef.current,
-          ) ||
-          (createdWall.type === 'wall' && wallClosesRoom(levelWalls, createdWall))
+      if (viewIs2DOnly) {
+        const levelWalls = Object.values(useScene.getState().nodes).filter(
+          (node): node is WallNode => node?.type === 'wall' && node.parentId === levelId,
+        )
+        if (createdWall) {
+          // 2D-only committer: mirror the 3D tool's auto-close. Stop when the
+          // segment closes back to the chain start, seals a room against the
+          // wall network, or tees into wall geometry outside the chain —
+          // continuing from a T-junction only drafts on top of existing walls.
+          if (
+            (wallChainFirstVertex && isWithinWallJoinSnapRadius(nextStart, wallChainFirstVertex)) ||
+            chainEndJoinsExistingWall(
+              createdWall.end as WallPlanPoint,
+              levelWalls,
+              wallChainWallIdsRef.current,
+            ) ||
+            (createdWall.type === 'wall' && wallClosesRoom(levelWalls, createdWall))
+          ) {
+            clearWallPlacementDraft()
+            setCursorPoint(null)
+            return
+          }
+        } else if (
+          getWallLineKind() !== 'invisible' &&
+          wallSegmentsCoverSegment(draftStart, point, levelWalls)
         ) {
-          clearWallPlacementDraft()
-          setCursorPoint(null)
+          // Collinear tracking: advance the draft origin along the host wall's
+          // centerline without creating a duplicate wall so the next branch T-joins cleanly.
+          sfxEmitter.emit('sfx:grid-snap')
+        } else {
           return
         }
-      } else if (isTransit) {
-        // Collinear tracking: advance the draft origin along the host wall's
-        // centerline without creating a duplicate wall so the next branch T-joins cleanly.
-        if (viewIs2DOnly) sfxEmitter.emit('sfx:grid-snap')
-      } else if (viewIs2DOnly) {
-        return
       } else if (!publishedNextStart) {
         // Split view: the 3D tool owns both the commit and the continuation
-        // decision, and it clears the published chain start whenever it stops
-        // drafting (room close, T-junction). Mirror that here instead of
-        // chaining the 2D draft from a dead point.
+        // decision (including collinear transit), and clears the published
+        // chain start whenever it stops drafting (room close, T-junction,
+        // loop close). Mirror that here instead of chaining from a dead point.
         clearWallPlacementDraft()
         setCursorPoint(null)
         return
