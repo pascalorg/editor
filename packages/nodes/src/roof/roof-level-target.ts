@@ -167,19 +167,21 @@ type RoofEdit = {
 export function prepareSeatedRoofEdit(
   sceneApi: SceneApi,
   edit: RoofEdit,
+  selectId?: AnyNodeId,
 ): (() => void) | RoofHostRefusal {
   const seated = seatRoofs(sceneApi.nodes(), edit)
   if ('kind' in seated) return seated
-  const { changes } = seated
+  const { changes, notes } = seated
   return () => {
     if (sceneApi.applyChanges) {
       sceneApi.applyChanges(changes)
-      return
+    } else {
+      // creates first: a roof the seat moves goes to a Roof level the seat creates
+      for (const op of changes.create ?? []) sceneApi.upsert(op.node, op.parentId)
+      for (const { id, data } of changes.update ?? []) sceneApi.update(id, data)
+      for (const id of changes.delete ?? []) sceneApi.delete(id)
     }
-    // creates first: a roof the seat moves goes to a Roof level the seat creates
-    for (const op of changes.create ?? []) sceneApi.upsert(op.node, op.parentId)
-    for (const { id, data } of changes.update ?? []) sceneApi.update(id, data)
-    for (const id of changes.delete ?? []) sceneApi.delete(id)
+    if (selectId && notes.length) selectPlacedNode(selectId)
   }
 }
 
@@ -203,16 +205,20 @@ export function writeSeatedRoofEdit(sceneApi: SceneApi, edit: RoofEdit): RoofHos
 export function commitSeatedRoofEdit(
   update: { id: AnyNodeId; data: Partial<AnyNode> }[],
   selectId: AnyNodeId,
+  deleteIds: AnyNodeId[] = [],
 ): RoofHostRefusal | null {
   const scene = useScene.getState()
-  const seated = seatRoofs(scene.nodes, { update })
+  const seated = seatRoofs(scene.nodes, {
+    update,
+    ...(deleteIds.length ? { delete: deleteIds } : {}),
+  })
   if ('kind' in seated) return seated
   const { changes, notes } = seated
-  if (!notes.length) {
+  if (!notes.length && !deleteIds.length) {
     scene.updateNodes(update)
     return null
   }
   scene.applyNodeChanges(changes)
-  selectPlacedNode(selectId)
+  if (notes.length) selectPlacedNode(selectId)
   return null
 }
