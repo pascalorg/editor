@@ -1355,6 +1355,7 @@ export {
   type WallInsertionPlan,
   type WallJoinResult,
   type WallTopologyChanges,
+  wallSegmentsCoverSegment,
 } from './systems/wall/wall-topology'
 export { wallTrimPatch } from './systems/wall/wall-trim'
 export type { SceneGraph } from './utils/clone-scene-graph'

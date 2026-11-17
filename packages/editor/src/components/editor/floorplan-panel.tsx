@@ -70,6 +70,7 @@ import {
   WindowNode as WindowNodeSchema,
   wallClosesRoom,
   wallRectangleCorners,
+  wallSegmentsCoverSegment,
   worldToFloorplanLocalPoint,
 } from '@pascal-app/core'
 import { useSegmentDraftChain, useWallSnapIndicator } from '@pascal-app/editor'
@@ -10130,9 +10131,18 @@ export function FloorplanPanel({
         ? (createdWall.end as WallPlanPoint)
         : (publishedNextStart ?? point)
 
+      const levelWalls = Object.values(useScene.getState().nodes).filter(
+        (node): node is WallNode => node?.type === 'wall' && node.parentId === levelId,
+      )
+      const isTransit =
+        !createdWall &&
+        getWallLineKind() !== 'invisible' &&
+        wallSegmentsCoverSegment(draftStart, point, levelWalls)
+
       if (
-        !wallDraftIsRun() ||
-        (wallChainFirstVertex && isWithinWallJoinSnapRadius(nextStart, wallChainFirstVertex))
+        !isTransit &&
+        wallChainFirstVertex &&
+        isWithinWallJoinSnapRadius(nextStart, wallChainFirstVertex)
       ) {
         clearWallPlacementDraft()
         setCursorPoint(null)
@@ -10144,9 +10154,6 @@ export function FloorplanPanel({
         // segment seals a room against the wall network, or when its resolved
         // end tees into wall geometry outside the chain — continuing from a
         // T-junction only drafts on top of existing walls.
-        const levelWalls = Object.values(useScene.getState().nodes).filter(
-          (node): node is WallNode => node?.type === 'wall' && node.parentId === levelId,
-        )
         if (
           chainEndJoinsExistingWall(
             createdWall.end as WallPlanPoint,
@@ -10159,11 +10166,17 @@ export function FloorplanPanel({
           setCursorPoint(null)
           return
         }
-      } else if (!(viewIs2DOnly || publishedNextStart)) {
+      } else if (isTransit) {
+        // Collinear tracking: advance the draft origin along the host wall's
+        // centerline without creating a duplicate wall so the next branch T-joins cleanly.
+        if (viewIs2DOnly) sfxEmitter.emit('sfx:grid-snap')
+      } else if (viewIs2DOnly) {
+        return
+      } else if (!publishedNextStart) {
         // Split view: the 3D tool owns both the commit and the continuation
         // decision, and it clears the published chain start whenever it stops
-        // drafting (room close, T-junction, single). Mirror that here instead
-        // of chaining the 2D draft from a dead point.
+        // drafting (room close, T-junction). Mirror that here instead of
+        // chaining the 2D draft from a dead point.
         clearWallPlacementDraft()
         setCursorPoint(null)
         return

@@ -19,6 +19,7 @@ import {
   type WallMiterData,
   type WallNode,
   wallClosesRoom,
+  wallSegmentsCoverSegment,
 } from '@pascal-app/core'
 import {
   addWallPolygonDraftCorner,
@@ -1047,47 +1048,58 @@ const LineWallTool: React.FC = () => {
                     flatConstructionBase: flatConstructionBase.current,
                   },
                 )
-          if (!createdWall) return
-          chainWallIds.current.push(createdWall.id)
-          // What was typed belongs to this segment; the next starts afresh.
-          usePlacementTyping.getState().clear()
-          // The run's next wall holds square to this one.
-          runReference = wallRunDirection(createdWall.start, createdWall.end)
+          if (!createdWall) {
+            const levelWalls = getCurrentLevelWalls()
+            const startPt: WallPlanPoint = [startingPoint.current.x, startingPoint.current.z]
+            const isCollinearTransit =
+              getWallLineKind() !== 'invisible' &&
+              wallSegmentsCoverSegment(startPt, snappedEnd, levelWalls)
+            if (!isCollinearTransit) return
+            // Tracking along an existing wall centerline advances the draft origin
+            // without duplicating the wall, so a subsequent branch T-joins cleanly.
+            nextStart = snappedEnd
+            runReference = wallRunDirection(startPt, snappedEnd)
+            usePlacementTyping.getState().clear()
+            useAlignmentGuides.getState().clear()
+            useWallSnapIndicator.getState().clear()
+            triggerSFX('sfx:grid-snap')
+          } else {
+            chainWallIds.current.push(createdWall.id)
+            // What was typed belongs to this segment; the next starts afresh.
+            usePlacementTyping.getState().clear()
+            // The run's next wall holds square to this one.
+            runReference = wallRunDirection(createdWall.start, createdWall.end)
 
-          // The new segment is now a real node — make it an alignment target
-          // for the next segment, and drop the just-shown guide.
-          refreshAlignmentCandidates()
-          useAlignmentGuides.getState().clear()
-          useWallSnapIndicator.getState().clear()
+            // The new segment is now a real node — make it an alignment target
+            // for the next segment, and drop the just-shown guide.
+            refreshAlignmentCandidates()
+            useAlignmentGuides.getState().clear()
+            useWallSnapIndicator.getState().clear()
 
-          // Walls draws one wall per two clicks.
-          if (!wallDraftIsRun()) {
-            stopDrafting()
-            return
+            const closedToChainStart =
+              chainFirstVertex.current &&
+              isWithinWallJoinSnapRadius(createdWall.end, chainFirstVertex.current)
+
+            // Auto-close also fires when the segment seals a room against the
+            // existing wall network (e.g. a bay closed onto the middle of another
+            // wall), not just when the chain loops back to its own start. Shares the
+            // room graph with auto slab/ceiling detection so the two never disagree.
+            // A resolved end that tees into wall geometry outside the chain also
+            // terminates even without an enclosed room — nobody continues drawing
+            // from a T-junction into an existing wall; a dead end in free space
+            // keeps the chain going from the exact resolved endpoint so sequential
+            // walls stay joined even off-grid or with typed lengths.
+            const levelWalls = getCurrentLevelWalls()
+            if (
+              closedToChainStart ||
+              chainEndJoinsExistingWall(createdWall.end, levelWalls, chainWallIds.current) ||
+              (createdWall.type === 'wall' && wallClosesRoom(levelWalls, createdWall))
+            ) {
+              stopDrafting()
+              return
+            }
+            nextStart = createdWall.end
           }
-
-          const closedToChainStart =
-            chainFirstVertex.current &&
-            isWithinWallJoinSnapRadius(createdWall.end, chainFirstVertex.current)
-
-          // Auto-close also fires when the segment seals a room against the
-          // existing wall network (e.g. a bay closed onto the middle of another
-          // wall), not just when the chain loops back to its own start. Shares the
-          // room graph with auto slab/ceiling detection so the two never disagree.
-          // A resolved end that tees into wall geometry outside the chain also
-          // terminates even without an enclosed room — nobody continues drawing
-          // from a T-junction into an existing wall; a dead end in free space
-          // keeps the chain going.
-          const levelWalls = getCurrentLevelWalls()
-          if (
-            closedToChainStart ||
-            chainEndJoinsExistingWall(createdWall.end, levelWalls, chainWallIds.current) ||
-            (createdWall.type === 'wall' && wallClosesRoom(levelWalls, createdWall))
-          ) {
-            stopDrafting()
-            return
-          }
-          nextStart = createdWall.end
         }
         // Publish the resolved chain start so the 2D floor-plan draft
         // chains its next segment from the same point (its own snap
