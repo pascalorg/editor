@@ -1,4 +1,5 @@
 import {
+  type AnyNode,
   type DormerNode,
   dormerWallFacePointToDormer,
   getDormerWallFaceFrame,
@@ -11,11 +12,11 @@ import {
   ADDITION,
   Brush,
   buildOpeningCutoutGeometry,
-  computeGeometryBoundsTree,
   csgEvaluator,
   csgGeometry,
   csgMaterials,
   getRoofSegmentBrushes,
+  getRoofSegmentHostSolid,
   mapRoofGroupMaterialIndex,
   prepareBrushForCSG,
   remapRoofShellFaces,
@@ -77,6 +78,7 @@ export function generateDormerGeometry(
   dormer: DormerNode,
   hostSegment: RoofSegmentNode,
   hostedWindows: readonly WindowNode[] = [],
+  nodes?: Record<string, AnyNode>,
 ): THREE.BufferGeometry {
   const isShed = dormer.roofType === 'shed'
   const yawBake = getDormerBodyYaw(dormer)
@@ -151,15 +153,18 @@ export function generateDormerGeometry(
   let resultGeo = new THREE.BufferGeometry()
   let dormerSolid: Brush | null = null
   let hostSolid: Brush | null = null
+  let hollowWall: Brush | null = null
+  let shinDeck: Brush | null = null
+  let pending: Brush | null = null
 
   try {
-    const hollowWall = csgEvaluator.evaluate(
+    hollowWall = csgEvaluator.evaluate(
       dormerBrushes.wallBrush,
       dormerBrushes.innerBrush,
       SUBTRACTION,
     ) as Brush
     prepareBrushForCSG(hollowWall)
-    const shinDeck = csgEvaluator.evaluate(
+    shinDeck = csgEvaluator.evaluate(
       dormerBrushes.shinSlab,
       dormerBrushes.deckSlab,
       ADDITION,
@@ -168,7 +173,9 @@ export function generateDormerGeometry(
     dormerSolid = csgEvaluator.evaluate(shinDeck, hollowWall, ADDITION) as Brush
     prepareBrushForCSG(dormerSolid)
     hollowWall.geometry.dispose()
+    hollowWall = null
     shinDeck.geometry.dispose()
+    shinDeck = null
 
     const bakeMatrix = new THREE.Matrix4().compose(
       new THREE.Vector3(0, -skirt, 0),
@@ -178,39 +185,8 @@ export function generateDormerGeometry(
     csgGeometry(dormerSolid).applyMatrix4(bakeMatrix)
     prepareBrushForCSG(dormerSolid)
 
-    const hostBrushes = getRoofSegmentBrushes(hostSegment)
-    if (hostBrushes) {
-      const wallPlusDeck = csgEvaluator.evaluate(
-        hostBrushes.wallBrush,
-        hostBrushes.deckSlab,
-        ADDITION,
-      ) as Brush
-      prepareBrushForCSG(wallPlusDeck)
-      hostSolid = csgEvaluator.evaluate(wallPlusDeck, hostBrushes.shinSlab, ADDITION) as Brush
-      prepareBrushForCSG(hostSolid)
-      wallPlusDeck.geometry.dispose()
-      hostBrushes.deckSlab.geometry.dispose()
-      hostBrushes.shinSlab.geometry.dispose()
-      hostBrushes.wallBrush.geometry.dispose()
-      hostBrushes.innerBrush.geometry.dispose()
-
-      // Union a deep ground box covering the host footprint so the
-      // dormer's skirt (extending below y=0) has something to subtract.
-      const groundMargin = Math.max(hostSegment.width, hostSegment.depth) * 2 + 4
-      const groundBoxGeo = new THREE.BoxGeometry(groundMargin, 100, groundMargin)
-      groundBoxGeo.translate(0, -50, 0)
-      const indexCount = groundBoxGeo.getIndex()?.count ?? 0
-      groundBoxGeo.clearGroups()
-      groundBoxGeo.addGroup(0, indexCount, 0)
-      computeGeometryBoundsTree(groundBoxGeo)
-      const groundBrush = new Brush(groundBoxGeo, roofCsgDummyMats[0])
-      prepareBrushForCSG(groundBrush)
-      const fullTrim = csgEvaluator.evaluate(hostSolid, groundBrush, ADDITION) as Brush
-      prepareBrushForCSG(fullTrim)
-      hostSolid.geometry.dispose()
-      groundBrush.geometry.dispose()
-      hostSolid = fullTrim
-
+    hostSolid = getRoofSegmentHostSolid(hostSegment, nodes)
+    if (hostSolid) {
       // Host brushes live in segment-local. Bring them into
       // dormer-mesh-local by inverting T(node.position) · R_y(node.rotation).
       const segToMesh = new THREE.Matrix4()
@@ -227,12 +203,35 @@ export function generateDormerGeometry(
       csgGeometry(hostSolid).applyMatrix4(segToMesh)
       prepareBrushForCSG(hostSolid)
 
-      const trimmed = csgEvaluator.evaluate(dormerSolid, hostSolid, SUBTRACTION) as Brush
-      prepareBrushForCSG(trimmed)
+      pending = csgEvaluator.evaluate(dormerSolid, hostSolid, SUBTRACTION) as Brush
+      prepareBrushForCSG(pending)
       dormerSolid.geometry.dispose()
       hostSolid.geometry.dispose()
       hostSolid = null
-      dormerSolid = trimmed
+      dormerSolid = pending
+      pending = null
+
+      // D - (host ∪ ground) = (D - host) - ground. Do not union the
+      // native faceted hull with a coplanar ground box: that needlessly
+      // splits its large bottom faces into hundreds of thousands of triangles.
+      const groundMargin = Math.max(hostSegment.width, hostSegment.depth) * 2 + 4
+      const groundBoxGeo = new THREE.BoxGeometry(groundMargin, 100, groundMargin)
+      try {
+        groundBoxGeo.translate(0, -50, 0)
+        groundBoxGeo.applyMatrix4(segToMesh)
+        const indexCount = groundBoxGeo.getIndex()?.count ?? 0
+        groundBoxGeo.clearGroups()
+        groundBoxGeo.addGroup(0, indexCount, 0)
+        const groundBrush = new Brush(groundBoxGeo, roofCsgDummyMats[0])
+        prepareBrushForCSG(groundBrush)
+        pending = csgEvaluator.evaluate(dormerSolid, groundBrush, SUBTRACTION) as Brush
+        prepareBrushForCSG(pending)
+        dormerSolid.geometry.dispose()
+        dormerSolid = pending
+        pending = null
+      } finally {
+        groundBoxGeo.dispose()
+      }
     }
 
     // Cut hosted window openings in dormer-local face coordinates.
@@ -241,25 +240,28 @@ export function generateDormerGeometry(
       const frame = getDormerWallFaceFrame(dormer, face)
       const center = dormerWallFacePointToDormer(dormer, face, window.position)
       const cutGeo = createHostedWindowCutGeometry(window)
-      cutGeo.rotateY(frame.yaw)
-      cutGeo.translate(center[0], center[1], center[2])
-      if (!cutGeo.getIndex()) {
-        const posCount = cutGeo.getAttribute('position').count
-        const idx = new Uint32Array(posCount)
-        for (let i = 0; i < posCount; i++) idx[i] = i
-        cutGeo.setIndex(new THREE.BufferAttribute(idx, 1))
+      try {
+        cutGeo.rotateY(frame.yaw)
+        cutGeo.translate(center[0], center[1], center[2])
+        if (!cutGeo.getIndex()) {
+          const posCount = cutGeo.getAttribute('position').count
+          const idx = new Uint32Array(posCount)
+          for (let i = 0; i < posCount; i++) idx[i] = i
+          cutGeo.setIndex(new THREE.BufferAttribute(idx, 1))
+        }
+        const idxCount = cutGeo.getIndex()!.count
+        cutGeo.clearGroups()
+        cutGeo.addGroup(0, idxCount, 0)
+        const brush = new Brush(cutGeo, roofCsgDummyMats[0])
+        prepareBrushForCSG(brush)
+        pending = csgEvaluator.evaluate(dormerSolid!, brush, SUBTRACTION) as Brush
+        prepareBrushForCSG(pending)
+        dormerSolid!.geometry.dispose()
+        dormerSolid = pending
+        pending = null
+      } finally {
+        cutGeo.dispose()
       }
-      const idxCount = cutGeo.getIndex()!.count
-      cutGeo.clearGroups()
-      cutGeo.addGroup(0, idxCount, 0)
-      computeGeometryBoundsTree(cutGeo)
-      const brush = new Brush(cutGeo, roofCsgDummyMats[0])
-      prepareBrushForCSG(brush)
-      const result = csgEvaluator.evaluate(dormerSolid!, brush, SUBTRACTION) as Brush
-      prepareBrushForCSG(result)
-      dormerSolid!.geometry.dispose()
-      brush.geometry.dispose()
-      dormerSolid = result
     }
 
     for (const window of hostedWindows) cutWindow(window)
@@ -295,6 +297,15 @@ export function generateDormerGeometry(
       } catch {}
     }
     return buildDormerFallbackGeometry(dormer)
+  } finally {
+    hollowWall?.geometry.dispose()
+    shinDeck?.geometry.dispose()
+    pending?.geometry.dispose()
+    dormerBrushes.deckSlab.geometry.dispose()
+    dormerBrushes.shinSlab.geometry.dispose()
+    dormerBrushes.wallBrush.geometry.dispose()
+    dormerBrushes.innerBrush.geometry.dispose()
+    dormerBrushes.rakeBoards?.dispose()
   }
 
   // If CSG produced zero triangles (host fully buried it, or one of the
@@ -303,6 +314,7 @@ export function generateDormerGeometry(
   const triCount = resultGeo.getIndex()?.count ?? resultGeo.getAttribute('position')?.count ?? 0
   if (triCount === 0) {
     console.warn('[dormer] CSG produced empty geometry; using fallback silhouette.')
+    resultGeo.dispose()
     return buildDormerFallbackGeometry(dormer)
   }
 

@@ -483,6 +483,7 @@ export {
   getPendingRoofMergeCount,
   getRoofOuterSurfaceFrameAtPoint,
   getRoofSegmentBrushes,
+  getRoofSegmentHostSolid,
   mapRoofGroupMaterialIndex,
   ROOF_MATERIAL_SLOT_COUNT,
   type RoofGeometryAdapter,
