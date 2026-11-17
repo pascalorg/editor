@@ -364,16 +364,20 @@ test('GlbScene resolves replace renderers through its sceneNodes', async () => {
     ],
   }
   const url = `data:model/gltf+json;base64,${Buffer.from(JSON.stringify(gltf)).toString('base64')}`
-  // GlbScene resets the page cursor on unmount; bun has no DOM.
-  const hadDocument = 'document' in globalThis
-  if (!hadDocument)
-    Object.assign(globalThis, { document: { body: { style: {} }, querySelector: () => null } })
-  const renderer = await create(
-    <Suspense fallback={null}>
-      <GlbScene replaceNodes={replaceNodes} sceneNodes={graph.nodes} url={url} />
-    </Suspense>,
-  )
+  // GlbScene resets the page cursor on unmount. Another test's partial DOM is not this fixture.
+  const previousDocument = Object.getOwnPropertyDescriptor(globalThis, 'document')
+  Object.defineProperty(globalThis, 'document', {
+    configurable: true,
+    writable: true,
+    value: { body: { style: {} }, querySelector: () => null },
+  })
+  let renderer: Renderer | undefined
   try {
+    renderer = await create(
+      <Suspense fallback={null}>
+        <GlbScene replaceNodes={replaceNodes} sceneNodes={graph.nodes} url={url} />
+      </Suspense>,
+    )
     await settle(renderer, 0)
     const root = renderer.scene.instance
 
@@ -381,7 +385,11 @@ test('GlbScene resolves replace renderers through its sceneNodes', async () => {
     expect(root.getObjectByName(`meadow:${meadow.id}`)).toBeDefined()
     expect(root.getObjectByName('meadow-parent:level')).toBeDefined()
   } finally {
-    await renderer.unmount()
-    if (!hadDocument) Reflect.deleteProperty(globalThis, 'document')
+    try {
+      await renderer?.unmount()
+    } finally {
+      if (previousDocument) Object.defineProperty(globalThis, 'document', previousDocument)
+      else Reflect.deleteProperty(globalThis, 'document')
+    }
   }
 })

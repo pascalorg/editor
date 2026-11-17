@@ -181,6 +181,16 @@ export {
   temporarilyHideNodeTypes,
   unionRegisteredNodeBounds,
 } from './lib/hero-pose'
+export * from './lib/id-buffer'
+export {
+  buildIdResolver,
+  ID_BUFFER_MAX_EDGE,
+  type IdPassRequest,
+  type IdPassResult,
+  type IdPassStats,
+  isGlassMaterial,
+  renderIdBuffer,
+} from './lib/id-pass'
 export {
   applyIsolation,
   clearIsolation,
@@ -201,6 +211,7 @@ export {
   ZONE_LAYER,
 } from './lib/layers'
 export { holdLiveFrame } from './lib/live-frame-hold'
+export { materialShows } from './lib/material-shows'
 export {
   applyMaterialPresetToMaterials,
   BLUEPRINT_PALETTE,
