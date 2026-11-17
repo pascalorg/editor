@@ -3,6 +3,7 @@ import { generateId } from '../schema/base'
 import {
   createDormerDefaultWindow,
   DormerNode,
+  getDormerWallOpeningVerticalBounds,
   getDormerWindowExposure,
 } from '../schema/nodes/dormer'
 import type { RoofSegmentNode } from '../schema/nodes/roof-segment'
@@ -368,10 +369,35 @@ export function planDormerCreation(
       'invalid-window',
       'The default window needs a positive finite height.',
     )
-  let window = createDormerDefaultWindow(dormer, 'window_placement')
+  const frontWindow = createDormerDefaultWindow(dormer, 'window_placement')
+  const backWindow = { ...frontWindow, dormerFace: 'back' as const }
+  const fits = (window: WindowNode) => {
+    const bounds = getDormerWallOpeningVerticalBounds(
+      dormer,
+      window.dormerFace!,
+      window.position[0],
+      window.width,
+    )
+    const bottom = window.position[1] - window.height / 2
+    const top = window.position[1] + window.height / 2
+    const roundoff =
+      16 *
+      Number.EPSILON *
+      Math.max(1, Math.abs(bounds.min), Math.abs(bounds.max), Math.abs(bottom), Math.abs(top))
+    return bottom >= bounds.min - roundoff && top <= bounds.max + roundoff
+  }
+  const frontFits = fits(frontWindow)
+  const backFits = fits(backWindow)
+  if (!frontFits && !backFits)
+    return refuse(
+      'window_does_not_fit',
+      'window-fit',
+      'The default window must fit within the dormer wall skirt and ceiling.',
+    )
+  let window = frontFits ? frontWindow : backWindow
   let exposure = getDormerWindowExposure(dormer, window, segment, { nodes })
-  if (exposure.status !== 'exposed') {
-    window = { ...window, dormerFace: 'back' }
+  if (exposure.status !== 'exposed' && window.dormerFace === 'front' && backFits) {
+    window = backWindow
     exposure = getDormerWindowExposure(dormer, window, segment, { nodes })
   }
   if (exposure.status !== 'exposed')

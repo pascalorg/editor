@@ -570,4 +570,95 @@ describe('shared native dormer creation plan', () => {
     })
     expect(check(f, candidate(f.segment, { depth: 0.5, position: [0, 4, 2] })).ok).toBe(true)
   })
+
+  test('creation contains the whole opening between native skirt and wall top, allowing exact contact', () => {
+    const f = fixture({ roofType: 'gable', depth: 8, pitch: 45 })
+    const before = structuredClone(f.nodes)
+    // Native gable wall bounds are [-skirt, height]=[-.2,0], NOT the
+    // gable's .49m roof peak. Centre=-skirt/2+offset, half-height=.1.
+    // At offset0 both edges touch; ±.01 moves one edge outside the wall.
+    for (const windowOffsetY of [0, -0.01, 0.01]) {
+      const allocated: string[] = []
+      const result = withIdAllocator(
+        (prefix) => {
+          allocated.push(prefix)
+          return `${prefix}_bounded`
+        },
+        () =>
+          planDormerCreation(freeze(f.nodes), f.segment, [0, 2], {
+            wallSkirtHeight: 0.2,
+            windowHeight: 0.2,
+            windowOffsetY,
+          }),
+      )
+      expect(f.nodes).toEqual(before)
+      if (windowOffsetY === 0) {
+        if (!result.ok) throw new Error(result.message)
+        expect(result.value.window.position[1]).toBeCloseTo(-0.1, 9)
+        expect(result.value.window.height).toBe(0.2)
+        expect(result.value.exposure.status).toBe('exposed')
+      } else {
+        expect(result).toMatchObject({
+          ok: false,
+          code: 'window_does_not_fit',
+          reason: 'window-fit',
+        })
+        expect(allocated).toEqual([])
+      }
+    }
+  })
+
+  for (const shedHighSide of ['front', 'back'] as const) {
+    test(`creation selects the fitting ${shedHighSide} shed wall even when both window centres are exposed`, () => {
+      const f = fixture({ roofType: 'gable', depth: 8, pitch: 45 })
+      // Own shed wall tops are 0 and2; opening [1.25,1.75] fits only the
+      // high side. Both centres at host-localY5.5 clear the host: its higher
+      // back covering is 6-1.225+.15sqrt(2), less than5.5.
+      const result = planDormerCreation(freeze(f.nodes), f.segment, [0, 2], {
+        roofType: 'shed',
+        shedHighSide,
+        roofHeight: 2,
+        windowHeight: 0.5,
+        windowOffsetY: 2.865,
+      })
+      if (!result.ok) throw new Error(result.message)
+      expect(result.value.window.dormerFace).toBe(shedHighSide)
+      expect(result.value.window.position[1]).toBeCloseTo(1.5, 9)
+      expect(result.value.exposure.status).toBe('exposed')
+    })
+  }
+
+  test('an exposed but non-fitting front cannot substitute for a fitting but buried back', () => {
+    const f = fixture({ roofType: 'gable', depth: 8, pitch: 45 })
+    // Opening [0,.5] exceeds the front wall's top0 but fits back top2.
+    // Centre4.25 clears front covering3.225+.15sqrt(2), not back4.775+.15sqrt(2).
+    expect(
+      planDormerCreation(freeze(f.nodes), f.segment, [0, 2], {
+        roofType: 'shed',
+        shedHighSide: 'back',
+        roofHeight: 2,
+        windowHeight: 0.5,
+        windowOffsetY: 1.615,
+      }),
+    ).toMatchObject({ ok: false, code: 'window_not_exposed' })
+  })
+
+  test('creation-only vertical fit does not prohibit editing an existing tall child', () => {
+    const f = fixture({ roofType: 'gable', depth: 8, pitch: 45 })
+    const existing = candidate(f.segment, {
+      position: [0, 4, 2],
+      windowHeight: 10,
+      children: ['window_tall'],
+    })
+    addDormer(f, existing)
+    f.nodes.window_tall = WindowNode.parse({
+      id: 'window_tall',
+      parentId: existing.id,
+      dormerId: existing.id,
+      dormerFace: 'front',
+      height: 10,
+      position: [0, -0.375, 0],
+    })
+    expect(check(f, { ...existing, width: 1.1 }).ok).toBe(true)
+  })
 })
