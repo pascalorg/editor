@@ -765,7 +765,7 @@ test('baked: controller seeDistance configures GlbScene, reports distance change
   await frames(90)
   expect(useFirstPersonHud.getState().seenInteract).toBeNull()
   input.clear()
-  // The omitted option restores Craftsman's 16 m identification range.
+  // The omitted option restores the default 16 m identification range.
   await renderer.update(content())
   await frames(30)
   expect(useFirstPersonHud.getState().seenInteract?.distance).toBeGreaterThan(6)

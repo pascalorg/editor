@@ -1,7 +1,7 @@
 /** Standing movement in metres per second; crouch retains its own speeds. */
 export type WalkthroughSpeeds = { walk?: number; run?: number }
 export const WALKTHROUGH_DEFAULT_SPEEDS = { walk: 2, run: 5 } as const
-/** Craftsman's centre-ray identification range; activation keeps its existing reach. */
+/** How far the centre ray identifies an interactable; activation keeps its existing reach. */
 export const WALKTHROUGH_SEE_DISTANCE = 16
 
 // The baked controller and GlbScene are siblings sharing the package's one active scene.
