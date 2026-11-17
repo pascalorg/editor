@@ -1118,6 +1118,7 @@ msgstr "另一个会话已先保存——要刷新吗？"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Build"
+#: apps/editor/app/fixtures/delivery/fixture-client.tsx
 #: apps/editor/components/scene-loader.tsx
 #, fuzzy
 msgid "app.sceneLoader.build"
@@ -3844,421 +3845,421 @@ msgstr "关闭"
 msgid "editor.dismissCameraControlsHint"
 msgstr "关闭相机操作提示"
 
-# English: "Feature wall"
 # Review: required
 # Source-Hash: 70f8eb319a09abd1
 # AI-Provider: openai
 # AI-Model: gpt-6-astra
+# English: "Feature wall"
 #: packages/editor/src/components/ui/panels/room-dressing.tsx
 #, fuzzy
 msgid "editor.dressing.accent"
 msgstr "特色墙"
 
-# English: "Add layer"
 # Review: required
 # Source-Hash: afcc2dbfb01b5e3f
 # AI-Provider: openai
 # AI-Model: gpt-6-astra
+# English: "Add layer"
 #: packages/editor/src/components/ui/panels/room-dressing.tsx
 #, fuzzy
 msgid "editor.dressing.add"
 msgstr "添加图层"
 
-# English: "No selection means all room walls; feature walls require a selection."
 # Review: required
 # Source-Hash: 95309dea75b11de5
 # AI-Provider: openai
 # AI-Model: gpt-6-astra
+# English: "No selection means all room walls; feature walls require a selection."
 #: packages/editor/src/components/ui/panels/room-dressing.tsx
 #, fuzzy
 msgid "editor.dressing.allWalls"
 msgstr "未选择时将应用于房间内的所有墙体；特色墙必须先选择墙体。"
 
-# English: "Along cabinet run"
 # Review: required
 # Source-Hash: 41305e4ff35d38b3
 # AI-Provider: openai
 # AI-Model: gpt-6-astra
+# English: "Along cabinet run"
 #: packages/editor/src/components/ui/panels/room-dressing.tsx
 #, fuzzy
 msgid "editor.dressing.alongRun"
 msgstr "沿橱柜排列"
 
-# English: "Room dressing applied."
 # Review: required
 # Source-Hash: 1fb20983290d7a6f
 # AI-Provider: openai
 # AI-Model: gpt-6-astra
+# English: "Room dressing applied."
 #: packages/editor/src/components/ui/panels/room-dressing.tsx
 #, fuzzy
 msgid "editor.dressing.applied"
 msgstr "已应用房间装饰。"
 
-# English: "Apply"
 # Review: required
 # Source-Hash: 417cf9c08b0b8d6c
 # AI-Provider: openai
 # AI-Model: gpt-6-astra
+# English: "Apply"
 #: packages/editor/src/components/ui/panels/room-dressing.tsx
 #, fuzzy
 msgid "editor.dressing.apply"
 msgstr "应用"
 
-# English: "Around fixtures"
 # Review: required
 # Source-Hash: 36bb7c2a6edcd792
 # AI-Provider: openai
 # AI-Model: gpt-6-astra
+# English: "Around fixtures"
 #: packages/editor/src/components/ui/panels/room-dressing.tsx
 #, fuzzy
 msgid "editor.dressing.around"
 msgstr "固定设施周围"
 
-# English: "ceiling"
 # Review: required
 # Source-Hash: aae6cc2a23aeb0e1
 # AI-Provider: openai
 # AI-Model: gpt-6-astra
+# English: "ceiling"
 #: packages/editor/src/components/ui/panels/room-dressing.tsx
 #, fuzzy
 msgid "editor.dressing.ceiling"
 msgstr "天花板"
 
-# English: "Chair rail"
 # Review: required
 # Source-Hash: 32d0bfee628c42a5
 # AI-Provider: openai
 # AI-Model: gpt-6-astra
+# English: "Chair rail"
 #: packages/editor/src/components/ui/panels/room-dressing.tsx
 #, fuzzy
 msgid "editor.dressing.chairRail"
 msgstr "护墙腰线"
 
-# English: "Choose a base run"
 # Review: required
 # Source-Hash: 42c592c36ce5b481
 # AI-Provider: openai
 # AI-Model: gpt-6-astra
+# English: "Choose a base run"
 #: packages/editor/src/components/ui/panels/room-dressing.tsx
 #, fuzzy
 msgid "editor.dressing.chooseRun"
 msgstr "选择一排地柜"
 
-# English: "Crown"
 # Review: required
 # Source-Hash: 49643244a196a45d
 # AI-Provider: openai
 # AI-Model: gpt-6-astra
+# English: "Crown"
 #: packages/editor/src/components/ui/panels/room-dressing.tsx
 #, fuzzy
 msgid "editor.dressing.crown"
 msgstr "顶角线"
 
-# English: "Depth"
 # Review: required
 # Source-Hash: 99ac4d03c3061f3a
 # AI-Provider: openai
 # AI-Model: gpt-6-astra
+# English: "Depth"
 #: packages/editor/src/components/ui/panels/room-dressing.tsx
 #, fuzzy
 msgid "editor.dressing.depth"
 msgstr "深度"
 
-# English: "Move down"
 # Review: required
 # Source-Hash: a06a50e63f0c240e
 # AI-Provider: openai
 # AI-Model: gpt-6-astra
+# English: "Move down"
 #: packages/editor/src/components/ui/panels/room-dressing.tsx
 #, fuzzy
 msgid "editor.dressing.down"
 msgstr "下移"
 
-# English: "Existing or default"
 # Review: required
 # Source-Hash: 2c4e1ee5b5ddee36
 # AI-Provider: openai
 # AI-Model: gpt-6-astra
+# English: "Existing or default"
 #: packages/editor/src/components/ui/panels/room-dressing.tsx
 #, fuzzy
 msgid "editor.dressing.existing"
 msgstr "现有或默认"
 
-# English: "The room could not be dressed. No changes were applied."
 # Review: required
 # Source-Hash: 29fb2ac4894d511b
 # AI-Provider: openai
 # AI-Model: gpt-6-astra
+# English: "The room could not be dressed. No changes were applied."
 #: packages/editor/src/components/ui/panels/room-dressing.tsx
 #, fuzzy
 msgid "editor.dressing.failed"
 msgstr "无法装饰房间。未应用任何更改。"
 
-# English: "Finish"
 # Review: required
 # Source-Hash: b3907da0ad234f10
 # AI-Provider: openai
 # AI-Model: gpt-6-astra
+# English: "Finish"
 #: packages/editor/src/components/ui/panels/room-dressing.tsx
 #, fuzzy
 msgid "editor.dressing.finish"
 msgstr "饰面"
 
-# English: "library:… / scene:… / #rrggbb"
 # Review: required
 # Source-Hash: 6a842dc873ae0b7b
 # AI-Provider: openai
 # AI-Model: gpt-6-astra
+# English: "library:… / scene:… / #rrggbb"
 #: packages/editor/src/components/ui/panels/room-dressing.tsx
 #, fuzzy
 msgid "editor.dressing.finishPlaceholder"
 msgstr "library:… / scene:… / #rrggbb"
 
-# English: "From"
 # Review: required
 # Source-Hash: 702140636ff3977a
 # AI-Provider: openai
 # AI-Model: gpt-6-astra
+# English: "From"
 #: packages/editor/src/components/ui/panels/room-dressing.tsx
 #, fuzzy
 msgid "editor.dressing.from"
 msgstr "起点"
 
-# English: "Full height"
 # Review: required
 # Source-Hash: 131bac2467f4fdf6
 # AI-Provider: openai
 # AI-Model: gpt-6-astra
+# English: "Full height"
 #: packages/editor/src/components/ui/panels/room-dressing.tsx
 #, fuzzy
 msgid "editor.dressing.full"
 msgstr "全高"
 
-# English: "Height"
 # Review: required
 # Source-Hash: 646ef0fbcbc58edf
 # AI-Provider: openai
 # AI-Model: gpt-6-astra
+# English: "Height"
 #: packages/editor/src/components/ui/panels/room-dressing.tsx
 #, fuzzy
 msgid "editor.dressing.height"
 msgstr "高度"
 
-# English: "Layer type"
 # Review: required
 # Source-Hash: fc318493e95f53dc
 # AI-Provider: openai
 # AI-Model: gpt-6-astra
+# English: "Layer type"
 #: packages/editor/src/components/ui/panels/room-dressing.tsx
 #, fuzzy
 msgid "editor.dressing.kind"
 msgstr "图层类型"
 
-# English: "Layer {number}"
 # Review: required
 # Source-Hash: 8d484577c8370d12
 # AI-Provider: openai
 # AI-Model: gpt-6-astra
+# English: "Layer {number}"
 #: packages/editor/src/components/ui/panels/room-dressing.tsx
 #, fuzzy
 msgid "editor.dressing.layer"
 msgstr "图层 {number}"
 
-# English: "Margin"
 # Review: required
 # Source-Hash: ac333c71ced986e1
 # AI-Provider: openai
 # AI-Model: gpt-6-astra
+# English: "Margin"
 #: packages/editor/src/components/ui/panels/room-dressing.tsx
 #, fuzzy
 msgid "editor.dressing.margin"
 msgstr "边距"
 
-# English: "Offset"
 # Review: required
 # Source-Hash: 0f0e13abf9b2bb67
 # AI-Provider: openai
 # AI-Model: gpt-6-astra
+# English: "Offset"
 #: packages/editor/src/components/ui/panels/room-dressing.tsx
 #, fuzzy
 msgid "editor.dressing.offset"
 msgstr "偏移"
 
-# English: "Placement"
 # Review: required
 # Source-Hash: b3be684ac62fbf53
 # AI-Provider: openai
 # AI-Model: gpt-6-astra
+# English: "Placement"
 #: packages/editor/src/components/ui/panels/room-dressing.tsx
 #, fuzzy
 msgid "editor.dressing.placement"
 msgstr "布置位置"
 
-# English: "Preview"
 # Review: required
 # Source-Hash: 20226b68d5467072
 # AI-Provider: openai
 # AI-Model: gpt-6-astra
+# English: "Preview"
 #: packages/editor/src/components/ui/panels/room-dressing.tsx
 #, fuzzy
 msgid "editor.dressing.preview"
 msgstr "预览"
 
-# English: "Preview only — nothing changed."
 # Review: required
 # Source-Hash: 4d29461a2bbbde99
 # AI-Provider: openai
 # AI-Model: gpt-6-astra
+# English: "Preview only — nothing changed."
 #: packages/editor/src/components/ui/panels/room-dressing.tsx
 #, fuzzy
 msgid "editor.dressing.previewOnly"
 msgstr "仅预览 — 未作任何更改。"
 
-# English: "Profile"
 # Review: required
 # Source-Hash: 96ad4bd0f7baa40e
 # AI-Provider: openai
 # AI-Model: gpt-6-astra
+# English: "Profile"
 #: packages/editor/src/components/ui/panels/room-dressing.tsx
 #, fuzzy
 msgid "editor.dressing.profile"
 msgstr "截面形状"
 
-# English: "{count} of 8 face regions"
 # Review: required
 # Source-Hash: 9f0722e1b1299f59
 # AI-Provider: openai
 # AI-Model: gpt-6-astra
+# English: "{count} of 8 face regions"
 #: packages/editor/src/components/ui/panels/room-dressing.tsx
 #, fuzzy
 msgid "editor.dressing.regionCount"
 msgstr "墙面区域 {count}/8"
 
-# English: "Along {start}–{end}; height {bottom}–{top}"
 # Review: required
 # Source-Hash: 19e68acf5a0b92e9
 # AI-Provider: openai
 # AI-Model: gpt-6-astra
+# English: "Along {start}–{end}; height {bottom}–{top}"
 #: packages/editor/src/components/ui/panels/room-dressing.tsx
 #, fuzzy
 msgid "editor.dressing.regionExtent"
 msgstr "沿墙方向 {start}–{end}；高度 {bottom}–{top}"
 
-# English: "Remove layer"
 # Review: required
 # Source-Hash: ca36e9fd7fba1fce
 # AI-Provider: openai
 # AI-Model: gpt-6-astra
+# English: "Remove layer"
 #: packages/editor/src/components/ui/panels/room-dressing.tsx
 #, fuzzy
 msgid "editor.dressing.remove"
 msgstr "移除图层"
 
-# English: "Apply replaces this room’s previous dressing regions, not hand paint. An empty stack removes those regions; trims stay. Lengths are in metres."
 # Review: required
 # Source-Hash: 7bd836108a92cf75
 # AI-Provider: openai
 # AI-Model: gpt-6-astra
+# English: "Apply replaces this room’s previous dressing regions, not hand paint. An empty stack removes those regions; trims stay. Lengths are in metres."
 #: packages/editor/src/components/ui/panels/room-dressing.tsx
 #, fuzzy
 msgid "editor.dressing.replaces"
 msgstr "应用后将替换此房间先前的装饰区域，但不会替换手工涂绘。图层列表为空时将移除这些区域；装饰线条会保留。长度单位为米。"
 
-# English: "Selected walls"
 # Review: required
 # Source-Hash: 58327a6cea2d37de
 # AI-Provider: openai
 # AI-Model: gpt-6-astra
+# English: "Selected walls"
 #: packages/editor/src/components/ui/panels/room-dressing.tsx
 #, fuzzy
 msgid "editor.dressing.selectedWalls"
 msgstr "选中的墙体"
 
-# English: "Skirting"
 # Review: required
 # Source-Hash: d9d55c5883a53789
 # AI-Provider: openai
 # AI-Model: gpt-6-astra
+# English: "Skirting"
 #: packages/editor/src/components/ui/panels/room-dressing.tsx
 #, fuzzy
 msgid "editor.dressing.skirting"
 msgstr "踢脚线"
 
-# English: "Splashback"
 # Review: required
 # Source-Hash: 6cf2493608aab3fb
 # AI-Provider: openai
 # AI-Model: gpt-6-astra
+# English: "Splashback"
 #: packages/editor/src/components/ui/panels/room-dressing.tsx
 #, fuzzy
 msgid "editor.dressing.splashback"
 msgstr "防溅板"
 
-# English: "Tiles"
 # Review: required
 # Source-Hash: 590dc223596c70b5
 # AI-Provider: openai
 # AI-Model: gpt-6-astra
+# English: "Tiles"
 #: packages/editor/src/components/ui/panels/room-dressing.tsx
 #, fuzzy
 msgid "editor.dressing.tiles"
 msgstr "瓷砖"
 
-# English: "Dress room"
 # Review: required
 # Source-Hash: de8b1eec4e822619
 # AI-Provider: openai
 # AI-Model: gpt-6-astra
+# English: "Dress room"
 #: packages/editor/src/components/ui/panels/room-dressing.tsx
 #, fuzzy
 msgid "editor.dressing.title"
 msgstr "装饰房间"
 
-# English: "To"
 # Review: required
 # Source-Hash: b3214a20e45a7aed
 # AI-Provider: openai
 # AI-Model: gpt-6-astra
+# English: "To"
 #: packages/editor/src/components/ui/panels/room-dressing.tsx
 #, fuzzy
 msgid "editor.dressing.to"
 msgstr "终点"
 
-# English: "Move up"
 # Review: required
 # Source-Hash: d49ea60a2312df2f
 # AI-Provider: openai
 # AI-Model: gpt-6-astra
+# English: "Move up"
 #: packages/editor/src/components/ui/panels/room-dressing.tsx
 #, fuzzy
 msgid "editor.dressing.up"
 msgstr "上移"
 
-# English: "Wainscot"
 # Review: required
 # Source-Hash: 7bf994f4d164e33a
 # AI-Provider: openai
 # AI-Model: gpt-6-astra
+# English: "Wainscot"
 #: packages/editor/src/components/ui/panels/room-dressing.tsx
 #, fuzzy
 msgid "editor.dressing.wainscot"
 msgstr "护墙板"
 
-# English: "wall end"
 # Review: required
 # Source-Hash: ae801874723635b1
 # AI-Provider: openai
 # AI-Model: gpt-6-astra
+# English: "wall end"
 #: packages/editor/src/components/ui/panels/room-dressing.tsx
 #, fuzzy
 msgid "editor.dressing.wallEnd"
 msgstr "墙体末端"
 
-# English: "Walls"
 # Review: required
 # Source-Hash: aac9a732d2159ccc
 # AI-Provider: openai
 # AI-Model: gpt-6-astra
+# English: "Walls"
 #: packages/editor/src/components/ui/panels/room-dressing.tsx
 #, fuzzy
 msgid "editor.dressing.walls"
@@ -8664,6 +8665,14 @@ msgstr "混凝土垫层"
 #, fuzzy
 msgid "editor.inspector.option.condenser.a74nps"
 msgstr "冷凝器"
+
+# English: "Conical"
+# Review: required
+# Source-Hash: 3241ecabee8221a1
+#: packages/nodes/src/i18n/definition-messages.ts
+#, fuzzy
+msgid "editor.inspector.option.conical.1d9dreq"
+msgstr "圆锥"
 
 # Source-Hash: 6786ac75cbe9af57
 # Review: required
@@ -30592,6 +30601,7 @@ msgstr "截角版本"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Conical"
+#: packages/nodes/src/dormer/panel.tsx
 #: packages/nodes/src/roof-segment/panel.tsx
 #, fuzzy
 msgid "node.roofSegment.panel.conical"
@@ -37442,31 +37452,31 @@ msgstr "外侧面"
 msgid "node.wall.reference.right"
 msgstr "右"
 
-# English: "Add stretch"
 # Review: required
 # Source-Hash: 8758d464002c7f66
 # AI-Provider: openai
 # AI-Model: gpt-6-astra
+# English: "Add stretch"
 #: packages/nodes/src/wall/trim-bounds.tsx
 #, fuzzy
 msgid "node.wall.trim.addStretch"
 msgstr "添加区段"
 
-# English: "End"
 # Review: required
 # Source-Hash: 135874d189176d13
 # AI-Provider: openai
 # AI-Model: gpt-6-astra
+# English: "End"
 #: packages/nodes/src/wall/trim-bounds.tsx
 #, fuzzy
 msgid "node.wall.trim.end"
 msgstr "终点"
 
-# English: "Trim face"
 # Review: required
 # Source-Hash: 15110f0ffc1f837a
 # AI-Provider: openai
 # AI-Model: gpt-6-astra
+# English: "Trim face"
 #: packages/nodes/src/wall/trim-bounds.tsx
 #, fuzzy
 msgid "node.wall.trim.face"
@@ -37492,21 +37502,21 @@ msgstr "{trim, select, skirting {隐藏踢脚线} crown {隐藏顶角线} other 
 msgid "node.wall.trim.show"
 msgstr "{trim, select, skirting {显示踢脚线} crown {显示顶角线} other {显示护墙板条}}"
 
-# English: "Start"
 # Review: required
 # Source-Hash: 0a26a1e61c825660
 # AI-Provider: openai
 # AI-Model: gpt-6-astra
+# English: "Start"
 #: packages/nodes/src/wall/trim-bounds.tsx
 #, fuzzy
 msgid "node.wall.trim.start"
 msgstr "起点"
 
-# English: "Whole face"
 # Review: required
 # Source-Hash: 6971027ba43d911a
 # AI-Provider: openai
 # AI-Model: gpt-6-astra
+# English: "Whole face"
 #: packages/nodes/src/wall/trim-bounds.tsx
 #, fuzzy
 msgid "node.wall.trim.wholeFace"

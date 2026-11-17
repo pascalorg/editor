@@ -177,6 +177,7 @@ export function createFreshPlacementSubtree(
     rootId,
     parentId,
   })
+  cloned.nodes = cloned.nodes.map((node) => remapNodeReferences(node, cloned.idMap))
 
   scene.applyNodeChanges({
     create: copyCreateOps(cloned, parentId),
@@ -306,6 +307,7 @@ export function commitFreshPlacementSubtree(
   )
   const parentId = parentIdOf(root)
   const cloned = cloneNodesInto([root, ...descendants], { rootId, parentId })
+  cloned.nodes = cloned.nodes.map((node) => remapNodeReferences(node, cloned.idMap))
   // The drafts' memberships, read before they are deleted.
   const create = copyCreateOps(cloned, parentId)
   const updates = surfaceAttachmentUpdates(rootId, null, null)

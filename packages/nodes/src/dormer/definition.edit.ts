@@ -1,4 +1,10 @@
-import type { DormerNode as DormerNodeType, HandleDescriptor } from '@pascal-app/core'
+import {
+  type AnyNodeId,
+  type DormerNode as DormerNodeType,
+  type HandleDescriptor,
+  type SceneApi,
+  validateDormerPlacement,
+} from '@pascal-app/core'
 import type { NodeEditContribution } from '../definition-contributions'
 import { dormerPaint } from './paint'
 import { dormerParametrics } from './parametrics'
@@ -28,6 +34,26 @@ const MIN_BODY_DISPLAY = 0.3
 // dormer's footprint" rather than floating at the apex or the eave.
 function getBodyMidY(n: DormerNodeType): number {
   return Math.max(n.height + n.roofHeight, MIN_BODY_DISPLAY) / 2
+}
+
+function admittedPatch(
+  initial: DormerNodeType,
+  patch: Partial<DormerNodeType>,
+  scene: SceneApi,
+): Partial<DormerNodeType> {
+  const nodes = scene.nodes()
+  const host = initial.roofSegmentId ? nodes[initial.roofSegmentId as AnyNodeId] : undefined
+  if (
+    host?.type === 'roof-segment' &&
+    validateDormerPlacement(nodes, host, { ...initial, ...patch }).ok
+  ) {
+    return patch
+  }
+  // Overrides merge per tick. Reset the edited fields so a refused final tick
+  // cannot leave an earlier valid proposal queued for commit.
+  return Object.fromEntries(
+    (Object.keys(patch) as (keyof DormerNodeType)[]).map((key) => [key, initial[key]]),
+  ) as Partial<DormerNodeType>
 }
 
 // Width arrow on the +X (right) or -X (left) side. Asymmetric resize:
@@ -63,7 +89,7 @@ function dormerWidthHandle(side: 'left' | 'right'): HandleDescriptor<DormerNodeT
     // chimney already documents.
     min: MIN_DIM,
     currentValue: (n) => n.width,
-    apply: (initial, newWidth) => {
+    apply: (initial, newWidth, scene) => {
       const rotY = initial.rotation ?? 0
       const armX = Math.cos(rotY)
       const armZ = -Math.sin(rotY)
@@ -71,10 +97,14 @@ function dormerWidthHandle(side: 'left' | 'right'): HandleDescriptor<DormerNodeT
       const anchorZ = initial.position[2] - sign * (initial.width / 2) * armZ
       const newCenterX = anchorX + sign * (newWidth / 2) * armX
       const newCenterZ = anchorZ + sign * (newWidth / 2) * armZ
-      return {
-        width: newWidth,
-        position: [newCenterX, initial.position[1], newCenterZ],
-      }
+      return admittedPatch(
+        initial,
+        {
+          width: newWidth,
+          position: [newCenterX, initial.position[1], newCenterZ],
+        },
+        scene,
+      )
     },
     placement: {
       position: (n) => [sign * (n.width / 2 + SIDE_HANDLE_OFFSET), getBodyMidY(n), 0],
@@ -105,7 +135,7 @@ function dormerDepthHandle(side: 'front' | 'back'): HandleDescriptor<DormerNodeT
     anchor: side === 'front' ? 'min' : 'max',
     min: MIN_DIM,
     currentValue: (n) => n.depth,
-    apply: (initial, newDepth) => {
+    apply: (initial, newDepth, scene) => {
       const rotY = initial.rotation ?? 0
       const armX = Math.sin(rotY)
       const armZ = Math.cos(rotY)
@@ -113,10 +143,14 @@ function dormerDepthHandle(side: 'front' | 'back'): HandleDescriptor<DormerNodeT
       const anchorZ = initial.position[2] - sign * (initial.depth / 2) * armZ
       const newCenterX = anchorX + sign * (newDepth / 2) * armX
       const newCenterZ = anchorZ + sign * (newDepth / 2) * armZ
-      return {
-        depth: newDepth,
-        position: [newCenterX, initial.position[1], newCenterZ],
-      }
+      return admittedPatch(
+        initial,
+        {
+          depth: newDepth,
+          position: [newCenterX, initial.position[1], newCenterZ],
+        },
+        scene,
+      )
     },
     placement: {
       position: (n) => [0, getBodyMidY(n), sign * (n.depth / 2 + SIDE_HANDLE_OFFSET)],
@@ -140,7 +174,7 @@ function dormerWallHeightHandle(): HandleDescriptor<DormerNodeType> {
     shape: 'tracker',
     min: MIN_HEIGHT,
     currentValue: (n) => n.height,
-    apply: (_n, newValue) => ({ height: newValue }),
+    apply: (initial, newValue, scene) => admittedPatch(initial, { height: newValue }, scene),
     placement: {
       position: (n) => [0, Math.max(n.height, 0.001), 0],
     },
@@ -161,7 +195,8 @@ function dormerRotateHandle(): HandleDescriptor<DormerNodeType> {
     shape: 'rotate',
     // Negate the cursor delta to match three.js Y-rotation handedness
     // (cursor atan2 ticks opposite-handed from `rotation-y`).
-    apply: (initial, delta) => ({ rotation: (initial.rotation ?? 0) - delta }),
+    apply: (initial, delta, scene) =>
+      admittedPatch(initial, { rotation: (initial.rotation ?? 0) - delta }, scene),
     placement: {
       position: (n) => {
         const halfX = n.width / 2 + ROTATE_CORNER_OFFSET

@@ -791,7 +791,7 @@ function migrateNodes(nodes: Record<string, any>): {
         const window = createDormerDefaultWindow(
           dormer,
           windowId,
-          getDormerDefaultWindowFace(dormer, hostSegment),
+          getDormerDefaultWindowFace(dormer, hostSegment, { nodes: patchedNodes }),
         )
         patchedNodes[windowId] = window
         patchedNodes[id] = { ...dormer, children: [...children, window.id] }

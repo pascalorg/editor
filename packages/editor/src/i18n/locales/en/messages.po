@@ -447,6 +447,7 @@ msgstr "Wall"
 msgid "app.sceneLoader.anotherSessionSavedFirstRefresh"
 msgstr "Another session saved first — refresh?"
 
+#: apps/editor/app/fixtures/delivery/fixture-client.tsx
 #: apps/editor/components/scene-loader.tsx
 msgid "app.sceneLoader.build"
 msgstr "Build"
@@ -3492,6 +3493,10 @@ msgstr "Concrete pad"
 #: packages/nodes/src/i18n/definition-messages.ts
 msgid "editor.inspector.option.condenser.a74nps"
 msgstr "Condenser"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.option.conical.1d9dreq"
+msgstr "Conical"
 
 #: packages/nodes/src/i18n/definition-messages.ts
 msgid "editor.inspector.option.corbeled.bovs4v"
@@ -12278,6 +12283,7 @@ msgstr "Barrel"
 msgid "node.roofSegment.panel.clippedVersion"
 msgstr "Clipped version"
 
+#: packages/nodes/src/dormer/panel.tsx
 #: packages/nodes/src/roof-segment/panel.tsx
 msgid "node.roofSegment.panel.conical"
 msgstr "Conical"

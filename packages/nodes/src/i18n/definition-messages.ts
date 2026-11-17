@@ -335,6 +335,7 @@ export const definitionMessages = [
   /* i18n */ { id: "editor.inspector.option.cleanout.lww8bm", message: "Cleanout" },
   /* i18n */ { id: "editor.inspector.option.concretePad.m1zdij", message: "Concrete pad" },
   /* i18n */ { id: "editor.inspector.option.condenser.a74nps", message: "Condenser" },
+  /* i18n */ { id: "editor.inspector.option.conical.1d9dreq", message: "Conical" },
   /* i18n */ { id: "editor.inspector.option.corbeled.bovs4v", message: "Corbeled" },
   /* i18n */ { id: "editor.inspector.option.count.1qoi4r8", message: "Count" },
   /* i18n */ { id: "editor.inspector.option.coupling.111aap2", message: "Coupling" },

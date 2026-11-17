@@ -4,13 +4,15 @@ import {
   type AnyNodeId,
   type DormerNode,
   DormerNode as DormerNodeSchema,
-  type RoofSegmentNode,
   sceneRegistry,
+  useLiveNodeOverrides,
   useScene,
+  validateDormerPlacement,
 } from '@pascal-app/core'
-import { commitFreshPlacementSubtree, useEditor } from '@pascal-app/editor'
+import { commitFreshPlacementSubtree, useEditor, usePlacementPreview } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
-import { useEffect, useMemo } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
+import { RoofAttachmentFallbackPreview } from '../shared/roof-attachment-fallback-preview'
 import { DormerPlacementGuides } from './placement-guides'
 import DormerPreview from './preview'
 import { useDormerPlacement } from './use-dormer-placement'
@@ -42,20 +44,19 @@ const MoveDormerTool = ({ node }: { node: DormerNode }) => {
   }, [node])
 
   // Hide the moving dormer while dragging. Restored in cleanup or on
-  // commit. We also mark metadata.isTransient so any other consumer
-  // (e.g. the inspector) can short-circuit.
+  // commit. Transient metadata is a live override, never a document/history edit.
   const meta =
     typeof node.metadata === 'object' && node.metadata !== null
       ? (node.metadata as Record<string, unknown>)
       : {}
   const isNew = !!meta.isNew
   const originalRotation = node.rotation ?? 0
-  const originalMetadata = node.metadata
+  const committedRef = useRef(false)
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: capture-on-mount; meta is intentionally not re-read on changes.
   useEffect(() => {
     if (!isNew) {
-      useScene.getState().updateNode(node.id as AnyNodeId, {
+      useLiveNodeOverrides.getState().set(node.id, {
         metadata: { ...meta, isTransient: true },
       })
     }
@@ -73,128 +74,149 @@ const MoveDormerTool = ({ node }: { node: DormerNode }) => {
         }
         useScene.temporal.getState().resume()
       } else {
-        useScene.getState().updateNode(node.id as AnyNodeId, {
-          metadata: originalMetadata,
-        })
+        useLiveNodeOverrides.getState().clearFields(node.id, ['metadata'])
       }
     }
   }, [node.id, isNew])
 
-  const { activeBuildingId, segmentXform, hitSegment, hitLocal, ghostRotation } =
+  const { activeBuildingId, clearPreview, segmentXform, hitSegment, hitLocal, ghostRotation } =
     useDormerPlacement({
       initialRotation: originalRotation,
       relativeStart: {
         position: [...node.position] as [number, number, number],
         roofSegmentId: node.roofSegmentId,
       },
+      resolveProposal: (hit, rotation) => {
+        const state = useScene.getState()
+        const segment = state.nodes[hit.segment.id]
+        if (state.readOnly || segment?.type !== 'roof-segment') return null
+        const current = state.nodes[node.id]
+        const candidate = {
+          ...(current?.type === 'dormer' ? current : node),
+          parentId: hit.segment.id,
+          roofSegmentId: hit.segment.id,
+          position: [hit.localX, hit.localY, hit.localZ] as [number, number, number],
+          rotation,
+        }
+        return validateDormerPlacement(state.nodes, segment, candidate).ok
+          ? { ...hit, segment }
+          : null
+      },
       onCommit: (hit, rotation) => {
         const state = useScene.getState()
+        const segment = state.nodes[hit.segment.id]
+        if (state.readOnly || committedRef.current || segment?.type !== 'roof-segment') return false
+        const current = state.nodes[node.id]
+        const source = current?.type === 'dormer' ? current : node
 
         // Strip the `isNew` / `isTransient` flags — only used to mark a
         // clone or in-flight move that hasn't been committed yet.
-        const cleanedMeta = (() => {
-          const m =
-            node.metadata && typeof node.metadata === 'object' && !Array.isArray(node.metadata)
-              ? (node.metadata as Record<string, unknown>)
-              : {}
-          const {
-            isNew: _isNew,
-            isTransient: _isTransient,
-            ...rest
-          } = m as {
-            isNew?: boolean
-            isTransient?: boolean
-          }
-          return Object.keys(rest).length > 0 ? rest : undefined
-        })()
+        const { isNew: _isNew, isTransient: _isTransient, ...cleanedMeta } = source.metadata
+        const candidate: DormerNode = {
+          ...source,
+          roofSegmentId: hit.segment.id,
+          parentId: hit.segment.id,
+          position: [hit.localX, hit.localY, hit.localZ],
+          rotation,
+          metadata: cleanedMeta,
+          visible: true,
+        }
+        if (!validateDormerPlacement(state.nodes, segment, candidate).ok) return false
 
-        if (isNew && node.id) {
-          const committedId = commitFreshPlacementSubtree(node.id as AnyNodeId, {
-            roofSegmentId: hit.segment.id,
-            parentId: hit.segment.id,
-            position: [hit.localX, hit.localY, hit.localZ],
-            rotation,
-            metadata: cleanedMeta,
-            visible: true,
-          })
-          if (!committedId) return
-          const committedNode = useScene.getState().nodes[committedId] as DormerNode | undefined
-          for (const childId of committedNode?.children ?? []) {
-            const child = useScene.getState().nodes[childId]
-            if (child?.type === 'window') {
-              useScene.getState().updateNode(childId, { dormerId: committedId })
-            }
-          }
+        if (isNew && current?.type === 'dormer') {
+          const committedId = commitFreshPlacementSubtree(node.id as AnyNodeId, candidate)
+          if (!committedId) return false
           state.dirtyNodes.add(hit.segment.id as AnyNodeId)
           state.dirtyNodes.add(committedId)
           setSelection({ selectedIds: [committedId] })
-        } else if (!node.id) {
-          const { id: _id, ...rest } = node
-          const committed = DormerNodeSchema.parse({
-            ...rest,
-            roofSegmentId: hit.segment.id,
-            parentId: hit.segment.id,
-            position: [hit.localX, hit.localY, hit.localZ],
-            rotation,
-            metadata: cleanedMeta,
-          })
+        } else if (isNew || !node.id) {
+          const { id: _id, ...rest } = candidate
+          const committed = DormerNodeSchema.parse(rest)
           state.createNode(committed, hit.segment.id as AnyNodeId)
+          if (!useScene.getState().nodes[committed.id]) return false
           state.dirtyNodes.add(hit.segment.id as AnyNodeId)
           setSelection({ selectedIds: [committed.id] })
         } else {
-          const prevSegmentId = node.roofSegmentId as AnyNodeId | undefined
-          state.updateNode(node.id as AnyNodeId, {
-            roofSegmentId: hit.segment.id,
-            parentId: hit.segment.id,
-            position: [hit.localX, hit.localY, hit.localZ],
-            rotation,
-            metadata: cleanedMeta,
+          const prevSegmentId = source.roofSegmentId as AnyNodeId | undefined
+          state.applyNodeChanges({
+            update: [
+              {
+                id: node.id,
+                data: {
+                  roofSegmentId: candidate.roofSegmentId,
+                  parentId: candidate.parentId,
+                  position: candidate.position,
+                  rotation: candidate.rotation,
+                  metadata: candidate.metadata,
+                },
+              },
+            ],
           })
           if (prevSegmentId) state.dirtyNodes.add(prevSegmentId)
           state.dirtyNodes.add(hit.segment.id as AnyNodeId)
-          // Unlist from previous segment's children and add to the new one.
-          if (prevSegmentId && prevSegmentId !== (hit.segment.id as AnyNodeId)) {
-            const prevSeg = state.nodes[prevSegmentId] as RoofSegmentNode | undefined
-            if (prevSeg) {
-              state.updateNode(prevSegmentId, {
-                children: (prevSeg.children ?? []).filter((id) => id !== node.id),
-              })
-            }
-            const newSeg = state.nodes[hit.segment.id as AnyNodeId] as RoofSegmentNode | undefined
-            if (newSeg && !(newSeg.children ?? []).includes(node.id)) {
-              state.updateNode(hit.segment.id as AnyNodeId, {
-                children: [...(newSeg.children ?? []), node.id],
-              })
-            }
-          }
           setSelection({ selectedIds: [node.id] })
         }
+        committedRef.current = true
         const dormerObj = sceneRegistry.nodes.get(node.id)
         if (dormerObj) dormerObj.visible = true
         setMovingNode(null)
+        return true
       },
     })
 
-  if (!activeBuildingId || !segmentXform || !hitLocal) return null
+  useEffect(() => {
+    const preview = usePlacementPreview.getState()
+    if (!(hitSegment && hitLocal)) {
+      if (preview.node?.id === previewNode.id) preview.clear()
+      return
+    }
+    preview.set(
+      {
+        ...previewNode,
+        parentId: hitSegment.id,
+        roofSegmentId: hitSegment.id,
+        position: hitLocal,
+        rotation: ghostRotation,
+      },
+      hitSegment,
+    )
+  }, [ghostRotation, hitLocal, hitSegment, previewNode])
+
+  useEffect(
+    () => () => {
+      const preview = usePlacementPreview.getState()
+      if (preview.node?.id === previewNode.id) preview.clear()
+    },
+    [previewNode.id],
+  )
 
   return (
-    <group position={segmentXform.position} quaternion={segmentXform.quaternion}>
-      {hitSegment && (
-        <DormerPlacementGuides
-          center={hitLocal}
-          depth={previewNode.depth}
-          movingId={node.id}
-          rotation={ghostRotation}
-          segment={hitSegment}
-          width={previewNode.width}
-        />
-      )}
-      <group position={hitLocal}>
-        <group rotation-y={ghostRotation}>
-          <DormerPreview node={previewNode} />
+    <>
+      <RoofAttachmentFallbackPreview
+        activeBuildingId={activeBuildingId}
+        ghost={<DormerPreview node={previewNode} invalid />}
+        onInvalidTarget={clearPreview}
+      />
+      {activeBuildingId && segmentXform && hitLocal && (
+        <group position={segmentXform.position} quaternion={segmentXform.quaternion}>
+          {hitSegment && (
+            <DormerPlacementGuides
+              center={hitLocal}
+              depth={previewNode.depth}
+              movingId={node.id}
+              rotation={ghostRotation}
+              segment={hitSegment}
+              width={previewNode.width}
+            />
+          )}
+          <group position={hitLocal}>
+            <group rotation-y={ghostRotation}>
+              <DormerPreview node={previewNode} />
+            </group>
+          </group>
         </group>
-      </group>
-    </group>
+      )}
+    </>
   )
 }
 
