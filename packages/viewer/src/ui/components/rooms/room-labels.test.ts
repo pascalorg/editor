@@ -906,9 +906,14 @@ test('room label anchors follow the kept volume on every axis and stay unchanged
   ).toBeNull()
 })
 
-test.each([0, 2, 4])(
+// Pins detected room entries and counts before this change.
+test.each([
+  [0, 0],
+  [2, 0],
+  [4, 16],
+])(
   'detected room with %s stored vertices keeps the original list entry and core count',
-  async (vertices) => {
+  async (vertices, labelArea) => {
     const { WallNode } = await import('@pascal-app/core')
     const { RoomSelectionIndex } = await import('../../lib/room-selection')
     const polygon: [number, number][] = [
@@ -917,11 +922,17 @@ test.each([0, 2, 4])(
       [4, 4],
       [0, 4],
     ]
-    const level = LevelNode.parse({})
+    const level = LevelNode.parse({ id: 'level_detected' })
     const walls = polygon.map((start, i) =>
-      WallNode.parse({ parentId: level.id, start, end: polygon[(i + 1) % 4] }),
+      WallNode.parse({
+        id: `wall_detected_${i}`,
+        parentId: level.id,
+        start,
+        end: polygon[(i + 1) % 4],
+      }),
     )
     const zone = ZoneNode.parse({
+      id: 'zone_bedroom',
       name: 'Bedroom',
       parentId: level.id,
       spaceRole: 'room',
@@ -932,27 +943,19 @@ test.each([0, 2, 4])(
     const nodes = Object.fromEntries([level, ...walls, zone].map((n) => [n.id, n]))
     const rooms = new RoomSelectionIndex(level.id).update(nodes)
     expect(rooms).toHaveLength(1)
-    // Execute the original function, including its nesting and visibility rules.
-    const original = Bun.spawnSync([
-      'git',
-      'show',
-      'origin/main:packages/viewer/src/ui/components/rooms/room-labels.tsx',
-    ]).stdout.toString()
-    const functionSource = original.slice(
-      original.indexOf('export function roomLabelEntries('),
-      original.indexOf("/** A label's colour"),
-    )
-    const js = new Bun.Transpiler({ loader: 'tsx' })
-      .transformSync(functionSource)
-      .replace('export ', '')
-    const { area, containsPoint, polygonInteriorPoint } = await import('@pascal-app/core')
-    const mainEntries = new Function(
-      'area',
-      'containsPoint',
-      'polygonInteriorPoint',
-      `${js}; return roomLabelEntries`,
-    )(area, containsPoint, polygonInteriorPoint)
-    expect(roomLabelEntries(rooms, [zone])).toEqual(mainEntries(rooms, [zone]))
+    expect(roomLabelEntries(rooms, [zone])).toEqual([
+      {
+        zoneId: 'zone_bedroom',
+        polygon: [
+          [0, 0],
+          [4, 0],
+          [4, 4],
+          [0, 4],
+        ],
+        holes: [],
+        area: labelArea,
+      },
+    ])
     expect(roomCounts({ nodes, rootNodeIds: [level.id] })).toMatchObject({
       rooms: 1,
       bedrooms: 1,

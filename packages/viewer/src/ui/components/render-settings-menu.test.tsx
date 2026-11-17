@@ -1,26 +1,39 @@
 import { expect, test } from 'bun:test'
 import { Content, Root } from '@radix-ui/react-dropdown-menu'
+import { Children, type ReactElement, type ReactNode } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import useViewer from '../../store/use-viewer'
 import { DaylightMenu } from './render-settings-menu'
 import { useSkyPanel } from './sky-control'
 
-test('the time menu preserves main’s existing order, with Dawn first', async () => {
-  const source = await Bun.file(new URL('./render-settings-menu.tsx', import.meta.url)).text()
-  const main = Bun.spawnSync([
-    'git',
-    'show',
-    'origin/main:packages/viewer/src/ui/components/render-settings-menu.tsx',
-  ])
-  expect(main.exitCode).toBe(0)
-  const ids = (text: string) =>
-    [
-      ...text
-        .slice(text.indexOf('function timeOptions'), text.indexOf('function weatherOptions'))
-        .matchAll(/id: '(\w+)'/g),
-    ].map(([, id]) => id)
-  expect(ids(main.stdout.toString())).toEqual(['golden', 'midday', 'blue', 'night'])
-  expect(ids(source)).toEqual(['dawn', ...ids(main.stdout.toString())])
+test('the time menu preserves the existing order, with Dawn first', () => {
+  function TimeEntries() {
+    const timeMenu = Children.toArray(DaylightMenu({}).props.children)[0] as ReactElement<{
+      children: ReactNode
+    }>
+    const content = Children.toArray(timeMenu.props.children)[1] as ReactElement<{
+      children: [ReactNode, ReactNode]
+    }>
+    return content.props.children[0]
+  }
+  const panel = useSkyPanel.getState()
+  try {
+    useSkyPanel.setState({ hosts: 0 })
+    const html = renderToStaticMarkup(
+      <Root>
+        <Content forceMount>
+          <TimeEntries />
+        </Content>
+      </Root>,
+    )
+    const entries = [...html.matchAll(/role="menuitem"[^>]*>[\s\S]*?<span>([^<]*)<\/span>/g)].map(
+      ([, name]) => name,
+    )
+    // Pins the time entry order before this change, with Dawn prepended.
+    expect(entries).toEqual(['Dawn', 'Golden hour', 'Midday', 'Blue hour', 'Night'])
+  } finally {
+    useSkyPanel.setState(panel, true)
+  }
 })
 
 test('an unknown time still falls back to Midday in the menu', () => {

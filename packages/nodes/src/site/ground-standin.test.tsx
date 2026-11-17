@@ -315,23 +315,6 @@ test('default site surfaces keep the original parent chain and child order', asy
   showGroundFloor()
   useViewer.setState({ sectionEnabled: false })
   const node = lot(true)
-  const original = Bun.spawnSync([
-    'git',
-    'show',
-    'origin/main:packages/nodes/src/site/renderer.tsx',
-  ])
-  expect(original.exitCode).toBe(0)
-  const transpiler = new Bun.Transpiler({
-    loader: 'tsx',
-    autoImportJSX: true,
-    tsconfig: JSON.stringify({ compilerOptions: { jsx: 'react-jsx' } }),
-  })
-  let js = transpiler.transformSync(original.stdout.toString())
-  for (const { path } of transpiler.scanImports(js))
-    js = js.replaceAll(JSON.stringify(path), JSON.stringify(Bun.resolveSync(path, import.meta.dir)))
-  const { SiteRenderer: MainSiteRenderer } = await import(
-    `data:text/javascript;base64,${Buffer.from(js).toString('base64')}`
-  )
   const hierarchy = (root: Object3D) => {
     const result: {
       path: number[]
@@ -357,13 +340,15 @@ test('default site surfaces keep the original parent chain and child order', asy
     })
     return result
   }
-  const main = await create(<MainSiteRenderer node={node} />)
-  let expected: ReturnType<typeof hierarchy>
-  try {
-    expected = hierarchy(main.scene.instance)
-  } finally {
-    await main.unmount()
-  }
+  // Pins the default site's parent chain and surface order before this change.
+  const expected: ReturnType<typeof hierarchy> = [
+    { path: [0], kind: 'Group', ground: undefined, export: undefined, order: 0 },
+    { path: [0, 0], kind: 'Mesh', ground: 'solid', export: undefined, order: 0 },
+    { path: [0, 1], kind: 'Mesh', ground: 'veil', export: 'strip', order: 0 },
+    { path: [0, 2], kind: 'Mesh', ground: 'solid', export: 'strip', order: 0 },
+    { path: [0, 3], kind: 'Mesh', ground: 'veil', export: 'strip', order: 0 },
+    { path: [0, 4], kind: 'Line', ground: undefined, export: undefined, order: 9 },
+  ]
   const renderer = await create(<SiteRenderer node={node} />)
   try {
     const actual = hierarchy(renderer.scene.instance)

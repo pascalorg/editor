@@ -160,7 +160,7 @@ test.each(translatedBedrooms)(
   },
 )
 
-// Recorded by executing origin/main:packages/core/src/building/room-use.ts.
+// Pins name classifications before this change.
 test.each([
   ['Bedroom 1', 'bedroom'],
   ['Primary bedroom', 'bedroom'],
