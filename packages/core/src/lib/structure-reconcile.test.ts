@@ -162,7 +162,7 @@ test('edit parity preserves deleted surfaces, persisted ceiling opt-out, and sub
   expect(useScene.getState().nodes).toEqual(result.nodes)
   expect(ofKind(result.nodes, 'slab')).toEqual([])
   expect(ofKind(result.nodes, 'ceiling')).toEqual([])
-  expect(ofKind(result.nodes, 'zone')[0]).toMatchObject({ hasCeiling: false })
+  expect(ofKind(result.nodes, 'zone')[0]).toMatchObject({ hasFloor: false, hasCeiling: false })
   assertIdempotent(result.nodes)
   const moved = { ...result.nodes }
   const updates = ofKind(moved, 'wall').map((node) => {
@@ -294,6 +294,121 @@ test('separator splits have two zones and ceilings but one shared plate', () => 
   expect(ofKind(result.nodes, 'ceiling')).toHaveLength(2)
   expect(ofKind(result.nodes, 'slab')).toHaveLength(1)
   assertIdempotent(result.nodes)
+})
+
+test('a surviving merged auto plate carries both rooms floor intent after the other plate retires', () => {
+  // Native connected rooms already share a base plate, even across a wall.
+  // Start with disconnected rooms, so both previous carriers are native output.
+  const rectangleWalls = (x: number, name: string) => {
+    const ring: [number, number][] = [
+      [x, 0],
+      [x + 4, 0],
+      [x + 4, 4],
+      [x, 4],
+    ]
+    return ring.map((start, index) =>
+      WallNode.parse({
+        id: `wall_${name}_${index}`,
+        parentId: levelId,
+        start,
+        end: ring[(index + 1) % ring.length],
+        thickness: 0.2,
+      }),
+    )
+  }
+  const left = rectangleWalls(0, 'left')
+  const right = rectangleWalls(6, 'right')
+  const level = LevelNode.parse({
+    id: levelId,
+    children: [...left, ...right].map((wall) => wall.id),
+  })
+  const previous = reconcileSceneStructure({
+    nodes: Object.fromEntries([level, ...left, ...right].map((node) => [node.id, node])),
+    mintId: factory(),
+  }).nodes
+  const plates = ofKind(previous, 'slab') as SlabNode[]
+  const zones = ofKind(previous, 'zone') as ZoneNode[]
+  expect(plates).toHaveLength(2)
+  expect(zones).toHaveLength(2)
+  for (const plate of plates) expect(plate.boundary).toBe('auto')
+  assertIdempotent(previous)
+
+  // Join the right component onto the left: translate its walls and authored
+  // room outline by -2m, replacing the two meeting walls with one separator.
+  const joinedInput = { ...previous }
+  for (const wall of right)
+    joinedInput[wall.id] = {
+      ...wall,
+      start: [wall.start[0] - 2, wall.start[1]],
+      end: [wall.end[0] - 2, wall.end[1]],
+    }
+  const rightZone = zones.find((zone) => zone.polygon.every(([x]) => x > 4))
+  expect(rightZone).toBeDefined()
+  joinedInput[rightZone!.id] = {
+    ...rightZone!,
+    polygon: rightZone!.polygon.map(([x, z]): [number, number] => [x - 2, z]),
+  }
+  const removedWallIds = new Set<string>([left[1]!.id, right[3]!.id])
+  for (const id of removedWallIds) delete joinedInput[id]
+  const separator = SeparatorNode.parse({
+    id: 'separator_merge_floor',
+    parentId: levelId,
+    start: [4, 0],
+    end: [4, 4],
+  })
+  joinedInput[separator.id] = separator
+  const previousLevel = joinedInput[levelId] as LevelNode
+  joinedInput[levelId] = {
+    ...previousLevel,
+    children: [...previousLevel.children.filter((id) => !removedWallIds.has(id)), separator.id],
+  }
+  // A native snapshot-normalizing writer supplies the coalesced current graph
+  // before edit reconciliation compares it with the prior saved graph. Neither
+  // the surviving plate's tags nor the retired plate ID are fabricated here.
+  const current = reconcileSceneStructure({ nodes: joinedInput, mintId: factory(30) }).nodes
+  const merged = ofKind(current, 'slab') as SlabNode[]
+  expect(merged).toHaveLength(1)
+  expect(plates.filter((plate) => !current[plate.id])).toHaveLength(1)
+  for (const zone of zones) {
+    expect(current[zone.id]?.type).toBe('zone')
+    expect(merged[0]!.zoneIds).toContain(zone.id)
+  }
+  assertIdempotent(current)
+  const before = structuredClone(current)
+  const result = reconcileSceneStructure({
+    nodes: current,
+    previousNodes: previous,
+    mintId: factory(30),
+  })
+  const floors = ofKind(result.nodes, 'slab') as SlabNode[]
+  expect(floors).toHaveLength(1)
+  for (const zone of zones) {
+    const surviving = result.nodes[zone.id]
+    expect(surviving?.type).toBe('zone')
+    if (surviving?.type !== 'zone') throw new Error('Merged floors must preserve both rooms')
+    // Native room intent is optional: only the literal false opts out of a floor.
+    expect(surviving.hasFloor).not.toBe(false)
+    expect(floors[0]!.zoneIds).toContain(zone.id)
+  }
+  expect(current).toEqual(before)
+  assertIdempotent(result.nodes)
+
+  // Removing the final carrier is an explicit opt-out, not a merge.
+  const removed = { ...result.nodes }
+  delete removed[floors[0]!.id]
+  const afterLevel = removed[levelId] as LevelNode
+  removed[levelId] = {
+    ...afterLevel,
+    children: afterLevel.children.filter((id) => id !== floors[0]!.id),
+  }
+  const gone = reconcileSceneStructure({
+    nodes: removed,
+    previousNodes: result.nodes,
+    mintId: factory(40),
+  })
+  expect(ofKind(gone.nodes, 'slab')).toEqual([])
+  for (const zone of zones) expect(gone.nodes[zone.id]).toMatchObject({ hasFloor: false })
+  assertIdempotent(gone.nodes)
 })
 
 test('zone elevation remains authoritative through wall support edits', () => {
