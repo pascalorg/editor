@@ -706,8 +706,6 @@ export const seatHouse: AgentOperation<z.infer<typeof seatInput>> = (nodes, raw)
     // A copy of the record: what a host remembers against its own is not this operation's to trust.
     const read = terrainFacts({ ...after })
     const seated = read?.houses.find((each) => each.buildingId === building.id)
-    // What splits this level's floor, and its rooms with no floor plate: the seat moves floor
-    // plates, never such a room.
     const ofLevel = (finding: { code: string; id: string }) => {
       const zone = after[finding.id as AnyNodeId]
       return (
@@ -716,12 +714,6 @@ export const seatHouse: AgentOperation<z.infer<typeof seatInput>> = (nodes, raw)
         zone.parentId === level.id
       )
     }
-    const floorless = (read?.open ?? []).flatMap((finding) => {
-      const zone = after[finding.id as AnyNodeId]
-      return finding.code === 'room_without_floor' && zone?.type === 'zone' && ofLevel(finding)
-        ? [zone]
-        : []
-    })
     const about = new Set<string>([
       level.id,
       ...(seated?.walls.map((wall) => wall.wallId) ?? []),
@@ -735,10 +727,6 @@ export const seatHouse: AgentOperation<z.infer<typeof seatInput>> = (nodes, raw)
       ...facts,
       unmet: [
         ...facts.unmet,
-        ...floorless.map(
-          (zone) =>
-            `${zone.name ?? 'A room'} (${zone.id}) has no floor plate: not seated. The ground under it was graded only where the seated floor reaches; its walls and doors are in the facts after.`,
-        ),
         ...buried.map(
           (door) =>
             `${door.doorId}, on the level under ${level.name ?? level.id}, has the ground ${(-door.stepM).toFixed(2)} m over its sill: this strategy seats the ground level and leaves the level under it in the ground; walk_out stands that level on the low ground.`,

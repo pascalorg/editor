@@ -32,6 +32,7 @@ import {
 import { floorRoomFaces } from './floor-room-faces'
 import { getOpeningFloorTarget, wallSupportForNodes } from './opening-floor-datum'
 import { area, intersection } from './polygon-boolean'
+import { roomFloorElevation, roomFloorElevationOffset } from './room-floor-elevation'
 import {
   checkRoomFloor,
   getRoomBaseElevation,
@@ -147,19 +148,27 @@ export function expandFloorIntentChanges(
   const stack = footprintStackChanges(nodes, intent)
   const constructionUpdates = [...intent, ...stack.updates]
   const result = [...constructionUpdates]
+  const constructed = { ...nodes }
+  for (const { id, data } of constructionUpdates) {
+    const node = nodes[id]
+    if (node?.type !== 'slab' || node.plateRole !== 'base') continue
+    const next = { ...node, ...data } as SlabNode
+    next.elevation =
+      (data as Partial<SlabNode>).elevation ?? next.floorHeight ?? automaticFloorHeight(nodes, next)
+    constructed[id] = next
+  }
   for (const update of constructionUpdates) {
     const plate = nodes[update.id]
     if (
       plate?.type !== 'slab' ||
       plate.plateRole !== 'base' ||
-      (!Object.hasOwn(update.data, 'floorHeight') && !Object.hasOwn(update.data, 'elevation'))
+      (!Object.hasOwn(update.data, 'floorHeight') &&
+        !Object.hasOwn(update.data, 'elevation') &&
+        !Object.hasOwn(update.data, 'referenceFloorElevation'))
     )
       continue
-    const patch = update.data as Partial<typeof plate>
     const delta =
-      (patch.elevation ?? patch.floorHeight ?? automaticFloorHeight(nodes, plate)) -
-      (plate.floorHeight ?? plate.elevation)
-    if (!delta) continue
+      (constructed[plate.id] as SlabNode).elevation - (plate.floorHeight ?? plate.elevation)
     for (const zone of Object.values(nodes)) {
       if (
         zone.type !== 'zone' ||
@@ -177,16 +186,27 @@ export function expandFloorIntentChanges(
       if (data.floor && Object.hasOwn(data.floor, 'elevation')) continue
       const floor = data.floor ?? zone.floor
       if (floor?.elevation === undefined) continue
+      const elevation = roundFloorElevation(
+        floor.elevation +
+          delta +
+          roomFloorElevationOffset(nodes, zone.id) -
+          roomFloorElevationOffset(constructed, zone.id),
+      )
+      if (elevation === floor.elevation) continue
       const translated = {
         id: zone.id,
         data: {
           ...data,
-          floor: { ...floor, elevation: roundFloorElevation(floor.elevation + delta) },
+          floor: {
+            ...floor,
+            elevation,
+          },
         },
       }
       if (index >= 0) result[index] = translated
       else result.push(translated)
     }
+    if (!delta) continue
     for (const node of Object.values(nodes)) {
       if (node.parentId !== plate.parentId) continue
       let data: Partial<AnyNode> | undefined
@@ -503,12 +523,17 @@ export function floorIntentConflicts(
     const zone = drafted[id] as ZoneNode
     if (zone.floor?.support === 'open' || zone.spaceRole !== 'room' || zone.hasFloor === false)
       return []
-    const elevation = zone.floor?.elevation ?? getRoomBaseElevation(drafted, zone.id)
+    const elevation =
+      zone.floor?.elevation === undefined
+        ? getRoomBaseElevation(drafted, zone.id)
+        : roomFloorElevation(drafted, zone.id)
     const check = checkRoomFloor(drafted, id, elevation)
     const previous = nodes[id]
     const oldElevation =
       previous?.type === 'zone'
-        ? (previous.floor?.elevation ?? getRoomBaseElevation(nodes, id))
+        ? previous.floor?.elevation === undefined
+          ? getRoomBaseElevation(nodes, id)
+          : roomFloorElevation(nodes, id)
         : elevation
     const before = previous?.type === 'zone' ? checkRoomFloor(nodes, id, oldElevation) : undefined
     return check.conflicts.filter(

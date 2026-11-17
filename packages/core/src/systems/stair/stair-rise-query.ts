@@ -1,4 +1,5 @@
 import { containsPoint } from '../../lib/polygon-boolean'
+import { roomFloorElevation } from '../../lib/room-floor-elevation'
 import { slabTerrainHeightAt } from '../../lib/slab-terrain'
 import { queryNodes } from '../../runtime/node-queries'
 import type { AnyNode, AnyNodeId, LevelNode, StairNode, StairSegmentNode } from '../../schema'
@@ -99,7 +100,11 @@ export function resolveStairTotalRise(
       covers(node.polygon, []),
   )
   const top =
-    room?.type === 'zone' ? room.floor!.elevation! : plate?.type === 'slab' ? plate.elevation : 0
+    room?.type === 'zone'
+      ? roomFloorElevation(nodes, room.id)
+      : plate?.type === 'slab'
+        ? plate.elevation
+        : 0
   return (
     elevations.get(destinationId)!.baseY - elevations.get(level.id)!.baseY + top - baseElevation
   )

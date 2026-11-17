@@ -545,9 +545,7 @@ export function roomFloorBase(scene: StructureNodes, zoneId: string): number {
   const zone = scene[zoneId]
   if (zone?.type === 'zone' && zone.floor?.support === 'open' && zone.hostZoneId) {
     const host = scene[zone.hostZoneId]
-    return host?.type === 'zone'
-      ? (host.floor?.elevation ?? getRoomBaseElevation(scene, host.id))
-      : 0
+    return host?.type === 'zone' ? roomFloorElevation(scene, host.id) : 0
   }
   return getRoomBaseElevation(scene, zoneId)
 }

@@ -1,4 +1,7 @@
 import { afterEach, describe, expect, test } from 'bun:test'
+import { wallSupportForNodes } from '../lib/opening-floor-datum'
+import { containsPoint } from '../lib/polygon-boolean'
+import { roomFloorElevation } from '../lib/room-floor-elevation'
 import { pauseSpaceDetection, resumeSpaceDetection } from '../lib/space-detection'
 import { applyStructureReconciliation } from '../lib/structure-commit'
 import { closeLiveScene, openLiveScene, snapshotOf } from '../runtime/__fixtures__/live-scene'
@@ -9,12 +12,12 @@ import {
   generateId,
   LevelNode,
   type SiteNode,
-  type SlabNode,
+  SlabNode,
   type WallNode,
   type ZoneNode,
 } from '../schema'
 import useScene, { clearSceneHistory } from '../store/use-scene'
-import { runSettled, settle, slopedLot } from './__fixtures__/sloped-lots'
+import { groundAt, runSettled, settle, slopedLot } from './__fixtures__/sloped-lots'
 import { applyAgentOutcome } from './apply-outcome'
 import { AGENT_OPERATIONS } from './index'
 
@@ -220,34 +223,112 @@ describe('a later call never switches off a floor the derivation merged back (D4
   })
 })
 
-describe('a split floor is said (D41)', () => {
-  test("a room's stored floor elevation left behind by the ground is a finding", () => {
+describe('room floors follow the house base without losing intended steps', () => {
+  test.each([0.05, 0.2])(
+    'a stored floor at %s follows the raised base and keeps its step',
+    (elevation) => {
+      const run = pureRunner(emptyLot())
+      const shellId = neutralHouse(run.tool)
+      run.tool('set_zone_intent', { zoneId: shellId, patch: { floor: { elevation } } })
+      const flat = roomFloorElevation(run.nodes(), shellId)
+      expect(flat).toBeCloseTo(elevation, 6)
+      run.tool('set_terrain_plane', HILL)
+      const nodes = run.nodes()
+      const base = basePlates(nodes)[0]!
+      expect(base.elevation).toBeCloseTo(1.65, 2)
+      expect(roomFloorElevation(nodes, shellId) - base.elevation).toBeCloseTo(elevation - 0.05, 6)
+      expect((nodes[shellId] as ZoneNode).floor?.elevation).toBe(elevation)
+      const floors = Object.values(nodes).filter(
+        (node): node is SlabNode => node.type === 'slab' && !!node.zoneIds?.includes(shellId),
+      )
+      expect(
+        floors.some((floor) =>
+          containsPoint([{ outer: floor.polygon, holes: floor.holes }], [1, 0]),
+        ),
+      ).toBe(true)
+      const facts = run.tool('read_terrain_facts', {}) as unknown as Facts
+      expect(facts.open.filter((finding) => finding.code === 'floor_split')).toEqual([])
+      const again = settle(nodes)
+      expect(roomFloorElevation(again, shellId)).toBeCloseTo(roomFloorElevation(nodes, shellId), 6)
+    },
+  )
+
+  test('loading a synthetic stored split restores the living floor and is stable on a second load', () => {
     const run = pureRunner(emptyLot())
     const shellId = neutralHouse(run.tool)
     run.tool('set_terrain_plane', HILL)
-    const facts = run.tool('read_terrain_facts', {}) as unknown as Facts
-    const split = facts.open.find((finding) => finding.id === shellId)
-    expect(split?.code).toBe('floor_split')
-    // The floor that rests on the ground has followed it to 1.65 m; the room stayed at 0.05 m.
-    expect(split?.value).toBeCloseTo(1.6, 1)
+    const nodes = run.nodes()
+    const base = basePlates(nodes)[0]!
+    const clear: Pt[] = [
+      [-4.3, -3.8],
+      [4.3, -3.8],
+      [4.3, 1.8],
+      [-4.3, 1.8],
+    ]
+    const sunken = SlabNode.parse({
+      id: 'slab_stored_split',
+      parentId: LEVEL,
+      boundary: 'auto',
+      autoFromWalls: true,
+      plateRole: 'sunken',
+      polygon: clear,
+      elevation: 0.05,
+      thickness: 0.05,
+      zoneIds: [shellId],
+    })
+    const level = nodes[LEVEL] as LevelNode
+    const stored = JSON.parse(
+      JSON.stringify({
+        ...nodes,
+        [LEVEL]: { ...level, children: [...level.children, sunken.id] },
+        [base.id]: {
+          ...base,
+          holes: [...base.holes, clear],
+          holeMetadata: [...base.holeMetadata, { source: 'room' }],
+        },
+        [sunken.id]: sunken,
+      }),
+    ) as Nodes
+    const loaded = settle(stored)
+    expect((loaded[shellId] as ZoneNode).floor?.elevation).toBe(0.05)
+    const plates = Object.values(loaded).filter(
+      (node): node is SlabNode => node.type === 'slab' && node.boundary === 'auto',
+    )
+    expect(plates.every((plate) => Math.abs(plate.elevation - base.elevation) < 1e-6)).toBe(true)
+    expect(
+      plates.some((plate) => containsPoint([{ outer: plate.polygon, holes: plate.holes }], [1, 0])),
+    ).toBe(true)
+    expect(Object.values(settle(loaded)).filter((node) => node.type === 'slab')).toEqual(plates)
   })
 
-  test('base plates of one floor at two heights are a finding', () => {
+  test('a floorless room connects automatic base plates into one house datum', () => {
     const run = pureRunner(emptyLot())
     const shellId = neutralHouse(run.tool)
-    // The living room between the wings without a floor: the rear block and the garage block
-    // each rest on their own ground.
     run.tool('set_zone_intent', { zoneId: shellId, patch: { floor: { elevation: null } } })
     run.tool('set_zone_intent', { zoneId: shellId, patch: { hasFloor: false } })
     run.tool('set_terrain_plane', HILL)
     const plates = basePlates(run.nodes())
     expect(plates.length).toBe(2)
     const facts = run.tool('read_terrain_facts', {}) as unknown as Facts
+    expect(plates[0]!.elevation).toBeCloseTo(plates[1]!.elevation, 6)
+    expect(facts.open.filter((finding) => finding.code === 'floor_split')).toEqual([])
+  })
+
+  test('an explicitly stepped base remains a floor_split finding', () => {
+    const run = pureRunner(emptyLot())
+    const shellId = neutralHouse(run.tool)
+    run.tool('set_zone_intent', {
+      zoneId: shellId,
+      patch: { floor: { elevation: null }, hasFloor: false },
+    })
+    const plates = basePlates(run.nodes())
+    expect(plates).toHaveLength(2)
+    run.tool('set_floor_foundation', { slabId: plates[0]!.id, patch: { floorHeight: 0.45 } })
+    const facts = run.tool('read_terrain_facts', {}) as unknown as Facts
     const split = facts.open.find(
       (finding) => finding.code === 'floor_split' && finding.id === LEVEL,
     )
-    const tops = plates.map((plate) => plate.elevation)
-    expect(split?.value).toBeCloseTo(Math.max(...tops) - Math.min(...tops), 1)
+    expect(split?.value).toBeCloseTo(0.4, 2)
   })
 
   test('a flat site with the same house says nothing of a split', () => {
@@ -257,22 +338,25 @@ describe('a split floor is said (D41)', () => {
     expect(facts.open.filter((finding) => finding.code === 'floor_split')).toEqual([])
   })
 
-  test('a gentle rise splits the floor less, and is said all the same', () => {
-    const run = pureRunner(emptyLot())
-    const shellId = neutralHouse(run.tool)
-    // 5 %: the floor that rests on the ground follows it to about 0.45 m; the room stays at 0.05.
-    run.tool('set_terrain_plane', {
-      ...HILL,
-      through: [
-        { at: [0, 10], heightM: -0.5 },
-        { at: [0, -10], heightM: 0.5 },
-      ],
-    })
-    const facts = run.tool('read_terrain_facts', {}) as unknown as Facts
-    const split = facts.open.find((finding) => finding.id === shellId)
-    expect(split?.code).toBe('floor_split')
-    expect(split?.value).toBeCloseTo(0.4, 1)
-  })
+  test.each([0.4, -0.2])(
+    'an authored room step at %s remains a floor_split finding on a gentle rise',
+    (elevation) => {
+      const run = pureRunner(emptyLot())
+      const shellId = neutralHouse(run.tool)
+      run.tool('set_zone_intent', { zoneId: shellId, patch: { floor: { elevation } } })
+      run.tool('set_terrain_plane', {
+        ...HILL,
+        through: [
+          { at: [0, 10], heightM: -0.5 },
+          { at: [0, -10], heightM: 0.5 },
+        ],
+      })
+      const facts = run.tool('read_terrain_facts', {}) as unknown as Facts
+      const split = facts.open.find((finding) => finding.id === shellId)
+      expect(split?.code).toBe('floor_split')
+      expect(split?.value).toBeCloseTo(Math.abs(elevation - 0.05), 2)
+    },
+  )
 
   test('a detached shed on the same level is another floor, not a split one', () => {
     const run = pureRunner(emptyLot())
@@ -322,7 +406,7 @@ describe('a room with no floor plate is read and named by the terraforming tools
     return { run, garage, street }
   }
 
-  test('read_terrain_facts lists the walls and the door of a floorless garage, read from their own foot', () => {
+  test('floorless garage walls and door follow the lifted house plate in support and terrain facts', () => {
     const { run, garage, street } = floorlessGarage()
     const facts = run.tool('read_terrain_facts', {}) as unknown as Facts
     const house = facts.houses[0]!
@@ -343,30 +427,64 @@ describe('a room with no floor plate is read and named by the terraforming tools
       ],
     ] as [Pt, Pt][])
       expect(listed.has(wallAt(nodes, from, to)?.id ?? 'missing')).toBe(true)
-    // The street wall is read from its own foot, which stands on the ground there (-1.6 m), not
-    // against the floor plate of the rear block at 1.65 m (3.3 m over the ground).
+    const base = basePlates(nodes)[0]!
+    for (const id of garage.boundaryWallIds) {
+      const support = wallSupportForNodes(nodes[id] as WallNode, nodes)
+      expect(support.elevation).toBeCloseTo(base.elevation, 6)
+      expect(
+        support.baseSegments.every(
+          (segment) => Math.abs(segment.elevation - base.elevation) < 1e-6,
+        ),
+      ).toBe(true)
+    }
     const front = house.walls.find((wall) => wall.wallId === street.id)!
-    expect(Math.abs(front.floorOverGroundM.max)).toBeLessThan(0.2)
-    expect(house.doors.some((each) => each.doorId === 'door_garage')).toBe(true)
+    expect(front.floorOverGroundM.min).toBeGreaterThan(3)
+    expect(house.doors.find((each) => each.doorId === 'door_garage')?.stepM).toBeGreaterThan(3)
     const named = facts.open.find(
       (finding) => finding.code === 'room_without_floor' && finding.id === garage.id,
     )
     expect(named?.message).toContain('has no floor plate')
   })
 
-  test('seat_house says the floorless garage is not seated, and keeps its findings after', () => {
+  test('seat_house grades beneath the floorless wing without inventing a floor', () => {
     const { run, garage } = floorlessGarage()
-    const seat = run.tool('seat_house', {}) as {
+    const seat = run.tool('seat_house', { groundM: 0 }) as {
       unmet: string[]
       after: { open: Finding[] }
     }
-    expect(
-      seat.unmet.some((line) => line.includes(`(${garage.id}) has no floor plate: not seated`)),
-    ).toBe(true)
+    for (const [x, z] of [
+      [0, 4],
+      [3, 6],
+      [0, 7],
+    ] as Pt[])
+      expect(groundAt(run.nodes(), x, z)).toBeCloseTo(0, 2)
+    expect((run.nodes()[garage.id] as ZoneNode).hasFloor).toBe(false)
+    expect(basePlates(run.nodes()).some((plate) => plate.zoneIds?.includes(garage.id))).toBe(false)
+    expect(seat.unmet.some((line) => line.includes('not seated'))).toBe(false)
     expect(
       seat.after.open.some(
         (finding) => finding.code === 'room_without_floor' && finding.id === garage.id,
       ),
     ).toBe(true)
+  })
+
+  test('terrain facts include a floorless open porch and its exterior wall and door', () => {
+    const { run, garage, street } = floorlessGarage()
+    run.set({
+      ...run.nodes(),
+      [garage.id]: {
+        ...run.nodes()[garage.id],
+        enclosureStatus: 'open',
+        roomType: 'porch',
+      } as ZoneNode,
+    })
+    const facts = run.tool('read_terrain_facts', {}) as unknown as Facts
+    expect(
+      facts.open.some(
+        (finding) => finding.code === 'room_without_floor' && finding.id === garage.id,
+      ),
+    ).toBe(true)
+    expect(facts.houses[0]!.walls.some((wall) => wall.wallId === street.id)).toBe(true)
+    expect(facts.houses[0]!.doors.some((door) => door.doorId === 'door_garage')).toBe(true)
   })
 })

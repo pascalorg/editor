@@ -6,6 +6,7 @@ import {
   type GeometryContext,
   polygonInteriorPoint,
   readFloorplanContext,
+  roomFloorElevation,
   type SlabNode,
   type ZoneNode,
 } from '@pascal-app/core'
@@ -283,8 +284,10 @@ const ROOM_LIFT_COLOR = '#6366f1'
  * chip; 0 when the room carries no floor intent of its own.
  */
 function roomFloorLift(node: ZoneNode, ctx: GeometryContext): number {
-  const elevation = node.floor?.elevation
-  if (elevation === undefined) return 0
+  if (node.floor?.elevation === undefined) return 0
+  const elevationOf = (zone: ZoneNode) =>
+    roomFloorElevation(ctx.sceneNodes ?? { [zone.id]: zone }, zone.id)
+  const elevation = elevationOf(node)
   const baseOf = (zone: ZoneNode | undefined): number | undefined => {
     if (!zone?.parentId) return undefined
     const level = ctx.resolve(zone.parentId as AnyNodeId)
@@ -299,7 +302,7 @@ function roomFloorLift(node: ZoneNode, ctx: GeometryContext): number {
   let base: number | undefined
   if (node.floor?.support === 'open' && node.hostZoneId) {
     const host = ctx.resolve<ZoneNode>(node.hostZoneId as AnyNodeId)
-    base = host?.floor?.elevation ?? baseOf(host)
+    base = host?.floor?.elevation === undefined ? baseOf(host) : elevationOf(host)
   } else base = baseOf(node)
   return base === undefined ? 0 : Math.round((elevation - base) * 1000) / 1000
 }

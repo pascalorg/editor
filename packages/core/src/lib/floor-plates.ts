@@ -425,14 +425,25 @@ export function buildFloorPlates({
           polygon: footprint.outer,
           holes: footprint.holes,
         } as SlabNode)
-      return { footprint, members, source, elevation, own, holdsUnderside }
+      const roomElevationOffset =
+        !own &&
+        !holdsUnderside &&
+        source?.floorHeight === undefined &&
+        source?.referenceFloorElevation === undefined
+          ? elevation - DEFAULT_SLAB_ELEVATION
+          : 0
+      return { footprint, members, source, elevation, own, holdsUnderside, roomElevationOffset }
     })
   const componentOf = (room: PlateRoom) =>
     components.find((component) => component.members.includes(room))
   const baseOf = (room: PlateRoom) => componentOf(room)?.elevation ?? DEFAULT_SLAB_ELEVATION
   // A room stepped down from the floor it shares (a porch, `floor.drop`) follows that floor.
-  const elevationOf = (room: PlateRoom) =>
-    intent.get(room.zone.id) ?? baseOf(room) - (room.zone.floor?.drop ?? 0)
+  const elevationOf = (room: PlateRoom) => {
+    const stored = intent.get(room.zone.id)
+    return stored === undefined
+      ? baseOf(room) - (room.zone.floor?.drop ?? 0)
+      : stored + (componentOf(room)?.roomElevationOffset ?? 0)
+  }
   const thresholds = floorOpeningFootprints(grounded, elevationOf, nodes ?? {})
   const interiors = new Map(
     grounded.map((room) => [

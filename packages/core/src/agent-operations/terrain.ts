@@ -9,6 +9,7 @@ import {
   sampleTerrainLineTool,
   shapeSiteTerrainTool,
 } from '../agent-tools/terrain'
+import { connectedHouseFootprint } from '../lib/house-footprint'
 import { intersection, area as sharedArea } from '../lib/polygon-boolean'
 import { segmentsIntersect } from '../lib/polygon-relations'
 import { classifyEdges, edgeLength, outwardNormal, resolveFrontEdge } from '../lib/setback-envelope'
@@ -29,7 +30,7 @@ import { persistedTerrainFieldOf } from '../lib/terrain-source-persisted'
 import { planTerrainTileChanges } from '../lib/terrain-tile-changes'
 import { terrainEditField } from '../lib/terrain-tile-write'
 import { queryNodes } from '../runtime/node-queries'
-import type { AnyNode, SiteNode } from '../schema'
+import type { AnyNode, SiteNode, ZoneNode } from '../schema'
 import { TerrainBreakNode } from '../schema/nodes/terrain-break'
 import { getLevelElevations } from '../services/storey'
 import useLiveTerrain from '../store/use-live-terrain'
@@ -1688,16 +1689,30 @@ function siteFrameFootprint(
   return { footprint, slabTopM: building.position[1] + surface.top }
 }
 
-/** The house a ground tool works around: the largest slab of a level, in the site frame. */
 export function houseOutline(nodes: SceneNodes, levelId?: string) {
   const surfaces = slabSurfaces(nodes as Record<string, AnyNode>)
   const resolved = houseLevelId(nodes, surfaces, levelId)
   const surface = largestSlabOn(surfaces, resolved)
+  const rooms = queryNodes<ZoneNode>(nodes, { type: 'zone', parentId: resolved })
+  const { footprint, floorlessRooms } = connectedHouseFootprint(
+    surface.solid[0]!,
+    rooms,
+    surfaces.flatMap((sibling) =>
+      sibling !== surface && sibling.levelId === resolved && sibling.slab.plateRole === 'base'
+        ? sibling.solid
+        : [],
+    ),
+  )
+  if (footprint.length !== 1)
+    refuse('disconnected_footprint', 'The house has no single connected footprint to grade.')
   return {
     levelId: resolved as string,
     slabId: surface.slab.id,
     buildingId: surface.buildingId as string,
-    ...siteFrameFootprint(nodes, surface),
+    ...siteFrameFootprint(
+      nodes,
+      floorlessRooms.length ? { ...surface, solid: footprint } : surface,
+    ),
   }
 }
 

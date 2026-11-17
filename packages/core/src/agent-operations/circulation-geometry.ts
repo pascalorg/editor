@@ -1,5 +1,6 @@
 import { resolveLevelId } from '../lib/node-ancestry'
 import { area, containsPoint, intersection } from '../lib/polygon-boolean'
+import { roomFloorElevation } from '../lib/room-floor-elevation'
 import { buildCirculationGraph, type CirculationGraph } from './circulation-graph'
 import { spaceRegion } from './circulation-spaces'
 import type { SceneNodes } from './types'
@@ -43,7 +44,8 @@ function floorReasons(scene: SceneNodes, graph: CirculationGraph, add: AddReason
         add(floor.ground ? 'floorless_interior_spaces' : 'floorless_upper_spaces', zone.id)
       else if (
         source.floor?.elevation !== undefined &&
-        Math.abs(floor.groundElevation + source.floor.elevation - floor.elevation) > 1e-6
+        Math.abs(floor.groundElevation + roomFloorElevation(scene, source.id) - floor.elevation) >
+          1e-6
       )
         add('split_interior_floors', zone.id)
     }

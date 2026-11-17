@@ -1,4 +1,6 @@
 import type { AnyNode, SlabNode, ZoneNode } from '../schema'
+import { DEFAULT_SLAB_ELEVATION } from '../schema/nodes/slab'
+import { floorPlateHoldsUnderside } from './floor-foundation-datum'
 import { area } from './polygon-boolean'
 
 type Nodes = Readonly<Record<string, AnyNode>>
@@ -34,17 +36,42 @@ export function roomOwnPlate(nodes: Nodes, zoneId: string): SlabNode | null {
   return alone ? plate : null
 }
 
-/** The walking surface of a room: its own elevation, else its plate's. */
+export function roomFloorElevationOffset(nodes: Nodes, zoneId: string): number {
+  const zone = nodes[zoneId]
+  if (!isGroundRoom(zone) || zone.floor?.footprint) return 0
+  const base = Object.values(nodes).find(
+    (node): node is SlabNode =>
+      node.type === 'slab' &&
+      node.plateRole === 'base' &&
+      node.parentId === zone.parentId &&
+      !!node.zoneIds?.includes(zone.id),
+  )
+  if (
+    !base ||
+    base.floorHeight !== undefined ||
+    base.referenceFloorElevation !== undefined ||
+    floorPlateHoldsUnderside(nodes, base)
+  )
+    return 0
+  return base.elevation - DEFAULT_SLAB_ELEVATION
+}
+
+/** Stored room steps ride the automatic ground datum; authored plate tops stay absolute. */
 export function roomFloorElevation(nodes: Nodes, zoneId: string): number {
   const zone = nodes[zoneId]
   if (zone?.type !== 'zone') return 0
   const own = roomOwnPlate(nodes, zoneId)
   if (own) return own.elevation
-  if (typeof zone.floor?.elevation === 'number') return zone.floor.elevation
-  const plate = Object.values(nodes).find(
-    (node) => node.type === 'slab' && node.zoneIds?.includes(zoneId),
+  if (typeof zone.floor?.elevation === 'number')
+    return zone.floor.elevation + roomFloorElevationOffset(nodes, zoneId)
+  const plates = Object.values(nodes).filter(
+    (node): node is SlabNode => node.type === 'slab' && !!node.zoneIds?.includes(zoneId),
   )
-  return plate?.type === 'slab' ? (plate.elevation ?? 0.05) : 0.05
+  const base = plates.find((plate) => plate.plateRole === 'base')
+  const baseTop = base?.elevation
+  if (baseTop !== undefined && zone.floor?.drop !== undefined) return baseTop - zone.floor.drop
+  const plate = plates[0]
+  return (plate === base ? baseTop : plate?.elevation) ?? DEFAULT_SLAB_ELEVATION
 }
 
 /** The walking surface of a room the separator closes, else zero. */

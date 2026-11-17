@@ -1,6 +1,8 @@
 import { floorConstructionLift, liftedManualSlab } from '../../lib/floor-construction-lift'
 import { floorRoomFaces, roomPolygonKey } from '../../lib/floor-room-faces'
+import { connectedHouseFootprint } from '../../lib/house-footprint'
 import { area, intersection, type MultiPolygon, union } from '../../lib/polygon-boolean'
+import { roomFloorElevation } from '../../lib/room-floor-elevation'
 import {
   getRenderableSlabPolygon,
   prepareSlabPolygonContext,
@@ -704,8 +706,40 @@ type SupportMemo = {
   terrainResults?: { revision: object; results: Map<string, WallSlabSupport> }
   baseAt?: (x: number, z: number) => number
   roomBases?: Map<string, RoomFaceBases>
+  houseFootprints?: Map<string, MultiPolygon>
 }
 const supportMemo = new WeakMap<WallNode[], SupportMemo>()
+
+function houseSupportFootprint(
+  slab: SlabNode,
+  slabs: readonly SlabNode[],
+  nodes: Readonly<Record<string, AnyNode>>,
+  memo: SupportMemo,
+): MultiPolygon {
+  memo.houseFootprints ??= new Map()
+  const cached = memo.houseFootprints.get(slab.id)
+  if (cached) return cached
+  const seed = { outer: slab.polygon, holes: slab.holes ?? [] }
+  const rooms = Object.values(nodes).filter(
+    (node): node is ZoneNode => node.type === 'zone' && node.parentId === slab.parentId,
+  )
+  const siblings = slabs
+    .filter(
+      (other) =>
+        other.parentId === slab.parentId && other.plateRole === 'base' && other.support !== 'open',
+    )
+    .map((other) => ({ outer: other.polygon, holes: other.holes ?? [] }))
+  const { floorlessRooms } = connectedHouseFootprint(seed, rooms, siblings)
+  // Extend only support, never the rendered plate or a sibling's authored floor height.
+  const footprint = floorlessRooms.length
+    ? union([
+        seed,
+        ...floorlessRooms.map((room) => ({ outer: room.polygon, holes: room.holes ?? [] })),
+      ])
+    : [seed]
+  memo.houseFootprints.set(slab.id, footprint)
+  return footprint
+}
 
 function roomFaceBases(
   slabs: readonly SlabNode[],
@@ -766,7 +800,9 @@ function roomFaceBases(
       ) ?? slabs.find((slab) => slab.plateRole === 'base' && slab.zoneIds?.includes(zone.id))
     const elevation = plate
       ? plate.plateRole
-        ? (zone.floor?.elevation ?? plate.elevation)
+        ? zone.floor?.elevation === undefined
+          ? plate.elevation
+          : roomFloorElevation(nodes, zone.id)
         : plate.elevation
       : undefined
     if (elevation === undefined || zone.hasFloor === false) continue
@@ -1050,7 +1086,10 @@ function computeWallSlabSupportUncached(
       slab.polygon.length < 3
     )
       continue
-    const renderedPolygon = renderedSlabPolygon(slab, slabs, levelWalls, nodes)
+    const renderedPolygon =
+      nodes && slab.plateRole === 'base' && preferredSlabId == null
+        ? houseSupportFootprint(slab, slabs, nodes, memo)
+        : renderedSlabPolygon(slab, slabs, levelWalls, nodes)
     const bounds = polygonBounds(renderedPolygon)
     if (
       bounds.minX > band.maxX ||

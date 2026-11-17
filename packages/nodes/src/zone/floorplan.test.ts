@@ -1,11 +1,15 @@
 import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import {
+  type AnyNode,
+  BuildingNode,
   containsPoint,
   createFloorplanContextExtensions,
   type FloorplanGeometry,
   type GeometryContext,
+  LevelNode,
   readFloorplanGeometryMetadata,
+  SlabNode,
   ZoneNode,
 } from '@pascal-app/core'
 import { buildZoneFloorplan } from './floorplan'
@@ -180,17 +184,40 @@ describe('buildZoneFloorplan floor lift chip', () => {
       spaceRole: 'room',
       ...(elevation === undefined ? {} : { floor: { elevation } }),
     })
-  const withPlate = (zone: ZoneNode): GeometryContext => {
-    const level = { id: 'level_lift', type: 'level', children: ['slab_lift_base'] }
-    const plate = {
+  const withPlate = (
+    zone: ZoneNode,
+    elevation = 0.05,
+    extraZones: ZoneNode[] = [],
+    plateIntent: Partial<SlabNode> = {},
+  ): GeometryContext => {
+    const building = BuildingNode.parse({
+      id: 'building_lift',
+      children: ['level_lift'],
+    })
+    const level = LevelNode.parse({
+      id: 'level_lift',
+      parentId: building.id,
+      level: 0,
+      children: ['slab_lift_base', zone.id, ...extraZones.map((room) => room.id)],
+    })
+    const plate = SlabNode.parse({
       id: 'slab_lift_base',
-      type: 'slab',
+      parentId: level.id,
       plateRole: 'base',
+      boundary: 'auto',
       zoneIds: [zone.id],
-      elevation: 0.05,
+      polygon: zone.polygon,
+      elevation,
+      ...plateIntent,
+    })
+    const byId: Record<string, AnyNode> = Object.fromEntries(
+      [building, level, plate, zone, ...extraZones].map((node) => [node.id, node]),
+    )
+    return {
+      ...context,
+      sceneNodes: byId,
+      resolve: ((id: string) => byId[id]) as GeometryContext['resolve'],
     }
-    const byId: Record<string, unknown> = { [level.id]: level, [plate.id]: plate }
-    return { ...context, resolve: ((id: string) => byId[id]) as GeometryContext['resolve'] }
   }
   const texts = (zone: ZoneNode) =>
     textChildren(buildZoneFloorplan(zone, withPlate(zone))).map(
@@ -205,6 +232,38 @@ describe('buildZoneFloorplan floor lift chip', () => {
   test('a room at its footprint floor shows none', () => {
     expect(texts(room(0.05))[0]).toBe('Lounge')
     expect(texts(room())[0]).toBe('Lounge')
+  })
+
+  test('automatic hillside floors keep raised and sunken label offsets relative to the base', () => {
+    for (const [elevation, label] of [
+      [0.2, '+0.15m'],
+      [-0.25, '−0.3m'],
+      [0.05, 'Lounge'],
+    ] as const) {
+      const zone = room(elevation)
+      const labels = textChildren(buildZoneFloorplan(zone, withPlate(zone, 1.65)))
+      expect(labels[0]?.text).toBe(label)
+    }
+  })
+
+  test('authored foundation tops keep explicit room elevations absolute', () => {
+    const zone = room(1.8)
+    const labels = textChildren(
+      buildZoneFloorplan(zone, withPlate(zone, 1.65, [], { floorHeight: 1.65 })),
+    )
+    expect(labels[0]?.text).toBe('+0.15m')
+  })
+
+  test('an open floor stays absolute while its host room follows the hillside base', () => {
+    const host = room(0.2)
+    const mezzanine = ZoneNode.parse({
+      ...room(2.3),
+      id: 'zone_mezzanine',
+      hostZoneId: host.id,
+      floor: { elevation: 2.3, support: 'open' },
+    })
+    const labels = textChildren(buildZoneFloorplan(mezzanine, withPlate(host, 1.65, [mezzanine])))
+    expect(labels[0]?.text).toBe('+0.5m')
   })
 })
 

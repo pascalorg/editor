@@ -18,6 +18,7 @@ import {
   wallSupportForNodes,
 } from './opening-floor-datum'
 import { area, intersection, union } from './polygon-boolean'
+import { roomFloorElevation, roomFloorElevationOffset } from './room-floor-elevation'
 import { autoRoomVerticalPlacements } from './room-vertical-placement'
 
 export const FLOOR_ELEVATION_EPSILON = 0.001
@@ -128,6 +129,7 @@ export function automaticRoomBaseElevations(
               hasFloor: node.hasFloor,
               enclosureStatus: node.enclosureStatus,
               support: node.floor?.support,
+              footprint: node.floor?.footprint,
               boundaryWallIds: node.boundaryWallIds,
               boundarySeparatorIds: node.boundarySeparatorIds,
             }
@@ -200,11 +202,17 @@ function computeRoomFloor(
   const level = nodes[zone.parentId!]
   if (level?.type !== 'level') throw new Error(`Level not found: ${zone.parentId}`)
   const candidate =
-    (zone.floor?.elevation ?? getRoomBaseElevation(nodes, zoneId)) === proposedElevation
+    roomFloorElevation(nodes, zoneId) === proposedElevation
       ? nodes
       : {
           ...nodes,
-          [zoneId]: { ...zone, floor: { ...zone.floor, elevation: proposedElevation } },
+          [zoneId]: {
+            ...zone,
+            floor: {
+              ...zone.floor,
+              elevation: proposedElevation - roomFloorElevationOffset(nodes, zoneId),
+            },
+          },
         }
   const linked = zone.boundaryWallIds?.length ? new Set(zone.boundaryWallIds) : undefined
   const spans = linked
@@ -367,10 +375,8 @@ export function getRoomRelativeFloorElevation(
   nodes: Readonly<Record<string, AnyNode>>,
   zoneId: string,
 ): number {
-  const zone = nodes[zoneId]
   return roundFloorElevation(
-    ((zone?.type === 'zone' ? zone.floor?.elevation : undefined) ??
-      getRoomBaseElevation(nodes, zoneId)) - getRoomBaseElevation(nodes, zoneId),
+    roomFloorElevation(nodes, zoneId) - getRoomBaseElevation(nodes, zoneId),
   )
 }
 
@@ -389,10 +395,7 @@ export function clampRoomFloorHandle(
 ): number {
   const check = checkRoomFloor(nodes, zoneId, proposed)
   const zone = nodes[zoneId]
-  const current =
-    zone?.type === 'zone'
-      ? (zone.floor?.elevation ?? getRoomBaseElevation(nodes, zoneId))
-      : proposed
+  const current = zone?.type === 'zone' ? roomFloorElevation(nodes, zoneId) : proposed
   // Existing overloads may improve incrementally without snapping to another floor.
   const max = Math.max(current, Math.floor((check.maxElevation + 1e-9) / 0.05) * 0.05)
   const min = Math.min(current, Math.ceil((check.minElevation - 1e-9) / 0.05) * 0.05)

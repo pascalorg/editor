@@ -5,6 +5,7 @@ import { groundLevelOf } from '../lib/ground-level'
 import { getOpeningFloorDatum, wallSupportForNodes } from '../lib/opening-floor-datum'
 import { rampHeightAt, rampOffsetPoint, rampStations } from '../lib/ramp'
 import { rampFacts } from '../lib/ramp-facts'
+import { roomFloorElevation } from '../lib/room-floor-elevation'
 import { classifyEdges, outwardNormal, resolveFrontEdge } from '../lib/setback-envelope'
 import { isSiteFlatwork } from '../lib/site-flatwork'
 import { slabTerrainHeightAt } from '../lib/slab-terrain'
@@ -25,7 +26,7 @@ import type {
   WallNode,
   ZoneNode,
 } from '../schema'
-import { DEFAULT_SLAB_ELEVATION, MIN_SLAB_THICKNESS } from '../schema/nodes/slab'
+import { MIN_SLAB_THICKNESS } from '../schema/nodes/slab'
 import {
   getLevelElevations,
   getLevelFloorToFloorHeight,
@@ -462,17 +463,12 @@ function inOrNear(x: number, z: number, polygon: Pt[], reach: number): boolean {
 
 type Exterior = { wall: WallNode; outward: 1 | -1 }
 
-/**
- * The enclosed rooms of a level that have no floor plate (`hasFloor: false`): a garage or a carport
- * on the ground. They are inside the house all the same: their walls meet the ground.
- */
 function floorlessRooms(level: LevelNode, nodes: SceneNodes): ZoneNode[] {
   return level.children.flatMap((id) => {
     const zone = nodes[id as AnyNodeId]
     return zone?.type === 'zone' &&
       zone.spaceRole === 'room' &&
       zone.hasFloor === false &&
-      zone.enclosureStatus !== 'open' &&
       zone.polygon.length >= 3
       ? [zone]
       : []
@@ -821,9 +817,8 @@ function touches(a: Pt[], b: Pt[]): boolean {
  * What splits the floor of a house's ground level, and the rooms the house holds with no floor:
  * - shared base plates (not a room's own keyed floor) of one house, joined by a room or touching,
  *   standing at different heights (a detached shed on the same level is another floor);
- * - a room with a floor elevation of its own (level-local, written once) off the floor that the
- *   ground has moved: it stands on a plate of its own that far off the rest;
- * - a room with no floor plate: no seat moves it, its walls stand on their own foot.
+ * - a room with an authored step off its shared base;
+ * - a room with no floor plate, measured from its walls' resolved support.
  */
 function floorFindings(house: HouseGroundFacts, nodes: SceneNodes): TerrainFinding[] {
   const L = TERRAIN_FACT_LIMITS
@@ -877,25 +872,17 @@ function floorFindings(house: HouseGroundFacts, nodes: SceneNodes): TerrainFindi
       })
   }
   for (const { slab, top } of tops) {
-    if (!followsGround(nodes, slab) || top - plane - DEFAULT_SLAB_ELEVATION <= L.floorLiftM)
-      continue
     for (const id of slab.zoneIds ?? []) {
       const zone = zoneOf(id)
-      const stored = zone?.floor?.elevation
-      if (
-        !zone ||
-        stored === undefined ||
-        zone.hasFloor === false ||
-        zone.floor?.support === 'open' ||
-        Math.abs(plane + stored - top) <= L.floorLiftM
-      )
-        continue
-      const step = plane + stored - top
+      if (!zone || zone.hasFloor === false || zone.floor?.support === 'open') continue
+      const floor = plane + roomFloorElevation(nodes, zone.id)
+      const step = floor - top
+      if (Math.abs(step) <= L.floorLiftM + 1e-9) continue
       findings.push({
         code: 'floor_split',
         id: zone.id,
         value: round(Math.abs(step)),
-        message: `${nameOf(zone)} has a floor elevation of its own (${stored.toFixed(2)} m over the level's base), ${Math.abs(step).toFixed(2)} m ${step < 0 ? 'under' : 'over'} the floor that rests on the ground and follows it (${top.toFixed(2)} m): it stands on a plate of its own. A stored floor elevation stays where it is written when the ground moves.`,
+        message: `${nameOf(zone)} has an authored floor step of ${Math.abs(step).toFixed(2)} m ${step < 0 ? 'under' : 'over'} its shared base (${top.toFixed(2)} m): its walking surface is at ${floor.toFixed(2)} m.`,
       })
     }
   }
@@ -912,7 +899,7 @@ function floorFindings(house: HouseGroundFacts, nodes: SceneNodes): TerrainFindi
       code: 'room_without_floor',
       id: zone.id,
       value: round(Math.abs(foot - floor)),
-      message: `${nameOf(zone)} has no floor plate: no seat moves it. Its walls stand on their own foot at ${foot.toFixed(2)} m, ${Math.abs(foot - floor).toFixed(2)} m ${foot < floor ? 'under' : 'over'} the floor of ${level.id} (${floor.toFixed(2)} m); they are read here with the house's other walls.`,
+      message: `${nameOf(zone)} has no floor plate. Its walls stand at ${foot.toFixed(2)} m, ${Math.abs(foot - floor).toFixed(2)} m ${foot < floor ? 'under' : 'over'} the floor of ${level.id} (${floor.toFixed(2)} m); they are read here with the house's other walls.`,
     })
   }
   return findings
