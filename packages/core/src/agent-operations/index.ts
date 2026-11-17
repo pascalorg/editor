@@ -14,6 +14,7 @@ import { createStair } from './create-stair'
 import { deleteNode } from './delete-node'
 import { designBrief, gatedByBrief } from './design-brief'
 import { placeDesign, validateDesignOperation } from './designs'
+import { dressRoom } from './dress-room'
 import { duplicateLevel } from './duplicate-level'
 import { duplicateNode } from './duplicate-node'
 import { findByType } from './find-by-type'
@@ -66,6 +67,7 @@ export * from './delete-node'
 export * from './design-brief'
 export * from './designs'
 export * from './door-clearance'
+export * from './dress-room'
 export * from './duplicate-level'
 export * from './duplicate-node'
 export * from './find-by-type'
@@ -133,6 +135,7 @@ const SINGLE_OPERATIONS = {
   add_wall: addWall,
   set_wall_type: setWallType,
   set_wall_trim: setWallTrim,
+  dress_room: dressRoom,
   add_fence: addFence,
   add_corner_window: addCornerWindow,
   merge_windows: mergeWindowsOperation,

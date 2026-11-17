@@ -1564,6 +1564,174 @@ msgstr "Dismiss"
 msgid "editor.dismissCameraControlsHint"
 msgstr "Dismiss camera controls hint"
 
+#: packages/editor/src/components/ui/panels/room-dressing.tsx
+msgid "editor.dressing.accent"
+msgstr "Feature wall"
+
+#: packages/editor/src/components/ui/panels/room-dressing.tsx
+msgid "editor.dressing.add"
+msgstr "Add layer"
+
+#: packages/editor/src/components/ui/panels/room-dressing.tsx
+msgid "editor.dressing.allWalls"
+msgstr "No selection means all room walls; feature walls require a selection."
+
+#: packages/editor/src/components/ui/panels/room-dressing.tsx
+msgid "editor.dressing.alongRun"
+msgstr "Along cabinet run"
+
+#: packages/editor/src/components/ui/panels/room-dressing.tsx
+msgid "editor.dressing.applied"
+msgstr "Room dressing applied."
+
+#: packages/editor/src/components/ui/panels/room-dressing.tsx
+msgid "editor.dressing.apply"
+msgstr "Apply"
+
+#: packages/editor/src/components/ui/panels/room-dressing.tsx
+msgid "editor.dressing.around"
+msgstr "Around fixtures"
+
+#: packages/editor/src/components/ui/panels/room-dressing.tsx
+msgid "editor.dressing.ceiling"
+msgstr "ceiling"
+
+#: packages/editor/src/components/ui/panels/room-dressing.tsx
+msgid "editor.dressing.chairRail"
+msgstr "Chair rail"
+
+#: packages/editor/src/components/ui/panels/room-dressing.tsx
+msgid "editor.dressing.chooseRun"
+msgstr "Choose a base run"
+
+#: packages/editor/src/components/ui/panels/room-dressing.tsx
+msgid "editor.dressing.crown"
+msgstr "Crown"
+
+#: packages/editor/src/components/ui/panels/room-dressing.tsx
+msgid "editor.dressing.depth"
+msgstr "Depth"
+
+#: packages/editor/src/components/ui/panels/room-dressing.tsx
+msgid "editor.dressing.down"
+msgstr "Move down"
+
+#: packages/editor/src/components/ui/panels/room-dressing.tsx
+msgid "editor.dressing.existing"
+msgstr "Existing or default"
+
+#: packages/editor/src/components/ui/panels/room-dressing.tsx
+msgid "editor.dressing.failed"
+msgstr "The room could not be dressed. No changes were applied."
+
+#: packages/editor/src/components/ui/panels/room-dressing.tsx
+msgid "editor.dressing.finish"
+msgstr "Finish"
+
+#: packages/editor/src/components/ui/panels/room-dressing.tsx
+msgid "editor.dressing.finishPlaceholder"
+msgstr "library:… / scene:… / #rrggbb"
+
+#: packages/editor/src/components/ui/panels/room-dressing.tsx
+msgid "editor.dressing.from"
+msgstr "From"
+
+#: packages/editor/src/components/ui/panels/room-dressing.tsx
+msgid "editor.dressing.full"
+msgstr "Full height"
+
+#: packages/editor/src/components/ui/panels/room-dressing.tsx
+msgid "editor.dressing.height"
+msgstr "Height"
+
+#: packages/editor/src/components/ui/panels/room-dressing.tsx
+msgid "editor.dressing.kind"
+msgstr "Layer type"
+
+#: packages/editor/src/components/ui/panels/room-dressing.tsx
+msgid "editor.dressing.layer"
+msgstr "Layer {number}"
+
+#: packages/editor/src/components/ui/panels/room-dressing.tsx
+msgid "editor.dressing.margin"
+msgstr "Margin"
+
+#: packages/editor/src/components/ui/panels/room-dressing.tsx
+msgid "editor.dressing.offset"
+msgstr "Offset"
+
+#: packages/editor/src/components/ui/panels/room-dressing.tsx
+msgid "editor.dressing.placement"
+msgstr "Placement"
+
+#: packages/editor/src/components/ui/panels/room-dressing.tsx
+msgid "editor.dressing.preview"
+msgstr "Preview"
+
+#: packages/editor/src/components/ui/panels/room-dressing.tsx
+msgid "editor.dressing.previewOnly"
+msgstr "Preview only — nothing changed."
+
+#: packages/editor/src/components/ui/panels/room-dressing.tsx
+msgid "editor.dressing.profile"
+msgstr "Profile"
+
+#: packages/editor/src/components/ui/panels/room-dressing.tsx
+msgid "editor.dressing.regionCount"
+msgstr "{count} of 8 face regions"
+
+#: packages/editor/src/components/ui/panels/room-dressing.tsx
+msgid "editor.dressing.regionExtent"
+msgstr "Along {start}–{end}; height {bottom}–{top}"
+
+#: packages/editor/src/components/ui/panels/room-dressing.tsx
+msgid "editor.dressing.remove"
+msgstr "Remove layer"
+
+#: packages/editor/src/components/ui/panels/room-dressing.tsx
+msgid "editor.dressing.replaces"
+msgstr "Apply replaces this room’s previous dressing regions, not hand paint. An empty stack removes those regions; trims stay. Lengths are in metres."
+
+#: packages/editor/src/components/ui/panels/room-dressing.tsx
+msgid "editor.dressing.selectedWalls"
+msgstr "Selected walls"
+
+#: packages/editor/src/components/ui/panels/room-dressing.tsx
+msgid "editor.dressing.skirting"
+msgstr "Skirting"
+
+#: packages/editor/src/components/ui/panels/room-dressing.tsx
+msgid "editor.dressing.splashback"
+msgstr "Splashback"
+
+#: packages/editor/src/components/ui/panels/room-dressing.tsx
+msgid "editor.dressing.tiles"
+msgstr "Tiles"
+
+#: packages/editor/src/components/ui/panels/room-dressing.tsx
+msgid "editor.dressing.title"
+msgstr "Dress room"
+
+#: packages/editor/src/components/ui/panels/room-dressing.tsx
+msgid "editor.dressing.to"
+msgstr "To"
+
+#: packages/editor/src/components/ui/panels/room-dressing.tsx
+msgid "editor.dressing.up"
+msgstr "Move up"
+
+#: packages/editor/src/components/ui/panels/room-dressing.tsx
+msgid "editor.dressing.wainscot"
+msgstr "Wainscot"
+
+#: packages/editor/src/components/ui/panels/room-dressing.tsx
+msgid "editor.dressing.wallEnd"
+msgstr "wall end"
+
+#: packages/editor/src/components/ui/panels/room-dressing.tsx
+msgid "editor.dressing.walls"
+msgstr "Walls"
+
 #: packages/editor/src/components/editor/index.tsx
 msgid "editor.expandSidebar"
 msgstr "Expand sidebar"
@@ -14695,6 +14863,7 @@ msgid "node.wall.panel.reference"
 msgstr "Reference"
 
 #: packages/nodes/src/wall/panel.tsx
+#: packages/nodes/src/wall/trim-bounds.tsx
 msgid "node.wall.panel.remove"
 msgstr "Remove"
 
@@ -14854,6 +15023,18 @@ msgstr "Outside face"
 msgid "node.wall.reference.right"
 msgstr "Right"
 
+#: packages/nodes/src/wall/trim-bounds.tsx
+msgid "node.wall.trim.addStretch"
+msgstr "Add stretch"
+
+#: packages/nodes/src/wall/trim-bounds.tsx
+msgid "node.wall.trim.end"
+msgstr "End"
+
+#: packages/nodes/src/wall/trim-bounds.tsx
+msgid "node.wall.trim.face"
+msgstr "Trim face"
+
 #: packages/nodes/src/wall/panel.tsx
 msgid "node.wall.trim.hide"
 msgstr "{trim, select, skirting {Hide skirting} crown {Hide crown molding} other {Hide chair rail}}"
@@ -14861,6 +15042,14 @@ msgstr "{trim, select, skirting {Hide skirting} crown {Hide crown molding} other
 #: packages/nodes/src/wall/panel.tsx
 msgid "node.wall.trim.show"
 msgstr "{trim, select, skirting {Show skirting} crown {Show crown molding} other {Show chair rail}}"
+
+#: packages/nodes/src/wall/trim-bounds.tsx
+msgid "node.wall.trim.start"
+msgstr "Start"
+
+#: packages/nodes/src/wall/trim-bounds.tsx
+msgid "node.wall.trim.wholeFace"
+msgstr "Whole face"
 
 #: packages/nodes/src/window/actions.tsx
 msgid "node.window.actions.swapHingeSide"

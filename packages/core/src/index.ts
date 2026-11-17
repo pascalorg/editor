@@ -964,6 +964,8 @@ export {
   sceneHistoryDraftRevertUpdates,
   settleSceneHistoryDrafts,
 } from './store/use-scene'
+export * from './systems/cabinet/run-coordinates'
+export * from './systems/cabinet/run-spans'
 export { resolveElevatorDispatchTarget } from './systems/elevator/elevator-dispatch'
 export {
   ELEVATOR_MIN_CAB_DIMENSION,

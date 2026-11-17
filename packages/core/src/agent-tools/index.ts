@@ -11,6 +11,7 @@ import { addCornerWindowTool } from './corner-window'
 import { createRoomTool } from './create-room'
 import { designBriefTool } from './design-brief'
 import { placeDesignTool, validateDesignTool } from './designs'
+import { dressRoomTool } from './dress-room'
 import { addFenceTool } from './fences'
 import { findByTypeTool } from './find-by-type'
 import { furnishRoomTool } from './furnish-room'
@@ -51,6 +52,7 @@ export * from './columns'
 export * from './contract'
 export * from './corner-window'
 export * from './create-room'
+export * from './dress-room'
 export * from './fences'
 export * from './find-by-type'
 export * from './furnish-room'
@@ -107,6 +109,7 @@ export const AGENT_TOOL_CONTRACTS = [
   addWallTool,
   setWallTypeTool,
   setWallTrimTool,
+  dressRoomTool,
   addFenceTool,
   addCornerWindowTool,
   mergeWindowsTool,

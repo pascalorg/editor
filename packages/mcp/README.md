@@ -496,6 +496,21 @@ and editable Start/End stretch bounds. Bounded trims survive straight wall
 splits, compatible merges and reversal; incompatible trim settings refuse a
 merge rather than losing their stretches.
 
+`dress_room({ zoneIds, layers, dryRun? })` plans ordered room dressing over the
+room's base finish. Layers are `skirting`, `chairRail`, `crown`, `wainscot`,
+`tiles`, `splashback`, and `accent` (feature walls named in `where.walls`).
+Wainscot defaults to 0.9 m; tiles to 1.2 m; splashbacks start at 0.9 m and
+rise 0.6 m. Set `to: "full"` for full-height finishes. `where.around` selects
+fixtures with an optional `margin`; `where.alongRun` follows a base cabinet's
+footprint and worktop, including rotated cabinet/module ancestors. Targets
+on another level refuse. Only `dress:<zoneId>:` regions are replaced; hand
+paint and other rooms survive. Empty layers remove owned regions, not trims.
+All rooms are atomic: shared-trim conflicts, the eight-region face limit and
+full-height script ownership refuse without partial writes. Partial curved
+finish stretches are reported as skipped. `dryRun` returns the same face plan
+without changes. By hand, select a room and open **Dress room** to edit and
+order all layers, preview the plan or refusals, then apply in one undo step.
+
 ```jsonc
 // The lot before the house: frontage, depth, each buildable edge as a front, the ground
 { "name": "get_site", "arguments": {} }

@@ -51,6 +51,7 @@ export const EXPECTED_OPENAI_TOOL_ANNOTATIONS = {
   delete_zone: policy(false, true, false),
   design_brief: policy(false, false, false),
   divide_zone: policy(false, true, false),
+  dress_room: policy(false, true, false),
   set_ground_level: policy(false, true, false),
   duplicate_level: policy(false, false, false),
   duplicate_node: policy(false, false, false),

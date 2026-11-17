@@ -7,10 +7,33 @@ import type {
   WallNode,
 } from '@pascal-app/core'
 import {
+  getRunSpans,
   getWallBodyCenterOffset,
   getWallBodyLine,
   getWallFaceOffsets,
+  moduleMaxX,
+  moduleMinX,
+  RUN_ADJACENCY_EPSILON,
+  type RunLike,
+  type RunSpan,
   resolveLevelId,
+  runLocalToPlan,
+  runMaxX,
+  runMinX,
+} from '@pascal-app/core'
+
+export {
+  getRunSpanGroups,
+  getRunSpans,
+  moduleMaxX,
+  moduleMinX,
+  RUN_ADJACENCY_EPSILON,
+  type RunLike,
+  type RunSpan,
+  runLocalToPlan,
+  runLocalXExtent,
+  runMaxX,
+  runMinX,
 } from '@pascal-app/core'
 
 /**
@@ -19,8 +42,6 @@ import {
  * insert positions all live here so a future corner (L-shape) module changes
  * one file instead of five call sites.
  */
-
-export const RUN_ADJACENCY_EPSILON = 1e-4
 
 const ADJACENT_RUN_EPSILON = 1e-4
 const ADJACENT_RUN_Z_TOLERANCE = 0.03
@@ -60,14 +81,6 @@ const OPEN_RUN_END: RunWallEndConstraint = { constrained: false, slack: 0 }
 
 export function sortRunModules<T extends ModuleLike>(modules: readonly T[]): T[] {
   return [...modules].sort((a, b) => a.position[0] - b.position[0])
-}
-
-export function moduleMinX(module: Pick<CabinetModuleNode, 'position' | 'width'>): number {
-  return module.position[0] - module.width / 2
-}
-
-export function moduleMaxX(module: Pick<CabinetModuleNode, 'position' | 'width'>): number {
-  return module.position[0] + module.width / 2
 }
 
 function levelIdForRun(
@@ -201,14 +214,6 @@ export function runWallConstraints(
   }
 }
 
-export function runMinX(modules: readonly ModuleLike[]): number {
-  return Math.min(...modules.map(moduleMinX))
-}
-
-export function runMaxX(modules: readonly ModuleLike[]): number {
-  return Math.max(...modules.map(moduleMaxX))
-}
-
 /**
  * Whether a module's side has no flush neighbor — i.e. the side is free for a
  * width-resize handle or an adjacent insert.
@@ -228,96 +233,6 @@ export function moduleSideOpen<T extends ModuleLike>(
   const edge = side === 'left' ? moduleMinX(module) : moduleMaxX(module)
   const neighborEdge = side === 'left' ? moduleMaxX(neighbor) : moduleMinX(neighbor)
   return Math.abs(edge - neighborEdge) > epsilon
-}
-
-export type RunSpan = {
-  minX: number
-  maxX: number
-  centerX: number
-  centerZ: number
-  width: number
-  depth: number
-  minZ: number
-  maxZ: number
-  topY: number
-  hasCountertop: boolean
-}
-
-type SpanModule = Pick<
-  CabinetModuleNode,
-  'position' | 'width' | 'depth' | 'carcassHeight' | 'cabinetType'
->
-
-/**
- * Contiguous same-height module groups along the run — the units the
- * countertop, plinth, and appliance-gap logic operate on. A gap, a
- * base↔tall transition, a top-height change, or a depth-footprint change
- * starts a new span.
- */
-export function getRunSpans(
-  modules: readonly SpanModule[],
-  opts: { runTier?: CabinetNode['runTier'] } = {},
-): RunSpan[] {
-  return getRunSpanGroups(modules, opts).map((group) => group.span)
-}
-
-export function getRunSpanGroups<T extends SpanModule>(
-  modules: readonly T[],
-  opts: {
-    runTier?: CabinetNode['runTier']
-  } = {},
-): Array<{ span: RunSpan; modules: T[] }> {
-  const sorted = [...modules].sort((a, b) => a.position[0] - b.position[0])
-  const groups: Array<{ span: RunSpan; modules: T[] }> = []
-  const runTier = opts.runTier ?? 'base'
-
-  for (const module of sorted) {
-    const minX = module.position[0] - module.width / 2
-    const maxX = module.position[0] + module.width / 2
-    const minZ = module.position[2] - module.depth / 2
-    const maxZ = module.position[2] + module.depth / 2
-    const topY = module.position[1] + module.carcassHeight
-    const hasCountertop = runTier === 'base' && (module.cabinetType ?? 'base') !== 'tall'
-    const group = groups.at(-1)
-    const current = group?.span
-    if (
-      !current ||
-      minX - current.maxX > RUN_ADJACENCY_EPSILON ||
-      current.hasCountertop !== hasCountertop ||
-      Math.abs(current.topY - topY) > RUN_ADJACENCY_EPSILON ||
-      Math.abs(current.minZ - minZ) > RUN_ADJACENCY_EPSILON ||
-      Math.abs(current.maxZ - maxZ) > RUN_ADJACENCY_EPSILON
-    ) {
-      groups.push({
-        modules: [module],
-        span: {
-          minX,
-          maxX,
-          centerX: module.position[0],
-          centerZ: module.position[2],
-          width: module.width,
-          depth: module.depth,
-          minZ,
-          maxZ,
-          topY,
-          hasCountertop,
-        },
-      })
-      continue
-    }
-
-    group!.modules.push(module)
-    current.maxX = Math.max(current.maxX, maxX)
-    current.minZ = Math.min(current.minZ, minZ)
-    current.maxZ = Math.max(current.maxZ, maxZ)
-    current.width = Math.max(0.01, current.maxX - current.minX)
-    current.centerX = (current.minX + current.maxX) / 2
-    current.depth = Math.max(0.01, current.maxZ - current.minZ)
-    current.centerZ = (current.minZ + current.maxZ) / 2
-    current.topY = Math.max(current.topY, topY)
-  }
-
-  return groups
 }
 
 function angleDelta(a: number, b: number): number {
@@ -1049,36 +964,6 @@ export function planRunModuleInsertion<T extends ModuleLike>({
     pushedSide,
     shrunkFillerIds,
   }
-}
-
-/** Full-run bounds in run-local frame (X along the run). */
-export function runLocalXExtent(modules: readonly ModuleLike[]): {
-  minX: number
-  maxX: number
-  centerX: number
-  width: number
-} | null {
-  if (modules.length === 0) return null
-  const minX = runMinX(modules)
-  const maxX = runMaxX(modules)
-  return { minX, maxX, centerX: (minX + maxX) / 2, width: Math.max(0.01, maxX - minX) }
-}
-
-export type RunLike = Pick<CabinetNode, 'position' | 'rotation'>
-
-/** Rotate + translate a run-local point into the plan (level) frame. */
-export function runLocalToPlan(
-  run: RunLike,
-  local: readonly [number, number, number],
-): [number, number, number] {
-  const cos = Math.cos(run.rotation)
-  const sin = Math.sin(run.rotation)
-  const [lx, ly, lz] = local
-  return [
-    run.position[0] + lx * cos + lz * sin,
-    run.position[1] + ly,
-    run.position[2] - lx * sin + lz * cos,
-  ]
 }
 
 /** Inverse of {@link runLocalToPlan}. */

@@ -119,6 +119,7 @@ const TOOL_POLICIES = [
       'rebase_floor_reference',
       'delete_zone',
       'divide_zone',
+      'dress_room',
       'duplicate_zone',
       'move_node',
       'move_zone',

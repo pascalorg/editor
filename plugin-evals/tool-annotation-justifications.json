@@ -384,6 +384,19 @@
       }
     },
     {
+      "name": "dress_room",
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": true,
+        "openWorldHint": false
+      },
+      "justifications": {
+        "readOnlyHint": "Writes wall finish layers and native trims for selected rooms; an optional dry run does not make the tool read-only.",
+        "destructiveHint": "Replaces the selected rooms' previously owned paint regions and can replace existing trim settings or finishes; empty layers remove owned regions.",
+        "openWorldHint": "Uses only the connected scene and its configured material library, without accessing the public internet."
+      }
+    },
+    {
       "name": "duplicate_level",
       "annotations": {
         "readOnlyHint": false,
