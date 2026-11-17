@@ -146,8 +146,13 @@ export {
   solarPosition,
   sunEvents,
   type TimeOfDay,
+  type TimeTarget,
 } from './lib/daylight/solar'
-export { type TimeTransitionOptions, transitionTimeOfDay } from './lib/daylight/time-transition'
+export {
+  type TimeTransitionOptions,
+  timeTargetMinutes,
+  transitionTimeOfDay,
+} from './lib/daylight/time-transition'
 export type { DisplayState } from './lib/display-state'
 export { disposeObject3DResources } from './lib/dispose-object3d'
 export {

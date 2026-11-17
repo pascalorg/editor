@@ -1,7 +1,7 @@
 import { useScene } from '@pascal-app/core'
 import useViewer from '../../store/use-viewer'
 import { resolveDaylightSite } from './location'
-import { presetInstant, solarClockMinutes, type TimeOfDay } from './solar'
+import { presetInstant, solarClockMinutes, type TimeTarget, timeTargetInstant } from './solar'
 
 export type TimeTransitionOptions = {
   durationMs?: number | ((deltaMinutes: number) => number)
@@ -15,22 +15,43 @@ export function cancelTimeTransition() {
   cancelPrevious()
 }
 
-/** Ease the displayed solar clock to a preset along the shortest route around midnight. */
-export function transitionTimeOfDay(
-  preset: TimeOfDay,
-  options: TimeTransitionOptions = {},
-): () => void {
-  cancelPrevious()
+function currentDaylightClock() {
   const state = useViewer.getState()
   const graph = useScene.getState()
   const site = graph.rootNodeIds.map((id) => graph.nodes[id]).find((node) => node?.type === 'site')
   const { location } = resolveDaylightSite(site, state.daylightSite, state.deviceLocation)
   const now = new Date()
-  const instant = (value: TimeOfDay) => presetInstant(now, location.lat, location.lng, value)
+  return { state, location, now }
+}
+
+/** Resolve solar-clock minutes for the current day/site without changing viewer state. */
+export function timeTargetMinutes(target: TimeTarget): number {
+  const { location, now } = currentDaylightClock()
+  return solarClockMinutes(timeTargetInstant(now, location.lat, location.lng, target), location.lng)
+}
+
+/** Ease the displayed solar clock to a target along the shortest route around midnight. */
+export function transitionTimeOfDay(
+  target: TimeTarget,
+  options: TimeTransitionOptions = {},
+): () => void {
+  cancelPrevious()
+  const { state, location, now } = currentDaylightClock()
   const from =
     state.timeOfDayMinutes ??
-    solarClockMinutes(state.skyLive ? now : instant(state.timeOfDay), location.lng)
-  const to = solarClockMinutes(instant(preset), location.lng)
+    solarClockMinutes(
+      state.skyLive ? now : presetInstant(now, location.lat, location.lng, state.timeOfDay),
+      location.lng,
+    )
+  const to = solarClockMinutes(
+    timeTargetInstant(now, location.lat, location.lng, target),
+    location.lng,
+  )
+  const finish = () => {
+    const current = useViewer.getState()
+    if (typeof target === 'string') current.setTimeOfDay(target)
+    else current.setTimeOfDayMinutes(to)
+  }
   const delta = ((((to - from + 2160) % 1440) + 1440) % 1440) - 720
   let frame = 0
   let cancelled = false
@@ -48,7 +69,7 @@ export function transitionTimeOfDay(
     Math.abs(delta) < 1 ||
     duration <= 0
   ) {
-    state.setTimeOfDay(preset)
+    finish()
     return cancel
   }
   const start = performance.now()
@@ -58,7 +79,7 @@ export function transitionTimeOfDay(
     const t = Math.min(1, (timestamp - start) / duration)
     if (t >= 1) {
       frame = 0
-      useViewer.getState().setTimeOfDay(preset)
+      finish()
       return
     }
     useViewer.getState().setTimeOfDayMinutes((((from + delta * ease(t)) % 1440) + 1440) % 1440)

@@ -155,10 +155,10 @@ const result = await build({
       'render-consumer',
       `
     import { loadPlugin, roomCounts, useScene } from '@pascal-app/core';
-    import { transitionTimeOfDay, filterSectionHits, filterXrayHits, isSectionObject, heldReasons, GlbScene, InteractiveSystem, createWalkthroughInput, WALKTHROUGH_DEFAULT_SPEEDS, WALKTHROUGH_SEE_DISTANCE, GlbWalkthroughController, LiveWalkthroughController, familyForNode, sceneFamilies, VIEWER_FAMILIES, xrayActive, SectionGroup, sectionBounds, presetInstant, useFirstPersonHud, useViewer, Viewer } from '@pascal-app/viewer';
+    import { timeTargetMinutes, transitionTimeOfDay, filterSectionHits, filterXrayHits, isSectionObject, heldReasons, GlbScene, InteractiveSystem, createWalkthroughInput, WALKTHROUGH_DEFAULT_SPEEDS, WALKTHROUGH_SEE_DISTANCE, GlbWalkthroughController, LiveWalkthroughController, familyForNode, sceneFamilies, VIEWER_FAMILIES, xrayActive, SectionGroup, sectionBounds, presetInstant, useFirstPersonHud, useViewer, Viewer } from '@pascal-app/viewer';
     import { renderPlugin } from '@pascal-app/nodes/render';
     import { WalkthroughTouchControls } from '@pascal-app/viewer/ui';
-    export { transitionTimeOfDay, filterSectionHits, filterXrayHits, isSectionObject, heldReasons, GlbScene, InteractiveSystem, createWalkthroughInput, WALKTHROUGH_DEFAULT_SPEEDS, WALKTHROUGH_SEE_DISTANCE, GlbWalkthroughController, WalkthroughTouchControls, LiveWalkthroughController, familyForNode, sceneFamilies, VIEWER_FAMILIES, xrayActive, SectionGroup, sectionBounds, presetInstant, roomCounts, useFirstPersonHud, useViewer, Viewer, renderPlugin };
+    export { timeTargetMinutes, transitionTimeOfDay, filterSectionHits, filterXrayHits, isSectionObject, heldReasons, GlbScene, InteractiveSystem, createWalkthroughInput, WALKTHROUGH_DEFAULT_SPEEDS, WALKTHROUGH_SEE_DISTANCE, GlbWalkthroughController, WalkthroughTouchControls, LiveWalkthroughController, familyForNode, sceneFamilies, VIEWER_FAMILIES, xrayActive, SectionGroup, sectionBounds, presetInstant, roomCounts, useFirstPersonHud, useViewer, Viewer, renderPlugin };
     export async function hydrate(scene) {
       await loadPlugin(renderPlugin);
       useScene.getState().setScene(scene);
@@ -241,13 +241,19 @@ const consumer = resolve(root, 'packages/nodes/render-consumer.ts')
 const consumerSource = `
   import { roomCounts, type Plugin, type RoomCounts, type SceneGraph } from '@pascal-app/core';
   import { familyForNode, sceneFamilies, VIEWER_FAMILIES, xrayActive, SectionGroup, sectionBounds, presetInstant, useViewer, type SectionAxis, type SectionShadows, type DaylightSite, type TimeOfDay } from '@pascal-app/viewer';
-  import { transitionTimeOfDay, filterSectionHits, filterXrayHits, isSectionObject, heldReasons, GlbScene, InteractiveSystem, type GlbPickEvent, type SelectionCalloutProps, type CalloutAction } from '@pascal-app/viewer';
+  import { timeTargetMinutes, transitionTimeOfDay, filterSectionHits, filterXrayHits, isSectionObject, heldReasons, GlbScene, InteractiveSystem, type TimeTarget, type TimeTransitionOptions, type GlbPickEvent, type SelectionCalloutProps, type CalloutAction } from '@pascal-app/viewer';
   import type { ComponentProps } from 'react';
   const renderCallout = (props: SelectionCalloutProps) => { const actions: CalloutAction[] = props.actions; return null; };
   export const bakedProps: ComponentProps<typeof GlbScene> = { url: 'scene.glb', outlineSync: false, renderCallout, onPick: (event: GlbPickEvent) => { if (event.hitObject) heldReasons(event.hitObject); } };
   export const liveProps: ComponentProps<typeof InteractiveSystem> = { renderCallout };
   export const interactionApi = { transitionTimeOfDay, filterSectionHits, filterXrayHits, isSectionObject, heldReasons };
   export const transition = () => transitionTimeOfDay('dawn', { durationMs: (delta) => Math.abs(delta) * 2, easing: (t) => t });
+  const elevationTarget: TimeTarget = { elevation: -2.5, side: 'setting' };
+  const transitionOptions: TimeTransitionOptions = { durationMs: 0 };
+  export const elevationTransition = (): (() => void) => transitionTimeOfDay(elevationTarget, transitionOptions);
+  export const risingTransition = () => transitionTimeOfDay({ elevation: 6, side: 'rising' });
+  export const targetMinutes: number = timeTargetMinutes(elevationTarget);
+  export const presetMinutes: number = timeTargetMinutes('dawn');
   const site: DaylightSite = { northRotation: 1, lat: 48.86, lng: 2.35 };
   const dawn: TimeOfDay = 'dawn';
   export const families = (graph: SceneGraph): string[] => sceneFamilies(graph);

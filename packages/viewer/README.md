@@ -86,6 +86,34 @@ rendering.
 See [`fixtures/viewer-live`](../../fixtures/viewer-live) for a complete small graph and the
 isolated packed-package dev/production smoke test.
 
+## Solar time targets
+
+`transitionTimeOfDay(target: TimeTarget, options?: TimeTransitionOptions): () => void` accepts
+a preset (`'dawn'`, `'midday'`, `'golden'`, `'blue'`, `'night'`) or
+`{ elevation: number, side: 'rising' | 'setting' }`, with elevation in degrees. Rising searches
+before solar noon; setting searches after it. Unreachable elevations use the closest sun on that
+half-day, including polar days. The day and location follow the viewer's usual resolution,
+including `daylightSite` for baked hosts.
+
+```ts
+import { timeTargetMinutes, transitionTimeOfDay, type TimeTarget } from '@pascal-app/viewer'
+
+const mood: TimeTarget = { elevation: -2.5, side: 'setting' }
+const minutes: number = timeTargetMinutes(mood) // Resolves without changing state or animating.
+const cancel = transitionTimeOfDay(mood, { durationMs: 0 }) // Immediate opening state.
+```
+
+Transitions take the shortest route from the displayed minute. Starting another cancels the
+previous one; the returned function cancels in place. `durationMs` also accepts a function of the
+signed minute delta, and `easing` maps progress from 0 to 1. Reduced motion applies immediately.
+Elevation targets leave `timeOfDayMinutes` explicit and turn `skyLive` off, preserving `timeOfDay`.
+Preset targets return to the preset as before.
+
+Automatic lamp switches turn on below −2°. The separate lamp-level uniform fades smoothly from
+1 at −5° to 0 at +6°. A resting explicit minute fixes the sun just like a preset: it does not tick
+with the live clock. Exposure still adapts to the camera, rooms and lamp state, settling when the
+view and lighting stay fixed.
+
 ## Walkthrough for live scenes
 
 `LiveWalkthroughController` is a 3D controller from the main `@pascal-app/viewer` entry.
