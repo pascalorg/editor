@@ -250,6 +250,7 @@ export {
   isAutoGutterEnabled,
   isDefaultGutterNode,
 } from './nodes/gutter'
+export { HEDGE_LIMITS, HedgeGap, HedgeNode } from './nodes/hedge'
 export { HvacEquipmentNode } from './nodes/hvac-equipment'
 export {
   ImportedMeshNode,
@@ -303,6 +304,12 @@ export { PipeFittingNode } from './nodes/pipe-fitting'
 export { PipeSegmentNode } from './nodes/pipe-segment'
 export { PipeTrapNode } from './nodes/pipe-trap'
 export {
+  PLANTING_DEFAULT_PLANTS,
+  PLANTING_LIMITS,
+  PlantingNode,
+  PlantingSpecies,
+} from './nodes/planting'
+export {
   DEFAULT_RAILING_WALL,
   getRailingWallConfig,
   getRailingWallHeight,
@@ -330,6 +337,7 @@ export {
   type RidgeVentLine,
   RidgeVentNode,
 } from './nodes/ridge-vent'
+export { RockNode } from './nodes/rock'
 export type { RoofSupport, RoofSurfaceMaterialRole, RoofSurfaceMaterialSpec } from './nodes/roof'
 export { getEffectiveRoofSurfaceMaterial, RoofNode } from './nodes/roof'
 export {

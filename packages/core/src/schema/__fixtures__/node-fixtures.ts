@@ -6,7 +6,7 @@ import { AnyNode, type AnyNodeType, nodeKindOf } from '../types'
 /**
  * Minimal valid instances of every node kind, built from the kinds' own
  * schemas. Shared by the `AnyNode` contract test, the compiled-parser parity
- * test, and the schema bench so all three cover the same 48 kinds without
+ * test, and the schema bench so all three cover the same kinds without
  * three copies of the table drifting apart.
  */
 
@@ -29,6 +29,7 @@ export const NODE_REQUIRED_FIELDS: Record<string, Record<string, unknown>> = {
   fence: { start: [0, 0], end: [4, 0] },
   'floor-opening': { polygon: [[0, 0], [1, 0], [1, 1], [0, 1]] },
   guide: { url: 'asset://guide.png' },
+  hedge: { path: [[0, 0], [4, 0]] },
   item: {
     asset: {
       id: 'asset-1',
@@ -65,7 +66,9 @@ export const NODE_REQUIRED_FIELDS: Record<string, Record<string, unknown>> = {
       [1, 0, 0],
     ],
   },
+  planting: { area: 4 },
   'procedural-item': { recipe: shelfRecipe },
+  rock: { polygon: [[0, 0], [2, 0], [2, 2], [0, 2]] },
   slab: {
     polygon: [
       [0, 0],

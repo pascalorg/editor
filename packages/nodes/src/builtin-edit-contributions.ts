@@ -25,6 +25,7 @@ import {
 import { floorOpeningEditContribution } from './floor-opening/definition.edit'
 import { guideEditContribution } from './guide/definition.edit'
 import { gutterEditContribution } from './gutter/definition.edit'
+import { hedgeEditContribution } from './hedge/definition.edit'
 import { hvacEquipmentEditContribution } from './hvac-equipment/definition.edit'
 import { importedMeshEditContribution } from './imported-mesh/definition.edit'
 import { itemEditContribution } from './item/definition.edit'
@@ -36,8 +37,10 @@ import { measurementEditContribution } from './measurement/definition.edit'
 import { pipeFittingEditContribution } from './pipe-fitting/definition.edit'
 import { pipeSegmentEditContribution } from './pipe-segment/definition.edit'
 import { pipeTrapEditContribution } from './pipe-trap/definition.edit'
+import { plantingEditContribution } from './planting/definition.edit'
 import { proceduralItemEditContribution } from './procedural-item/definition.edit'
 import { ridgeVentEditContribution } from './ridge-vent/definition.edit'
+import { rockEditContribution } from './rock/definition.edit'
 import { roofEditContribution } from './roof/definition.edit'
 import { roofSegmentEditContribution } from './roof-segment/definition.edit'
 import { scanEditContribution } from './scan/definition.edit'
@@ -87,6 +90,9 @@ export const builtinEditContributions = {
   'stair-segment': stairSegmentEditContribution,
   zone: zoneEditContribution,
   site: siteEditContribution,
+  rock: rockEditContribution,
+  hedge: hedgeEditContribution,
+  planting: plantingEditContribution,
   building: buildingEditContribution,
   level: levelEditContribution,
   guide: guideEditContribution,

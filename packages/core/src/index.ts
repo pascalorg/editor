@@ -400,6 +400,13 @@ export {
 export { type LevelGradeStanding, levelGradeStanding } from './lib/grade-standing'
 export { type GroundLevel, groundLevelOf, levelUnderNamedGround } from './lib/ground-level'
 export {
+  FLAT_GROUND,
+  type GroundRead,
+  groundReadOf,
+  resolveSiteGround,
+  SITE_GROUND_DEPENDENCY_TYPES,
+} from './lib/ground-read'
+export {
   GROUND_SEAT_TOLERANCE,
   type GroundSeat,
   gradeUnderLevel,
@@ -412,6 +419,43 @@ export {
   levelStackGroundBox,
   terrainBetweenEyeAndBox,
 } from './lib/ground-window'
+export {
+  buildHedge,
+  type HedgePlan,
+  hedgeCurrentGen,
+  hedgeFormFor,
+  planHedge,
+  registerHedgeForm,
+} from './lib/hedge-build'
+export { type HedgeFacts, hedgeFacts } from './lib/hedge-facts'
+export {
+  HEDGE_MAX_TRIANGLES,
+  type HedgeEstimate,
+  type HedgeForm,
+  type HedgeFormInput,
+  type HedgeMesh,
+} from './lib/hedge-form'
+export {
+  HEDGE_EMBED,
+  type HedgeFootRun,
+  type HedgeFootStation,
+  hedgeGroundRange,
+  standHedgeLine,
+} from './lib/hedge-ground'
+export {
+  HEDGE_MAX_STATIONS,
+  type HedgeGapFact,
+  type HedgeLine,
+  type HedgeLineInput,
+  type HedgeRun,
+  type HedgeStation,
+  hedgeBands,
+  hedgeCentreline,
+  hedgeEndScale,
+  hedgeLateral,
+  hedgeLine,
+  hedgeNormal,
+} from './lib/hedge-line'
 export { hierarchyCycleErrors, wouldCreateHierarchyCycle } from './lib/hierarchy'
 export {
   type ExposedInterval,
@@ -488,6 +532,47 @@ export {
   PORCH_FLOOR_DROP,
 } from './lib/outdoor-room'
 export {
+  buildPlanting,
+  type PlantingPlan,
+  planPlanting,
+  plantingCurrentGen,
+  plantingFormFor,
+  registerPlantingForm,
+} from './lib/planting-build'
+export { type PlantingFacts, plantingFacts } from './lib/planting-facts'
+export {
+  PLANTING_MAX_TRIANGLES,
+  type PlantingEstimate,
+  type PlantingForm,
+  type PlantingFormInput,
+  type PlantingMesh,
+} from './lib/planting-form'
+export { estimatePlanting } from './lib/planting-form-v1'
+export { plantingGroundLift, plantingSurfaceHeight } from './lib/planting-ground'
+export {
+  type PlantingPoint,
+  plantingArea,
+  plantingAreaOutline,
+  plantingBounds,
+  plantingCentroid,
+  plantingContains,
+  plantingEdgeDistance,
+  plantingOrganicOutline,
+  plantingOutlineProblem,
+  plantingSimple,
+} from './lib/planting-outline'
+export {
+  type PlantingAccept,
+  type PlantingPlacement,
+  plantingSeenDepth,
+  scatterPlanting,
+} from './lib/planting-scatter'
+export {
+  PLANTING_SCENE_DEPENDENCY_TYPES,
+  resolvePlantingAccept,
+  resolvePlantingGround,
+} from './lib/planting-scene'
+export {
   classifyPlateSideAt,
   clearPlateSurfaceCaches,
   computePlateSurfacePartition,
@@ -554,6 +639,38 @@ export {
   porchFramingSettings,
 } from './lib/porch-framing'
 export { type PorchPartMetadata, porchPartOf } from './lib/porch-framing-sync'
+export { buildRock, planRock, type RockPlan, rockCurrentGen, rockFormFor } from './lib/rock-build'
+export { rockHolesIn, rockSlabHoles, rocksOf } from './lib/rock-cuts'
+export { type RockFacts, rockFacts } from './lib/rock-facts'
+export { rockFootprint } from './lib/rock-footprint'
+export {
+  ROCK_MAX_FAR_TRIANGLES,
+  ROCK_MAX_NEAR_TRIANGLES,
+  ROCK_MAX_TRIANGLES,
+  type RockEstimate,
+  type RockForm,
+  type RockFormInput,
+  type RockLevel,
+  type RockLevelEstimate,
+  type RockMesh,
+  type RockShapeInput,
+} from './lib/rock-form'
+export {
+  highestGroundUnder,
+  lowestGroundUnder,
+  ROCK_EMBED,
+  type RockSpan,
+  rockSpan,
+} from './lib/rock-ground'
+export { effectiveBuilding, effectiveRock } from './lib/rock-live'
+export {
+  outlineProblem,
+  ROCK_RINGS,
+  rockCentre,
+  rockRings,
+  rockSection,
+  rockSections,
+} from './lib/rock-shape'
 export {
   type EavePoint,
   eaveContains,

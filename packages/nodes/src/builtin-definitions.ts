@@ -26,6 +26,7 @@ import {
 import { floorOpeningRenderDefinition } from './floor-opening/definition.render'
 import { guideRenderDefinition } from './guide/definition.render'
 import { gutterRenderDefinition } from './gutter/definition.render'
+import { hedgeRenderDefinition } from './hedge/definition.render'
 import { hvacEquipmentRenderDefinition } from './hvac-equipment/definition.render'
 import { importedMeshRenderDefinition } from './imported-mesh/definition.render'
 import { itemRenderDefinition } from './item/definition.render'
@@ -37,8 +38,10 @@ import { measurementRenderDefinition } from './measurement/definition.render'
 import { pipeFittingRenderDefinition } from './pipe-fitting/definition.render'
 import { pipeSegmentRenderDefinition } from './pipe-segment/definition.render'
 import { pipeTrapRenderDefinition } from './pipe-trap/definition.render'
+import { plantingRenderDefinition } from './planting/definition.render'
 import { proceduralItemRenderDefinition } from './procedural-item/definition.render'
 import { ridgeVentRenderDefinition } from './ridge-vent/definition.render'
+import { rockRenderDefinition } from './rock/definition.render'
 import { roofRenderDefinition } from './roof/definition.render'
 import { roofSegmentRenderDefinition } from './roof-segment/definition.render'
 import { scanRenderDefinition } from './scan/definition.render'
@@ -88,6 +91,9 @@ export const builtinRenderDefinitions = [
   stairSegmentRenderDefinition,
   zoneRenderDefinition,
   siteRenderDefinition,
+  rockRenderDefinition,
+  hedgeRenderDefinition,
+  plantingRenderDefinition,
   buildingRenderDefinition,
   levelRenderDefinition,
   guideRenderDefinition,

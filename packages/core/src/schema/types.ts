@@ -23,6 +23,7 @@ import { FenceGateNode, FenceOpeningNode } from './nodes/fence-feature'
 import { FloorOpeningNode } from './nodes/floor-opening'
 import { GuideNode } from './nodes/guide'
 import { GutterNode } from './nodes/gutter'
+import { HedgeNode } from './nodes/hedge'
 import { HvacEquipmentNode } from './nodes/hvac-equipment'
 import { ImportedMeshNode } from './nodes/imported-mesh'
 import { ItemNode } from './nodes/item'
@@ -34,7 +35,9 @@ import { MeasurementNode } from './nodes/measurement'
 import { PipeFittingNode } from './nodes/pipe-fitting'
 import { PipeSegmentNode } from './nodes/pipe-segment'
 import { PipeTrapNode } from './nodes/pipe-trap'
+import { PlantingNode } from './nodes/planting'
 import { RidgeVentNode } from './nodes/ridge-vent'
+import { RockNode } from './nodes/rock'
 import { RoofNode } from './nodes/roof'
 import { RoofSegmentNode } from './nodes/roof-segment'
 import { ScanNode } from './nodes/scan'
@@ -113,6 +116,9 @@ export const AnyNode = nodeUnion([
   ImportedMeshNode,
   ZoneNode,
   SlabNode,
+  HedgeNode,
+  PlantingNode,
+  RockNode,
   CeilingNode,
   RoofNode,
   RoofSegmentNode,

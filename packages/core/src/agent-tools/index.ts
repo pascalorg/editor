@@ -14,6 +14,7 @@ import { placeDesignTool, validateDesignTool } from './designs'
 import { addFenceTool } from './fences'
 import { findByTypeTool } from './find-by-type'
 import { furnishRoomTool } from './furnish-room'
+import { addHedgeTool } from './hedge'
 import {
   addLevelTool,
   duplicateLevelTool,
@@ -29,6 +30,8 @@ import { deleteNodeTool, getNodeTool } from './nodes'
 import { paintTool } from './paint'
 import { placeInRoomTool } from './place-in-room'
 import { placeItemsTool } from './place-items'
+import { addPlantingTool } from './planting'
+import { addRockTool } from './rock'
 import { createRoofTool, moveRoofsToRoofLevelTool } from './roofs'
 import { ROOM_TOOL_CONTRACTS } from './room-structure'
 import { searchMaterialsTool } from './search-materials'
@@ -53,6 +56,7 @@ export * from './create-room'
 export * from './fences'
 export * from './find-by-type'
 export * from './furnish-room'
+export * from './hedge'
 export * from './hosted-services'
 export * from './levels'
 export * from './measurement'
@@ -63,9 +67,11 @@ export * from './nodes'
 export * from './notation-inventory'
 export * from './paint'
 export * from './place-items'
+export * from './planting'
 export * from './project-files'
 export * from './refusal'
 export * from './retired'
+export * from './rock'
 export * from './roofs'
 export * from './room-structure'
 export * from './search-materials'
@@ -105,6 +111,9 @@ export const AGENT_TOOL_CONTRACTS = [
   addWallTool,
   setWallTypeTool,
   addFenceTool,
+  addHedgeTool,
+  addPlantingTool,
+  addRockTool,
   addCornerWindowTool,
   mergeWindowsTool,
   addLevelTool,

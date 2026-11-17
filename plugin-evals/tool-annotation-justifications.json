@@ -59,6 +59,19 @@
       }
     },
     {
+      "name": "add_hedge",
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": true,
+        "openWorldHint": false
+      },
+      "justifications": {
+        "readOnlyHint": "It is not read-only because it adds a hedge to a Site, or changes the fields given of an existing one, in the connected Pascal scene.",
+        "destructiveHint": "Changing a hedge replaces its line, height, width, openings, seed or looks; undo restores them. Nothing else in the scene is edited.",
+        "openWorldHint": "It operates on the connected Pascal scene without accessing the public internet."
+      }
+    },
+    {
       "name": "add_level",
       "annotations": {
         "readOnlyHint": false,
@@ -82,6 +95,32 @@
         "readOnlyHint": "It is not read-only because it creates an object from a three.js module in the connected Pascal scene, or rebuilds an existing one.",
         "destructiveHint": "Given an existing object's nodeId it replaces that object's geometry and script, so earlier authored state is overwritten (undo restores it).",
         "openWorldHint": "It runs the supplied module in the Pascal server's script host and stores the result with the scene, without accessing the public internet."
+      }
+    },
+    {
+      "name": "add_planting",
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": true,
+        "openWorldHint": false
+      },
+      "justifications": {
+        "readOnlyHint": "Adds one planting bed to the Site or changes an existing bed in the connected scene.",
+        "destructiveHint": "Changing a bed replaces its supplied outline, species, layout or appearance fields; undo restores the prior state.",
+        "openWorldHint": "It operates on the connected Pascal scene without accessing the public internet."
+      }
+    },
+    {
+      "name": "add_rock",
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": true,
+        "openWorldHint": false
+      },
+      "justifications": {
+        "readOnlyHint": "Adds a rock to a Site, or changes the fields given of an existing one, in the connected Pascal scene.",
+        "destructiveHint": "Changing a rock replaces its outline, height, seed or looks; undo restores them. Floors it passes through derive their holes and are not edited.",
+        "openWorldHint": "It operates on the connected Pascal scene and its persisted terrain without accessing the public internet."
       }
     },
     {

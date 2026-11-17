@@ -66,6 +66,12 @@ const REQUIRED_FIELDS: Record<string, Record<string, unknown>> = {
     ],
   },
   guide: { url: 'asset://guide.png' },
+  hedge: {
+    path: [
+      [0, 0],
+      [4, 0],
+    ],
+  },
   item: {
     asset: {
       id: 'asset-1',
@@ -100,6 +106,15 @@ const REQUIRED_FIELDS: Record<string, Record<string, unknown>> = {
     path: [
       [0, 0, 0],
       [1, 0, 0],
+    ],
+  },
+  planting: { area: 4 },
+  rock: {
+    polygon: [
+      [0, 0],
+      [2, 0],
+      [2, 2],
+      [0, 2],
     ],
   },
   separator: { start: [20, 0], end: [22, 0] },

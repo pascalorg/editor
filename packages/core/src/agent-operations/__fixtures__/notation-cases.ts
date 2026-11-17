@@ -327,6 +327,11 @@ export const NOTATION_CASES: NotationCase[] = [
  * pixels, so neither is listed; a length or an angle added as a bare number fails the test.
  */
 export const NOT_LENGTHS = new Set([
+  'add_hedge.clip',
+  'add_planting.plants[].share',
+  'add_rock.weathering',
+  'add_rock.moss',
+  'add_rock.lichen',
   'add_window.rollerShutterOpen',
   'add_window.shutterOpen',
   'author_scene.payload.levels[].walls[].openings[].rollerShutterOpen',
