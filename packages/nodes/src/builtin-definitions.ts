@@ -41,6 +41,7 @@ import { pipeTrapRenderDefinition } from './pipe-trap/definition.render'
 import { plantingRenderDefinition } from './planting/definition.render'
 import { proceduralItemRenderDefinition } from './procedural-item/definition.render'
 import { ridgeVentRenderDefinition } from './ridge-vent/definition.render'
+import { rockRenderDefinition } from './rock/definition.render'
 import { roofRenderDefinition } from './roof/definition.render'
 import { roofSegmentRenderDefinition } from './roof-segment/definition.render'
 import { scanRenderDefinition } from './scan/definition.render'
@@ -90,6 +91,7 @@ export const builtinRenderDefinitions = [
   stairSegmentRenderDefinition,
   zoneRenderDefinition,
   siteRenderDefinition,
+  rockRenderDefinition,
   hedgeRenderDefinition,
   plantingRenderDefinition,
   buildingRenderDefinition,

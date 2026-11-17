@@ -40,6 +40,7 @@ import { pipeTrapEditContribution } from './pipe-trap/definition.edit'
 import { plantingEditContribution } from './planting/definition.edit'
 import { proceduralItemEditContribution } from './procedural-item/definition.edit'
 import { ridgeVentEditContribution } from './ridge-vent/definition.edit'
+import { rockEditContribution } from './rock/definition.edit'
 import { roofEditContribution } from './roof/definition.edit'
 import { roofSegmentEditContribution } from './roof-segment/definition.edit'
 import { scanEditContribution } from './scan/definition.edit'
@@ -89,6 +90,7 @@ export const builtinEditContributions = {
   'stair-segment': stairSegmentEditContribution,
   zone: zoneEditContribution,
   site: siteEditContribution,
+  rock: rockEditContribution,
   hedge: hedgeEditContribution,
   planting: plantingEditContribution,
   building: buildingEditContribution,
