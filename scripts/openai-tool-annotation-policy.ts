@@ -17,6 +17,7 @@ export const EXPECTED_OPENAI_TOOL_ANNOTATIONS = {
   add_door: policy(false, false, false),
   add_fence: policy(false, false, false),
   add_level: policy(false, false, false),
+  add_roof_element: policy(false, false, false),
   add_wall: policy(false, false, false),
   set_wall_trim: policy(false, true, false),
   set_wall_type: policy(false, true, false),

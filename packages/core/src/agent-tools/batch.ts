@@ -18,6 +18,7 @@ export const BATCHABLE_TOOLS = [
   'fit_stair',
   'find_by_type',
   'create_roof',
+  'add_roof_element',
   'add_wall',
   'set_wall_type',
   'set_wall_trim',

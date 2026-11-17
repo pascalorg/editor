@@ -8,11 +8,14 @@ import {
   LevelNode,
   type RoofElementKind,
   type RoofEvent,
+  RoofGlazing,
   RoofNode,
   RoofSegmentNode,
   sceneRegistry,
   useScene,
 } from '@pascal-app/core'
+import { addRoofElement } from '@pascal-app/core/agent-operations'
+import { isAgentRefusal } from '@pascal-app/core/agent-tools'
 import { useOpeningGuides, usePlacementPreview } from '@pascal-app/editor'
 import { generateRoofSegmentGeometry, useViewer } from '@pascal-app/viewer'
 import { act } from '@react-three/test-renderer'
@@ -213,6 +216,215 @@ describe('roof element manual adapter', () => {
     const before = structuredClone(useScene.getState().nodes)
     expect(roofElementAtClick('chimney', empty, [0, 0, 0])).toBeNull()
     expect(useScene.getState().nodes).toEqual(before)
+  })
+})
+
+describe('strict operation against actual native covering triangles', () => {
+  for (const roofType of forms) {
+    test(`${roofType} stores the physical covering seat through the strict operation`, () => {
+      const f = fixture({ roofType, ...(roofType === 'barrel' ? { barrelSegments: 7 } : {}) })
+      const hit = coveringHit(f.segment)
+      const world = f.segmentObject.localToWorld(hit.point.clone())
+      const levelObject = sceneRegistry.nodes.get(f.level.id)
+      if (!levelObject) throw new Error('Expected registered roof-parent frame')
+      const levelPoint = levelObject.worldToLocal(world)
+      const outcome = addRoofElement(
+        useScene.getState().nodes,
+        {
+          kind: 'chimney',
+          id: f.segment.id,
+          point: [levelPoint.x, levelPoint.z],
+        },
+        { activeLevelId: null },
+      )
+      const node = outcome.changes?.create?.[0]?.node
+      if (node?.type !== 'chimney') throw new Error('Expected one native chimney construction')
+      expect(outcome.changes?.create).toHaveLength(1)
+      expect(node).toMatchObject({ parentId: f.segment.id, roofSegmentId: f.segment.id })
+      closeRenderedPosition(node.position, hit.point.toArray())
+    })
+  }
+
+  test('a stored shed piece physically ends before the nominal high-eave snap', () => {
+    const f = fixture({
+      roofType: 'shed',
+      width: 8,
+      depth: 6,
+      managedByParent: false,
+      wallThickness: 0,
+      overhang: 0,
+      gableOverhang: 0,
+      shedFootprintPieces: [
+        [
+          [-4, -1],
+          [4, -1],
+          [4, 3],
+          [-4, 3],
+        ],
+      ],
+    })
+    const geometry = generateRoofSegmentGeometry(f.segment)
+    const materials = Array.from({ length: 8 }, () => new MeshBasicMaterial({ side: DoubleSide }))
+    const mesh = new Mesh(geometry, materials)
+    mesh.updateMatrixWorld(true)
+    try {
+      for (const [z, supported] of [
+        [1, true],
+        [-3, false],
+      ] as const) {
+        const hits = new Raycaster(new Vector3(0.5, 100, z), new Vector3(0, -1, 0))
+          .intersectObject(mesh)
+          .filter((entry) => (entry.face?.normal.y ?? 0) > 0.1)
+        expect(hits.length > 0).toBe(supported)
+        if (supported) {
+          const world = f.segmentObject.localToWorld(hits[0]!.point.clone())
+          expect(roofElementAtClick('ridge-vent', f.roof, world.toArray())).toBeNull()
+        }
+      }
+    } finally {
+      geometry.dispose()
+      for (const material of materials) material.dispose()
+    }
+  })
+
+  test('bare lower XYZ cannot bypass covering exposure while roof targeting chooses the highest', () => {
+    const f = fixture()
+    const upper = RoofSegmentNode.parse({
+      ...f.segment,
+      id: 'rseg_upper',
+      position: [f.segment.position[0], f.segment.position[1] + 20, f.segment.position[2]],
+    })
+    // Vertical separation does not waive the strict covering-exposure guard.
+    // Standalone geometry supplies coordinates, not a committed scene witness;
+    // genuine lower rendered-hit acceptance is covered by the mounted suite.
+    const roof = { ...f.roof, children: [upper.id, f.segment.id] }
+    useScene.setState({
+      nodes: { ...useScene.getState().nodes, [roof.id]: roof, [upper.id]: upper },
+    })
+    const upperObject = new Group()
+    upperObject.position.fromArray(upper.position)
+    upperObject.rotation.y = upper.rotation
+    sceneRegistry.nodes.get(roof.id)!.add(upperObject)
+    upperObject.updateWorldMatrix(true, true)
+    sceneRegistry.nodes.set(upper.id, upperObject)
+    const hit = coveringHit(f.segment)
+    const world = f.segmentObject.localToWorld(hit.point.clone())
+    const manual = roofElementAtClick('box-vent', roof, world.toArray())
+    expect(manual).toBeNull()
+    const levelPoint = sceneRegistry.nodes.get(f.level.id)!.worldToLocal(world.clone())
+    const agent = addRoofElement(
+      useScene.getState().nodes,
+      {
+        kind: 'box-vent',
+        id: roof.id,
+        point: [levelPoint.x, levelPoint.z],
+      },
+      { activeLevelId: null },
+    )
+    expect(agent.result.segmentId).toBe(upper.id)
+  })
+
+  test('mounted ridge preview/click refuse an achieved snap outside the actual custom shed', async () => {
+    const f = fixture({
+      roofType: 'shed',
+      width: 8,
+      depth: 6,
+      wallHeight: 2,
+      wallThickness: 0,
+      overhang: 0,
+      gableOverhang: 0,
+      shedFootprintPieces: [
+        [
+          [-4, -1],
+          [4, -1],
+          [4, 3],
+          [-4, 3],
+        ],
+      ],
+    })
+    const world = f.segmentObject.localToWorld(coveringHit(f.segment, 0.5, 1).point)
+    const before = structuredClone(useScene.getState().nodes)
+    const renderer = await mountTool('ridge-vent')
+    await send('roof:move', f.roof, world)
+    expect(useOpeningGuides.getState().guides).toEqual([])
+    await send('roof:click', f.roof, world)
+    expect(useScene.getState().nodes).toEqual(before)
+    expect(useScene.temporal.getState().pastStates).toHaveLength(0)
+    await renderer.unmount()
+    expect(useOpeningGuides.getState().guides).toEqual([])
+  })
+
+  test('empty glazed bay refusal and frame support agree with actual rendered geometry', () => {
+    const f = fixture({
+      roofType: 'gable',
+      roofSystem: 'glazed',
+      position: [0, 0, 0],
+      rotation: 0,
+      wallThickness: 0,
+      overhang: 0,
+      gableOverhang: 0,
+      glazing: RoofGlazing.parse({
+        across: { layout: 'count', count: 1 },
+        along: { layout: 'count', count: 1 },
+        panelType: 'empty',
+        glazedEnds: false,
+      }),
+    })
+    const geometry = generateRoofSegmentGeometry(f.segment)
+    const materials = Array.from({ length: 8 }, () => new MeshBasicMaterial({ side: DoubleSide }))
+    const mesh = new Mesh(geometry, materials)
+    mesh.updateMatrixWorld(true)
+    try {
+      for (const [x, present] of [
+        [0, false],
+        [-5.99, true],
+      ] as const) {
+        const hit = new Raycaster(new Vector3(x, 100, 1), new Vector3(0, -1, 0))
+          .intersectObject(mesh)
+          .find((entry) => (entry.face?.normal.y ?? 0) > 0.1)
+        // These are simple 30-degree top faces; the threshold only excludes vertical
+        // frame walls. It is not a general roof slope eligibility rule.
+        expect(Boolean(hit)).toBe(present)
+        const world = f.segmentObject.localToWorld(new Vector3(x, 0, 1))
+        const levelObject = sceneRegistry.nodes.get(f.level.id)!
+        const levelPoint = levelObject.worldToLocal(world)
+        const input = {
+          kind: 'chimney' as const,
+          id: f.segment.id,
+          point: [levelPoint.x, levelPoint.z],
+        }
+        if (present) {
+          const outcome = addRoofElement(useScene.getState().nodes, input, { activeLevelId: null })
+          const node = outcome.changes?.create?.[0]?.node
+          if (node?.type !== 'chimney' || !hit) throw new Error('Expected a supported frame seat')
+          closeRenderedPosition(node.position, hit.point.toArray())
+          const humanWorld = f.segmentObject.localToWorld(hit.point.clone())
+          const manual = roofElementAtClick('chimney', f.roof, humanWorld.toArray())
+          if (!manual) throw new Error('A real glazed frame hit must remain manually placeable')
+          expect(manual.segmentId).toBe(f.segment.id)
+          closeRenderedPosition(manual.node.position, hit.point.toArray())
+        } else {
+          // There is no native surface here. A bbox/nominal fallback must not
+          // manufacture a manual owner even at the nominal plane's height.
+          const phantom = f.segmentObject.localToWorld(
+            new Vector3(x, 2 + 3 * Math.tan(Math.PI / 6), 1),
+          )
+          expect(roofElementAtClick('chimney', f.roof, phantom.toArray())).toBeNull()
+          let refused = false
+          try {
+            addRoofElement(useScene.getState().nodes, input, { activeLevelId: null })
+          } catch (error) {
+            if (!isAgentRefusal(error)) throw error
+            expect(error.code).toBe('roof_point_outside_segment')
+            refused = true
+          }
+          expect(refused).toBe(true)
+        }
+      }
+    } finally {
+      geometry.dispose()
+      for (const material of materials) material.dispose()
+    }
   })
 })
 

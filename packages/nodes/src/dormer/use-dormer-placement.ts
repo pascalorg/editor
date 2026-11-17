@@ -11,7 +11,7 @@ import { useViewer } from '@pascal-app/viewer'
 import { useEffect, useRef, useState } from 'react'
 import * as THREE from 'three'
 import { createRelativeRoofDrag } from '../shared/relative-roof-drag'
-import { resolveRoofSegmentHit } from '../shared/roof-segment-hit'
+import { resolveRoofSegmentHit, roofEventWitness } from '../shared/roof-segment-hit'
 import { DORMER_PLACEMENT_ROTATION_STEP, DORMER_PLACEMENT_SNAP_M } from './geometry'
 
 const tmpMatrix = new THREE.Matrix4()
@@ -118,6 +118,7 @@ export function useDormerPlacement(opts: {
         event.position[0],
         event.position[1],
         event.position[2],
+        roofEventWitness(event),
       )
     }
 

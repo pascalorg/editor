@@ -85,6 +85,19 @@
       }
     },
     {
+      "name": "add_roof_element",
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "openWorldHint": false
+      },
+      "justifications": {
+        "readOnlyHint": "Creates one native roof accessory in the connected Pascal scene.",
+        "destructiveHint": "Adds one accessory without replacing or deleting existing scene nodes.",
+        "openWorldHint": "Uses only the connected scene without network access."
+      }
+    },
+    {
       "name": "add_wall",
       "annotations": {
         "readOnlyHint": false,

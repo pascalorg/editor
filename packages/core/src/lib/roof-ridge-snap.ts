@@ -37,7 +37,7 @@ export function resolveRidgeSnap(
     const distanceSq = (cursorLocalX - localX) ** 2 + (cursorLocalZ - localZ) ** 2
     if (distanceSq < bestDistanceSq) {
       bestDistanceSq = distanceSq
-      best = { localX, localZ, rotation: Math.atan2(-dz, dx) }
+      best = { localX, localZ, rotation: Math.atan2(-dz, dx) || 0 }
     }
   }
   return best

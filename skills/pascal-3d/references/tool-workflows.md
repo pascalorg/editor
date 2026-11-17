@@ -138,6 +138,33 @@ Partial curved finish stretches are skipped and reported, never expanded.
 The selected-room panel's **Dress room** controls provide the same layer
 options, preview/refusals and one-undo apply.
 
+## Native roof accessories
+
+`add_roof_element({ kind, id, point, rows?, columns?, name? })` adds one
+chimney, skylight, solar-panel, cupola, box-vent, ridge-vent, turbine-vent or
+eyebrow-vent with native defaults and orientation. `point` is a finite numeric
+`[x, z]` in metres in the roof level's building-local plan axes, not world or
+segment-local coordinates. A roof id chooses the highest physical covering;
+a roof-segment id queries only that segment without bypassing cuts or higher
+covering. Missing covering refuses `roof_point_outside_segment`; unresolved
+accessory/plugin cuts or roof intersections refuse `roof_surface_unmeasured`
+with `reason` and `nodeIds`. Do not replace an unresolved seat with a guess.
+
+Solar `rows` and `columns` are independently optional integers from 1 to 20,
+defaulting to 2 and 3. Ridge vents snap to a native ridge/break line (a shed's
+high eave), refuse `roof_no_ridge_line` where absent, and validate the achieved
+point again. Their stored Y is zero; the renderer derives the seat.
+The result names the roof and supplying segment and reports segment-local
+`localPosition`, `rotation` in radians and achieved level-plan `planPoint`,
+rounded for readback; stored coordinates retain full precision.
+
+By hand, choose the matching roof-accessory tool and click the roof. Manual
+events with a genuine registered native mesh-triangle witness can preserve
+exceptional vertical/surviving CSG hits that a strict plan query cannot measure.
+Bare XYZ and accessory-child hits cannot authorize that fallback.
+For ridge vents, covering evidence applies only at an unchanged achieved point;
+moved snaps require strict support, and vertical witnesses do not certify it.
+
 ## Greenhouse and barrel roofs
 
 Use `create_roof` with `roofSystem: "glazed"` for a gable, straight shed or barrel greenhouse roof. For a barrel roof, `depth` is the span and `barrelRise` is the arch rise, no more than half the span. `barrelSegments` controls faceting. `glazing` sets frame dimensions, glass appearance, grid layouts, glazed ends and individual glass, solid or empty panels. Standard barrel construction uses a solid covering.

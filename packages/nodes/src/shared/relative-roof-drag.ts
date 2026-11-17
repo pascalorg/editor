@@ -8,7 +8,7 @@ import {
 import { isGridSnapActive, useEditor } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import * as THREE from 'three'
-import { type RoofSegmentHit, resolveRoofSegmentHit } from './roof-segment-hit'
+import { type RoofSegmentHit, resolveRoofSegmentHit, roofEventWitness } from './roof-segment-hit'
 import { getSurfaceY } from './roof-surface'
 
 export type RelativeRoofDragTarget = {
@@ -87,6 +87,7 @@ export function createRelativeRoofDrag(original: {
         event.position[0],
         event.position[1],
         event.position[2],
+        roofEventWitness(event),
       )
       if (!hit) return null
 

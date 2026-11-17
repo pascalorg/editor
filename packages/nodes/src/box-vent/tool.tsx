@@ -11,10 +11,14 @@ import {
 } from '@pascal-app/core'
 import { triggerSFX } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import * as THREE from 'three'
 import { RoofAttachmentFallbackPreview } from '../shared/roof-attachment-fallback-preview'
-import { resolveRoofSegmentHit, roofElementAtClick } from '../shared/roof-segment-hit'
+import {
+  resolveRoofSegmentHit,
+  roofElementAtClick,
+  roofEventWitness,
+} from '../shared/roof-segment-hit'
 import { getAnalyticalNormal, getDownSlopeYaw, surfaceQuatFromNormal } from '../shared/roof-surface'
 import {
   clearRoofSurfacePlacementGuides,
@@ -58,6 +62,12 @@ const BoxVentTool = () => {
     [previewRotation],
   )
 
+  const clearPreview = useCallback(() => {
+    setPreviewPos(null)
+    setPreviewSurfaceQuat(null)
+    clearRoofSurfacePlacementGuides()
+  }, [])
+
   useEffect(() => {
     if (!activeBuildingId) return
 
@@ -82,8 +92,11 @@ const BoxVentTool = () => {
         lastSnapRef.current = [sx, sz]
       }
 
-      const hit = resolveRoofSegmentHit(event.node as RoofNode, wx, wy, wz)
-      if (!hit) return
+      const hit = resolveRoofSegmentHit(event.node as RoofNode, wx, wy, wz, roofEventWitness(event))
+      if (!hit) {
+        clearPreview()
+        return
+      }
 
       const normal = getAnalyticalNormal(hit.localX, hit.localZ, hit.segment)
       setPreviewSurfaceQuat(surfaceQuatFromNormal(normal, new THREE.Quaternion()))
@@ -103,8 +116,17 @@ const BoxVentTool = () => {
     }
 
     const onClick = (event: RoofEvent) => {
-      const placed = roofElementAtClick('box-vent', event.node as RoofNode, event.position)
-      if (!placed) return
+      const placed = roofElementAtClick(
+        'box-vent',
+        event.node as RoofNode,
+        event.position,
+        undefined,
+        roofEventWitness(event),
+      )
+      if (!placed) {
+        clearPreview()
+        return
+      }
       const { node: vent, segmentId } = placed
       const state = useScene.getState()
 
@@ -126,18 +148,14 @@ const BoxVentTool = () => {
       emitter.off('roof:click', onClick)
       clearRoofSurfacePlacementGuides()
     }
-  }, [activeBuildingId, setSelection, previewNode])
+  }, [activeBuildingId, setSelection, previewNode, clearPreview])
 
   return (
     <>
       <RoofAttachmentFallbackPreview
         activeBuildingId={activeBuildingId}
         ghost={<BoxVentPreview node={previewNode} invalid />}
-        onInvalidTarget={() => {
-          setPreviewPos(null)
-          setPreviewSurfaceQuat(null)
-          clearRoofSurfacePlacementGuides()
-        }}
+        onInvalidTarget={clearPreview}
       />
       {activeBuildingId && previewPos && previewSurfaceQuat && (
         <group position={previewPos}>

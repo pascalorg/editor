@@ -4,6 +4,7 @@ import { addColumn } from './add-column'
 import { addFence } from './add-fence'
 import { addLevel } from './add-level'
 import { addObjectInBatch } from './add-object'
+import { addRoofElement } from './add-roof-element'
 import { addWall } from './add-wall'
 import { viewAssets } from './asset-views'
 import { createBatchSteps } from './batch'
@@ -50,6 +51,7 @@ export * from './add-column'
 export * from './add-fence'
 export * from './add-level'
 export * from './add-object'
+export * from './add-roof-element'
 export * from './add-wall'
 export * from './apply-changes'
 export * from './apply-outcome'
@@ -118,6 +120,7 @@ export * from './wall-skirting'
 export * from './wall-type'
 
 const SINGLE_OPERATIONS = {
+  add_roof_element: addRoofElement,
   measure_stair: measureStairOperation,
   fit_stair: fitStair,
   list_levels: listLevels,

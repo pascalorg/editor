@@ -11,10 +11,14 @@ import {
 } from '@pascal-app/core'
 import { triggerSFX, usePlacementPreview } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import * as THREE from 'three'
 import { RoofAttachmentFallbackPreview } from '../shared/roof-attachment-fallback-preview'
-import { resolveRoofSegmentHit, roofElementAtClick } from '../shared/roof-segment-hit'
+import {
+  resolveRoofSegmentHit,
+  roofElementAtClick,
+  roofEventWitness,
+} from '../shared/roof-segment-hit'
 import { getAnalyticalNormal, surfaceQuatFromNormal } from '../shared/roof-surface'
 import {
   clearRoofSurfacePlacementGuides,
@@ -30,9 +34,8 @@ const worldPoint = new THREE.Vector3()
  * Solar panel placement tool. The preview shows the array at the
  * cursor with the analytical roof-surface tilt applied (no raycast in
  * the placement preview — uses `getAnalyticalNormal` derived from the
- * segment's roof type + dimensions). On commit, snaps the position's
- * Y to the segment's surface height and stores the analytical normal
- * in the node so the renderer reproduces the same orientation.
+ * segment's roof type + dimensions). Commit preserves the physical hit
+ * and stores the analytical normal so the renderer reproduces the tilt.
  */
 const SolarPanelTool = () => {
   const activeBuildingId = useViewer((s) => s.selection.buildingId)
@@ -59,6 +62,14 @@ const SolarPanelTool = () => {
     [],
   )
 
+  const clearPreview = useCallback(() => {
+    setPreviewPos(null)
+    setPreviewSurfaceQuat(null)
+    const placementPreview = usePlacementPreview.getState()
+    if (placementPreview.node?.id === previewNode.id) placementPreview.clear()
+    clearRoofSurfacePlacementGuides()
+  }, [previewNode.id])
+
   useEffect(() => {
     if (!activeBuildingId) return
 
@@ -83,8 +94,11 @@ const SolarPanelTool = () => {
         lastSnapRef.current = [sx, sz]
       }
 
-      const hit = resolveRoofSegmentHit(event.node as RoofNode, wx, wy, wz)
-      if (!hit) return
+      const hit = resolveRoofSegmentHit(event.node as RoofNode, wx, wy, wz, roofEventWitness(event))
+      if (!hit) {
+        clearPreview()
+        return
+      }
 
       const normal = getAnalyticalNormal(hit.localX, hit.localZ, hit.segment)
       setPreviewSurfaceQuat(surfaceQuatFromNormal(normal, new THREE.Quaternion()))
@@ -110,8 +124,17 @@ const SolarPanelTool = () => {
     }
 
     const onClick = (event: RoofEvent) => {
-      const placed = roofElementAtClick('solar-panel', event.node as RoofNode, event.position)
-      if (!placed) return
+      const placed = roofElementAtClick(
+        'solar-panel',
+        event.node as RoofNode,
+        event.position,
+        undefined,
+        roofEventWitness(event),
+      )
+      if (!placed) {
+        clearPreview()
+        return
+      }
       const { node: panel, segmentId } = placed
       const state = useScene.getState()
 
@@ -137,20 +160,14 @@ const SolarPanelTool = () => {
       if (placementPreview.node?.id === previewNode.id) placementPreview.clear()
       clearRoofSurfacePlacementGuides()
     }
-  }, [activeBuildingId, setSelection, previewNode])
+  }, [activeBuildingId, setSelection, previewNode, clearPreview])
 
   return (
     <>
       <RoofAttachmentFallbackPreview
         activeBuildingId={activeBuildingId}
         ghost={<SolarPanelPreview node={previewNode} invalid />}
-        onInvalidTarget={() => {
-          setPreviewPos(null)
-          setPreviewSurfaceQuat(null)
-          const placementPreview = usePlacementPreview.getState()
-          if (placementPreview.node?.id === previewNode.id) placementPreview.clear()
-          clearRoofSurfacePlacementGuides()
-        }}
+        onInvalidTarget={clearPreview}
       />
       {activeBuildingId && previewPos && previewSurfaceQuat && (
         <group position={previewPos}>

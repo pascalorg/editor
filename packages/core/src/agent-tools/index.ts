@@ -30,6 +30,7 @@ import { deleteNodeTool, getNodeTool } from './nodes'
 import { paintTool } from './paint'
 import { placeInRoomTool } from './place-in-room'
 import { placeItemsTool } from './place-items'
+import { addRoofElementTool } from './roof-elements'
 import { createRoofTool, moveRoofsToRoofLevelTool } from './roofs'
 import { ROOM_TOOL_CONTRACTS } from './room-structure'
 import { searchMaterialsTool } from './search-materials'
@@ -69,6 +70,7 @@ export * from './place-items'
 export * from './project-files'
 export * from './refusal'
 export * from './retired'
+export * from './roof-elements'
 export * from './roofs'
 export * from './room-structure'
 export * from './search-materials'
@@ -89,6 +91,7 @@ export * from './write-target'
  * surface drifts. See wiki/architecture/agent-surfaces.md.
  */
 export const AGENT_TOOL_CONTRACTS = [
+  addRoofElementTool,
   addColumnTool,
   measureStairTool,
   fitStairTool,

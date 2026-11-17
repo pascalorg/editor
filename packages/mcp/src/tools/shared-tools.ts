@@ -27,6 +27,8 @@ import {
   addFenceTool,
   addLevelTool,
   addObjectTool,
+  addRoofElementOutput,
+  addRoofElementTool,
   addWallTool,
   createRoofTool,
   createRoomTool,
@@ -436,6 +438,12 @@ const SHARED_TOOLS: SharedTool[] = [
     contract: createRoofTool,
     operation: AGENT_OPERATIONS.create_roof,
     annotations: ADDITIVE_TOOL_ANNOTATIONS,
+  },
+  {
+    contract: addRoofElementTool,
+    operation: AGENT_OPERATIONS.add_roof_element,
+    annotations: ADDITIVE_TOOL_ANNOTATIONS,
+    outputSchema: addRoofElementOutput,
   },
   {
     contract: moveRoofsToRoofLevelTool,
