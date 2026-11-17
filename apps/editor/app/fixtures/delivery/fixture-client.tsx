@@ -9,15 +9,22 @@ import {
   Editor,
   getSavedSceneDocument,
   type SceneGraph,
+  selectPlacedNode,
   selectZoneOrRoom,
   useEditor,
 } from '@pascal-app/editor'
-import { pendingSceneBuildCount, useViewer } from '@pascal-app/viewer'
+import {
+  getPendingRoofMergeCount,
+  pendingSceneBuildCount,
+  useGeometryStatus,
+  useViewer,
+} from '@pascal-app/viewer'
 import { useFrame, useThree } from '@react-three/fiber'
 import { useEffect, useRef, useState } from 'react'
-import type { Mesh } from 'three'
+import type { Mesh, Object3D } from 'three'
 import type { WebGPURenderer } from 'three/webgpu'
 import { z } from 'zod'
+import { type RoofFixtureCase, roofFixture, roofFixtureCases } from './roof-scene'
 import { deliveryScene } from './scene'
 
 type Point = [number, number, number]
@@ -31,6 +38,17 @@ type Probe = {
   geometry: Record<string, number>
   camera: number[]
   itemFailures: Record<string, string>
+  roof: {
+    pendingMerges: number
+    failures: Record<string, string>
+    roots: Record<
+      string,
+      {
+        visibleVertices: number
+        meshes: { name: string; vertices: number; placeholder: boolean; uuid: string }[]
+      }
+    >
+  }
 }
 type Bridge = {
   probe: Probe | null
@@ -42,6 +60,8 @@ type Bridge = {
   reset: (scene?: SceneGraph) => void
   selectRoom: typeof selectZoneOrRoom
   camera: (pose: Pose) => Promise<void>
+  roofCases: readonly RoofFixtureCase[]
+  loadRoof: typeof loadRoof
 }
 
 declare global {
@@ -67,6 +87,20 @@ function reset(scene = deliveryScene()) {
   useViewer.getState().setTextures(false)
   useViewer.getState().setUnit('metric')
   selectRoom('zone_salon')
+}
+
+function loadRoof(caseId: RoofFixtureCase) {
+  const { scene, ...description } = roofFixture(caseId)
+  applySceneGraphToEditor(scene)
+  useEditor.getState().armToolMode({ mode: 'select' })
+  useEditor.getState().clearRoom()
+  useViewer.getState().resetSelection()
+  useViewer.getState().setCameraMode('perspective')
+  useViewer.getState().setShading('rendered')
+  useViewer.getState().setTextures(false)
+  useViewer.getState().setUnit('metric')
+  selectPlacedNode(description.segmentId)
+  return description
 }
 
 function call(name: string, input: unknown) {
@@ -107,12 +141,45 @@ function FixtureProbe({ bridge }: { bridge: Bridge }) {
   // Same post-render priority as viewer-live: grid geometry is not scene evidence.
   useFrame(() => {
     const geometry: Record<string, number> = {}
-    for (const id of Object.keys(useScene.getState().nodes)) {
+    const roots: Probe['roof']['roots'] = {}
+    for (const node of Object.values(useScene.getState().nodes)) {
+      const id = node.id
       let vertices = 0
       sceneRegistry.nodes.get(id)?.traverse((object) => {
         vertices += (object as Mesh).geometry?.getAttribute('position')?.count ?? 0
       })
       geometry[id] = vertices
+      if (node.type === 'roof') {
+        const root = sceneRegistry.nodes.get(id)
+        const meshes: Probe['roof']['roots'][string]['meshes'] = []
+        let visible = true
+        for (
+          let ancestor: Object3D | null | undefined = root;
+          ancestor;
+          ancestor = ancestor.parent
+        ) {
+          if (!ancestor.visible) visible = false
+        }
+        if (visible)
+          root?.traverseVisible((object) => {
+            const mesh = object as Mesh
+            const count = mesh.geometry?.getAttribute('position')?.count ?? 0
+            if (mesh.isMesh && count && mesh.layers.test(camera.layers))
+              meshes.push({
+                name: mesh.name,
+                vertices: count,
+                placeholder: Boolean(mesh.geometry.userData.placeholder),
+                uuid: mesh.geometry.uuid,
+              })
+          })
+        roots[id] = {
+          visibleVertices: meshes.reduce(
+            (sum, mesh) => sum + (mesh.placeholder ? 0 : mesh.vertices),
+            0,
+          ),
+          meshes,
+        }
+      }
     }
     bridge.probe = {
       frame: ++frame.current,
@@ -122,6 +189,11 @@ function FixtureProbe({ bridge }: { bridge: Bridge }) {
       geometry,
       camera: camera.position.toArray(),
       itemFailures: { ...useViewer.getState().itemLoadFailures },
+      roof: {
+        pendingMerges: getPendingRoofMergeCount(),
+        failures: Object.fromEntries(useGeometryStatus.getState().failures),
+        roots,
+      },
     }
   }, 2)
   return null
@@ -141,6 +213,8 @@ export default function DeliveryFixture() {
     }),
     reset,
     selectRoom,
+    roofCases: roofFixtureCases,
+    loadRoof,
     camera: async () => {
       throw new Error('Camera controls not mounted')
     },

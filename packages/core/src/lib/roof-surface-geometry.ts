@@ -24,7 +24,7 @@ import { clipRoofTrianglesByTrim, getRoofSegmentTrimCuts } from './roof-outline'
 import {
   getShedBandFacetCount,
   getShedFootprintPieces,
-  getShedRenderOutlines,
+  getShedRenderPieces,
 } from './roof-shed-pieces'
 import { bendShedBandPoint, getShedPieceSurface } from './roof-shed-surface'
 import { getDutchRakeBoardTops, getRoofFasciaBoardFaces, wearsRoofFascia } from './roof-trim-faces'
@@ -32,6 +32,11 @@ import { getDutchRakeBoardTops, getRoofFasciaBoardFaces, wearsRoofFascia } from 
 type Point = [number, number, number]
 export type RoofSurfaceTriangle = { vertices: [Point, Point, Point]; normal: Point }
 export type RoofModuleInput = Parameters<typeof getRoofModuleFaces>[0]
+export type RoofSurfacePatch = {
+  triangles: RoofSurfaceTriangle[]
+  sourcePieceIndex: number | null
+  neighborIds: RoofSegmentNode['id'][]
+}
 
 /** Brush construction recipe only: independent coverings and custom sheds have their own dispatch. */
 export function getRoofShingleModules(segment: RoofSegmentNode): {
@@ -117,7 +122,11 @@ function triangle(vertices: [Point, Point, Point], orient = false): RoofSurfaceT
   return { vertices, normal: [normal[0] / length, normal[1] / length, normal[2] / length] }
 }
 
-function faceTriangles(faces: RoofShapeFaceVertex[][], shiftZ = 0): RoofSurfaceTriangle[] {
+export function faceTriangles(
+  faces: RoofShapeFaceVertex[][],
+  shiftZ = 0,
+  orient = false,
+): RoofSurfaceTriangle[] {
   return faces.flatMap((face) => {
     const points = face.map((p): Point => [p.x, p.y, p.z + shiftZ])
     if (points.length < 3) return []
@@ -130,17 +139,17 @@ function faceTriangles(faces: RoofShapeFaceVertex[][], shiftZ = 0): RoofSurfaceT
     ]
     if (Math.hypot(...cross) === 0) return []
     return points.slice(1, -1).flatMap((p, i) => {
-      const result = triangle([a, p, points[i + 2]!])
+      const result = triangle([a, p, points[i + 2]!], orient)
       return result ? [result] : []
     })
   })
 }
 
-function shedTriangles(
+function shedPatches(
   segment: RoofSegmentNode,
   shell: boolean,
   nodes?: Readonly<Record<string, AnyNode>>,
-): RoofSurfaceTriangle[] | null {
+): RoofSurfacePatch[] | null {
   if (segment.roofType !== 'shed') return null
   const pieces = getShedFootprintPieces(segment)
   const arc = isBandedShedSegment(segment) ? segment.arc : undefined
@@ -166,25 +175,62 @@ function shedTriangles(
       const vertices = outline.map(([x, z], i) =>
         point(x, z, surface.topY[i]! - (shell ? surface.verticalThickness : 0)),
       )
-      return [
+      const triangles = [
         [0, 1, 2],
         [0, 2, 3],
       ].flatMap(([a, b, c]) => {
         const result = triangle([vertices[a!]!, vertices[b!]!, vertices[c!]!], true)
         return result ? [result] : []
       })
-    }).flat()
+      return { triangles, sourcePieceIndex: null, neighborIds: [] }
+    })
   }
-  return getShedRenderOutlines(segment, pieces).flatMap((outline) => {
+  return getShedRenderPieces(segment).map(({ outline, sourcePieceIndex }) => {
     const surface = getShedPieceSurface(segment, outline, nodes)
     const vertices = outline.map(([x, z], i) =>
       point(x, z, surface.topY[i]! - (shell ? surface.verticalThickness : 0)),
     )
-    return triangulatePlanPolygon(outline).flatMap(([a, b, c]) => {
+    const triangles = triangulatePlanPolygon(outline).flatMap(([a, b, c]) => {
       const result = triangle([vertices[a]!, vertices[b]!, vertices[c]!], true)
       return result ? [result] : []
     })
+    const neighborIds =
+      !arc && outline.length === 3 && nodes
+        ? [
+            ...new Set(
+              surface.edgeSiblings.flatMap((sibling) => (sibling?.arc ? [sibling.id] : [])),
+            ),
+          ]
+        : []
+    return { triangles, sourcePieceIndex, neighborIds }
   })
+}
+
+function shedTriangles(
+  segment: RoofSegmentNode,
+  shell: boolean,
+  nodes?: Readonly<Record<string, AnyNode>>,
+): RoofSurfaceTriangle[] | null {
+  return shedPatches(segment, shell, nodes)?.flatMap((patch) => patch.triangles) ?? null
+}
+
+/** Internal producer seam: retain construction identity before any query clipping. */
+export function getRoofSegmentShellPatches(
+  roof: RoofNode,
+  segment: RoofSegmentNode,
+  nodes: Readonly<Record<string, AnyNode>>,
+): RoofSurfacePatch[] {
+  if (!isGlazedRoofSegment(segment)) {
+    const shed = shedPatches(segment, true, nodes)
+    if (shed) return shed
+  }
+  return [
+    {
+      triangles: buildRoofSegmentShellTriangles(roof, segment, nodes),
+      sourcePieceIndex: null,
+      neighborIds: [],
+    },
+  ]
 }
 
 function conicalSectorTop(segment: RoofSegmentNode): RoofSurfaceTriangle[] | null {

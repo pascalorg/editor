@@ -6,6 +6,7 @@ import {
 
 /** A shed's plan polygon, in its flat segment-local frame. */
 export type ShedPlanPolygon = [number, number][]
+export type ShedRenderPiece = { outline: ShedPlanPolygon; sourcePieceIndex: number | null }
 
 export function getShedBandFacetCount(width: number): number {
   return Math.max(4, Math.min(32, Math.ceil(width / 0.4)))
@@ -15,17 +16,19 @@ const isFiniteNumber = (value: unknown): value is number =>
   typeof value === 'number' && Number.isFinite(value)
 
 /** The stored footprint pieces whose every point is a finite [x, z]; malformed ones are dropped. */
-function storedShedPieces(segment: RoofSegmentNode): ShedPlanPolygon[] {
+function storedShedPieces(segment: RoofSegmentNode): ShedRenderPiece[] {
   const stored: unknown = segment.shedFootprintPieces
   if (!Array.isArray(stored)) return []
-  return stored.flatMap((polygon: unknown) => {
+  return stored.flatMap((polygon: unknown, sourcePieceIndex) => {
     if (!Array.isArray(polygon)) return []
     const points = polygon.flatMap((point: unknown): ShedPlanPolygon => {
       if (!Array.isArray(point) || point.length < 2) return []
       const [x, z] = point
       return isFiniteNumber(x) && isFiniteNumber(z) ? [[x, z]] : []
     })
-    return points.length >= 3 && points.length === polygon.length ? [points] : []
+    return points.length >= 3 && points.length === polygon.length
+      ? [{ outline: points, sourcePieceIndex }]
+      : []
   })
 }
 
@@ -120,10 +123,16 @@ function managedShedFootprint(segment: RoofSegmentNode): ShedPlanPolygon {
  * other segment.
  */
 export function getShedFootprintPieces(segment: RoofSegmentNode): ShedPlanPolygon[] {
+  return shedFootprintSources(segment).map((piece) => piece.outline)
+}
+
+function shedFootprintSources(segment: RoofSegmentNode): ShedRenderPiece[] {
   if (segment.roofType !== 'shed') return []
   const stored = storedShedPieces(segment)
   if (stored.length > 0) return stored
-  return segment.managedByParent ? [managedShedFootprint(segment)] : []
+  return segment.managedByParent
+    ? [{ outline: managedShedFootprint(segment), sourcePieceIndex: null }]
+    : []
 }
 
 function clipAtX(
@@ -206,14 +215,30 @@ export function getShedRenderOutlines(
   segment: RoofSegmentNode,
   pieces: readonly ShedPlanPolygon[],
 ): ShedPlanPolygon[] {
+  return getShedRenderPieces(
+    segment,
+    pieces.map((outline) => ({ outline, sourcePieceIndex: null })),
+  ).map((piece) => piece.outline)
+}
+
+/** Persisted identities survive normalization; only the first valid source is band-faceted. */
+export function getShedRenderPieces(
+  segment: RoofSegmentNode,
+  pieces: readonly ShedRenderPiece[] = shedFootprintSources(segment),
+): ShedRenderPiece[] {
   if (segment.roofType !== 'shed') return []
-  const rendered = isBandedShedSegment(segment)
-    ? [...facetBandedRoofPieces(pieces.slice(0, 1), segment.width), ...pieces.slice(1)]
-    : pieces
-  return rendered.flatMap((polygon) => {
-    const sanitized = sanitizeRoofPlanPolygon(polygon)
+  const rendered = pieces.flatMap((piece, index) =>
+    isBandedShedSegment(segment) && index === 0
+      ? facetBandedRoofPieces([piece.outline], segment.width).map((outline) => ({
+          ...piece,
+          outline,
+        }))
+      : [piece],
+  )
+  return rendered.flatMap((piece) => {
+    const sanitized = sanitizeRoofPlanPolygon(piece.outline)
     const area = signedArea(sanitized)
     if (Math.abs(area) <= 1e-9) return []
-    return [area > 0 ? sanitized : [...sanitized].reverse()]
+    return [{ ...piece, outline: area > 0 ? sanitized : [...sanitized].reverse() }]
   })
 }

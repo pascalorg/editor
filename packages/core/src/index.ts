@@ -593,7 +593,9 @@ export {
   getShedBandFacetCount,
   getShedFootprintPieces,
   getShedRenderOutlines,
+  getShedRenderPieces,
   type ShedPlanPolygon,
+  type ShedRenderPiece,
   sanitizeRoofPlanPolygon,
 } from './lib/roof-shed-pieces'
 export {
@@ -602,6 +604,15 @@ export {
   getShedPieceSurface,
   getShedSiblingTopY,
 } from './lib/roof-shed-surface'
+export {
+  getRoofSegmentCoveringSeat,
+  getRoofSegmentShellSeat,
+  getRoofSegmentShellSupport,
+  pickRoofCoveringSeat,
+  type RoofShellSupport,
+  type RoofSurfaceResult,
+  type RoofSurfaceSeat,
+} from './lib/roof-surface'
 export {
   buildRoofSegmentCoveringTriangles,
   buildRoofSegmentShellTriangles,
