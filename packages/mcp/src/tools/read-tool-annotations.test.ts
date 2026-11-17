@@ -106,6 +106,8 @@ const TOOL_POLICIES = [
       'apply_patch',
       'clear_scene',
       'add_object',
+      'add_hedge',
+      'add_planting',
       'author_scene',
       'add_column',
       'set_wall_type',
