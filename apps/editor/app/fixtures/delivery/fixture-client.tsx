@@ -21,7 +21,15 @@ import {
 } from '@pascal-app/viewer'
 import { useFrame, useThree } from '@react-three/fiber'
 import { useEffect, useRef, useState } from 'react'
-import type { Mesh, Object3D } from 'three'
+import {
+  Box3,
+  type Color,
+  type Material,
+  type Mesh,
+  type Object3D,
+  type Texture,
+  Vector3,
+} from 'three'
 import type { WebGPURenderer } from 'three/webgpu'
 import { z } from 'zod'
 import { type RoofFixtureCase, roofFixture, roofFixtureCases } from './roof-scene'
@@ -69,6 +77,8 @@ type Bridge = {
   reset: (scene?: SceneGraph) => void
   selectRoom: typeof selectZoneOrRoom
   clearSelection: () => void
+  setDiagnosticTextures: (enabled: boolean) => void
+  renderDiagnostics: () => Record<string, unknown>
   camera: (pose: Pose) => Promise<void>
   roofCases: readonly RoofFixtureCase[]
   loadRoof: typeof loadRoof
@@ -141,6 +151,7 @@ function call(name: string, input: unknown) {
 function FixtureProbe({ bridge }: { bridge: Bridge }) {
   const gl = useThree((state) => state.gl) as unknown as WebGPURenderer
   const camera = useThree((state) => state.camera)
+  const scene = useThree((state) => state.scene)
   const controls = useThree((state) => state.controls) as unknown as Controls | null
   const frame = useRef(0)
 
@@ -149,13 +160,194 @@ function FixtureProbe({ bridge }: { bridge: Bridge }) {
       if (!controls) throw new Error('Camera controls not mounted')
       await controls.setLookAt(...position, ...target, false)
     }
+    // On demand only: do not traverse material maps/bounds on every rendered frame.
+    // These are observations, not render overrides or a pixel-visibility oracle.
+    bridge.renderDiagnostics = () => {
+      const meshes: Record<string, unknown>[] = []
+      const seen = new Set<string>()
+      for (const node of Object.values(useScene.getState().nodes)) {
+        if (['building', 'level', 'zone'].includes(node.type)) continue
+        sceneRegistry.nodes.get(node.id)?.traverse((object) => {
+          const mesh = object as Mesh
+          if (!mesh.isMesh || seen.has(mesh.uuid)) return
+          seen.add(mesh.uuid)
+          const ancestors = []
+          for (let ancestor: Object3D | null = mesh; ancestor; ancestor = ancestor.parent) {
+            ancestors.push({
+              uuid: ancestor.uuid,
+              name: ancestor.name,
+              type: ancestor.type,
+              visible: ancestor.visible,
+              layers: ancestor.layers.mask,
+            })
+          }
+          const position = mesh.geometry.getAttribute('position')
+          const bounds = new Box3()
+          const point = new Vector3()
+          if (position) {
+            for (let index = 0; index < position.count; index++) {
+              point.fromBufferAttribute(position, index)
+              bounds.expandByPoint(point)
+            }
+            bounds.applyMatrix4(mesh.matrixWorld)
+          }
+          const materials = (Array.isArray(mesh.material) ? mesh.material : [mesh.material]).map(
+            (material) => {
+              const surface = material as Material & { color?: Color } & Partial<
+                  Record<
+                    'map' | 'normalMap' | 'roughnessMap' | 'aoMap' | 'alphaMap',
+                    Texture | null
+                  >
+                >
+              return {
+                uuid: material.uuid,
+                name: material.name,
+                type: material.type,
+                visible: material.visible,
+                opacity: material.opacity,
+                transparent: material.transparent,
+                alphaTest: material.alphaTest,
+                side: material.side,
+                colorWrite: material.colorWrite,
+                depthTest: material.depthTest,
+                depthWrite: material.depthWrite,
+                color: surface.color?.getHexString(),
+                maps: Object.fromEntries(
+                  (['map', 'normalMap', 'roughnessMap', 'aoMap', 'alphaMap'] as const).map(
+                    (slot) => {
+                      const texture = surface[slot]
+                      return [
+                        slot,
+                        texture
+                          ? {
+                              uuid: texture.uuid,
+                              name: texture.name,
+                              version: texture.version,
+                              hasImage: Boolean(texture.image),
+                            }
+                          : null,
+                      ]
+                    },
+                  ),
+                ),
+              }
+            },
+          )
+          meshes.push({
+            owner: node.id,
+            uuid: mesh.uuid,
+            name: mesh.name,
+            ancestors,
+            ancestorsVisible: ancestors.every((ancestor) => ancestor.visible),
+            cameraLayerMatch: mesh.layers.test(camera.layers),
+            frustumCulled: mesh.frustumCulled,
+            renderOrder: mesh.renderOrder,
+            vertices: position?.count ?? 0,
+            drawRange: { ...mesh.geometry.drawRange },
+            groups: mesh.geometry.groups.map((group) => ({ ...group })),
+            matrixWorld: mesh.matrixWorld.toArray(),
+            worldBounds: bounds.isEmpty()
+              ? null
+              : {
+                  min: bounds.min.toArray(),
+                  max: bounds.max.toArray(),
+                },
+            materials,
+          })
+        })
+      }
+      // Inspect the renderer's existing backend/device only. Do not request a
+      // second adapter: that would not establish which device rendered this scene.
+      const backend = (
+        gl as unknown as {
+          backend?: {
+            constructor: { name: string }
+            isWebGPUBackend?: boolean
+            isWebGLBackend?: boolean
+            compatibilityMode?: boolean | null
+            device?: {
+              adapterInfo?: {
+                vendor?: string
+                architecture?: string
+                device?: string
+                description?: string
+                isFallbackAdapter?: boolean
+              }
+              features?: ReadonlySet<string>
+            } | null
+            gl?: WebGL2RenderingContext | null
+          }
+        }
+      ).backend
+      const adapter = backend?.device?.adapterInfo
+      let webgl: Record<string, unknown> | null = null
+      if (backend?.gl) {
+        const context = backend.gl
+        try {
+          const debug = context.getExtension('WEBGL_debug_renderer_info')
+          webgl = {
+            version: context.getParameter(context.VERSION),
+            vendor: context.getParameter(context.VENDOR),
+            renderer: context.getParameter(context.RENDERER),
+            unmaskedVendor: debug ? context.getParameter(debug.UNMASKED_VENDOR_WEBGL) : null,
+            unmaskedRenderer: debug ? context.getParameter(debug.UNMASKED_RENDERER_WEBGL) : null,
+            contextLost: context.isContextLost(),
+          }
+        } catch (error) {
+          webgl = { error: String(error) }
+        }
+      }
+      return {
+        probe: bridge.probe,
+        selection: structuredClone(useViewer.getState().selection),
+        room: structuredClone(useEditor.getState().room),
+        hoveredId: useViewer.getState().hoveredId,
+        levelMode: useViewer.getState().levelMode,
+        camera: {
+          type: camera.type,
+          position: camera.position.toArray(),
+          worldPosition: camera.getWorldPosition(new Vector3()).toArray(),
+          quaternion: camera.quaternion.toArray(),
+          direction: camera.getWorldDirection(new Vector3()).toArray(),
+          layers: camera.layers.mask,
+          projection: camera.projectionMatrix.toArray(),
+          matrixWorld: camera.matrixWorld.toArray(),
+          matrixWorldInverse: camera.matrixWorldInverse.toArray(),
+        },
+        scene: { visible: scene.visible, layers: scene.layers.mask },
+        renderer: {
+          type: gl.constructor.name,
+          toneMapping: gl.toneMapping,
+          exposure: gl.toneMappingExposure,
+          backend: backend?.constructor.name ?? 'not observed',
+          isWebGPUBackend: backend?.isWebGPUBackend ?? false,
+          isWebGLBackend: backend?.isWebGLBackend ?? false,
+          compatibilityMode: backend?.compatibilityMode ?? null,
+          adapter: adapter
+            ? {
+                vendor: adapter.vendor,
+                architecture: adapter.architecture,
+                device: adapter.device,
+                description: adapter.description,
+                isFallbackAdapter: adapter.isFallbackAdapter,
+              }
+            : null,
+          deviceFeatures: backend?.device?.features ? [...backend.device.features] : null,
+          webgl,
+        },
+        meshes,
+      }
+    }
     return () => {
       bridge.camera = async () => {
         throw new Error('Camera controls not mounted')
       }
+      bridge.renderDiagnostics = () => {
+        throw new Error('Scene probe not mounted')
+      }
       bridge.probe = null
     }
-  }, [bridge, controls])
+  }, [bridge, camera, controls, gl, scene])
 
   // Same post-render priority as viewer-live: grid geometry is not scene evidence.
   useFrame(() => {
@@ -242,6 +434,10 @@ export default function DeliveryFixture() {
     reset,
     selectRoom,
     clearSelection,
+    setDiagnosticTextures: (enabled) => useViewer.getState().setTextures(enabled),
+    renderDiagnostics: () => {
+      throw new Error('Scene probe not mounted')
+    },
     roofCases: roofFixtureCases,
     loadRoof,
     camera: async () => {
