@@ -24,6 +24,8 @@ import {
   type AgentToolAnnotations,
   type AgentToolContract,
   addCornerWindowTool,
+  addDormerOutput,
+  addDormerTool,
   addFenceTool,
   addLevelTool,
   addObjectTool,
@@ -444,6 +446,12 @@ const SHARED_TOOLS: SharedTool[] = [
     operation: AGENT_OPERATIONS.add_roof_element,
     annotations: ADDITIVE_TOOL_ANNOTATIONS,
     outputSchema: addRoofElementOutput,
+  },
+  {
+    contract: addDormerTool,
+    operation: AGENT_OPERATIONS.add_dormer,
+    annotations: ADDITIVE_TOOL_ANNOTATIONS,
+    outputSchema: addDormerOutput,
   },
   {
     contract: moveRoofsToRoofLevelTool,

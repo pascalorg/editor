@@ -19,6 +19,7 @@ export const BATCHABLE_TOOLS = [
   'find_by_type',
   'create_roof',
   'add_roof_element',
+  'add_dormer',
   'add_wall',
   'set_wall_type',
   'set_wall_trim',

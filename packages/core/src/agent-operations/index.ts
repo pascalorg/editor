@@ -1,6 +1,7 @@
 import { AGENT_TOOL_CONTRACTS, BATCHABLE_TOOLS } from '../agent-tools'
 import { inOneGo } from '../lib/steps'
 import { addColumn } from './add-column'
+import { addDormer } from './add-dormer'
 import { addFence } from './add-fence'
 import { addLevel } from './add-level'
 import { addObjectInBatch } from './add-object'
@@ -48,6 +49,7 @@ import './usage-checks'
 export { inOneGo, type Steps } from '../lib/steps'
 export * from './achieved'
 export * from './add-column'
+export * from './add-dormer'
 export * from './add-fence'
 export * from './add-level'
 export * from './add-object'
@@ -120,6 +122,7 @@ export * from './wall-skirting'
 export * from './wall-type'
 
 const SINGLE_OPERATIONS = {
+  add_dormer: addDormer,
   add_roof_element: addRoofElement,
   measure_stair: measureStairOperation,
   fit_stair: fitStair,

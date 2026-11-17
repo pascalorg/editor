@@ -46,6 +46,19 @@
       }
     },
     {
+      "name": "add_dormer",
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "openWorldHint": false
+      },
+      "justifications": {
+        "readOnlyHint": "Creates one native dormer and its hosted window in the connected Pascal scene.",
+        "destructiveHint": "Adds the complete subtree without replacing or deleting existing authored scene nodes.",
+        "openWorldHint": "Uses only the connected scene and its configured material library without accessing the public internet."
+      }
+    },
+    {
       "name": "add_fence",
       "annotations": {
         "readOnlyHint": false,

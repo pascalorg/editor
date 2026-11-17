@@ -11,6 +11,7 @@ import { addCornerWindowTool } from './corner-window'
 import { createRoomTool } from './create-room'
 import { designBriefTool } from './design-brief'
 import { placeDesignTool, validateDesignTool } from './designs'
+import { addDormerTool } from './dormers'
 import { dressRoomTool } from './dress-room'
 import { addFenceTool } from './fences'
 import { findByTypeTool } from './find-by-type'
@@ -53,6 +54,7 @@ export * from './columns'
 export * from './contract'
 export * from './corner-window'
 export * from './create-room'
+export * from './dormers'
 export * from './dress-room'
 export * from './fences'
 export * from './find-by-type'
@@ -91,6 +93,7 @@ export * from './write-target'
  * surface drifts. See wiki/architecture/agent-surfaces.md.
  */
 export const AGENT_TOOL_CONTRACTS = [
+  addDormerTool,
   addRoofElementTool,
   addColumnTool,
   measureStairTool,
