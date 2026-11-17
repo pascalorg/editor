@@ -1,32 +1,35 @@
 'use client'
 
-// Loads `@pascal-app/nodes`' built-in plugin into the node registry on the
-// client. Mounted from `layout.tsx` so every page in the standalone
-// editor gets the registry populated before its first `<Viewer>` /
-// `<Editor>` mounts — without this the registry is empty on the client
-// (the server registers in its own module instance, which is unreachable
-// from hydrated pages) and every `NodeRenderer` resolves to `null`. The
-// `loaded` guard inside `../lib/bootstrap` keeps the side effect
-// idempotent under HMR.
-import '../lib/bootstrap'
-import { createI18n, defaultI18n, PascalI18nProvider } from '@pascal-app/core'
-import { registerBundledLocales } from '@pascal-app/editor/locales'
+import {
+  type CompiledTranslationMessages,
+  createI18n,
+  defaultI18n,
+  PascalI18nProvider,
+  registerCompiledMessages,
+} from '@pascal-app/core'
+import { loadBundledLocale, registerEnglishLocale } from '@pascal-app/editor/locales/lazy'
 import { type ReactNode, useEffect, useMemo } from 'react'
-import { registerDevLocales } from '@/lib/dev-locales'
+import { loadDevLocale } from '@/lib/dev-locales'
 
-registerBundledLocales()
-registerDevLocales()
+registerEnglishLocale()
 
 export function ClientBootstrap({
   children,
   enableDevDiagnostics,
+  initialLocaleCatalog,
   locale,
 }: {
   children: ReactNode
   enableDevDiagnostics: boolean
+  initialLocaleCatalog?: { locale: string; messages: CompiledTranslationMessages }
   locale: string
 }) {
-  const i18n = useMemo(() => createI18n({ locale }), [locale])
+  const i18n = useMemo(() => {
+    if (initialLocaleCatalog) {
+      registerCompiledMessages(initialLocaleCatalog.locale, '', initialLocaleCatalog.messages)
+    }
+    return createI18n({ locale })
+  }, [initialLocaleCatalog, locale])
 
   useEffect(() => {
     if (!enableDevDiagnostics) return
@@ -42,7 +45,11 @@ export function ClientBootstrap({
   }, [i18n])
 
   useEffect(() => {
-    return defaultI18n.subscribeLocale((nextLocale) => i18n.setLocale(nextLocale))
+    return defaultI18n.subscribeLocale((nextLocale) => {
+      void Promise.all([loadDevLocale(nextLocale), loadBundledLocale(nextLocale)]).finally(() => {
+        i18n.setLocale(nextLocale)
+      })
+    })
   }, [i18n])
 
   return <PascalI18nProvider i18n={i18n}>{children}</PascalI18nProvider>

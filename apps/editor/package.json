@@ -4,7 +4,7 @@
   "type": "module",
   "private": true,
   "scripts": {
-    "dev": "dotenv -e ../../.env.local -e ../../.env.defaults -- next dev",
+    "dev": "NODE_OPTIONS=--disable-warning=ExperimentalWarning dotenv -e ../../.env.local -e ../../.env.defaults -- next dev",
     "build": "dotenv -e ../../.env.local -- next build",
     "start": "next start",
     "smoke": "bun scripts/smoke-production-server.ts",

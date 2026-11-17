@@ -1,5 +1,6 @@
 'use client'
 
+import '@/lib/bootstrap'
 import { initSpatialGridSync, useScene } from '@pascal-app/core'
 import {
   applySceneGraphToEditor,

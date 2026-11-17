@@ -2,6 +2,7 @@ import { registerCompiledMessages } from '@pascal-app/core'
 import { messages } from './locales/en-XA/messages'
 
 export const PSEUDO_LOCALE = 'en-XA'
+export { messages as pseudoLocaleMessages }
 
 let registered = false
 

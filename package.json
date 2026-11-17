@@ -4,6 +4,7 @@
   "scripts": {
     "build": "turbo run build",
     "dev": "dotenv -e ./.env -e ./.env.defaults -- turbo run dev --env-mode=loose",
+    "dev:fast": "NODE_OPTIONS=--disable-warning=ExperimentalWarning dotenv -e ./.env -e ./.env.defaults -- bun --cwd apps/editor dev",
     "lint": "biome lint",
     "lints": "bun run lint",
     "lint:fix": "biome lint --write",
@@ -90,6 +91,7 @@
   "patchedDependencies": {
     "iwer@2.3.0": "patches/iwer@2.3.0.patch",
     "three-bvh-csg@0.0.18": "patches/three-bvh-csg@0.0.18.patch",
-    "three@0.187.0": "patches/three@0.187.0.patch"
+    "three@0.187.0": "patches/three@0.187.0.patch",
+    "@react-three/drei@10.7.9": "patches/@react-three%2Fdrei@10.7.9.patch"
   }
 }
