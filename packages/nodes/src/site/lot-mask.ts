@@ -40,5 +40,9 @@ export function lotMaskedMaterial(material: Material, polygon: ReadonlyArray<Poi
   // the lot AND out of the window, not one instead of the other.
   const inside = insideLotNode(polygon)
   masked.maskNode = masked.maskNode ? (masked.maskNode as Node<'bool'>).and(inside) : inside
+  // A ground that keeps its shadow where it is not drawn (the earth implied under the ground)
+  // carries its own shadow mask: that one stops at the property line as well.
+  if (masked.maskShadowNode)
+    masked.maskShadowNode = (masked.maskShadowNode as Node<'bool'>).and(inside)
   return masked as unknown as Material
 }

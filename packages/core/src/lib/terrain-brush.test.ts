@@ -4,6 +4,7 @@ import {
   beginStroke,
   DEFAULT_BRUSH_SETTINGS,
   detachStrokeAnchor,
+  diffuseHeights,
   highestOver,
   MIN_BRUSH_RADIUS_IN_SPACINGS,
   maxCoverage,
@@ -360,6 +361,32 @@ describe('smooth', () => {
       expect(current).toBeLessThanOrEqual(previous + 1e-9)
       previous = current
     }
+  })
+})
+
+describe('diffuseHeights', () => {
+  test('is the target a smooth dab reaches at its centre', () => {
+    // The exported diffusion is what both the brush and shape_site_terrain's
+    // smooth verb lerp toward; at a dab's centre the coverage is full, so the
+    // stroke lands exactly on it.
+    const base = field()
+    const heights = base.heights.slice()
+    const centre = 16 * 33 + 16
+    heights[centre] = quantize(base, 2)
+    const spiked = { ...base, heights }
+    const diffused = diffuseHeights(spiked)
+    const smoothed = stroke(
+      spiked,
+      { verb: 'smooth', settings: { radius: 3, strength: 1, falloff: 0.2 } },
+      [[0, 0]],
+    )
+    expect(smoothed.heights[centre]).toBe(diffused[centre])
+    expect(diffused[centre]).toBeLessThan(heights[centre] ?? 0)
+  })
+
+  test('leaves flat ground untouched', () => {
+    const flat = field()
+    expect(Array.from(diffuseHeights(flat))).toEqual(Array.from(flat.heights))
   })
 })
 

@@ -1,3 +1,4 @@
+import { validateTerrainBreakRelations } from '../lib/terrain-break-validation'
 import type { AnyNode, AnyNodeId } from '../schema/types'
 import { nodeRegistry } from './registry'
 
@@ -12,6 +13,7 @@ export function validateNodeRelations(
   changedIds: Iterable<AnyNodeId>,
 ) {
   const affected = new Set(changedIds)
+  validateTerrainBreakRelations(before, next, affected)
   for (const id of [...affected]) {
     for (const node of [before[id], next[id]]) {
       if (node?.parentId) affected.add(node.parentId as AnyNodeId)

@@ -313,9 +313,14 @@ describe('buildFirstPersonColliderWorldFromRegistry', () => {
 
     // The hill is in the collider: a flat slab would top out at 0.
     expect(world.bounds?.max.y).toBeCloseTo(2.5)
-    // And it still reaches past the site so stepping out does not drop the player.
-    expect(world.bounds?.min.x).toBeCloseTo(-1008)
-    expect(world.bounds?.max.x).toBeCloseTo(1008)
+    // And it still reaches past the site so stepping out does not drop the player. The ground
+    // the player stands on is the scene's authority (tiles, the frozen legacy field, a
+    // continuation), which spans the lot as well as the sculpted field: this site's default
+    // 30 × 30 m lot reaches ±15 m, past the field's ±8 m, and the skirt starts from there.
+    expect(world.bounds?.min.x).toBeCloseTo(-1015)
+    expect(world.bounds?.max.x).toBeCloseTo(1015)
+    expect(world.bounds?.min.z).toBeCloseTo(-1015)
+    expect(world.bounds?.max.z).toBeCloseTo(1015)
 
     // What the player actually stands on, on the plateau and off it.
     const raycaster = new Raycaster()

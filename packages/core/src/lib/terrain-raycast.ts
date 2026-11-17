@@ -21,7 +21,9 @@
  * `heightAt` reports.
  */
 
-import { heightAt, type TerrainField } from './terrain-field'
+import { TERRAIN_CONTINUATION_DISTANCE } from './terrain-authority'
+import { terrainBreakHeightAt, terrainBreakIsClosed } from './terrain-breaks'
+import { heightAt, heightAtSample, type TerrainField } from './terrain-field'
 
 export type TerrainHit = {
   /** Distance along the (unnormalized) direction vector. */
@@ -55,16 +57,17 @@ function fieldBounds(field: TerrainField): {
   maxX: number
   maxZ: number
 } {
+  const apron = field.readHeightAt ? TERRAIN_CONTINUATION_DISTANCE : 0
   return {
-    minX: field.origin[0],
-    minZ: field.origin[1],
-    maxX: field.origin[0] + (field.cols - 1) * field.spacing,
-    maxZ: field.origin[1] + (field.rows - 1) * field.spacing,
+    minX: field.origin[0] - apron,
+    minZ: field.origin[1] - apron,
+    maxX: field.origin[0] + (field.cols - 1) * field.spacing + apron,
+    maxZ: field.origin[1] + (field.rows - 1) * field.spacing + apron,
   }
 }
 
 /**
- * Min/max height in metres, cached per `heights` buffer.
+ * Min/max height in metres, cached per field version.
  *
  * The vertical extent is what bounds the march for rays that never leave the
  * field in XZ — a straight-down pointer ray, which is the single most common
@@ -72,30 +75,26 @@ function fieldBounds(field: TerrainField): {
  * such a ray relies on `MAX_STEPS` to terminate, and an *upward* one burns all
  * 8192 steps before returning null.
  *
- * The scan is O(samples), so it is cached on the buffer rather than repeated per
- * ray. `applyHeightPatch` allocates a new `Int16Array` for every mutation, which
- * makes the buffer identity a correct version key: a patched field misses the
- * cache and rescans exactly once, and a stale entry is unreachable. `WeakMap`
- * keeps it from retaining fields past their use.
+ * Sparse fields provide conservative bounds from their authored sources and
+ * continuation. Dense fields scan once per immutable field version.
  */
-const heightRangeCache = new WeakMap<Int16Array, { minY: number; maxY: number }>()
+const heightRangeCache = new WeakMap<TerrainField, { minY: number; maxY: number }>()
 
 function heightRange(field: TerrainField): { minY: number; maxY: number } {
-  const cached = heightRangeCache.get(field.heights)
+  if (field.heightBounds) return { minY: field.heightBounds[0], maxY: field.heightBounds[1] }
+  const cached = heightRangeCache.get(field)
   if (cached) return cached
   let min = 0
   let max = 0
-  if (field.heights.length > 0) {
-    min = field.heights[0] ?? 0
-    max = min
-    for (let i = 1; i < field.heights.length; i++) {
-      const h = field.heights[i] ?? 0
+  for (let row = 0; row < field.rows; row++) {
+    for (let col = 0; col < field.cols; col++) {
+      const h = heightAtSample(field, col, row)
       if (h < min) min = h
       if (h > max) max = h
     }
   }
-  const range = { minY: min * field.step, maxY: max * field.step }
-  heightRangeCache.set(field.heights, range)
+  const range = { minY: min, maxY: max }
+  heightRangeCache.set(field, range)
   return range
 }
 
@@ -154,13 +153,18 @@ function clipToField(
  * basement finds the surface it exits through. A ray whose origin is already
  * exactly on the surface returns `t = 0`.
  */
-export function raycastTerrain(
+function raycastGroundSurface(
   field: TerrainField,
   origin: readonly [number, number, number],
   direction: readonly [number, number, number],
 ): TerrainHit | null {
   const dirLength = Math.hypot(direction[0], direction[1], direction[2])
   if (dirLength < 1e-12) return null
+  if (field.readHeightAt && direction[0] === 0 && direction[2] === 0) {
+    const y = heightAt(field, origin[0], origin[2])
+    const t = (y - origin[1]) / direction[1]
+    return t >= 0 ? { t, x: origin[0], y, z: origin[2] } : null
+  }
 
   const clip = clipToField(field, origin, direction)
   if (!clip) return null
@@ -181,7 +185,7 @@ export function raycastTerrain(
   }
   const hitAt = (t: number): TerrainHit => {
     const p = at(t)
-    return { t, x: p.x, y: heightAt(field, p.x, p.z), z: p.z }
+    return { t, x: p.x, y: field.terrainBreaks?.length ? p.y : heightAt(field, p.x, p.z), z: p.z }
   }
 
   let prevT = tEnter
@@ -213,4 +217,50 @@ export function raycastTerrain(
   }
 
   return null
+}
+
+function raycastBreakFaces(
+  field: TerrainField,
+  origin: readonly [number, number, number],
+  direction: readonly [number, number, number],
+): TerrainHit | null {
+  const clip = clipToField(field, origin, direction)
+  if (!clip) return null
+  let nearest: TerrainHit | null = null
+  for (const terrainBreak of field.terrainBreaks ?? []) {
+    const closed = terrainBreakIsClosed(terrainBreak)
+    for (let index = 1; index < terrainBreak.line.length; index++) {
+      const from = terrainBreak.line[index - 1]
+      const to = terrainBreak.line[index]
+      if (!from || !to) continue
+      const edgeX = to[0] - from[0]
+      const edgeZ = to[1] - from[1]
+      const denominator = direction[0] * edgeZ - direction[2] * edgeX
+      if (Math.abs(denominator) < 1e-12) continue
+      const offsetX = from[0] - origin[0]
+      const offsetZ = from[1] - origin[2]
+      const t = (offsetX * edgeZ - offsetZ * edgeX) / denominator
+      const u = (offsetX * direction[2] - offsetZ * direction[0]) / denominator
+      if (t < clip.tEnter || t > clip.tExit || (nearest && t >= nearest.t)) continue
+      if (closed && (u < 0 || u > 1)) continue
+      const x = origin[0] + direction[0] * t
+      const y = origin[1] + direction[1] * t
+      const z = origin[2] + direction[2] * t
+      const leftM = terrainBreakHeightAt(field, terrainBreak, 'left', x, z)
+      const rightM = terrainBreakHeightAt(field, terrainBreak, 'right', x, z)
+      if (y >= Math.min(leftM, rightM) && y <= Math.max(leftM, rightM)) nearest = { t, x, y, z }
+    }
+  }
+  return nearest
+}
+
+export function raycastTerrain(
+  field: TerrainField,
+  origin: readonly [number, number, number],
+  direction: readonly [number, number, number],
+): TerrainHit | null {
+  const surface = raycastGroundSurface(field, origin, direction)
+  if (!field.terrainBreaks?.length) return surface
+  const face = raycastBreakFaces(field, origin, direction)
+  return face && (!surface || face.t <= surface.t + 1e-6) ? face : surface
 }

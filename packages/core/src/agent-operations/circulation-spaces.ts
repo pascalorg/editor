@@ -12,6 +12,7 @@ import {
   union,
 } from '../lib/polygon-boolean'
 import { polygonInteriorPoint } from '../lib/polygon-label'
+import { slabTerrainHeightAt } from '../lib/slab-terrain'
 import { extractRooms } from '../lib/space-detection'
 import type { AnyNode, AnyNodeId, ElevatorNode, LevelNode, WallNode } from '../schema'
 import { getLevelElevations } from '../services/storey'
@@ -51,6 +52,7 @@ export type Floor = {
     holes: Pt[][]
     elevation: number
     outdoor: boolean
+    heightAt?: (point: Pt) => number
   }[]
   interior: MultiPolygon
   voids: Pt[][]
@@ -295,7 +297,14 @@ function floorOf(nodes: SceneNodes, level: LevelNode, context: FloorContext): Fl
     polygon: slab.polygon,
     holes: slab.holes ?? [],
     elevation: groundElevation + slab.elevation,
-    outdoor: outdoor(slab.polygon, slab.holes ?? [], slab.support === 'open'),
+    outdoor: outdoor(
+      slab.polygon,
+      slab.holes ?? [],
+      slab.support === 'open' || slab.terrainMode === 'draped',
+    ),
+    ...(slab.terrainMode === 'draped'
+      ? { heightAt: (point: Pt) => groundElevation + slabTerrainHeightAt(slab, nodes, ...point) }
+      : {}),
   }))
   const zones = zonesOf(on, context.apartmentOfZone).map((zone) =>
     ground
@@ -438,7 +447,9 @@ function outdoorElevation(slabs: Floor['slabs'], point: Pt, groundElevation: num
       pointInPolygon(point, slab.polygon) &&
       !slab.holes.some((hole) => pointInPolygon(point, hole, false)),
   )
-  return covering.length ? Math.max(...covering.map((slab) => slab.elevation)) : groundElevation
+  return covering.length
+    ? Math.max(...covering.map((slab) => slab.heightAt?.(point) ?? slab.elevation))
+    : groundElevation
 }
 
 export function spaceElevation(floor: Floor, space: Space, point?: Pt) {

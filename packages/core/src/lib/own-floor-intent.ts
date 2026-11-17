@@ -10,7 +10,8 @@ import { floorIntentConflicts } from './floor-intent-changes'
 import { isFloorAnchoredOpening } from './floor-opening-footprints'
 import { floorRoomFaces } from './floor-room-faces'
 import { getOpeningFloorDatum, wallSupportForNodes } from './opening-floor-datum'
-import { getRoomBaseElevation, roundFloorElevation } from './room-floor-feasibility'
+import { roomFloorElevation, roomFloorElevationOffset } from './room-floor-elevation'
+import { roundFloorElevation } from './room-floor-feasibility'
 
 type Update = { id: AnyNodeId; data: Partial<AnyNode> }
 
@@ -19,6 +20,7 @@ export function ownFloorIntentChanges(
   updates: readonly Update[],
 ) {
   const result: Update[] = []
+  const preservedTops = new Map<string, number>()
   let changed = false
   const refuse = (id: string, detail: string) => ({
     updates: [] as Update[],
@@ -83,16 +85,15 @@ export function ownFloorIntentChanges(
         node.type === 'slab' && node.plateRole === 'base' && !!node.zoneIds?.includes(zone.id),
     )
     if (!base) return refuse(zone.id, 'This room has no single base plate to convert.')
-    const top = roundFloorElevation(zone.floor?.elevation ?? getRoomBaseElevation(nodes, zone.id))
+    const top = roundFloorElevation(roomFloorElevation(nodes, zone.id))
     if (
       mint &&
       floorPlateHoldsUnderside(nodes, base) &&
       base.thickness + top - base.elevation < 0.02 - 1e-9
     )
       return refuse(zone.id, 'The floor must retain at least 0.02 m above its soffit.')
-    // Room intent stores the level-local walking top, preserving its world height
-    // when the destination base is at a different height.
     floor.elevation = top
+    preservedTops.set(zone.id, top)
     if (
       !key &&
       !base.zoneIds?.some(
@@ -117,7 +118,9 @@ export function ownFloorIntentChanges(
         result.push({
           id: base.id,
           data: {
-            floorHeight: target.floorHeight ?? target.elevation,
+            floorHeight: floorPlateHoldsUnderside(nodes, target)
+              ? (target.floorHeight ?? target.elevation)
+              : target.floorHeight,
             referenceFloorElevation: target.referenceFloorElevation,
             thickness: target.thickness,
             foundation: target.foundation,
@@ -129,9 +132,48 @@ export function ownFloorIntentChanges(
     changed = true
   }
   if (!changed) return { updates: result, conflicts: [] }
+  const changedLevels = new Set([...preservedTops.keys()].map((id) => nodes[id]?.parentId))
+  for (const node of Object.values(nodes)) {
+    if (
+      node.type !== 'zone' ||
+      node.spaceRole !== 'room' ||
+      !changedLevels.has(node.parentId) ||
+      node.hasFloor === false ||
+      node.floor?.support === 'open' ||
+      preservedTops.has(node.id) ||
+      result.some(
+        (update) =>
+          update.id === node.id &&
+          Object.hasOwn((update.data as Partial<ZoneNode>).floor ?? {}, 'elevation'),
+      )
+    )
+      continue
+    preservedTops.set(node.id, roomFloorElevation(nodes, node.id))
+  }
   const draft = { ...nodes }
   for (const { id, data } of result) draft[id] = { ...draft[id], ...data } as AnyNode
   let next = reconcileStructureWithStableIds({ nodes: draft }).nodes
+  let rebased = false
+  for (const [id, top] of preservedTops) {
+    const offset = roomFloorElevationOffset(next, id)
+    const elevation = roundFloorElevation(top - offset)
+    const zone = draft[id] as ZoneNode
+    if (
+      zone.floor?.elevation === elevation ||
+      (zone.floor?.elevation === undefined && Math.abs(roomFloorElevation(next, id) - top) < 1e-6)
+    )
+      continue
+    let update = result.find((entry) => entry.id === id)
+    if (!update) {
+      update = { id: zone.id, data: {} }
+      result.push(update)
+    }
+    const data = update.data as Partial<ZoneNode>
+    data.floor = { ...zone.floor, ...data.floor, elevation }
+    draft[id] = { ...draft[id], ...data } as AnyNode
+    rebased = true
+  }
+  if (rebased) next = reconcileStructureWithStableIds({ nodes: draft }).nodes
   const beforeLevels = getLevelElevations(nodes)
   const afterLevels = getLevelElevations(next)
   for (const [id, level] of beforeLevels)

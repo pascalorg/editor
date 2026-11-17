@@ -14,6 +14,7 @@ import {
   eyeUnderTheGround,
   groundHoleOpenNode,
   groundHoleOpenNow,
+  groundUnderEye,
   registerSkyLights,
   restoreSkyLights,
   SKY_LIGHT_SCALE,
@@ -49,6 +50,43 @@ test('the dark mode is wanted only while the eye is under the ground, never on S
   expect(earthTarget({ ...under, groundMode: 'solid' })).toBe(0)
   // Outside the walkthrough the two are the same edge.
   expect(ambianceTarget({ ...under, walkthroughMode: false })).toBe(1)
+})
+
+test('past the property line of a sculpted lot the eye is measured against the ground drawn there', () => {
+  // A hillside lot of 30 x 30 m: its hill stands 3 m high along the west line and the height
+  // field carries it on past the line, where nothing of it is drawn: the lot is a block of earth
+  // on the horizon disc, here 4.09 m under the datum.
+  const lot = [
+    [-15, -15],
+    [15, -15],
+    [15, 15],
+    [-15, 15],
+  ] as const
+  const hill = (x: number) => () => (x < -8 ? 3 : 0.05)
+  const pastLot = { y: -4.09, lot }
+  // Inside the line the site's own ground is the ground, under the hill as on the pad.
+  expect(groundUnderEye(-14, 0, hill(-14), pastLot)).toBe(3)
+  expect(groundUnderEye(0, 12, hill(0), pastLot)).toBe(0.05)
+  // Past it, in the open beside the block: the disc, on the hill's side as on any other. A low
+  // orbit round the lot, 1.6 m up, is over the ground the whole way round, not under it for the
+  // third of the turn it spends west of the lot.
+  expect(groundUnderEye(-24, 0, hill(-24), pastLot)).toBe(-4.09)
+  expect(groundUnderEye(0, 24, hill(0), pastLot)).toBe(-4.09)
+  expect(eyeUnderTheGround(false, 1.6, groundUnderEye(-24, 0, hill(-24), pastLot))).toBe(false)
+  expect(eyeUnderTheGround(false, 1.6, groundUnderEye(-14, 0, hill(-14), pastLot))).toBe(true)
+  // The site's ground is not asked out there.
+  expect(
+    groundUnderEye(
+      40,
+      40,
+      () => {
+        throw new Error('asked')
+      },
+      pastLot,
+    ),
+  ).toBe(-4.09)
+  // A flat site, or a site that draws no ground of its own, has one ground everywhere.
+  expect(groundUnderEye(-24, 0, hill(-24), null)).toBe(3)
 })
 
 test('the eye goes under the ground past a small band and comes back past it, no chatter', () => {

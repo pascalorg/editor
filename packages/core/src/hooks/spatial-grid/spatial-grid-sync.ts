@@ -54,10 +54,52 @@ export function initSpatialGridSync(): () => void {
     if (bulkSlabs) markAllSlabDependents(state.nodes, markDirty)
     const changedSlabContextLevels = new Set<string>()
     const changedRoomSupportLevels = new Set<string>()
+    let terrainFrameChanged = false
     const checkSlabContext = (id: string) => {
       const previous = prevState.nodes[id as AnyNodeId]
       const next = state.nodes[id as AnyNodeId]
       if (previous === next) return
+      if (
+        (previous?.type === 'terrain-break' || next?.type === 'terrain-break') &&
+        (previous?.type !== 'terrain-break' ||
+          next?.type !== 'terrain-break' ||
+          previous.parentId !== next.parentId ||
+          previous.line !== next.line ||
+          previous.left !== next.left ||
+          previous.right !== next.right)
+      )
+        terrainFrameChanged = true
+      if (
+        (previous?.type === 'terrain-tile' || next?.type === 'terrain-tile') &&
+        (previous?.type !== 'terrain-tile' ||
+          next?.type !== 'terrain-tile' ||
+          previous.parentId !== next.parentId ||
+          previous.ix !== next.ix ||
+          previous.iz !== next.iz ||
+          previous.step !== next.step ||
+          previous.heights !== next.heights)
+      )
+        terrainFrameChanged = true
+      if (
+        (previous?.type === 'building' || next?.type === 'building') &&
+        (previous?.type !== 'building' ||
+          next?.type !== 'building' ||
+          previous.parentId !== next.parentId ||
+          previous.position !== next.position ||
+          previous.rotation !== next.rotation ||
+          previous.children !== next.children)
+      )
+        terrainFrameChanged = true
+      if (
+        (previous?.type === 'level' || next?.type === 'level') &&
+        (previous?.type !== 'level' ||
+          next?.type !== 'level' ||
+          previous.parentId !== next.parentId ||
+          previous.height !== next.height ||
+          previous.baseElevation !== next.baseElevation ||
+          previous.level !== next.level)
+      )
+        terrainFrameChanged = true
       const wallChanged =
         (previous?.type === 'wall' || next?.type === 'wall') &&
         (previous?.type !== 'wall' ||
@@ -74,7 +116,8 @@ export function initSpatialGridSync(): () => void {
           next?.type !== 'slab' ||
           previous.parentId !== next.parentId ||
           previous.polygon !== next.polygon ||
-          previous.elevation !== next.elevation)
+          previous.elevation !== next.elevation ||
+          previous.terrainMode !== next.terrainMode)
       const roomChanged =
         (previous?.type === 'zone' || next?.type === 'zone') &&
         (previous?.type !== 'zone' ||
@@ -187,11 +230,16 @@ export function initSpatialGridSync(): () => void {
         }
       } else if (node.type === 'slab' && prev.type === 'slab') {
         const supportChanged =
+          node.parentId !== prev.parentId ||
           node.polygon !== prev.polygon ||
           node.elevation !== prev.elevation ||
-          node.holes !== prev.holes
+          node.holes !== prev.holes ||
+          node.terrainMode !== prev.terrainMode
         if (supportChanged) {
           const levelId = resolveLevelId(node, state.nodes)
+          const previousLevelId = resolveLevelId(prev, prevState.nodes)
+          if (previousLevelId !== levelId)
+            spatialGridManager.handleNodeDeleted(node.id, node.type, previousLevelId)
           spatialGridManager.handleNodeUpdated(node, levelId)
         }
         if (!bulkSlabs) {
@@ -247,6 +295,8 @@ export function initSpatialGridSync(): () => void {
         }
       }
     }
+
+    if (terrainFrameChanged) markTerrainSupportDependents(state.nodes, markDirty)
 
     // Unchanged slabs can lose an adopted wall band or a sibling seam. Their
     // stored polygons cannot identify objects standing on the former boundary.
@@ -331,7 +381,8 @@ export function countBulkSlabChanges(
       prev?.type !== 'slab' ||
       (prev as SlabNode).polygon !== (node as SlabNode).polygon ||
       (prev as SlabNode).elevation !== (node as SlabNode).elevation ||
-      (prev as SlabNode).holes !== (node as SlabNode).holes
+      (prev as SlabNode).holes !== (node as SlabNode).holes ||
+      (prev as SlabNode).terrainMode !== (node as SlabNode).terrainMode
     ) {
       count++
     }
@@ -430,14 +481,20 @@ export function markSlabChangeDependents(
     next.parentId !== previous.parentId ||
     next.polygon !== previous.polygon ||
     next.elevation !== previous.elevation ||
-    next.holes !== previous.holes
+    next.holes !== previous.holes ||
+    next.terrainMode !== previous.terrainMode
 
   // A slab's surface script is the surface what stands on the slab rests on.
   if (supportChanged || next.surfaceScript !== previous.surfaceScript) {
     markNodesOverlappingSlab(previous, nodes, markDirty, previousNodes)
     markNodesOverlappingSlab(next, nodes, markDirty)
   }
-  if (next.elevation !== previous.elevation) {
+  if (
+    next.elevation !== previous.elevation ||
+    (next.terrainMode ?? 'flat') !== (previous.terrainMode ?? 'flat') ||
+    ((next.terrainMode === 'draped' || previous.terrainMode === 'draped') &&
+      next.parentId !== previous.parentId)
+  ) {
     markDeckAttachedStairs(next.id, nodes, markDirty)
   }
   if (
@@ -482,6 +539,13 @@ export function markTerrainSupportDependents(
   nodes: Record<string, AnyNode>,
   markDirty: (id: AnyNodeId) => void,
 ) {
+  const drapedSlabs = new Set<string>()
+  const drapedLevels = new Set<string>()
+  for (const node of Object.values(nodes)) {
+    if (node.type !== 'slab' || node.terrainMode !== 'draped') continue
+    drapedSlabs.add(node.id)
+    drapedLevels.add(resolveLevelId(node, nodes))
+  }
   const plates = Object.values(nodes).filter(
     (node): node is SlabNode =>
       node.type === 'slab' &&
@@ -530,7 +594,7 @@ export function markTerrainSupportDependents(
   for (const node of Object.values(nodes)) {
     if (node.type === 'slab') {
       // A deck's posts run down to the ground under each, on whatever storey it stands.
-      if (isDeckSlab(node, (id) => nodes[id])) {
+      if (isDeckSlab(node, (id) => nodes[id]) || node.terrainMode === 'draped') {
         markDirty(node.id)
         continue
       }
@@ -565,6 +629,9 @@ export function markTerrainSupportDependents(
       continue
     }
 
+    if (node.type === 'stair' && node.deckSlabId && drapedSlabs.has(node.deckSlabId))
+      markDirty(node.id)
+
     const floorPlaced = nodeRegistry.get(node.type)?.capabilities?.floorPlaced
     if (!floorPlaced) {
       // A kind whose geometry builder resolved its own origin from the ground
@@ -585,7 +652,8 @@ export function markTerrainSupportDependents(
     const parentId = node.parentId as AnyNodeId | null
     const parent = parentId ? nodes[parentId] : null
     if (parent && parent.type !== 'level') continue
-    if (!isGrade(resolveLevelId(node, nodes))) continue
+    const levelId = resolveLevelId(node, nodes)
+    if (!drapedLevels.has(levelId) && !isGrade(levelId)) continue
     markDirty(node.id)
   }
 }

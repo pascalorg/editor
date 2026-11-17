@@ -31,6 +31,7 @@ import {
 import { Vector2 } from 'three/webgpu'
 import { GroundPit, setGroundPitEdge } from './ground-pit'
 import { buildPitWalls, type PitWalls } from './ground-pit-geometry'
+import { groundDrawnToEyeNode } from './ground-veil'
 import { fractalNoise3 } from './hole-noise'
 import { EDGE_LOOKS, type EdgeLook } from './underground-edge'
 
@@ -288,6 +289,28 @@ function holePieces() {
  */
 export function solidGroundMaskNode() {
   return groundWindowMaskNode().and(holePieces().inHole.not())
+}
+
+/**
+ * Gives a solid ground surface (the lot's ground, its skirt, the horizon disc, a break's face) the
+ * mask it draws with: out of the ground window and, where the scene has a level below grade, out
+ * of the hole. With the earth implied under the ground (`undergroundLook.ground`), the surface is
+ * also not drawn to an eye under it; its shadow still falls as it does in daylight, so what stands
+ * on the ground is lit the same.
+ */
+export function setSolidGroundMask(
+  material: object,
+  hasBasement: boolean,
+  impliedBelow: boolean,
+): void {
+  const drawn = hasBasement ? solidGroundMaskNode() : groundWindowMaskNode()
+  const masked = material as { maskNode: unknown; maskShadowNode: unknown }
+  if (!impliedBelow) {
+    masked.maskNode = drawn
+    return
+  }
+  masked.maskNode = drawn.and(groundDrawnToEyeNode())
+  masked.maskShadowNode = drawn
 }
 
 /** Whether a fragment is in the hole, a hand's width over: what the pit's floor is drawn in. */

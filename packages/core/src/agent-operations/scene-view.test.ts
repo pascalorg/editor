@@ -1080,7 +1080,10 @@ describe('a close-up of a roof', () => {
     // Without their plugin, core cannot read the planes: they frame as planes on the level did, and
     // a look at the roof itself frames the storey it covers up to that top.
     const nodes = hipHouse()
-    const plane = roofPlane('roofplane_south', [-0.5, -0.5, 10.5, 4], 0, { parentId: 'roof_main' })
+    const plane = {
+      ...roofPlane('roofplane_south', [-0.5, -0.5, 10.5, 4], 0, { parentId: 'roof_main' }),
+      type: 'test:unregistered-roof-plane',
+    } as AnyNode
     const roof = nodes.roof_main as RoofNode
     nodes.roof_main = { ...roof, children: [...roof.children, plane.id] }
     nodes[plane.id] = plane

@@ -1,6 +1,9 @@
 import type { AnyNode } from '../schema'
 import { terrainFieldOf } from './terrain-source'
-import { terrainSupportLift as queryTerrainSupportLift } from './terrain-support-query'
+import {
+  groundHeightAt as queryGroundHeightAt,
+  terrainSupportLift as queryTerrainSupportLift,
+} from './terrain-support-query'
 
 export {
   isLevelAtSiteDatum,
@@ -16,6 +19,15 @@ export function terrainSupportLift(
   z: number,
 ): number | null {
   return queryTerrainSupportLift(nodes, levelId, x, z, terrainFieldOf)
+}
+
+export function groundHeightAt(
+  nodes: Record<string, AnyNode>,
+  levelId: string,
+  x: number,
+  z: number,
+): number | null {
+  return queryGroundHeightAt(nodes, levelId, x, z, terrainFieldOf)
 }
 
 export function levelBaseElevationAt(

@@ -4,9 +4,14 @@ import {
   getFenceCenterlineFrameAt,
   getLevelElevations,
   getWallCurveFrameAt,
+  heightAt,
   type MeasurementFeature,
   measurementCentroid,
   nodeRegistry,
+  persistedTerrainFieldOf,
+  rampBounds,
+  terrainBreakFacts,
+  tileFieldOf,
 } from '@pascal-app/core'
 import type { Vec3 } from '@pascal-app/core/agent-operations'
 import {
@@ -186,6 +191,33 @@ function ownGeometryCentre(node: AnyNode, nodes: Nodes): Vec3 | null {
   const n = node as Record<string, unknown>
   if (node.type === 'block') {
     return boundsCentre(node.topology.vertices.map((v) => v.position as Vec3))
+  }
+  if (node.type === 'ramp') {
+    const bounds = rampBounds(node, true)
+    const minY = Math.min(node.startHeight, node.endHeight) - node.thickness
+    const maxY = Math.max(node.startHeight, node.endHeight) + node.retainingHeight
+    return [(bounds.minX + bounds.maxX) / 2, (minY + maxY) / 2, (bounds.minZ + bounds.maxZ) / 2]
+  }
+  if (node.type === 'terrain-tile') {
+    const field = tileFieldOf(node)
+    if (!field) return null
+    const x = field.origin[0] + ((field.cols - 1) * field.spacing) / 2
+    const z = field.origin[1] + ((field.rows - 1) * field.spacing) / 2
+    return [x, heightAt(field, x, z), z]
+  }
+  if (node.type === 'terrain-break') {
+    const site = node.parentId ? nodes[node.parentId] : undefined
+    const field = site?.type === 'site' ? persistedTerrainFieldOf(site, nodes) : null
+    if (!field) return null
+    const facts = terrainBreakFacts(node, field)
+    const minY = Math.min(facts.left.minM, facts.right.minM)
+    const maxY = Math.max(facts.left.maxM, facts.right.maxM)
+    return boundsCentre(
+      node.line.flatMap(([x, z]): Vec3[] => [
+        [x, minY, z],
+        [x, maxY, z],
+      ]),
+    )
   }
   if (node.type === 'imported-mesh') {
     const points: Vec3[] = []

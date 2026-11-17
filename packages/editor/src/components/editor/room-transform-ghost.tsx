@@ -4,6 +4,7 @@ import {
   type AnyNodeId,
   DEFAULT_LEVEL_HEIGHT,
   type Point,
+  roomFloorElevation,
   sceneRegistry,
   useScene,
 } from '@pascal-app/core'
@@ -60,13 +61,15 @@ export function RoomTransformGhost3D() {
   const session = useRoomTransform((s) => s.session)
   const root = useRef<Group>(null)
   const levelId = session?.levelId
-  const zone = useScene((s) => (session ? s.nodes[session.zoneId as AnyNodeId] : undefined))
+  const elevation = useScene((s) => {
+    const zone = session ? s.nodes[session.zoneId as AnyNodeId] : undefined
+    return zone?.type === 'zone' ? roomFloorElevation(s.nodes, zone.id) : 0.05
+  })
   const levelHeight = useScene((s) => {
     const level = levelId ? s.nodes[levelId as AnyNodeId] : undefined
     return level?.type === 'level' ? (level.height ?? DEFAULT_LEVEL_HEIGHT) : DEFAULT_LEVEL_HEIGHT
   })
   const isDark = useViewer((s) => getSceneTheme(s.sceneTheme).appearance === 'dark')
-  const elevation = zone?.type === 'zone' ? (zone.floor?.elevation ?? 0.05) : 0.05
   const color = session?.valid === false ? BLOCKED_COLOR : GHOST_COLOR
   const materials = useMemo(
     () => ({

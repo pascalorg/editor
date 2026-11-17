@@ -2,6 +2,7 @@ import {
   groundWindowEnabledNode,
   inGroundWindowNode,
   SITE_GROUND,
+  undergroundAmbianceNode,
   useViewer,
 } from '@pascal-app/viewer'
 import { type BufferGeometry, DoubleSide, type Material } from 'three'
@@ -17,6 +18,20 @@ import { insideLotNode } from './lot-mask'
 /** Presentation-only meshes are never picked: clicks fall through to what lies under them. */
 export const noopRaycast = () => {}
 
+/** How far the dark mode has to be in before the implied ground is gone: the middle of the crossing. */
+const GROUND_GONE_AT = 0.5
+
+/**
+ * Whether the ground is drawn to this eye, for the look that implies the earth under the ground
+ * (`undergroundLook.ground: 'implied'`): yes until the eye is under it, the dark mode's own factor
+ * past its middle. A flat lot's ground is gone from below as it is (it is seen from one side); a
+ * sculpted lot's block, its skirt, the disc under its base and the veil are not, and this takes
+ * them away the same. Zero on Solid, in the walkthrough and in a capture, as the factor is.
+ */
+export function groundDrawnToEyeNode(): Node<'bool'> {
+  return undergroundAmbianceNode().lessThan(GROUND_GONE_AT) as unknown as Node<'bool'>
+}
+
 /** How much of the ground shows as a veil: enough to read where grade is, and no more. */
 const VEIL_OPACITY = 0.1
 
@@ -28,7 +43,7 @@ type Point = readonly [number, number]
  * colour, or the screen-space ink would outline the whole sheet. `coverage` (0 to 1) is how much
  * of the ground this sheet draws.
  */
-function veilMaterial(groundColor: string, coverage: Node<'float'>) {
+function veilMaterial(groundColor: string, coverage: Node<'float'>, impliedBelow: boolean) {
   const material = new MeshBasicNodeMaterial({
     transparent: true,
     depthWrite: false,
@@ -38,11 +53,12 @@ function veilMaterial(groundColor: string, coverage: Node<'float'>) {
   // Wholesale, the veil is the whole ground at `VEIL_OPACITY`. While the ground window is open
   // (the hillside in the way, not a floor under it), only the ground in the window veils —
   // at the same faintness — and the rest of this sheet draws nothing over the solid ground.
-  material.opacityNode = select(
+  const opacity = select(
     groundWindowEnabledNode(),
     select(inGroundWindowNode(), float(VEIL_OPACITY), float(0)),
     coverage.mul(VEIL_OPACITY),
   )
+  material.opacityNode = impliedBelow ? select(groundDrawnToEyeNode(), opacity, float(0)) : opacity
   // The plain field too: Follow's sight reads it, not the node, to tell what it sees through.
   material.opacity = VEIL_OPACITY
   material.mrtNode = mrt({ output, diffuseColor: vec4(0), normal: vec4(0) })
@@ -50,8 +66,8 @@ function veilMaterial(groundColor: string, coverage: Node<'float'>) {
 }
 
 /** The veil of the lot's own ground: its fill, or its sculpted terrain. */
-export function groundVeilMaterial(groundColor: string) {
-  return veilMaterial(groundColor, float(1))
+export function groundVeilMaterial(groundColor: string, impliedBelow = false) {
+  return veilMaterial(groundColor, float(1), impliedBelow)
 }
 
 /**
@@ -63,11 +79,12 @@ export function horizonVeilMaterial(
   groundColor: string,
   lot: ReadonlyArray<Point>,
   bounds: { cx: number; cz: number; radius: number },
+  impliedBelow = false,
 ) {
   const distance = positionWorld.xz.sub(vec2(bounds.cx, bounds.cz)).length()
   const fade = float(1).sub(smoothstep(float(bounds.radius), float(bounds.radius * 2), distance))
   const outsideLot = insideLotNode(lot, positionWorld.xz).not()
-  return veilMaterial(groundColor, select(outsideLot, fade, float(0)))
+  return veilMaterial(groundColor, select(outsideLot, fade, float(0)), impliedBelow)
 }
 
 /**

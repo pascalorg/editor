@@ -203,6 +203,14 @@ type ViewerState = {
    */
   eyeUnderGround: boolean
   /**
+   * Where the ground is drawn past the property line. A sculpted site draws its ground to the
+   * line only, as a block of earth, and past it the horizon disc under the block's base, however
+   * the height field continues out there: an eye past the line is under the ground only under
+   * that disc. Set by the site renderer; `null` where the ground is one surface (a flat site) or
+   * the site draws none. Never persisted.
+   */
+  groundPastLot: GroundPastLot | null
+  /**
    * The world is turned, or turning, to earth (the underground ambiance's factor is above 0).
    * Its factor itself eases every frame and lives with the shaders, not here; this flips only at
    * the crossing's ends. Set by the viewer's underground ambiance; never persisted.
@@ -582,6 +590,7 @@ function persistedSolid(state: Record<string, unknown>): boolean {
 export const DEFAULT_UNDERGROUND_LOOK: UndergroundLook = {
   edge: 'section-earth',
   transition: 'fade',
+  ground: 'drawn',
 }
 
 function resolveLook(state: ViewerState, patch: Partial<ViewerState>): Partial<ViewerState> {
@@ -764,6 +773,7 @@ const useViewer = create<ViewerState>()(
       hasLevelBelowGrade: false,
       diveAvailable: false,
       eyeUnderGround: false,
+      groundPastLot: null,
       ambianceActive: false,
       undergroundLook: DEFAULT_UNDERGROUND_LOOK,
       setUndergroundLook: (look) =>
@@ -1017,7 +1027,24 @@ export type UndergroundEdge = 'noise' | 'quiet' | 'section' | 'section-earth'
 /** The dive under the ground: `noise` closes a noise mask over the screen, `fade` fades the whole frame at once. */
 export type UndergroundTransition = 'noise' | 'fade'
 
-export type UndergroundLook = { edge: UndergroundEdge; transition: UndergroundTransition }
+/**
+ * What an eye under the ground sees of the ground itself. `drawn`: whatever the site draws. A flat
+ * lot's ground is seen from above only, so nothing; a sculpted lot is a block of earth (its
+ * surface, the skirt along the property line, the horizon disc under its base), and an eye inside
+ * it sees the disc as a sunlit floor, the ground it is level with, and the veil. `implied`: under
+ * the ground no ground is drawn on any lot, so the inside of a hill looks as the underside of a
+ * flat lot does. Above the ground the two are the same.
+ */
+export type UndergroundGround = 'drawn' | 'implied'
+
+export type UndergroundLook = {
+  edge: UndergroundEdge
+  transition: UndergroundTransition
+  ground: UndergroundGround
+}
+
+/** The ground past a sculpted lot's property line: its height, world Y, and the line, in plan. */
+export type GroundPastLot = { y: number; lot: ReadonlyArray<readonly [number, number]> }
 
 /**
  * Whether the site's ground is drawn as a veil wholesale: a level below grade is shown, the

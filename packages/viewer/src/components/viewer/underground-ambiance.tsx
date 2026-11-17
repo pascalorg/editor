@@ -23,6 +23,7 @@ import {
   easeAmbiance,
   eyeUnderTheGround,
   FADE_SECONDS,
+  groundUnderEye,
   restoreSkyLights,
   setAmbianceFactor,
   setAmbianceFocus,
@@ -48,6 +49,7 @@ export function UndergroundAmbiance() {
   const eye = useRef(new Vector3())
   const lastEye = useRef(new Vector3(Number.NaN, Number.NaN, Number.NaN))
   const lastNodes = useRef<Record<AnyNodeId, AnyNode> | null>(null)
+  const lastPastLot = useRef<unknown>(null)
   const groundY = useRef(0)
   // The box the fog keeps clear: the host's ground window box when it keeps one, else the level
   // shown (or the building) worked out here, so a host without the window still gets it.
@@ -62,12 +64,25 @@ export function UndergroundAmbiance() {
     state.camera.getWorldPosition(eye.current)
 
     const { nodes } = useScene.getState()
-    if (!eye.current.equals(lastEye.current) || nodes !== lastNodes.current) {
+    const pastLot = viewer.groundPastLot
+    if (
+      !eye.current.equals(lastEye.current) ||
+      nodes !== lastNodes.current ||
+      pastLot !== lastPastLot.current
+    ) {
       lastEye.current.copy(eye.current)
       lastNodes.current = nodes
-      const siteId = sceneRegistry.byType.site?.values().next().value as AnyNodeId | undefined
-      const site = siteId ? nodes[siteId] : null
-      groundY.current = groundHeightAt(site, eye.current.x, eye.current.z)
+      lastPastLot.current = pastLot
+      const { x, z } = eye.current
+      groundY.current = groundUnderEye(
+        x,
+        z,
+        () => {
+          const siteId = sceneRegistry.byType.site?.values().next().value as AnyNodeId | undefined
+          return groundHeightAt(siteId ? nodes[siteId] : null, nodes, x, z)
+        },
+        pastLot,
+      )
     }
     const under = eyeUnderTheGround(viewer.eyeUnderGround, eye.current.y, groundY.current)
     if (under !== viewer.eyeUnderGround) useViewer.setState({ eyeUnderGround: under })

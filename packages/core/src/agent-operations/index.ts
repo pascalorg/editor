@@ -27,13 +27,33 @@ import { moveRoofsToRoofLevel } from './move-roofs'
 import { paint } from './paint'
 import { placeInRoom } from './place-in-room'
 import { placeItems } from './place-items'
+import { addRamp } from './ramp'
 import { ROOM_OPERATIONS } from './room-structure'
 import { searchAssets } from './search-assets'
 import { searchMaterials } from './search-materials'
 import { setCheckpoint } from './set-checkpoint'
 import { setGroundLevel } from './set-ground-level'
+import { setSiteLot } from './set-site-lot'
 import { getSite, placeBuilding } from './site'
 import { fitStair, measureStairOperation } from './stairs'
+import { addTerraces } from './terraces'
+import {
+  addStepsToGround,
+  gradeAlongLine,
+  readTerrainFacts,
+  seatHouse,
+  setTerrainPlane,
+} from './terraforming'
+import {
+  carveTerrainPad,
+  describeTerrainUnderHouse,
+  gradeAroundHouse,
+  readSiteTerrain,
+  readTerrainContours,
+  sampleTerrainLine,
+  shapeSiteTerrain,
+} from './terrain'
+import { addTerrainBreak } from './terrain-break'
 import type { AgentOperation, AgentOperationSteps, AgentOperations } from './types'
 import { createUnit, listUnits, setUnitMembers } from './units'
 import { verifyScene, verifySceneSteps } from './verify-scene'
@@ -90,6 +110,7 @@ export * from './place-items'
 export * from './plan-geometry'
 export * from './point-context'
 export * from './project-files'
+export * from './ramp'
 export * from './roof-writes'
 export { ROOM_CHECK_CODES } from './room-checks'
 export * from './room-floor-script'
@@ -101,10 +122,18 @@ export * from './scene-queries'
 export * from './scene-view'
 export * from './search-assets'
 export * from './search-materials'
+export * from './set-site-lot'
 export * from './site'
 export * from './slab-surface-script'
 export * from './stairs'
+export * from './terraces'
+export * from './terraforming'
+export * from './terrain'
+export * from './terrain-break'
+export * from './terrain-break-facts'
+export * from './terrain-facts'
 export * from './types'
+export * from './unguarded-drop-observations'
 export * from './units'
 export * from './verify-scene'
 export * from './wall-face-script'
@@ -152,6 +181,22 @@ const SINGLE_OPERATIONS = {
   search_materials: searchMaterials,
   get_site: getSite,
   place_building: placeBuilding,
+  set_site_lot: setSiteLot,
+  add_ramp: addRamp,
+  add_terrain_break: addTerrainBreak,
+  read_site_terrain: readSiteTerrain,
+  sample_terrain_line: sampleTerrainLine,
+  read_terrain_contours: readTerrainContours,
+  shape_site_terrain: shapeSiteTerrain,
+  carve_terrain_pad: carveTerrainPad,
+  grade_around_house: gradeAroundHouse,
+  describe_terrain_under_house: describeTerrainUnderHouse,
+  read_terrain_facts: readTerrainFacts,
+  seat_house: seatHouse,
+  set_terrain_plane: setTerrainPlane,
+  grade_along_line: gradeAlongLine,
+  add_steps_to_ground: addStepsToGround,
+  add_terraces: addTerraces,
   ...ROOM_OPERATIONS,
   create_unit: createUnit,
   set_unit_members: setUnitMembers,

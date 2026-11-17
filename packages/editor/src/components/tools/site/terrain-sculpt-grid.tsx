@@ -4,7 +4,6 @@ import {
   type HeightPatch,
   type SiteNode,
   type TerrainField,
-  terrainFieldOf,
   useLiveTerrain,
   useScene,
 } from '@pascal-app/core'
@@ -14,7 +13,11 @@ import { type MutableRefObject, useEffect, useMemo, useRef } from 'react'
 import { BufferAttribute, BufferGeometry, type LineSegments, Vector2 } from 'three'
 import { float, positionLocal, smoothstep, uniform } from 'three/tsl'
 import { LineBasicNodeMaterial } from 'three/webgpu'
-import { sculptFieldForSite, terrainPointInsideSite } from '../../../lib/terrain-sculpt'
+import {
+  sculptFieldForSite,
+  terrainPointInsideSite,
+  terrainSculptRefusal,
+} from '../../../lib/terrain-sculpt'
 import type { TerrainBrushFocus } from './terrain-brush-cursor'
 
 const GRID_LIFT = 0.012
@@ -122,9 +125,13 @@ export function TerrainSculptGrid({
   const appearance = useViewer((state) => getSceneTheme(state.sceneTheme).appearance)
   const targetRef = useRef<LineSegments>(null)
 
-  const field = useMemo(() => sculptFieldForSite(site), [site])
-  const geometry = useMemo(() => createGridGeometry(field, site), [field, site])
-  useEffect(() => () => geometry.dispose(), [geometry])
+  const nodes = useScene((state) => state.nodes)
+  const field = useMemo(
+    () => (terrainSculptRefusal(site) ? null : sculptFieldForSite(site, nodes)),
+    [site, nodes],
+  )
+  const geometry = useMemo(() => (field ? createGridGeometry(field, site) : null), [field, site])
+  useEffect(() => () => geometry?.dispose(), [geometry])
 
   const focusCenter = useMemo(() => uniform(new Vector2()), [])
   const focusRadius = useMemo(() => uniform(1), [])
@@ -156,6 +163,7 @@ export function TerrainSculptGrid({
   })
 
   useEffect(() => {
+    if (!field) return
     let lastPatch = useLiveTerrain.getState().strokeOf(site.id)?.lastPatch ?? null
 
     return useLiveTerrain.subscribe((state) => {
@@ -174,14 +182,15 @@ export function TerrainSculptGrid({
       if (!stroke && lastPatch) {
         lastPatch = null
         const current = useScene.getState().nodes[site.id]
-        if (current?.type !== 'site') return
-        const restored = terrainFieldOf(current) ?? sculptFieldForSite(current)
+        if (current?.type !== 'site' || terrainSculptRefusal(current)) return
+        const restored = sculptFieldForSite(current)
         if (restored.cols !== field.cols || restored.rows !== field.rows) return
         writeGridHeights(attribute, restored, null)
       }
     })
-  }, [field.cols, field.rows, site.id])
+  }, [field?.cols, field?.rows, site.id])
 
+  if (!geometry) return null
   return (
     <lineSegments
       frustumCulled={false}

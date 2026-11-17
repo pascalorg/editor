@@ -16,7 +16,7 @@ import {
   vec3,
   vec4,
 } from 'three/tsl'
-import type { GroundMode } from '../store/use-viewer'
+import type { GroundMode, GroundPastLot } from '../store/use-viewer'
 import { backdropGradient } from './backdrop'
 import { UNDERGROUND_PALETTE } from './scene-themes'
 
@@ -112,6 +112,32 @@ export function ambianceTarget(state: {
  */
 export function eyeUnderTheGround(previous: boolean, eyeY: number, groundY: number): boolean {
   return previous ? eyeY < groundY + EYE_BAND : eyeY < groundY - EYE_BAND
+}
+
+/**
+ * The height of the ground the eye is measured against at a world XZ: the ground that is drawn
+ * there. Inside the property line that is the site's own (`siteGround`, asked only then); past
+ * the line of a sculpted site (`pastLot`) no sculpted ground is drawn, whatever the height field
+ * says of the hill beyond, and the ground is the horizon disc under the lot's block.
+ */
+export function groundUnderEye(
+  x: number,
+  z: number,
+  siteGround: () => number,
+  pastLot: GroundPastLot | null,
+): number {
+  if (pastLot && !insideLot(pastLot.lot, x, z)) return pastLot.y
+  return siteGround()
+}
+
+function insideLot(lot: GroundPastLot['lot'], x: number, z: number): boolean {
+  let inside = false
+  for (let a = 0, b = lot.length - 1; a < lot.length; b = a, a += 1) {
+    const [ax, az] = lot[a]!
+    const [bx, bz] = lot[b]!
+    if (az > z !== bz > z && x < ((bx - ax) * (z - az)) / (bz - az) + ax) inside = !inside
+  }
+  return inside
 }
 
 /**

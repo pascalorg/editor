@@ -1,5 +1,6 @@
 import { resolveLevelId } from '../lib/node-ancestry'
 import { area, containsPoint, intersection } from '../lib/polygon-boolean'
+import { roomFloorElevation } from '../lib/room-floor-elevation'
 import { buildCirculationGraph, type CirculationGraph } from './circulation-graph'
 import { spaceRegion } from './circulation-spaces'
 import type { SceneNodes } from './types'
@@ -43,7 +44,8 @@ function floorReasons(scene: SceneNodes, graph: CirculationGraph, add: AddReason
         add(floor.ground ? 'floorless_interior_spaces' : 'floorless_upper_spaces', zone.id)
       else if (
         source.floor?.elevation !== undefined &&
-        Math.abs(floor.groundElevation + source.floor.elevation - floor.elevation) > 1e-6
+        Math.abs(floor.groundElevation + roomFloorElevation(scene, source.id) - floor.elevation) >
+          1e-6
       )
         add('split_interior_floors', zone.id)
     }
@@ -93,9 +95,11 @@ function geometryGroups(scene: SceneNodes, graph: CirculationGraph) {
     add(
       node?.type === 'stair'
         ? 'incomplete_stairs'
-        : node?.type === 'door'
-          ? 'unhosted_doors'
-          : 'disconnected_surfaces',
+        : node?.type === 'ramp'
+          ? 'incomplete_ramps'
+          : node?.type === 'door'
+            ? 'unhosted_doors'
+            : 'disconnected_surfaces',
       id,
     )
   }
@@ -118,6 +122,8 @@ const REASONS: Record<string, (count: number) => string> = {
     `${n} stair or deck connection${n === 1 ? '' : 's'} cannot be measured between their walking surfaces`,
   incomplete_stairs: (n) =>
     `${n} stair${n === 1 ? ' has' : 's have'} an incomplete walking path or a missing destination floor`,
+  incomplete_ramps: (n) =>
+    `${n} ramp${n === 1 ? ' has' : 's have'} invalid or unmeasurable centreline geometry`,
   unhosted_doors: (n) => `${n} door${n === 1 ? ' has' : 's have'} no wall host`,
   disconnected_surfaces: (n) =>
     `${n} floor surface${n === 1 ? ' is' : 's are'} split into disconnected walking regions`,

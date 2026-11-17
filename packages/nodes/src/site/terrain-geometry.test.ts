@@ -537,6 +537,22 @@ describe('terrainFootprint — the horizon punch', () => {
 })
 
 describe('the lot block — a skirt along the property line', () => {
+  test('a huge virtual field uses its height bounds without scanning empty space', () => {
+    const field: TerrainField = {
+      origin: [0, 0],
+      cols: 20_001,
+      rows: 20_001,
+      spacing: 0.5,
+      step: 0.01,
+      heights: new Int16Array(0),
+      heightBounds: [-12, 3],
+      readHeightAt: () => {
+        throw new Error('Sparse lot scanned for its skirt floor')
+      },
+    }
+    expect(terrainBlockBase(field)).toBe(-13)
+  })
+
   // A dented lot inside a 21 x 21 m field on a 10% grade, wound clockwise on
   // purpose: the ring must come out in the field perimeter's own direction.
   const lot: [number, number][] = [
@@ -613,6 +629,46 @@ describe('the lot block — a skirt along the property line', () => {
     const patch = flattenPatch(field, { minX: 6, minZ: 6, maxX: 14, maxZ: 14 }, -2) as HeightPatch
     const dug = applyHeightPatch(field, patch)
     updateTerrainSkirt(dug, skirt)
+    expect(Array.from(skirt.positions)).toEqual(Array.from(buildTerrainSkirt(dug, ring).positions))
+  })
+
+  test('a dab re-reads the ring points in its rectangle alone, and leaves a full rewrite’s buffers', () => {
+    const ring = skirtRing(field, lot)
+    const skirt = buildTerrainSkirt(field, ring)
+    // Raised ground over the lot's west edge: the block's base (its lowest point) does not move.
+    const bounds = { minX: 0, minZ: 5, maxX: 5, maxZ: 9 }
+    const raised = applyHeightPatch(field, flattenPatch(field, bounds, 3) as HeightPatch)
+    const before = Array.from(skirt.positions)
+    const range = updateTerrainSkirt(raised, skirt, {
+      minX: bounds.minX - 1,
+      minZ: bounds.minZ - 1,
+      maxX: bounds.maxX + 1,
+      maxZ: bounds.maxZ + 1,
+    })
+    expect(Array.from(skirt.positions)).toEqual(
+      Array.from(buildTerrainSkirt(raised, ring).positions),
+    )
+    expect(Array.from(skirt.normals)).toEqual(Array.from(buildTerrainSkirt(raised, ring).normals))
+    // The points on the west edge between z 4 and 10, of a ring of some hundred and thirty.
+    const moved = before.flatMap((value, index) =>
+      value === skirt.positions[index] ? [] : [index],
+    )
+    expect(moved.length).toBeGreaterThan(0)
+    expect(range).not.toBeNull()
+    expect(range?.start).toBeLessThanOrEqual(moved[0] as number)
+    expect((range?.start ?? 0) + (range?.count ?? 0)).toBeGreaterThan(moved.at(-1) as number)
+    expect(range?.count).toBeLessThan(skirt.positions.length / 5)
+    // A dab away from the property line touches no point of it.
+    expect(updateTerrainSkirt(raised, skirt, { minX: 8, minZ: 6, maxX: 12, maxZ: 10 })).toBeNull()
+  })
+
+  test('a dab that lowers the block’s base moves every bottom vertex: the whole skirt is rewritten', () => {
+    const ring = skirtRing(field, lot)
+    const skirt = buildTerrainSkirt(field, ring)
+    const bounds = { minX: 6, minZ: 6, maxX: 14, maxZ: 12 }
+    const dug = applyHeightPatch(field, flattenPatch(field, bounds, -2) as HeightPatch)
+    const range = updateTerrainSkirt(dug, skirt, bounds)
+    expect(range).toEqual({ start: 0, count: skirt.positions.length })
     expect(Array.from(skirt.positions)).toEqual(Array.from(buildTerrainSkirt(dug, ring).positions))
   })
 })

@@ -25,7 +25,7 @@ import {
   setRoomRelativeFloorHeight,
   stepRoomFloorElevation,
 } from './room-construction-commands'
-import { commitRoomElevation, ownFloorElevationBounds } from './room-handle-drag'
+import { commitRoomElevation, ownFloorElevationBounds, planRoomElevation } from './room-handle-drag'
 import { applyRoomPlan } from './room-structure-commands'
 import { showRoomNotice, useRoomTransform } from './room-transform-session'
 
@@ -180,19 +180,23 @@ describe('Built on: the Floor row summary', () => {
     ).toBe('Lanai floor')
   })
 
-  test("compares the room's walking surface with the shared-floor room beside it, not plate with plate", () => {
+  test.each([
+    [0.05, -0.3],
+    [0.15, -0.4],
+    [0.45, -0.7],
+  ])('compares walking surfaces beside a shared floor at %f', (base, offset) => {
     const wall = 'wall_between'
-    // The living room is raised 0.15 on the 0.15 house plate: it walks at 0.30.
+    // Stored 0.30 means a 0.25 step above the automatic shared base.
     const raised = {
       ...living,
       boundaryWallIds: [wall],
       floor: { ...living.floor, elevation: 0.3 },
     } as ZoneNodeType
     const walled = { ...keyedLanai, boundaryWallIds: [wall] } as ZoneNodeType
-    const house = plate('slab_house', rect(0, 0, 4, 4), [living.id], 0.15)
+    const house = plate('slab_house', rect(0, 0, 4, 4), [living.id], base)
     const own = plate('slab_lanai', rect(4, 0, 6, 4), [keyedLanai.id], 0)
     const nodes = scene(raised, walled, house, own)
-    expect(separateFloorOffset(nodes, keyedLanai.id)).toBeCloseTo(-0.3)
+    expect(separateFloorOffset(nodes, keyedLanai.id)).toBeCloseTo(offset)
     const model = roomBuiltOn(nodes, keyedLanai.id)!
     expect(
       separateFloorSummary(
@@ -200,10 +204,10 @@ describe('Built on: the Floor row summary', () => {
         length,
         english,
       ),
-    ).toBe('Lanai floor · 0.30 m below Living floor')
+    ).toBe(`Lanai floor · ${length(-offset)} below Living floor`)
     // Nothing shared across a wall or open side: the shared plate's top.
     expect(separateFloorOffset(scene(raised, keyedLanai, house, own), keyedLanai.id)).toBeCloseTo(
-      -0.15,
+      -base,
     )
     // A room on the shared floor has no step to state.
     expect(separateFloorOffset(nodes, living.id)).toBeNull()
@@ -259,6 +263,26 @@ describe('Built on: moving between floors, through core', () => {
   afterEach(() => {
     stop()
     stop = () => {}
+  })
+
+  test('a room elevation plan converts a lifted walking surface back to stored floor intent', () => {
+    useScene
+      .getState()
+      .updateNodes(
+        Object.values(live()).flatMap((node) =>
+          node.type === 'wall' ? [{ id: node.id, data: { supportOffset: 0.4 } }] : [],
+        ),
+      )
+    const before = live()
+    const base = Object.values(before).find(
+      (node) =>
+        node.type === 'slab' && node.plateRole === 'base' && node.zoneIds?.includes(houseRoom),
+    )
+    expect(base?.type === 'slab' && base.elevation).toBeCloseTo(0.45)
+    expect(applyRoomPlan(planRoomElevation(before, houseRoom, 0.65))).toBe(true)
+    expect((live()[houseRoom] as ZoneNodeType).floor?.elevation).toBeCloseTo(0.25)
+    expect(roomFloorElevation(live(), houseRoom)).toBeCloseTo(0.65)
+    expect(roomRelativeFloorHeight(live(), houseRoom)).toBeCloseTo(0.2)
   })
 
   test('New floor detaches in one undo step, keeps the height, and reads against the shared floor', () => {

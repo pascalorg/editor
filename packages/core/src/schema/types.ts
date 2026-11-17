@@ -34,6 +34,7 @@ import { MeasurementNode } from './nodes/measurement'
 import { PipeFittingNode } from './nodes/pipe-fitting'
 import { PipeSegmentNode } from './nodes/pipe-segment'
 import { PipeTrapNode } from './nodes/pipe-trap'
+import { RampNode } from './nodes/ramp'
 import { RidgeVentNode } from './nodes/ridge-vent'
 import { RoofNode } from './nodes/roof'
 import { RoofSegmentNode } from './nodes/roof-segment'
@@ -48,6 +49,8 @@ import { SpawnNode } from './nodes/spawn'
 import { StairNode } from './nodes/stair'
 import { StairSegmentNode } from './nodes/stair-segment'
 import { StructuralGridNode } from './nodes/structural-grid'
+import { TerrainBreakNode } from './nodes/terrain-break'
+import { TerrainTileNode } from './nodes/terrain-tile'
 import { TurbineVentNode } from './nodes/turbine-vent'
 import { UnitNode } from './nodes/unit'
 import { WallNode } from './nodes/wall'
@@ -90,6 +93,8 @@ export const nodeUnion = <const T extends readonly [NodeMember, ...NodeMember[]]
 
 export const AnyNode = nodeUnion([
   SiteNode,
+  TerrainBreakNode,
+  TerrainTileNode,
   BuildingNode,
   ElevatorNode,
   UnitNode,
@@ -113,6 +118,7 @@ export const AnyNode = nodeUnion([
   ImportedMeshNode,
   ZoneNode,
   SlabNode,
+  RampNode,
   CeilingNode,
   RoofNode,
   RoofSegmentNode,

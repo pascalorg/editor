@@ -29,11 +29,31 @@ import { deleteNodeTool, getNodeTool } from './nodes'
 import { paintTool } from './paint'
 import { placeInRoomTool } from './place-in-room'
 import { placeItemsTool } from './place-items'
+import { addRampTool } from './ramp'
 import { createRoofTool, moveRoofsToRoofLevelTool } from './roofs'
 import { ROOM_TOOL_CONTRACTS } from './room-structure'
 import { searchMaterialsTool } from './search-materials'
 import { getSiteTool, placeBuildingTool } from './site'
 import { createStairTool, fitStairTool, measureStairTool } from './stairs'
+import {
+  addStepsToGroundTool,
+  addTerracesTool,
+  gradeAlongLineTool,
+  readTerrainFactsTool,
+  seatHouseTool,
+  setTerrainPlaneTool,
+} from './terraforming'
+import {
+  addTerrainBreakTool,
+  carveTerrainPadTool,
+  describeTerrainUnderHouseTool,
+  gradeAroundHouseTool,
+  readSiteTerrainTool,
+  readTerrainContoursTool,
+  sampleTerrainLineTool,
+  setSiteLotTool,
+  shapeSiteTerrainTool,
+} from './terrain'
 import { UNIT_TOOL_CONTRACTS } from './units'
 import { verifySceneTool } from './verify-scene'
 import { viewSceneTool } from './view-scene'
@@ -132,6 +152,22 @@ export const AGENT_TOOL_CONTRACTS = [
   searchMaterialsTool,
   getSiteTool,
   placeBuildingTool,
+  setSiteLotTool,
+  addRampTool,
+  addTerrainBreakTool,
+  readSiteTerrainTool,
+  sampleTerrainLineTool,
+  readTerrainContoursTool,
+  shapeSiteTerrainTool,
+  carveTerrainPadTool,
+  gradeAroundHouseTool,
+  describeTerrainUnderHouseTool,
+  readTerrainFactsTool,
+  seatHouseTool,
+  setTerrainPlaneTool,
+  gradeAlongLineTool,
+  addStepsToGroundTool,
+  addTerracesTool,
   ...ROOM_TOOL_CONTRACTS,
   ...UNIT_TOOL_CONTRACTS,
   runBatchTool,
@@ -143,4 +179,7 @@ export * from './design-brief'
 export { placeDesignTool, validateDesignTool } from './designs'
 export { straightenFacadePhotoTool } from './photo-elevation'
 export { placeInRoomTool } from './place-in-room'
+export * from './ramp'
 export { createRoofTool } from './roofs'
+export * from './terraforming'
+export * from './terrain'

@@ -34,6 +34,7 @@ import {
   type SlabNode,
   type SlabSlotId,
   slabPolygonContextFromGeometry,
+  slabTerrainFrameOf,
   surfaceHeightAt,
   terrainFieldOf,
   useScene,
@@ -57,6 +58,31 @@ import { generateFenceSlotGeometries } from '../fence/geometry-parts'
 import { creaseCrossings } from '../site/terrain-drape'
 import { buildDeckGeometry } from './deck-geometry'
 import { clipPlateTerrainFill, splitPlateFaces, splitSlabFacesByFacing } from './surface-split'
+import { drapeSlabGeometry } from './terrain-draped'
+
+function drapedSlabFrame(node: SlabNode, ctx: GeometryContext | undefined) {
+  if (node.terrainMode !== 'draped' || !ctx) return null
+  if (ctx.sceneNodes) return slabTerrainFrameOf(node, ctx.sceneNodes, 'live')
+  const nodes: Record<string, AnyNode> = {}
+  let ancestor = ctx.parent
+  while (ancestor && !nodes[ancestor.id]) {
+    nodes[ancestor.id] = ancestor
+    if ('children' in ancestor)
+      for (const id of ancestor.children) {
+        const child = ctx.resolve<AnyNode>(id as AnyNodeId)
+        if (child?.type !== 'level') continue
+        nodes[child.id] = child
+        for (const childId of child.children) {
+          const member = ctx.resolve<AnyNode>(childId as AnyNodeId)
+          if (member) nodes[member.id] = member
+        }
+      }
+    ancestor = ancestor.parentId
+      ? (ctx.resolve<AnyNode>(ancestor.parentId as AnyNodeId) ?? null)
+      : null
+  }
+  return slabTerrainFrameOf(node, nodes, 'live')
+}
 
 /**
  * Stage B builder for slab. Reuses `generateSlabGeometry` (pure
@@ -360,7 +386,9 @@ export function buildSlabGeometry(
     ctx?.levelBaseAt ??
     ((x: number, z: number) =>
       node.parentId ? levelBaseElevationAt(baseNodes, node.parentId, x, z) : 0)
+  const terrainFrame = drapedSlabFrame(node, ctx)
   const platform =
+    !terrainFrame &&
     isFloorPlate(node) &&
     node.support !== 'open' &&
     !node.plateRole &&
@@ -440,6 +468,11 @@ export function buildSlabGeometry(
     if (geometry.getAttribute('position').count === 0) {
       geometry.dispose()
       return
+    }
+    if (terrainFrame) {
+      const source = geometry
+      geometry = drapeSlabGeometry(source, terrainFrame)
+      source.dispose()
     }
     const mesh = new Mesh(geometry, material)
     mesh.castShadow = true
@@ -553,6 +586,7 @@ export function buildSlabGeometry(
   if (
     (foundation || outdoor || (!node.plateRole && node.fillToTerrain)) &&
     !node.recessed &&
+    !terrainFrame &&
     !platform &&
     group.children.length > 0
   ) {

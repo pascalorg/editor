@@ -15,6 +15,7 @@ import {
 import { type SceneCommit, subscribeSceneCommits } from '../store/history-control'
 import useLiveTerrain from '../store/use-live-terrain'
 import useScene, { clearSceneHistory } from '../store/use-scene'
+import { roomFloorElevation } from './room-floor-elevation'
 import { initSpaceDetectionSync } from './space-detection'
 import type { SceneNodes } from './structure-kernel'
 import { reconcileSceneStructure, type StructureIdFactory } from './structure-reconcile'
@@ -296,7 +297,7 @@ test('separator splits have two zones and ceilings but one shared plate', () => 
   assertIdempotent(result.nodes)
 })
 
-test('zone elevation remains authoritative through wall support edits', () => {
+test('stored zone steps follow the automatic datum through wall support edits', () => {
   for (const custom of [false, true]) {
     const initial = { ...reconcileSceneStructure({ nodes: room().nodes, mintId: factory() }).nodes }
     const slab = ofKind(initial, 'slab')[0] as SlabNode
@@ -312,12 +313,16 @@ test('zone elevation remains authoritative through wall support edits', () => {
     )
     const result = reconcileSceneStructure({ nodes, previousNodes: initial, mintId: factory(3) })
     expect(result.nodes[slab.id]).toMatchObject({ plateRole: 'base', elevation: 0.65 })
-    if (custom)
-      expect(
-        ofKind(result.nodes, 'slab').find(
-          (node) => node.type === 'slab' && node.plateRole === 'sunken',
-        ),
-      ).toMatchObject({ elevation: 0.42 })
+    const zone = ofKind(result.nodes, 'zone')[0] as ZoneNode
+    expect(roomFloorElevation(result.nodes, zone.id)).toBeCloseTo(custom ? 1.02 : 0.65)
+    if (custom) {
+      expect(zone.floor?.elevation).toBe(0.42)
+      const platform = ofKind(result.nodes, 'slab').find(
+        (node) => node.type === 'slab' && node.plateRole === 'platform',
+      ) as SlabNode
+      expect(platform.elevation).toBeCloseTo(1.02)
+      expect(platform.thickness).toBeCloseTo(0.37)
+    }
     assertIdempotent(result.nodes)
   }
 })

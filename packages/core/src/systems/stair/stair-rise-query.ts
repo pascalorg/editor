@@ -1,4 +1,6 @@
 import { containsPoint } from '../../lib/polygon-boolean'
+import { roomFloorElevation } from '../../lib/room-floor-elevation'
+import { slabTerrainHeightAt } from '../../lib/slab-terrain'
 import { queryNodes } from '../../runtime/node-queries'
 import type { AnyNode, AnyNodeId, LevelNode, StairNode, StairSegmentNode } from '../../schema'
 import { StairDesignTargets } from '../../schema/nodes/stair-design-targets'
@@ -40,12 +42,25 @@ export function resolveStairTotalRise(
   // systems do (persisted `supportSlabId` honored, uncapped election
   // otherwise) keeps base + rise landing precisely on the destination surface.
   const baseElevation = baseElevationFor(stair, nodes, level?.id ?? null)
+  const arrivalPoint = (): [number, number] => {
+    const opening = stairArrivalOpening(stair, nodes)
+    return opening.length
+      ? [
+          opening.reduce((sum, vertex) => sum + vertex[0], 0) / opening.length,
+          opening.reduce((sum, vertex) => sum + vertex[1], 0) / opening.length,
+        ]
+      : [stair.position[0], stair.position[2]]
+  }
 
   if (stair.deckSlabId) {
-    // The deck's `elevation` IS its walking surface (level-local). A stale
+    // Sample the deck's walking surface at the arrival, not the stair's base. A stale
     // reference (deck gone) falls through to the level-derived rise.
     const deck = nodes[stair.deckSlabId]
-    if (deck?.type === 'slab') return (deck.elevation ?? 0.05) - baseElevation
+    if (deck?.type === 'slab') {
+      const point: [number, number] =
+        deck.terrainMode === 'draped' ? arrivalPoint() : [stair.position[0], stair.position[2]]
+      return slabTerrainHeightAt(deck, nodes, point[0], point[1]) - baseElevation
+    }
   }
 
   if (!level) return DEFAULT_LEVEL_HEIGHT
@@ -63,13 +78,7 @@ export function resolveStairTotalRise(
       : findLevelAboveId(level.id, elevations)
   if (!destinationId)
     return getLevelFloorToFloorHeight(level.id, nodes as Record<AnyNodeId, AnyNode>) - baseElevation
-  const opening = stairArrivalOpening(stair, nodes)
-  const point: [number, number] = opening.length
-    ? [
-        opening.reduce((sum, vertex) => sum + vertex[0], 0) / opening.length,
-        opening.reduce((sum, vertex) => sum + vertex[1], 0) / opening.length,
-      ]
-    : [stair.position[0], stair.position[2]]
+  const point = arrivalPoint()
   const covers = (polygon: [number, number][], holes: [number, number][][]) =>
     containsPoint([{ outer: polygon, holes }], point)
   const room = Object.values(nodes).find(
@@ -91,7 +100,11 @@ export function resolveStairTotalRise(
       covers(node.polygon, []),
   )
   const top =
-    room?.type === 'zone' ? room.floor!.elevation! : plate?.type === 'slab' ? plate.elevation : 0
+    room?.type === 'zone'
+      ? roomFloorElevation(nodes, room.id)
+      : plate?.type === 'slab'
+        ? plate.elevation
+        : 0
   return (
     elevations.get(destinationId)!.baseY - elevations.get(level.id)!.baseY + top - baseElevation
   )

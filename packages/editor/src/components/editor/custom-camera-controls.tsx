@@ -14,13 +14,7 @@ import {
   sceneRegistry,
   useScene,
 } from '@pascal-app/core'
-import {
-  GRID_LAYER,
-  getLevelPresentationY,
-  useSceneGroundReplacement,
-  useViewer,
-  ZONE_LAYER,
-} from '@pascal-app/viewer'
+import { GRID_LAYER, useSceneGroundReplacement, useViewer, ZONE_LAYER } from '@pascal-app/viewer'
 import {
   type CameraPoseApplicationPlan,
   frameViewerCamera,
@@ -61,6 +55,7 @@ import {
   setKeyboardPanKey,
   syncKeyboardPanMotion,
 } from '../../lib/keyboard-pan'
+import { levelOrbitFloorY } from '../../lib/level-orbit-floor'
 import {
   diveFloorY,
   MAX_ORBIT_POLAR_ANGLE,
@@ -170,8 +165,7 @@ function orbitGroundY(
   levelId: string | null | undefined,
   levelMode: LevelMode = useViewer.getState().levelMode,
 ) {
-  const floorY = levelId ? getLevelPresentationY(levelId, useScene.getState().nodes, levelMode) : 0
-  return floorY + ORBIT_TARGET_HEIGHT
+  return levelOrbitFloorY(levelId, useScene.getState().nodes, levelMode) + ORBIT_TARGET_HEIGHT
 }
 
 /**
@@ -182,7 +176,7 @@ function orbitGroundY(
 function keepEyeOverGround(x: number, eyeY: number, z: number, previousEyeY = eyeY): number {
   const { nodes } = useScene.getState()
   const siteId = sceneRegistry.byType.site?.values().next().value as AnyNodeId | undefined
-  const groundY = groundHeightAt(siteId ? nodes[siteId] : null, x, z)
+  const groundY = groundHeightAt(siteId ? nodes[siteId] : null, nodes, x, z)
   return overviewEyeY(eyeY, previousEyeY, groundY, useViewer.getState().eyeUnderGround)
 }
 
@@ -509,9 +503,7 @@ export const CustomCameraControls = ({
   // Survives first-person (orbit unmounted) so scene-ready fit still applies
   // once CameraControls remount.
   const pendingFitSceneRef = useRef<PendingFitScene | null>(null)
-  const floorY = useScene((state) =>
-    currentLevelId ? getLevelPresentationY(currentLevelId, state.nodes, levelMode) : 0,
-  )
+  const floorY = useScene((state) => levelOrbitFloorY(currentLevelId, state.nodes, levelMode))
   const allowUnderground = !isPreviewMode && allowUndergroundCamera
   // With the ground on Auto the eye may dive under any building, down to the dive's floor; Solid
   // keeps the eye over the ground.

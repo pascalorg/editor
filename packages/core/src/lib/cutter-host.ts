@@ -3,6 +3,7 @@ import { getScaledDimensions } from '../schema/nodes/item'
 import { liftedManualSlab } from './floor-construction-lift'
 import { selectSlabSupportForItem } from './item-slab-support'
 import { getRenderableSlabPolygon, slabPolygonContextForLevel } from './slab-polygon'
+import { slabTerrainHeightAt } from './slab-terrain'
 
 export function isCutterName(name: string): boolean {
   return name === 'cutout' || name === 'cut:wall' || name === 'cut:ceiling' || name === 'cut:slab'
@@ -33,7 +34,10 @@ export function resolveCutterHost(
       slabs,
       { position: node.position, dimensions: getScaledDimensions(node), rotation: node.rotation },
       (slab) => getRenderableSlabPolygon(slab, context),
-      { preferredSlabId: node.supportSlabId },
+      {
+        preferredSlabId: node.supportSlabId,
+        elevationOf: (slab) => slabTerrainHeightAt(slab, nodes, node.position[0], node.position[2]),
+      },
     )
   }
   if (name !== 'cutout' && host?.type !== name.slice(4)) return

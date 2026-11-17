@@ -151,6 +151,13 @@ export const BASE_BUILD_TYPES: BuildType[] = [
     mode: 'terrain-sculpt',
     section: 'outdoor',
   },
+  {
+    id: 'terrain-break',
+    label: /* i18n */ { id: 'app.lib.buildPalette.terrainBreak', message: 'Terrain break' },
+    iconSrc: '/icons/mesh.webp',
+    kind: 'terrain-break',
+    section: 'outdoor',
+  },
   // An outdoor room (no walls, no ceiling), drawn like a room; see `startTerraceDraft`.
   {
     id: 'terrace',

@@ -2,6 +2,12 @@ import { liftedManualSlab } from '../../lib/floor-construction-lift'
 import { selectSlabSupportForItem, slabSupportsItemFootprint } from '../../lib/item-slab-support'
 import { type PlanAabb, planFootprintAABB, planFootprintCorners } from '../../lib/plan-footprint'
 import { getRenderableSlabPolygon } from '../../lib/slab-polygon'
+import {
+  type SlabTerrainFrame,
+  slabTerrainFrameOf,
+  slabTerrainHeightAt,
+} from '../../lib/slab-terrain'
+import { surfaceHeightAt } from '../../lib/terrain-field'
 import { levelBaseElevationAt } from '../../lib/terrain-support'
 import { floorPlacedCollides, nodeRegistry } from '../../registry'
 import type { AnyNode, AnyNodeId, CeilingNode, ItemNode, SlabNode, WallNode } from '../../schema'
@@ -140,6 +146,134 @@ function intervalsOverlap(minA: number, maxA: number, minB: number, maxB: number
   return minA < maxB - epsilon && maxA > minB + epsilon
 }
 
+function insideSlab(x: number, z: number, polygon: [number, number][], slab: SlabNode) {
+  return (
+    pointInPolygon(x, z, polygon) &&
+    !(slab.holes ?? []).some((hole) => hole.length >= 3 && pointInPolygon(x, z, hole))
+  )
+}
+
+/** Split the ray wherever its plan point enters/leaves the footprint or a hole. */
+function slabRayIntervals(
+  origin: [number, number, number],
+  direction: [number, number, number],
+  polygon: [number, number][],
+  slab: SlabNode,
+): Array<[number, number]> {
+  const [ox, , oz] = origin
+  const [dx, , dz] = direction
+  const cuts = new Set([0])
+  for (const ring of [polygon, ...(slab.holes ?? [])]) {
+    for (const [i, a] of ring.entries()) {
+      const b = ring[(i + 1) % ring.length]
+      if (!b) continue
+      const ex = b[0] - a[0]
+      const ez = b[1] - a[1]
+      const denominator = dx * ez - dz * ex
+      if (Math.abs(denominator) < 1e-12) {
+        if (Math.abs((a[0] - ox) * dz - (a[1] - oz) * dx) > 1e-9) continue
+        const lengthSquared = dx * dx + dz * dz
+        if (lengthSquared < 1e-18) continue
+        for (const [x, z] of [a, b]) {
+          const t = ((x - ox) * dx + (z - oz) * dz) / lengthSquared
+          if (t >= 0) cuts.add(t)
+        }
+        continue
+      }
+      const t = ((a[0] - ox) * ez - (a[1] - oz) * ex) / denominator
+      const u = ((a[0] - ox) * dz - (a[1] - oz) * dx) / denominator
+      if (t >= 0 && u >= 0 && u <= 1) cuts.add(t)
+    }
+  }
+  const sorted = [...cuts].sort((a, b) => a - b)
+  const intervals: Array<[number, number]> = []
+  for (const [i, start] of sorted.entries()) {
+    const end = sorted[i + 1]
+    if (end === undefined || end <= start) continue
+    const t = (start + end) / 2
+    if (insideSlab(ox + dx * t, oz + dz * t, polygon, slab)) intervals.push([start, end])
+  }
+  return intervals
+}
+
+function addTerrainRayCuts(
+  cuts: Set<number>,
+  origin: number,
+  direction: number,
+  gridOrigin: number,
+  spacing: number,
+  count: number,
+  start: number,
+  end: number,
+) {
+  if (Math.abs(direction) < 1e-12) return
+  const first = (origin + direction * start - gridOrigin) / spacing
+  const last = (origin + direction * end - gridOrigin) / spacing
+  const low = Math.max(0, Math.ceil(Math.min(first, last)))
+  const high = Math.min(count - 1, Math.floor(Math.max(first, last)))
+  for (let i = low; i <= high; i++) {
+    const t = (gridOrigin + i * spacing - origin) / direction
+    if (t > start && t < end) cuts.add(t)
+  }
+}
+
+function drapedSlabRayHit(
+  slab: SlabNode,
+  frame: SlabTerrainFrame,
+  polygon: [number, number][],
+  origin: [number, number, number],
+  direction: [number, number, number],
+): { t: number; elevation: number } | null {
+  const [ox, oy, oz] = origin
+  const [dx, dy, dz] = direction
+  const [sx, sz] = frame.toSite(ox, oz)
+  const [nextX, nextZ] = frame.toSite(ox + dx, oz + dz)
+  const siteDx = nextX - sx
+  const siteDz = nextZ - sz
+  const height = (t: number) =>
+    (frame.field ? surfaceHeightAt(frame.field, sx + siteDx * t, sz + siteDz * t) : 0) -
+    frame.baseY +
+    slab.elevation
+  if (Math.hypot(dx, dz) < 1e-12) {
+    if (Math.abs(dy) < 1e-12 || !insideSlab(ox, oz, polygon, slab)) return null
+    const elevation = height(0)
+    const t = (elevation - oy) / dy
+    return t > 0 ? { t, elevation } : null
+  }
+  for (const [start, end] of slabRayIntervals(origin, direction, polygon, slab)) {
+    const cuts = new Set([start, end])
+    const field = frame.field
+    if (field) {
+      addTerrainRayCuts(cuts, sx, siteDx, field.origin[0], field.spacing, field.cols, start, end)
+      addTerrainRayCuts(cuts, sz, siteDz, field.origin[1], field.spacing, field.rows, start, end)
+      addTerrainRayCuts(
+        cuts,
+        sx + sz,
+        siteDx + siteDz,
+        field.origin[0] + field.origin[1],
+        field.spacing,
+        field.cols + field.rows - 1,
+        start,
+        end,
+      )
+    }
+    const sorted = [...cuts].sort((a, b) => a - b)
+    // Between grid lines/diagonals the clamped terrain sample is affine.
+    // Solving each segment avoids missing a later hit after a hole or an earlier hit off-slab.
+    for (const [i, a] of sorted.entries()) {
+      const b = sorted[i + 1]
+      if (b === undefined) continue
+      const gapA = oy + dy * a - height(a)
+      const gapB = oy + dy * b - height(b)
+      if (gapA !== 0 && gapB !== 0 && gapA > 0 === gapB > 0) continue
+      const t = gapA === 0 ? a : gapB === 0 ? b : a + ((b - a) * gapA) / (gapA - gapB)
+      if (t > 0 && insideSlab(ox + dx * t, oz + dz * t, polygon, slab))
+        return { t, elevation: height(t) }
+    }
+  }
+  return null
+}
+
 function resolveNodeLevelId(node: AnyNode, nodes: Record<string, AnyNode>): string {
   if (node.type === 'level') return node.id
 
@@ -188,7 +322,7 @@ export type ItemSlabSupport = {
 
 export type PointedSupportSurface = ItemSlabSupport & {
   /**
-   * Level-local XZ where the ray meets the pointed surface's plane, or
+   * Level-local XZ where the ray meets the pointed surface, or
    * null when the ray never reaches it (grazing / aimed above the base).
    * This is the plan point the pointer actually indicates: unlike a grid
    * event-plane hit — whose XZ shifts with whatever height the event
@@ -326,6 +460,20 @@ export class SpatialGridManager {
       else if (next) this.handleNodeUpdated(next, levelIdOf(next, after))
     }
     return true
+  }
+
+  private terrainSource(): 'persisted' | 'live' {
+    return this.source.terrain() === undefined ? 'persisted' : 'live'
+  }
+
+  private slabElevationAt(slab: SlabNode, anchor: readonly [number, number]): number {
+    return slabTerrainHeightAt(
+      slab,
+      this.source.nodes(),
+      anchor[0],
+      anchor[1],
+      this.terrainSource(),
+    )
   }
 
   private getFloorGrid(levelId: string): SpatialGrid {
@@ -839,10 +987,12 @@ export class SpatialGridManager {
     const slabMap = this.slabsByLevel.get(levelId)
     if (!slabMap) return 0
 
-    let maxElevation = 0
+    let maxElevation: number | undefined
     for (const stored of slabMap.values()) {
       const slab = this.effectiveSlabRecord(stored)
-      if (slab.polygon.length >= 3 && pointInPolygon(x, z, slab.polygon)) {
+      const polygon =
+        slab.terrainMode === 'draped' ? this.getRenderedSlabPolygon(levelId, slab) : slab.polygon
+      if (polygon.length >= 3 && pointInPolygon(x, z, polygon)) {
         // Check if point is in any hole
         let inHole = false
         const holes = slab.holes || []
@@ -854,14 +1004,17 @@ export class SpatialGridManager {
         }
 
         if (!inHole) {
-          const elevation = slab.elevation ?? 0.05
-          if (elevation > maxElevation) {
+          const sampled = this.slabElevationAt(slab, [x, z])
+          // Legacy flat queries retain their zero floor; draped tops can sit
+          // below the level origin after the site/building frame conversion.
+          const elevation = slab.terrainMode === 'draped' ? sampled : Math.max(0, sampled)
+          if (maxElevation === undefined || elevation > maxElevation) {
             maxElevation = elevation
           }
         }
       }
     }
-    return maxElevation
+    return maxElevation ?? 0
   }
 
   /**
@@ -886,6 +1039,9 @@ export class SpatialGridManager {
    * applies). Returns `{ elevation: 0, slabId: null }` when nothing
    * overlaps.
    *
+   * Heights use the node's anchor XZ, not footprint extrema. Composite callers
+   * pass the same `anchor` for each footprint so their parts stay rigid.
+   *
    * `maxElevation` is the pointer-decided cap: when set, only slabs whose
    * walking surface sits at or below `maxElevation +
    * SUPPORT_ELEVATION_EPSILON` may win — a deck hanging above the surface
@@ -897,6 +1053,7 @@ export class SpatialGridManager {
     dimensions: [number, number, number],
     rotation: [number, number, number],
     maxElevation?: number | null,
+    anchor: readonly [number, number] = [position[0], position[2]],
   ): ItemSlabSupport {
     const slabMap = this.slabsByLevel.get(levelId)
     if (!slabMap) return { elevation: 0, slabId: null }
@@ -905,22 +1062,22 @@ export class SpatialGridManager {
       Array.from(slabMap.values(), (slab) => this.effectiveSlabRecord(slab)),
       { position, dimensions, rotation },
       (slab) => this.getRenderedSlabPolygon(levelId, slab),
-      { maxElevation },
+      { maxElevation, elevationOf: (slab) => this.slabElevationAt(slab, anchor) },
     )
     return winner
-      ? { elevation: winner.elevation ?? 0.05, slabId: winner.id }
+      ? { elevation: this.slabElevationAt(winner, anchor), slabId: winner.id }
       : { elevation: 0, slabId: null }
   }
 
   /**
    * The walking surface the pointer actually points at: the nearest slab
-   * plane the ray crosses INSIDE that slab's rendered polygon (hole veto
+   * surface the ray crosses INSIDE that slab's rendered polygon (hole veto
    * applies), or the level base (`elevation: 0, slabId: null`) when it
    * crosses none. Ray origin/direction are level-local. Deliberately a
    * point test, not a footprint test — it answers "which surface is under
    * the cursor", which then caps the footprint election so a deck hanging
    * above the aimed-at floor never lifts the placement. `point` is the
-   * ray's crossing of that surface's plane — the stable plan point
+   * ray's crossing of that surface — the stable plan point
    * callers should elect/preview at (see {@link PointedSupportSurface}).
    */
   getPointedSupportSurface(
@@ -931,29 +1088,28 @@ export class SpatialGridManager {
     const slabMap = this.slabsByLevel.get(levelId)
     const [ox, oy, oz] = rayOrigin
     const [dx, dy, dz] = rayDirection
-    if (Math.abs(dy) < 1e-9) return { elevation: 0, slabId: null, point: null }
-
     let best: { t: number; elevation: number; slabId: string } | null = null
     if (slabMap) {
       for (const stored of slabMap.values()) {
         const slab = this.effectiveSlabRecord(stored)
         if (slab.polygon.length < 3) continue
+        const rendered = this.getRenderedSlabPolygon(levelId, slab)
+        if (rendered.length < 3) continue
+        if (slab.terrainMode === 'draped') {
+          const frame = slabTerrainFrameOf(slab, this.source.nodes(), this.terrainSource())
+          if (!frame) continue
+          const hit = drapedSlabRayHit(slab, frame, rendered, rayOrigin, rayDirection)
+          if (hit && (!best || hit.t < best.t)) best = { ...hit, slabId: slab.id }
+          continue
+        }
+        if (Math.abs(dy) < 1e-9) continue
         const elevation = slab.elevation ?? 0.05
         const t = (elevation - oy) / dy
         if (t <= 0) continue
         if (best && t >= best.t) continue
         const x = ox + dx * t
         const z = oz + dz * t
-        const rendered = this.getRenderedSlabPolygon(levelId, slab)
-        if (rendered.length < 3 || !pointInPolygon(x, z, rendered)) continue
-        let inHole = false
-        for (const hole of slab.holes || []) {
-          if (hole.length >= 3 && pointInPolygon(x, z, hole)) {
-            inHole = true
-            break
-          }
-        }
-        if (inHole) continue
+        if (!insideSlab(x, z, rendered, slab)) continue
         best = { t, elevation, slabId: slab.id }
       }
     }
@@ -964,7 +1120,7 @@ export class SpatialGridManager {
         point: [ox + dx * best.t, oz + dz * best.t],
       }
     }
-    const tBase = -oy / dy
+    const tBase = Math.abs(dy) < 1e-9 ? -1 : -oy / dy
     return {
       elevation: 0,
       slabId: null,
@@ -983,6 +1139,7 @@ export class SpatialGridManager {
     position: [number, number, number],
     dimensions: [number, number, number],
     rotation: [number, number, number],
+    anchor: readonly [number, number] = [position[0], position[2]],
   ): SlabSupportCandidate[] {
     const slabMap = this.slabsByLevel.get(levelId)
     if (!slabMap) return []
@@ -991,7 +1148,7 @@ export class SpatialGridManager {
     for (const stored of slabMap.values()) {
       const slab = this.effectiveSlabRecord(stored)
       if (!this.slabSupportsFootprint(levelId, slab, position, dimensions, rotation)) continue
-      candidates.push({ slabId: slab.id, elevation: slab.elevation ?? 0.05 })
+      candidates.push({ slabId: slab.id, elevation: this.slabElevationAt(slab, anchor) })
     }
     candidates.sort(
       (a, b) =>
@@ -1014,12 +1171,13 @@ export class SpatialGridManager {
     position: [number, number, number],
     dimensions: [number, number, number],
     rotation: [number, number, number],
+    anchor: readonly [number, number] = [position[0], position[2]],
   ): number | null {
     const stored = this.slabsByLevel.get(levelId)?.get(slabId)
     if (!stored) return null
     const slab = this.effectiveSlabRecord(stored)
     if (!this.slabSupportsFootprint(levelId, slab, position, dimensions, rotation)) return null
-    return slab.elevation ?? 0.05
+    return this.slabElevationAt(slab, anchor)
   }
 
   /**
@@ -1341,6 +1499,13 @@ export function createSnapshotSpatialGrid(
   })
   grid.bulkLoad(nodes())
   return grid
+}
+
+/** A manager indexed over a scene's nodes as given: what a check or a test reads support from. */
+export function createSceneSpatialGrid(
+  nodes: Readonly<Record<string, AnyNode>>,
+): SpatialGridManager {
+  return createSnapshotSpatialGrid(() => nodes as Record<string, AnyNode>, resolveNodeLevelId)
 }
 
 type NodesStore = { getState(): { nodes: Record<string, AnyNode> } }

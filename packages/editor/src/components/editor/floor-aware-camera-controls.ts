@@ -12,8 +12,9 @@ const virtualPosition = new Vector3()
 const groundedPosition = new Vector3()
 const drawnTarget = new Vector3()
 const shiftDelta = new Vector3()
-// Below this height over the level's floor limit the surface under the camera
-// is looked up; higher up it cannot matter.
+// Below this height over the level's floor limit (or over the highest the
+// surface stands, a hill) the surface under the camera is looked up; higher
+// up it cannot matter.
 const SURFACE_BAND = 3
 // While the limit glides up over a platform's edge, the camera still never
 // sits closer than this to the floor it is over.
@@ -23,6 +24,8 @@ const SURFACE_MIN_GAP = 0.05
 export type CameraFloorSurface = {
   /** Changes whenever an earlier answer may no longer hold. */
   readonly revision: number
+  /** The highest the surface stands anywhere (a hill over the level's floor), when it knows. */
+  readonly reachY?: number | null
   topAt(x: number, z: number, levelY: number): number | null
 }
 
@@ -297,7 +300,8 @@ export class FloorAwareCameraControls extends CameraControlsImpl {
    */
   private resolveFloorLimit(position: Vector3, levelY: number) {
     const surface = this.floorSurface
-    if (!surface || position.y > levelY + ORBIT_FLOOR_CLEARANCE + SURFACE_BAND) {
+    const reachY = Math.max(levelY, surface?.reachY ?? levelY)
+    if (!surface || position.y > reachY + ORBIT_FLOOR_CLEARANCE + SURFACE_BAND) {
       this.forgetFloorSurface()
       return levelY + ORBIT_FLOOR_CLEARANCE
     }

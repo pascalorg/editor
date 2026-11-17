@@ -58,6 +58,10 @@ import {
   queryNodes,
 } from './scene-queries'
 import { reviewSince } from './scene-review'
+import {
+  type TerrainBreakObservation,
+  terrainBreakObservations,
+} from './terrain-break-observations'
 import type { AgentContext, AgentOperation, AgentOperationSteps, SceneNodes } from './types'
 import type { RoomUnreachableIssue } from './unreachable-rooms-check'
 import {
@@ -73,6 +77,7 @@ import { type WallObjectObservation, wallObjectObservations } from './wall-objec
 export type SceneIssue =
   | CeilingObjectObservation
   | WallObjectObservation
+  | TerrainBreakObservation
   | RoomFinding
   | { type: string; message: string; severity?: 'info' | 'warning' }
   | { type: 'schema_invalid'; message: string; nodeId: string; path: string }
@@ -483,7 +488,15 @@ export const verifySceneSteps: AgentOperationSteps<VerifySceneInput | undefined>
         true,
       )
     const seat = groundSeat(asNodes, buildingOf(level.levelId) ?? '')
-    if (seat?.levelId === level.levelId && seat.explicit && !seat.seated)
+    // A house that walks out: the level under its ground level stands on the low ground and in
+    // the hill at once. The ground level then stands high on purpose, carried by that level.
+    const walksOut = levels.some(
+      (other) =>
+        other.floorIndex === level.floorIndex - 1 &&
+        buildingOf(other.levelId) === buildingOf(level.levelId) &&
+        levelGradeStanding(asNodes, other.levelId) === 'partly-below-grade',
+    )
+    if (seat?.levelId === level.levelId && seat.explicit && !seat.seated && !walksOut)
       report(
         'ground_level_unseated',
         `${levelName} is the ground floor, but its floor datum stands ${seat.offset.toFixed(2)} m ${seat.offset > 0 ? 'over' : 'under'} grade (${seat.gradeElevation.toFixed(2)} m); a seated ground floor stands on it. set_ground_level on it seats the building.`,
@@ -808,6 +821,7 @@ export const verifySceneSteps: AgentOperationSteps<VerifySceneInput | undefined>
   issues.push(...layoutIssuesFromScene(Object.values(settled)))
   issues.push(...ceilingObjectObservations(settled))
   issues.push(...wallObjectObservations(settled))
+  issues.push(...terrainBreakObservations(settled))
   const registered = function* (beforeCheckpoint: boolean): Steps<void> {
     for (const check of checks) {
       if (check.order < CHECKPOINT_ORDER !== beforeCheckpoint) continue

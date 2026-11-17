@@ -165,8 +165,8 @@ fixed underside; it never changes the slab interval. Recessed slabs keep an expl
 construction plane is tagged `fixed-plane` so a plane at world Y=0 cannot be mistaken for the
 terrain query plane on later pointer moves.
 
-Auto-room surfaces derive their vertical placement from the enclosing walls when no
-`zone.floor.elevation` is authored. `autoRoomVerticalPlacements` takes each boundary wall's
+Auto-room base plates derive their vertical placement from the enclosing walls.
+`autoRoomVerticalPlacements` takes each boundary wall's
 ground (terrain) plus `supportOffset` and places the flat plate 0.05 m above the highest one.
 Slabs do not count: auto slabs would feed back, and a manual slab under a few walls is a
 terrace or platform (a room standing on one gets no generated floor). A migrated base plate
@@ -175,13 +175,29 @@ it replaces the derived datum so migrated walls and rooms keep their height. Ter
 invalidate the wall-base signature and update derived plates once per committed stroke. Live
 terrain dabs do not write floor geometry.
 
-Explicit zone elevation wins over derived placement. Grounded rooms in one
-connected footprint share a base plate at its automatic datum or authored
+On an automatic shared ground-contact base, `zone.floor.elevation` follows that
+base: its resolved top is the stored value plus the base top minus 0.05 m.
+A stored 0.05 m is flush; 0.35 m keeps a 0.30 m step. Flat-datum scenes
+therefore keep their appearance. Reconciliation repairs already-lifted split
+floors without rewriting their room intent. Authored base heights/references,
+keyed room floors, manual slabs and suspended floors retain their existing
+level-local height rules. `roomFloorElevation` resolves the walking top;
+geometric editing controls convert back through `roomFloorElevationOffset`.
+
+Grounded rooms in one connected footprint share a base plate at its automatic datum or authored
 `floorHeight`. Raising a room adds a solid platform in its clear polygon above
 the base; lowering a room cuts that clear polygon out of the base and adds a
 sunken plate. Room-facing walls meet their room floor, while structural support
 and exterior faces stay on the base. Mezzanines remain separate open supports.
 Manual coverage of at least 60% suppresses a room's generated floor, wall ring included.
+
+Floorless rooms, including open porches, connect the house's automatic datum
+without acquiring floor geometry. Their walls follow the connected house base
+unless explicitly hosted elsewhere. `seat_house` includes these attached wings
+in its grading outline, and terrain facts include their walls, doors and missing
+floors. Detached rooms remain independent. `floor_split` reports actual authored
+room steps beyond 0.15 m and connected base differences beyond 0.05 m, not the
+terrain lift of an otherwise flush room.
 
 Floor-level openings stand on the higher adjacent room floor. Its plate extends
 through the aperture; the exposed step is a room-owned plate riser, without a
@@ -414,7 +430,7 @@ Because community autosave only persists after the first post-load edit, the mig
 - **Boundary geometry.** Auto plates store full wall footprints; manual slabs and older snapshots can still put wall/ceiling clamp samples exactly on polygon edges — always use the boundary-inclusive band-overlap helpers (`wallOverlapsSlabFootprint`, `slabCoversPoint`), never raw ray-cast point-in-polygon on those paths.
 - **Straight stairs build from stored segment heights**, not the resolved rise — any rise change must go through `syncStairRises` (applied by `StairOpeningSystem`, history-paused, one microtask after store updates so the spatial grid has settled; and synchronously by `reconcileDocument` for hosts that edit outside the editor). Without the built-in stair kind registered (a bare MCP server), the rise elects the stair's support with `stairBaseElevation`, which agrees with the registered kind's floor-placed election.
 - **Reactivity is explicit.** A `level.height` change dirties that level's walls/stairs/ceilings/fences; a slab change dirties overlapping same-level supports, the level below's walls/ceilings, and deck-attached stairs. Every live terrain dab dirties ground-hosted structures, `fillToTerrain` walls/slabs, every `floorPlaced` node at grade, and every kind whose builder asked for `ctx.levelBaseAt`, through the transient `useLiveTerrain` subscription in `spatial-grid-sync.ts`; the scene graph and undo history are still written only once when the stroke commits. Ending or canceling a stroke runs the same sweep so dependents settle back onto the persisted field. Slab handles reuse the slab-change dependency helper for live previews. If a new consumer reads these bounds, wire its dirty rule there.
-- **Auto floors derive once per terrain stroke.** Floors without authored elevation follow persisted boundary-wall bases; explicit zone intent remains fixed.
+- **Auto floors derive once per terrain stroke.** Automatic shared ground-contact bases and their room steps follow persisted boundary-wall bases; stored room intent remains unchanged.
 - **Host lifecycle.** Retiring a plate remaps `supportSlabId`/`deckSlabId` to its surviving plate in the same commit. Deleting a slab without a successor strips those references; a host merely reshaped away falls back silently and resumes if the slab returns.
 - **Clone paths differ.** `clone-scene-graph.ts` remaps `supportSlabId`/`deckSlabId`; the editor clipboard (`scene-clipboard.ts`) intentionally does not (it re-elects); room placement remaps them (fixed in the private repo's `room-placement.ts`). When adding a new clone/instantiation path, remap both fields.
 

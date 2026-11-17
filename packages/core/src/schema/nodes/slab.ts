@@ -9,6 +9,7 @@ import { ZoneFloorScript } from './zone'
 // −0.01 underside offset. Applies to edits only; migration writes legacy
 // intervals verbatim (including degenerate zero-thickness slabs).
 export const MIN_SLAB_THICKNESS = 0.02
+export const DEFAULT_SLAB_THICKNESS = 0.05
 // A ground-bearing base plate has no ceiling under it, so it may be thinner;
 // it is never zero (a zero-thickness plate renders as a hole).
 export const MIN_GROUND_FLOOR_THICKNESS = 0.01
@@ -27,6 +28,12 @@ export const SlabNode = BaseNode.extend({
   holes: z.array(z.array(z.tuple([z.number(), z.number()]))).default([]),
   holeMetadata: z.array(SurfaceHoleMetadata).default([]),
   elevation: z.number().default(DEFAULT_SLAB_ELEVATION), // Walking surface (slab top), meters above the level plane
+  terrainMode: z
+    .enum(['flat', 'draped'])
+    .optional()
+    .describe(
+      'Manual outdoor surfaces only: draped follows Site terrain with elevation as clearance; absent or flat keeps the authored plane.',
+    ),
   floorHeight: z
     .number()
     .finite()
@@ -47,7 +54,7 @@ export const SlabNode = BaseNode.extend({
       material: z.union([z.string(), MaterialSchema]).optional(),
     })
     .optional(),
-  thickness: z.number().default(0.05), // Grows downward from the surface
+  thickness: z.number().default(DEFAULT_SLAB_THICKNESS), // Grows downward from the surface
   recessed: z.boolean().default(false),
   recessedRimElevation: z.number().finite().optional(),
   fillToTerrain: z.boolean().optional(),

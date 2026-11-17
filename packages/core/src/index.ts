@@ -1,3 +1,8 @@
+import { setTerrainSceneSource } from './lib/terrain-source'
+import terrainScene from './store/use-scene'
+
+setTerrainSceneSource(() => terrainScene.getState().nodes)
+
 export type {
   PointAskPin,
   PointAskStatus,
@@ -81,6 +86,7 @@ export {
   getFloorStackedPosition,
 } from './hooks/spatial-grid/floor-placed-elevation'
 export {
+  createSceneSpatialGrid,
   getWallBaseElevationForNodes,
   getWallEffectiveHeightForNodes,
   type PointedSupportSurface,
@@ -397,7 +403,7 @@ export {
   nearestPointIn,
   resettledPosition,
 } from './lib/geometry-surfaces'
-export { type LevelGradeStanding, levelGradeStanding } from './lib/grade-standing'
+export { groundCovers, type LevelGradeStanding, levelGradeStanding } from './lib/grade-standing'
 export { type GroundLevel, groundLevelOf, levelUnderNamedGround } from './lib/ground-level'
 export {
   GROUND_SEAT_TOLERANCE,
@@ -555,6 +561,28 @@ export {
 } from './lib/porch-framing'
 export { type PorchPartMetadata, porchPartOf } from './lib/porch-framing-sync'
 export {
+  type RampPoint,
+  type RampStation,
+  rampBounds,
+  rampCentrelineMaximumSlopePercent,
+  rampDefaultTransitionLength,
+  rampHeightAt,
+  rampLength,
+  rampMaximumSlopePercent,
+  rampOffsetPoint,
+  rampProjectPoint,
+  rampStations,
+  rampStepForSag,
+} from './lib/ramp'
+export {
+  type RampFacts,
+  type RampTargetMatch,
+  type RampTransitionFacts,
+  type RampWarning,
+  rampFacts,
+} from './lib/ramp-facts'
+export { planRampCreation, planRampEdit, planRampTerrain } from './lib/ramp-terrain'
+export {
   type EavePoint,
   eaveContains,
   FASCIA_DROP,
@@ -666,6 +694,7 @@ export {
   slabPolygonContextFromGeometry,
   snapSlabEdgeToWallBand,
 } from './lib/slab-polygon'
+export { type SlabTerrainFrame, slabTerrainFrameOf, slabTerrainHeightAt } from './lib/slab-terrain'
 export {
   deriveSlotId,
   isSlotMaterialName,
@@ -704,6 +733,22 @@ export {
   type StructureIdFactory,
 } from './lib/structure-reconcile'
 export {
+  TERRAIN_CONTEXT_HEIGHT,
+  TERRAIN_CONTINUATION_DISTANCE,
+  terrainContextHeightOf,
+  terrainPreviewField,
+} from './lib/terrain-authority'
+export { validateTerrainBreakRelations } from './lib/terrain-break-validation'
+export {
+  type TerrainBreakSide,
+  terrainBreakFacts,
+  terrainBreakHeightAt,
+  terrainBreakIsClosed,
+  terrainBreakSideAt,
+  terrainBreaksOf,
+  validateTerrainBreak,
+} from './lib/terrain-breaks'
+export {
   advanceStroke,
   type BrushSettings,
   type BrushShape,
@@ -711,6 +756,7 @@ export {
   brushHeightAt,
   DEFAULT_BRUSH_SETTINGS,
   detachStrokeAnchor,
+  diffuseHeights,
   highestOver,
   MIN_BRUSH_RADIUS_IN_SPACINGS,
   maxCoverage,
@@ -745,9 +791,12 @@ export {
   quantize,
   sampleRangeOver,
   slopeAt,
+  storedHeightAt,
   surfaceHeightAt,
   type TerrainField,
 } from './lib/terrain-field'
+export { fieldExtentForSite } from './lib/terrain-field-extent'
+export { rampsGradingOf } from './lib/terrain-ramp-cut'
 export { raycastTerrain, type TerrainHit } from './lib/terrain-raycast'
 export {
   commitTerrainField,
@@ -764,6 +813,20 @@ export {
   SITE_DATUM_Y,
   terrainSupportLift,
 } from './lib/terrain-support'
+export { levelLocalToWorldXZ } from './lib/terrain-support-query'
+export { planTerrainTileChanges } from './lib/terrain-tile-changes'
+export {
+  planTerrainTileWrites,
+  type TerrainEditBounds,
+  type TerrainTileWrites,
+  terrainEditField,
+} from './lib/terrain-tile-write'
+export {
+  type TerrainNodes,
+  type TerrainSite,
+  terrainTilesOf,
+  tileFieldOf,
+} from './lib/terrain-tiles'
 export {
   deriveUnit,
   type UnitDerivation,

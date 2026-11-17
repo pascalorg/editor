@@ -1,14 +1,43 @@
-import type { SiteNode } from '../schema/nodes/site'
-import { livePreviewsVisible } from '../store/live-previews'
-import useLiveTerrain from '../store/use-live-terrain'
+import { livePreviewsVisible } from '../lib/live-previews'
+import { terrainPreviewField } from './terrain-authority'
 import type { TerrainField } from './terrain-field'
 import { persistedTerrainFieldOf } from './terrain-source-persisted'
+import type { TerrainNodes, TerrainSite } from './terrain-tiles'
 
 export {
   commitTerrainField,
   persistedTerrainFieldOf,
   terrainFieldForEdit,
 } from './terrain-source-persisted'
+
+const previewCache = new WeakMap<TerrainField, WeakMap<TerrainField, TerrainField>>()
+let sceneNodesOf: (() => TerrainNodes) | undefined
+let liveFieldOf: ((siteId: string) => TerrainField | undefined) | undefined
+
+/** The live store installs its reader so persisted migration queries stay headless. */
+export function setTerrainLiveSource(source: (siteId: string) => TerrainField | undefined): void {
+  liveFieldOf = source
+}
+
+/** The package entry installs the live store without making schema readers import it. */
+export function setTerrainSceneSource(source: () => TerrainNodes): void {
+  sceneNodesOf = source
+}
+
+function previewOf(live: TerrainField, persisted: TerrainField | null): TerrainField {
+  let fields = previewCache.get(live)
+  if (!fields) {
+    fields = new WeakMap()
+    previewCache.set(live, fields)
+  }
+  const key = persisted ?? live
+  let field = fields.get(key)
+  if (!field) {
+    field = terrainPreviewField(live, persisted)
+    fields.set(key, field)
+  }
+  return field
+}
 
 /**
  * The terrain field for a site, or `null` when the site has no sculpted terrain.
@@ -27,11 +56,14 @@ export {
  * showing a hill the raycast cannot hit.
  */
 export function terrainFieldOf(
-  site: (Pick<SiteNode, 'terrain'> & { id?: string }) | null | undefined,
+  site: TerrainSite | null | undefined,
+  nodes?: TerrainNodes,
 ): TerrainField | null {
+  const sceneNodes = nodes ?? (site?.id ? sceneNodesOf?.() : undefined)
+  const persisted = persistedTerrainFieldOf(site, sceneNodes)
   if (site?.id && livePreviewsVisible()) {
-    const live = useLiveTerrain.getState().fieldOf(site.id)
-    if (live) return live
+    const live = liveFieldOf?.(site.id)
+    if (live) return previewOf(live, persisted)
   }
-  return persistedTerrainFieldOf(site)
+  return persisted
 }

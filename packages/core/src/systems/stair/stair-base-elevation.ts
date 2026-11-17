@@ -2,6 +2,7 @@ import { GROUND_SUPPORT_ID } from '../../hooks/spatial-grid/support-host-id'
 import { itemOverlapsPolygon } from '../../lib/item-polygon-overlap'
 import { resolveLevelId } from '../../lib/node-ancestry'
 import { getRenderableSlabPolygon } from '../../lib/slab-polygon'
+import { slabTerrainHeightAt } from '../../lib/slab-terrain'
 import { levelBaseElevationAt } from '../../lib/terrain-support-query'
 import type { AnyNode, SlabNode, StairNode, WallNode } from '../../schema'
 import { pointInPolygon } from '../slab/slab-support'
@@ -48,8 +49,10 @@ export function stairBaseElevation(
       ) && !(slab.holes ?? []).some((hole) => pointInPolygon(position[0], position[2], hole))
     )
   }
-  const elevation = (slab: SlabNode) =>
-    Number.isFinite(slab.elevation ?? 0.05) ? (slab.elevation ?? 0.05) : 0
+  const elevation = (slab: SlabNode) => {
+    const sampled = slabTerrainHeightAt(slab, nodes, stair.position[0], stair.position[2])
+    return Number.isFinite(sampled) ? sampled : 0
+  }
   const host = slabs.find((slab) => slab.id === stair.supportSlabId)
   if (host && footprints.some((footprint) => supports(host, footprint)))
     return stair.position[1] + elevation(host)

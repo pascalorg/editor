@@ -7,7 +7,10 @@ import {
   MIN_WALL_HEIGHT,
   SlabNode,
   WallNode,
+  ZoneNode,
 } from '../../index'
+import { connectedHouseFootprint } from '../../lib/house-footprint'
+import { area } from '../../lib/polygon-boolean'
 
 // 4×3 room slab drawn on the wall centerlines, like an auto-slab.
 const SQUARE: Array<[number, number]> = [
@@ -208,5 +211,108 @@ describe('computeWallSlabSupport covering slabs', () => {
     expect(computeWallSlabSupport(wall, [floor, cap], [wall], 'slab_cap').elevation).toBeCloseTo(
       2.662,
     )
+  })
+})
+
+describe('floorless house support', () => {
+  const rectangle = (x: number, z: number, width = 3, depth = 3): Array<[number, number]> => [
+    [x, z],
+    [x + width, z],
+    [x + width, z + depth],
+    [x, z + depth],
+  ]
+  const level = LevelNode.parse({ id: 'level_floorless', height: 2.7 })
+  const base = SlabNode.parse({
+    id: 'slab_house',
+    parentId: level.id,
+    boundary: 'auto',
+    plateRole: 'base',
+    polygon: SQUARE,
+    elevation: 1.25,
+  })
+  const wing = ZoneNode.parse({
+    id: 'zone_wing',
+    name: 'Floorless wing',
+    parentId: level.id,
+    spaceRole: 'room',
+    hasFloor: false,
+    polygon: rectangle(4, 0),
+  })
+  const wall = WallNode.parse({
+    id: 'wall_wing',
+    parentId: level.id,
+    start: [7, 0],
+    end: [7, 3],
+  })
+  const nodes = { [level.id]: level, [base.id]: base, [wing.id]: wing, [wall.id]: wall }
+
+  it('supports attached floorless walls at the base without extending the floor plate', () => {
+    const support = computeWallSlabSupport(wall, [base], [wall], undefined, undefined, 0, nodes)
+    expect(support.elevation).toBe(1.25)
+    expect(support.electedSlabId).toBe(base.id)
+    expect(support.baseSegments).toEqual([{ start: 0, end: 1, elevation: 1.25 }])
+    expect(support.faceDatum.a.every((run) => run.elevation === 1.25)).toBe(true)
+    expect(support.faceDatum.b.every((run) => run.elevation === 1.25)).toBe(true)
+    expect(base.polygon).toEqual(SQUARE)
+    expect(base.zoneIds ?? []).not.toContain(wing.id)
+  })
+
+  it('leaves a detached floorless room on its own terrain, not another house datum', () => {
+    const detached = { ...wing, polygon: rectangle(10, 0) }
+    const detachedWall = { ...wall, start: [13, 0], end: [13, 3] } as WallNode
+    const detachedNodes = { ...nodes, [wing.id]: detached, [wall.id]: detachedWall }
+    const support = computeWallSlabSupport(
+      detachedWall,
+      [base],
+      [detachedWall],
+      undefined,
+      undefined,
+      0.3,
+      detachedNodes,
+    )
+    expect(support.elevation).toBe(0.3)
+    expect(support.electedSlabId).toBeNull()
+  })
+
+  it('preserves explicit bare-ground and slab hosts in the attached wing', () => {
+    const manual = SlabNode.parse({
+      id: 'slab_wing_host',
+      parentId: level.id,
+      polygon: rectangle(6, -1, 2, 5),
+      elevation: 0.4,
+    })
+    const hostNodes = { ...nodes, [manual.id]: manual }
+    const slabs = [base, manual]
+    const walls = [wall]
+    const ground = computeWallSlabSupport(wall, slabs, walls, 'ground', undefined, 0.2, hostNodes)
+    expect(ground.elevation).toBe(0.2)
+    expect(ground.electedSlabId).toBeNull()
+    const hosted = computeWallSlabSupport(wall, slabs, walls, manual.id, undefined, 0.2, hostNodes)
+    expect(hosted.elevation).toBe(0.4)
+    expect(hosted.electedSlabId).toBe(manual.id)
+  })
+
+  it('joins split base footprints through a floorless wing, excluding detached houses', () => {
+    const seed = { outer: base.polygon, holes: [] }
+    const siblings = [
+      seed,
+      { outer: rectangle(7, 0), holes: [] },
+      { outer: rectangle(20, 0), holes: [] },
+    ]
+    const shed = { ...wing, id: 'zone_shed', polygon: rectangle(20, 3) }
+    const connected = connectedHouseFootprint(seed, [wing, shed], siblings)
+    expect(connected.connectedFootprintIndices).toEqual([0, 1])
+    expect(connected.floorlessRooms.map((room) => room.id)).toEqual([wing.id])
+    expect(area(connected.footprint)).toBe(30)
+  })
+
+  it('includes open floorless porches, but not suspended or corner-only rooms', () => {
+    const seed = { outer: base.polygon, holes: [] }
+    const porch = { ...wing, enclosureStatus: 'open' as const }
+    expect(connectedHouseFootprint(seed, [porch]).floorlessRooms).toEqual([porch])
+    const suspended = { ...wing, floor: { support: 'open' as const } }
+    expect(connectedHouseFootprint(seed, [suspended]).floorlessRooms).toEqual([])
+    const corner = { ...wing, polygon: rectangle(4, 3) }
+    expect(connectedHouseFootprint(seed, [corner]).floorlessRooms).toEqual([])
   })
 })

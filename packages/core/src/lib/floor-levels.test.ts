@@ -1,11 +1,13 @@
 import { expect, test } from 'bun:test'
+import { rebaseFloorReference } from '../commands/structure/rebase-floor-reference'
 import { setZoneIntent } from '../commands/structure/set-zone-intent'
 import {
   type AnyNode,
   BuildingNode,
   DoorNode,
   LevelNode,
-  type SlabNode,
+  SiteNode,
+  SlabNode,
   type WallNode,
   type ZoneNode,
 } from '../schema'
@@ -24,6 +26,7 @@ import { expandFloorIntentChanges } from './floor-intent-changes'
 import { getOpeningFloorDatum, getOpeningWallCut, wallSupportForNodes } from './opening-floor-datum'
 import { computePlateSurfacePartition, plateLevelContext } from './plate-surface'
 import { area, containsPoint, intersection } from './polygon-boolean'
+import { roomFloorElevation } from './room-floor-elevation'
 import {
   checkRoomFloor,
   clampRoomFloorHandle,
@@ -31,6 +34,8 @@ import {
   getRoomRelativeFloorElevation,
   roomFloorElevationFromRelative,
 } from './room-floor-feasibility'
+import { encodeTerrainField } from './terrain-codec'
+import { createTerrainField } from './terrain-field'
 
 function scene(high = 0.55, low = 0.05, door = true) {
   const fixture = floorStepFixture()
@@ -55,6 +60,18 @@ function scene(high = 0.55, low = 0.05, door = true) {
 }
 const plates = (nodes: Record<string, AnyNode>) =>
   Object.values(nodes).filter((n): n is SlabNode => n.type === 'slab')
+
+function onRaisedGround(nodes: Record<string, AnyNode>, lift: number) {
+  const field = createTerrainField({ cols: 33, rows: 33, spacing: 1, origin: [-16, -16] })
+  const site = SiteNode.parse({
+    id: 'site_floor_datum',
+    terrain: encodeTerrainField({
+      ...field,
+      heights: new Int16Array(field.heights.length).fill(Math.round(lift * 100)),
+    }),
+  })
+  return { ...nodes, [site.id]: site }
+}
 
 test('D1/D2/D3/D5: raising floors retains the base, complete wall bodies and fixed tops', () => {
   const s = scene()
@@ -406,4 +423,178 @@ test('room-relative heights round to micrometres and handle clamps stay on the 5
   expect(roomFloorElevationFromRelative(nodes, s.zones[0]!.id, 0.35)).toBe(0.4)
   expect(checkRoomFloor(nodes, s.zones[0]!.id, 0.8).maxElevation).toBeCloseTo(0.529)
   expect(clampRoomFloorHandle(nodes, s.zones[0]!.id, 0.8)).toBe(0.5)
+})
+
+test.each([-0.4, 0, 0.4, 1.6])(
+  'stored room steps follow an automatic ground datum lifted by %s metres',
+  (lift) => {
+    const s = scene(0.2, 0.05, false)
+    const before = onRaisedGround(s.nodes, lift)
+    expect(roomFloorElevation(before, s.zones[0]!.id)).toBeCloseTo(0.2)
+    const nodes = reconcileStructureWithStableIds({
+      nodes: before,
+    }).nodes
+    const high = s.zones[0]!.id
+    const low = s.zones[1]!.id
+    expect((nodes[high] as ZoneNode).floor?.elevation).toBe(0.2)
+    expect((nodes[low] as ZoneNode).floor?.elevation).toBe(0.05)
+    expect(roomFloorElevation(nodes, high)).toBeCloseTo(lift + 0.2)
+    expect(roomFloorElevation(nodes, low)).toBeCloseTo(lift + 0.05)
+    expect(getRoomRelativeFloorElevation(nodes, high)).toBe(0.15)
+    expect(roomFloorElevationFromRelative(nodes, high, 0.3)).toBeCloseTo(lift + 0.35)
+    const platform = plates(nodes).find((plate) => plate.plateRole === 'platform')!
+    expect(platform.elevation).toBeCloseTo(lift + 0.2)
+    expect(platform.thickness).toBeCloseTo(0.15)
+    expect(reconcileStructureWithStableIds({ nodes }).nodes).toEqual(nodes)
+  },
+)
+
+test('authoring a foundation on lifted ground preserves room steps and clearing restores them', () => {
+  const s = scene(0.2, 0.05, false)
+  let nodes = { ...reconcileStructureWithStableIds({ nodes: onRaisedGround(s.nodes, 0.4) }).nodes }
+  const base = plates(nodes).find((plate) => plate.plateRole === 'base')!
+  const roomId = s.zones[0]!.id
+  for (const [floorHeight, expectedTop, expectedStored] of [
+    [0.65, 0.8, 0.8],
+    [undefined, 0.6, 0.2],
+  ] as const) {
+    const updates = expandFloorIntentChanges(nodes, [{ id: base.id, data: { floorHeight } }])
+    for (const { id, data } of updates) nodes[id] = { ...nodes[id], ...data } as AnyNode
+    nodes = { ...reconcileStructureWithStableIds({ nodes }).nodes }
+    expect((nodes[roomId] as ZoneNode).floor?.elevation).toBeCloseTo(expectedStored)
+    expect(roomFloorElevation(nodes, roomId)).toBeCloseTo(expectedTop)
+    expect(getRoomRelativeFloorElevation(nodes, roomId)).toBeCloseTo(0.15)
+  }
+})
+
+test('a numeric room edit on lifted ground is checked at its resolved walking surface', () => {
+  const s = scene(0.2, 0.05, false)
+  const nodes = reconcileStructureWithStableIds({ nodes: onRaisedGround(s.nodes, 0.4) }).nodes
+  const roomId = s.zones[0]!.id
+  const plan = setZoneIntent(nodes, { zoneId: roomId, patch: { floor: { elevation: 0.35 } } })
+  expect(plan.conflicts ?? []).toEqual([])
+  const draft = { ...nodes }
+  for (const change of plan.changes)
+    if (change.op === 'update')
+      draft[change.id] = { ...draft[change.id], ...change.data } as AnyNode
+  const after = reconcileStructureWithStableIds({ nodes: draft }).nodes
+  expect(roomFloorElevation(after, roomId)).toBeCloseTo(0.75)
+  expect(getRoomRelativeFloorElevation(after, roomId)).toBeCloseTo(0.3)
+  expect(checkRoomFloor(after, roomId, 2.7).conflicts).toContainEqual(
+    expect.objectContaining({ code: 'floor-headroom' }),
+  )
+})
+
+test('an implicit outdoor drop follows the lifted base without becoming a stored absolute top', () => {
+  const s = scene(0.2, 0.05, false)
+  const zone = s.zones[0]!
+  const draft = onRaisedGround(s.nodes, 0.4)
+  draft[zone.id] = { ...zone, floor: { drop: 0.1 } }
+  const nodes = reconcileStructureWithStableIds({ nodes: draft }).nodes
+  expect((nodes[zone.id] as ZoneNode).floor?.elevation).toBeUndefined()
+  expect(roomFloorElevation(nodes, zone.id)).toBeCloseTo(0.35)
+  expect(getRoomRelativeFloorElevation(nodes, zone.id)).toBeCloseTo(-0.1)
+})
+
+test.each([false, true])(
+  'a zero-displacement reference rebase preserves lifted room steps (store guard %s)',
+  (guarded) => {
+    const s = scene(0.2, 0.05, false)
+    const nodes = reconcileStructureWithStableIds({ nodes: onRaisedGround(s.nodes, 0.4) }).nodes
+    const base = plates(nodes).find((plate) => plate.plateRole === 'base')!
+    const plan = rebaseFloorReference(nodes, {
+      slabId: base.id,
+      referenceFloorElevation: 0.05,
+    })
+    expect(plan.conflicts ?? []).toEqual([])
+    const updates = plan.changes.flatMap((change) =>
+      change.op === 'update' ? [{ id: change.id, data: change.data }] : [],
+    )
+    const expanded = guarded
+      ? filterDerivedNodeWrites(nodes, { update: updates }).update
+      : expandFloorIntentChanges(nodes, updates)
+    const draft = { ...nodes }
+    for (const { id, data } of expanded) draft[id] = { ...draft[id], ...data } as AnyNode
+    const after = reconcileStructureWithStableIds({ nodes: draft }).nodes
+    expect(roomFloorElevation(after, s.zones[0]!.id)).toBeCloseTo(0.6)
+    expect(roomFloorElevation(after, s.zones[1]!.id)).toBeCloseTo(0.45)
+    expect(plates(after).find((plate) => plate.plateRole === 'base')!.elevation).toBeCloseTo(0.45)
+  },
+)
+
+test.each([false, true])(
+  'rejoining a larger own floor preserves the shared automatic datum and both rooms (store guard %s)',
+  (guarded) => {
+    const fixture = floorStepFixture(true)
+    const initial = Object.fromEntries(
+      Object.entries(fixture.nodes).filter(([, node]) => node.type !== 'slab'),
+    )
+    initial[fixture.boundary.id] = {
+      ...fixture.boundary,
+      start: [2, 0],
+      end: [2, 4],
+    }
+    for (const zone of fixture.zones)
+      initial[zone.id] = {
+        ...zone,
+        polygon: zone.polygon.map(([x, z]) => [x === 4 ? 2 : x, z]),
+        floor: { elevation: 0.05 },
+      }
+    initial[fixture.level.id] = {
+      ...fixture.level,
+      children: fixture.level.children.filter((id) => initial[id]),
+    }
+    let nodes = reconcileStructureWithStableIds({ nodes: onRaisedGround(initial, 0.1) }).nodes
+    for (const footprint of ['new', null] as const) {
+      const plan = setZoneIntent(nodes, {
+        zoneId: fixture.zones[1]!.id,
+        patch: { floor: { footprint } },
+      })
+      expect(plan.conflicts ?? []).toEqual([])
+      const updates = plan.changes.flatMap((change) =>
+        change.op === 'update' ? [{ id: change.id, data: change.data }] : [],
+      )
+      const applied = guarded ? filterDerivedNodeWrites(nodes, { update: updates }).update : updates
+      const draft = { ...nodes }
+      for (const { id, data } of applied) draft[id] = { ...draft[id], ...data } as AnyNode
+      nodes = reconcileStructureWithStableIds({ nodes: draft }).nodes
+      for (const zone of fixture.zones) expect(roomFloorElevation(nodes, zone.id)).toBeCloseTo(0.15)
+    }
+    expect(plates(nodes).filter((plate) => plate.plateRole === 'base')).toHaveLength(1)
+    expect(plates(nodes).find((plate) => plate.plateRole === 'base')!.floorHeight).toBeUndefined()
+    for (const zone of fixture.zones)
+      expect((nodes[zone.id] as ZoneNode).floor?.elevation).toBeCloseTo(0.05)
+  },
+)
+
+test('a retained manual source moved away no longer suppresses the regenerated room datum', () => {
+  const s = scene(0.2, 0.05, false)
+  const zone = s.nodes[s.zones[0]!.id] as ZoneNode
+  const source = SlabNode.parse({
+    id: 'slab_moved_room_source',
+    parentId: zone.parentId,
+    polygon: zone.polygon,
+    elevation: 0.2,
+    thickness: 0.05,
+  })
+  const initial = onRaisedGround(s.nodes, 0.4)
+  initial[source.id] = source
+  initial[zone.id] = { ...zone, floor: { ...zone.floor, sourceSlabId: source.id } }
+  const before = reconcileStructureWithStableIds({ nodes: initial }).nodes
+  const after = reconcileStructureWithStableIds({
+    nodes: {
+      ...before,
+      [source.id]: {
+        ...source,
+        polygon: source.polygon.map(([x, z]) => [x + 20, z]),
+      },
+    },
+  }).nodes
+  expect((after[zone.id] as ZoneNode).floor?.sourceSlabId).toBe(source.id)
+  expect((after[zone.id] as ZoneNode).floor?.elevation).toBe(0.2)
+  expect(roomFloorElevation(after, zone.id)).toBeCloseTo(0.6)
+  const platform = plates(after).find(
+    (plate) => plate.plateRole === 'platform' && plate.zoneIds?.includes(zone.id),
+  )!
+  expect(platform.elevation).toBeCloseTo(0.6)
 })

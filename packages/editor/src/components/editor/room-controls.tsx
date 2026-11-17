@@ -224,10 +224,12 @@ function RoomFloatingMenu({
   room,
   zone,
   height,
+  floorElevation,
 }: {
   room: RoomSelectionRecord
   zone: AnyNode
   height: number
+  floorElevation: number
 }) {
   const isFloorplanHovered = useEditor((s) => s.isFloorplanHovered)
   const anchor = useRef<Group>(null)
@@ -240,7 +242,7 @@ function RoomFloatingMenu({
   })
   if (zone.type !== 'zone' || !zone.seed || isFloorplanHovered) return null
   // A mezzanine's pill floats over its host's walls, not a storey above its own floor.
-  const elevation = zone.floor?.support === 'open' ? 0.05 : (zone.floor?.elevation ?? 0.05)
+  const elevation = zone.floor?.support === 'open' ? 0.05 : floorElevation
   return (
     <group
       // Above the room's walls, as a wall's pill floats above the wall — clear
@@ -678,7 +680,9 @@ export function RoomControls3D() {
     const level = levelId ? s.nodes[levelId as AnyNodeId] : undefined
     return level?.type === 'level' ? (level.height ?? DEFAULT_LEVEL_HEIGHT) : DEFAULT_LEVEL_HEIGHT
   })
-  const elevation = zone?.type === 'zone' ? (zone.floor?.elevation ?? 0.05) : 0.05
+  const elevation = useScene((s) =>
+    zone?.type === 'zone' ? roomFloorElevation(s.nodes, zone.id) : 0.05,
+  )
   const root = useRef<Group>(null)
   const { gl, camera, invalidate } = useThree()
   useDivideLifetime()
@@ -724,7 +728,12 @@ export function RoomControls3D() {
     <>
       <group matrixAutoUpdate={false} ref={root}>
         {typeof document !== 'undefined' && room && zone && (
-          <RoomFloatingMenu height={levelHeight} room={room} zone={zone} />
+          <RoomFloatingMenu
+            floorElevation={elevation}
+            height={levelHeight}
+            room={room}
+            zone={zone}
+          />
         )}
         {room && !isFloorplanHovered && <RoomHandles3D room={room} />}
         <RoomHandleDragPreview3D />

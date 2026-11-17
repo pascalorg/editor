@@ -1,6 +1,7 @@
 'use client'
 
 import {
+  roomFloorElevation,
   type SeparatorNode,
   separatorFloorElevation,
   useLiveNodeOverrides,
@@ -40,18 +41,16 @@ export default function SeparatorRenderer({
   const ownFloor = useScene((s) =>
     selected && !inRoom ? separatorFloorElevation(s.nodes, node.id) : null,
   )
+  const roomFloor = useScene((s) =>
+    zone?.type === 'zone' && inRoom ? roomFloorElevation(s.nodes, zone.id) : null,
+  )
   const live = useLiveNodeOverrides((s) => s.overrides.get(node.id)) as
     | Partial<SeparatorNode>
     | undefined
   const start = live?.start ?? node.start
   const end = live?.end ?? node.end
   const events = useNodeEvents(node, 'separator')
-  const y =
-    zone?.type === 'zone' && inRoom
-      ? (zone.floor?.elevation ?? 0.05) + 0.02
-      : ownFloor !== null
-        ? ownFloor + 0.02
-        : 0.07
+  const y = roomFloor !== null ? roomFloor + 0.02 : ownFloor !== null ? ownFloor + 0.02 : 0.07
   const dx = end[0] - start[0],
     dz = end[1] - start[1]
   const length = Math.hypot(dx, dz)

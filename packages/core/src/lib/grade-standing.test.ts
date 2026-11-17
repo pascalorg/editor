@@ -10,7 +10,7 @@ import {
   ZoneNode,
 } from '../schema'
 import hillside from './__fixtures__/owner-hillside-grade.json'
-import { levelGradeStanding } from './grade-standing'
+import { groundCovers, levelGradeStanding } from './grade-standing'
 import { levelGroundBox } from './ground-window'
 import { encodeTerrainField } from './terrain-codec'
 import { createTerrainField } from './terrain-field'
@@ -285,4 +285,72 @@ test('a pad outside every room (an entry stoop) is not a floor the ground buries
   } as typeof nodes
   expect(levelGradeStanding(nodes, 'level_g')).toBe('partly-below-grade')
   expect(levelGradeStanding(withRoom, 'level_g')).toBe('at-grade')
+})
+describe('groundCovers', () => {
+  test('on a hillside floor it is the buried half that the ground covers', () => {
+    const covers = groundCovers(hillsideStack(6), 'level_garden')
+    expect(covers(-3, 0)).toBe(false)
+    expect(covers(3, 0)).toBe(true)
+  })
+
+  test('a floor at grade is covered nowhere, an id that is no level either', () => {
+    expect(groundCovers(hillsideStack(6), 'level_street')(3, 0)).toBe(false)
+    expect(groundCovers(hillsideStack(6), 'level_missing')(3, 0)).toBe(false)
+  })
+
+  test('a floor the ground covers outright is covered everywhere', () => {
+    const nodes = hillsideStack(6)
+    const buried = {
+      ...nodes,
+      site_a: SiteNode.parse({
+        id: 'site_a',
+        children: ['building_a'],
+        terrain: encodeTerrainField({
+          ...createTerrainField({ cols: 33, rows: 33, spacing: 1, origin: [-16, -16] }),
+          heights: new Int16Array(33 * 33).fill(600),
+        }),
+      }),
+    } as typeof nodes
+    const covers = groundCovers(buried, 'level_garden')
+    expect(covers(-3, 0)).toBe(true)
+    expect(covers(3, 0)).toBe(true)
+  })
+
+  test('on a flat site a split level is covered over its sunken room only', () => {
+    const slab = (id: string, polygon: Array<[number, number]>, elevation: number) =>
+      SlabNode.parse({ id, parentId: 'level_split', polygon, elevation })
+    const nodes = buildNodes([
+      BuildingNode.parse({ id: 'building_a', children: ['level_split'] }),
+      LevelNode.parse({
+        id: 'level_split',
+        parentId: 'building_a',
+        level: 0,
+        children: ['slab_raised', 'slab_sunken'],
+      }),
+      slab(
+        'slab_raised',
+        [
+          [0, 0],
+          [4, 0],
+          [4, 4],
+          [0, 4],
+        ],
+        0.05,
+      ),
+      slab(
+        'slab_sunken',
+        [
+          [4, 0],
+          [8, 0],
+          [8, 4],
+          [4, 4],
+        ],
+        -1.2,
+      ),
+    ])
+    expect(levelGradeStanding(nodes, 'level_split')).toBe('partly-below-grade')
+    const covers = groundCovers(nodes, 'level_split')
+    expect(covers(2, 2)).toBe(false)
+    expect(covers(6, 2)).toBe(true)
+  })
 })

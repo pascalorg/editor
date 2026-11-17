@@ -1,4 +1,5 @@
 import type { McpServer } from '@modelcontextprotocol/server'
+import { terrainFactsForNode } from '@pascal-app/core/agent-operations'
 import type { AnyNode, AnyNodeId } from '@pascal-app/core/schema'
 import { z } from 'zod'
 import type { SceneOperations } from '../operations'
@@ -20,6 +21,10 @@ export const measureOutput = {
   areaSqMeters: z.number().optional(),
   units: z.literal('meters'),
   areaUnits: z.literal('square_meters').optional(),
+  /** A terrain break measured against itself: its line, length, side heights, drops, face area. */
+  terrainBreak: z.record(z.string(), z.unknown()).optional(),
+  /** A site measured against itself: the facts of each of its terrain breaks. */
+  breaks: z.array(z.record(z.string(), z.unknown())).optional(),
 }
 
 /** Compute polygon area via the shoelace formula. */
@@ -76,8 +81,12 @@ export function registerMeasure(server: McpServer, bridge: SceneOperations): voi
             structuredContent: payload,
           }
         }
-        // For non-polygon self, distance is 0 and no area.
-        const payload = { distanceMeters: 0, units: 'meters' as const }
+        // For non-polygon self, distance is 0 and no area; a terrain break or a site says its breaks.
+        const payload = {
+          distanceMeters: 0,
+          units: 'meters' as const,
+          ...terrainFactsForNode(n, bridge.getNodes()),
+        }
         return {
           content: [{ type: 'text' as const, text: JSON.stringify(payload) }],
           structuredContent: payload,

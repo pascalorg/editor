@@ -33,7 +33,7 @@ describe('one notation (N1): each length, angle and pitch reads in its own unit 
       })
 })
 
-test('every other number a shared tool takes by name is a coordinate, a fraction or a ratio', () => {
+test('every bare number a shared tool takes by name has a reviewed exact-path exception', () => {
   const plain = bareNumberPaths(CONTRACTS)
   expect(plain.filter((path) => !NOT_LENGTHS.has(path))).toEqual([])
   expect([...NOT_LENGTHS].filter((path) => !plain.includes(path))).toEqual([])

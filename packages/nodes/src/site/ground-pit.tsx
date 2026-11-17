@@ -7,10 +7,12 @@ import {
   attribute,
   color,
   float,
+  min,
   mix,
   mx_noise_float,
   normalize,
   normalLocal,
+  positionGeometry,
   positionLocal,
   positionWorld,
   smoothstep,
@@ -107,13 +109,17 @@ function wallMaterial(topsoil: string, foot: string) {
   const material = new MeshLambertNodeMaterial({ side: FrontSide })
   const drop = attribute<'float'>('drop', 'float')
   const slide = drop.mul(pitEase())
-  const drawnY = mix(positionLocal.y, pitDrawnFloorY.sub(FOOT_TUCK), slide)
+  // A wall hangs from the ground it starts at down to the pit's floor. Where that ground lies
+  // under the floor (a cut or a bank inside the hole's reach) there is no wall to hang: it stays
+  // at its top, without height, rather than standing up from the ground to the floor.
+  const footY = min(positionLocal.y, pitDrawnFloorY.sub(FOOT_TUCK))
+  const drawnY = mix(positionLocal.y, footY, slide)
   // An earth cut is rough in depth: past the rim's own cut the wall is pushed sideways by a 3D
   // noise that changes with depth, so a wiggle of the rim does not run straight down as a fold.
   // Nothing at the rim (the top stays on the shader's cut) nor at the foot (it stays under the
   // floor's plate), both eased in over a few tenths of a metre.
   const belowRim = positionLocal.y.sub(drawnY)
-  const aboveFoot = drawnY.sub(pitDrawnFloorY.sub(FOOT_TUCK))
+  const aboveFoot = drawnY.sub(footY)
   const rough = smoothstep(float(CRUMBLE_RIM), float(CRUMBLE_RIM * 5), belowRim).mul(
     smoothstep(float(0), float(CRUMBLE_FOOT), aboveFoot),
   )
@@ -149,8 +155,11 @@ function wallMaterial(topsoil: string, foot: string) {
   const strata = smoothstep(float(-0.06), float(0.06), mx_noise_float(sample))
   const layers = mix(color(STRATA.dark), color(STRATA.light), strata)
   const toFoot = mix(layers, color(foot), drop.mul(0.6).mul(float(1).sub(pitSection)))
-  // The ground's own layer along the cut, its lower edge a noise threshold like the rim.
-  const depthBelowTop = drop.mul(pitTopY.sub(pitFloorY)).mul(pitEase())
+  // The ground's own layer along the cut, its lower edge a noise threshold like the rim. Its depth
+  // is counted from the ground this wall hangs from (the vertex as stored, before it is slid
+  // down), not from the flat grade: on a slope, or on a lot that stands over the datum, the walls
+  // start at other heights, and the layer would be as thick as the flat grade is far from them.
+  const depthBelowTop = positionGeometry.y.sub(positionWorld.y)
   const edge = float(TOPSOIL_DEPTH).add(
     mx_noise_float(positionWorld.mul(vec3(1.3, 0, 1.3))).mul(0.12),
   )

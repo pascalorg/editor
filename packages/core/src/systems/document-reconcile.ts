@@ -4,6 +4,7 @@ import {
   supportIndexOf,
   withSpatialGrid,
 } from '../hooks/spatial-grid/spatial-grid-manager'
+import { withoutLivePreviews } from '../lib/live-previews'
 import { resolveLevelId } from '../lib/node-ancestry'
 import { structureLevelsForChange } from '../lib/space-detection'
 import { applyStructureReconciliation } from '../lib/structure-commit'
@@ -12,7 +13,6 @@ import type { AnyNode, AnyNodeId } from '../schema'
 import { generateId } from '../schema/base'
 import { roofsKeptOverStorey } from '../services/roof-move'
 import { pauseSceneHistory, resumeSceneHistory } from '../store/history-control'
-import { withoutLivePreviews } from '../store/live-previews'
 import type { SceneStore } from '../store/use-scene'
 import { planOwnedFloorOpenings } from './owned-floor-openings'
 import { reconcileOwnedFloorOpeningChanges } from './reconcile-owned-floor-openings'

@@ -3,6 +3,7 @@ import {
   pointInPolygon2D,
   type SlabNode as SlabNodeType,
   slabSlots,
+  slabTerrainHeightAt,
 } from '@pascal-app/core'
 import type { NodeRenderDefinition } from '../definition-contributions'
 import { surfaceBatchable } from '../shared/node-batch/batchable'
@@ -57,7 +58,13 @@ export const slabRenderDefinition: NodeRenderDefinition<typeof SlabNode> & { kin
             )
           )
             return null
-          return liftedManualSlab(context.nodes, slab).elevation
+          return slabTerrainHeightAt(
+            liftedManualSlab(context.nodes, slab),
+            context.nodes,
+            x,
+            z,
+            'live',
+          )
         },
       },
     },

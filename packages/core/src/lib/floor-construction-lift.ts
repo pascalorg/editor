@@ -13,6 +13,15 @@ export function floorConstructionLift(
   nodes: Readonly<Record<string, AnyNode>>,
   node: AnyNode,
 ): number {
+  if (
+    node.type === 'slab' &&
+    node.terrainMode === 'draped' &&
+    !node.plateRole &&
+    node.boundary !== 'auto' &&
+    !node.autoFromWalls &&
+    !node.recessed
+  )
+    return 0
   let cache = memo.get(nodes)
   if (!cache) {
     cache = new WeakMap()

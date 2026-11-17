@@ -17,6 +17,7 @@ import {
   planWallDivision,
   resolveMovedWallSupportSlabPatch,
   roomFloorElevation,
+  roomFloorElevationOffset,
   roomOwnPlate,
   runAsSingleSceneHistoryStep,
   SEPARATOR_JOIN_REACH,
@@ -410,7 +411,11 @@ export function snapPushDistance(line: number, raw: number): number {
  */
 export function planRoomElevation(nodes: StructureNodes, zoneId: string, elevation: number) {
   const own = roomOwnPlate(nodes, zoneId)
-  if (!own) return setZoneIntent(nodes, { zoneId, patch: { floor: { elevation } } })
+  if (!own)
+    return setZoneIntent(nodes, {
+      zoneId,
+      patch: { floor: { elevation: elevation - roomFloorElevationOffset(nodes, zoneId) } },
+    })
   const patch = upperFloorHeightControl(nodes, own)
     ? footprintHeightPatch(nodes, own, elevation)
     : footprintHeightPatch(
