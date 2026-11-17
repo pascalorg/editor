@@ -26,6 +26,7 @@ import { resolveFloorStepFinish } from './floor-step-finish'
 import { getOpeningFloorDatum, getOpeningWallCut, wallSupportForNodes } from './opening-floor-datum'
 import { computePlateSurfacePartition, plateLevelContext } from './plate-surface'
 import { area, containsPoint, intersection } from './polygon-boolean'
+import { roomFloorElevation } from './room-floor-elevation'
 import { getRoomBaseElevation } from './room-floor-feasibility'
 import { initSpaceDetectionSync } from './space-detection'
 
@@ -275,6 +276,8 @@ test('infeasible relative height on an own floor refuses clearly; in-app writes 
   const id = s.zones[1]!.id
   const nodes = toggle(s.nodes, id, true)
   const patch = { floor: { ...zone(nodes, id).floor, elevation: 4 } }
+  expect(roomFloorElevation(nodes, id)).toBeCloseTo(-0.4)
+  expect(roomFloorElevation({ ...nodes, [id]: { ...zone(nodes, id), ...patch } }, id)).toBe(4)
   expect(setZoneIntent(nodes, { zoneId: id, patch }).changes).toEqual([])
   expect(() => assertDerivedNodeWrites(nodes, { update: [{ id, data: patch }] })).toThrow(
     'does not fit',

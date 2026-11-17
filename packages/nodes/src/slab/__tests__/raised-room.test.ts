@@ -12,7 +12,7 @@ for (const terrain of [false, true])
     const slabs = Object.values(nodes).filter((n): n is SlabNode => n.type === 'slab')
     const base = slabs.find((s) => s.plateRole === 'base')!
     const platform = slabs.find((s) => s.plateRole === 'platform')!
-    expect(platform.elevation).toBe(0.6)
+    expect(platform.elevation - base.elevation).toBeCloseTo(0.55)
     expect(platform.thickness).toBeCloseTo(platform.elevation - base.elevation)
     expect(platform.fillToTerrain).toBe(false)
     const ctx: GeometryContext = {
@@ -26,7 +26,7 @@ for (const terrain of [false, true])
     const top = new Raycaster(new Vector3(2, 1, 2), new Vector3(0, -1, 0)).intersectObject(
       group,
     )[0]!
-    expect(top.point.y).toBeCloseTo(0.6)
+    expect(top.point.y).toBeCloseTo(base.elevation + 0.55)
     expect(
       new Raycaster(new Vector3(2, 0.5, -0.2), new Vector3(0, 0, 1), 0, 0.25).intersectObject(
         group,

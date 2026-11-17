@@ -60,10 +60,10 @@ export function roomFloorElevationOffset(nodes: Nodes, zoneId: string): number {
 export function roomFloorElevation(nodes: Nodes, zoneId: string): number {
   const zone = nodes[zoneId]
   if (zone?.type !== 'zone') return 0
-  const own = roomOwnPlate(nodes, zoneId)
-  if (own) return own.elevation
   if (typeof zone.floor?.elevation === 'number')
     return zone.floor.elevation + roomFloorElevationOffset(nodes, zoneId)
+  const own = roomOwnPlate(nodes, zoneId)
+  if (own) return own.elevation
   const plates = Object.values(nodes).filter(
     (node): node is SlabNode => node.type === 'slab' && !!node.zoneIds?.includes(zoneId),
   )
