@@ -1,6 +1,12 @@
 'use client'
 
-import { PLANTING_LIMITS, PlantingNode, useLiveNodeOverrides, useScene } from '@pascal-app/core'
+import {
+  PLANTING_LIMITS,
+  PlantingNode,
+  useLiveNodeOverrides,
+  usePascalI18n,
+  useScene,
+} from '@pascal-app/core'
 import { SliderControl } from '@pascal-app/editor'
 import { useCallback, useRef, useState } from 'react'
 
@@ -17,9 +23,10 @@ export function PlantingAreaControl({
   node: PlantingNode
   onUpdate: (patch: Partial<PlantingNode>) => void
 }) {
+  const i18n = usePascalI18n()
   const latest = useRef({ node, onUpdate })
   latest.current = { node, onUpdate }
-  const [error, setError] = useState<string | null>(null)
+  const [error, setError] = useState(false)
   const clear = useCallback(() => {
     useLiveNodeOverrides.getState().clear(node.id)
     useScene.getState().markDirty(node.id)
@@ -29,7 +36,7 @@ export function PlantingAreaControl({
       const stored = useScene.getState().nodes[node.id]
       const current = stored?.type === 'planting' ? stored : latest.current.node
       const patch = plantingAreaPatch(current, area)
-      setError(patch ? null : 'This area would put the outline outside the supported Site bounds.')
+      setError(!patch)
       return patch
     },
     [node.id],
@@ -54,7 +61,7 @@ export function PlantingAreaControl({
   return (
     <div>
       <SliderControl
-        label="Area"
+        label={i18n._({ id: 'node.planting.area.label', message: 'Area' })}
         max={PLANTING_LIMITS.maxArea}
         min={PLANTING_LIMITS.minArea}
         onCancel={clear}
@@ -68,7 +75,10 @@ export function PlantingAreaControl({
       />
       {error && (
         <p className="mt-1 text-xs text-amber-700" role="status">
-          {error}
+          {i18n._({
+            id: 'node.planting.area.outsideSite',
+            message: 'This area would put the outline outside the supported Site bounds.',
+          })}
         </p>
       )}
     </div>

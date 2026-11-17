@@ -240,6 +240,10 @@ msgid "app.lib.buildPalette.fence"
 msgstr "Fence"
 
 #: apps/editor/lib/build-palette.ts
+msgid "app.lib.buildPalette.hedge"
+msgstr "Hedge"
+
+#: apps/editor/lib/build-palette.ts
 msgid "app.lib.buildPalette.hvacUnit"
 msgstr "HVAC Unit"
 
@@ -260,12 +264,20 @@ msgid "app.lib.buildPalette.mep"
 msgstr "MEP"
 
 #: apps/editor/lib/build-palette.ts
+msgid "app.lib.buildPalette.planting"
+msgstr "Planting bed"
+
+#: apps/editor/lib/build-palette.ts
 msgid "app.lib.buildPalette.post"
 msgstr "Post"
 
 #: apps/editor/lib/build-palette.ts
 msgid "app.lib.buildPalette.register"
 msgstr "Register"
+
+#: apps/editor/lib/build-palette.ts
+msgid "app.lib.buildPalette.rock"
+msgstr "Rock"
 
 #: apps/editor/lib/build-palette.ts
 msgid "app.lib.buildPalette.roof"
@@ -2167,6 +2179,14 @@ msgid "editor.helpers.registeredToolHelper.guidedConstraintsBypassed"
 msgstr "Guided constraints bypassed"
 
 #: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.action.randomise.xcy1a1"
+msgstr "Randomise"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.action.upgradeToGen2.1idvvc0"
+msgstr "Upgrade to gen 2"
+
+#: packages/nodes/src/i18n/definition-messages.ts
 msgid "editor.inspector.field.angle.g10zaw"
 msgstr "Angle"
 
@@ -2255,6 +2275,14 @@ msgid "editor.inspector.field.cleanoutStyle.127zz6z"
 msgstr "Cleanout style"
 
 #: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.clip.1mm17ob"
+msgstr "Clip"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.closed.dvi7s5"
+msgstr "Closed"
+
+#: packages/nodes/src/i18n/definition-messages.ts
 msgid "editor.inspector.field.collarDiameter.1d5k28r"
 msgstr "Collar diameter"
 
@@ -2317,6 +2345,10 @@ msgstr "Curb"
 #: packages/nodes/src/i18n/definition-messages.ts
 msgid "editor.inspector.field.curbHeight.1yn97sg"
 msgstr "Curb height"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.curve.ag5fhw"
+msgstr "Curve"
 
 #: packages/nodes/src/i18n/definition-messages.ts
 msgid "editor.inspector.field.curveOffset.l4xhvr"
@@ -2407,6 +2439,10 @@ msgid "editor.inspector.field.edgeInset.1obeimx"
 msgstr "Edge inset"
 
 #: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.edging.azwyfj"
+msgstr "Edging"
+
+#: packages/nodes/src/i18n/definition-messages.ts
 msgid "editor.inspector.field.elevation.4jbp44"
 msgstr "Elevation"
 
@@ -2443,6 +2479,10 @@ msgid "editor.inspector.field.fittingType.18mz17s"
 msgstr "Fitting type"
 
 #: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.flashing.1y1nk7r"
+msgstr "Flashing"
+
+#: packages/nodes/src/i18n/definition-messages.ts
 msgid "editor.inspector.field.flashingHeight.3e8nn6"
 msgstr "Flashing height"
 
@@ -2473,6 +2513,10 @@ msgstr "Flue spacing"
 #: packages/nodes/src/i18n/definition-messages.ts
 msgid "editor.inspector.field.footingStyle.e3btg6"
 msgstr "Footing style"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.form.1hf0yuf"
+msgstr "Form"
 
 #: packages/nodes/src/i18n/definition-messages.ts
 msgid "editor.inspector.field.frameDepth.1934a5n"
@@ -2513,6 +2557,10 @@ msgstr "Gap y"
 #: packages/nodes/src/i18n/definition-messages.ts
 msgid "editor.inspector.field.glassThickness.s97b0x"
 msgstr "Glass thickness"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.ground.1qwiu8u"
+msgstr "Ground"
 
 #: packages/nodes/src/i18n/definition-messages.ts
 msgid "editor.inspector.field.groundClearance.4os7f0"
@@ -2603,6 +2651,14 @@ msgid "editor.inspector.field.lanternTopScale.hkmpp2"
 msgstr "Lantern top scale"
 
 #: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.leafColor.103kjmm"
+msgstr "Leaf color"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.leafSize.nq3bxi"
+msgstr "Leaf size"
+
+#: packages/nodes/src/i18n/definition-messages.ts
 msgid "editor.inspector.field.ledgerDepth.7av8k9"
 msgstr "Ledger depth"
 
@@ -2625,6 +2681,10 @@ msgstr "Left overhang"
 #: packages/nodes/src/i18n/definition-messages.ts
 msgid "editor.inspector.field.length.1kpdcfp"
 msgstr "Length"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.lichen.1upfxqy"
+msgstr "Lichen"
 
 #: packages/nodes/src/i18n/definition-messages.ts
 msgid "editor.inspector.field.liquidDiameter.w3pk7c"
@@ -2661,6 +2721,10 @@ msgstr "Match host roof material"
 #: packages/nodes/src/i18n/definition-messages.ts
 msgid "editor.inspector.field.matchHostRoofStructure.bojht3"
 msgstr "Match host roof structure"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.moss.puxfub"
+msgstr "Moss"
 
 #: packages/nodes/src/i18n/definition-messages.ts
 msgid "editor.inspector.field.mount.h80tay"
@@ -2709,6 +2773,10 @@ msgstr "Panel height"
 #: packages/nodes/src/i18n/definition-messages.ts
 msgid "editor.inspector.field.panelWidth.946581"
 msgstr "Panel width"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.pattern.1vuws7d"
+msgstr "Pattern"
 
 #: packages/nodes/src/i18n/definition-messages.ts
 msgid "editor.inspector.field.patternAlignment.jd1ht0"
@@ -2883,6 +2951,10 @@ msgid "editor.inspector.field.rightOverhang.yqbeft"
 msgstr "Right overhang"
 
 #: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.rockType.f2wywk"
+msgstr "Rock type"
+
+#: packages/nodes/src/i18n/definition-messages.ts
 msgid "editor.inspector.field.roofHeight.1uhy6qy"
 msgstr "Roof height"
 
@@ -2913,6 +2985,10 @@ msgstr "Scale"
 #: packages/nodes/src/i18n/definition-messages.ts
 msgid "editor.inspector.field.seamDetail.197za48"
 msgstr "Seam detail"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.seed.1lu3q30"
+msgstr "Seed"
 
 #: packages/nodes/src/i18n/definition-messages.ts
 msgid "editor.inspector.field.segmentType.l667sy"
@@ -3031,6 +3107,10 @@ msgid "editor.inspector.field.strapStyle.fh1oy4"
 msgstr "Strap style"
 
 #: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.strata.35dly4"
+msgstr "Strata"
+
+#: packages/nodes/src/i18n/definition-messages.ts
 msgid "editor.inspector.field.style.nf3vcm"
 msgstr "Style"
 
@@ -3125,6 +3205,10 @@ msgstr "Wall skirt height"
 #: packages/nodes/src/i18n/definition-messages.ts
 msgid "editor.inspector.field.wallThickness.17wn4iv"
 msgstr "Wall thickness"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.weathering.xdn5ut"
+msgstr "Weathering"
 
 #: packages/nodes/src/i18n/definition-messages.ts
 msgid "editor.inspector.field.width.gfxz9b"
@@ -3247,6 +3331,10 @@ msgid "editor.inspector.group.flues.nq6pye"
 msgstr "Flues"
 
 #: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.group.foliage.166kiw8"
+msgstr "Foliage"
+
+#: packages/nodes/src/i18n/definition-messages.ts
 msgid "editor.inspector.group.footprint.g8q2pg"
 msgstr "Footprint"
 
@@ -3261,6 +3349,10 @@ msgstr "Geometry"
 #: packages/nodes/src/i18n/definition-messages.ts
 msgid "editor.inspector.group.grid.d8gwxd"
 msgstr "Grid"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.group.ground.1qwiu8u"
+msgstr "Ground"
 
 #: packages/nodes/src/i18n/definition-messages.ts
 msgid "editor.inspector.group.hangers.agnfzn"
@@ -3281,6 +3373,10 @@ msgstr "Insulation"
 #: packages/nodes/src/i18n/definition-messages.ts
 msgid "editor.inspector.group.lantern.1h7o2xb"
 msgstr "Lantern"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.group.layout.1woj3tr"
+msgstr "Layout"
 
 #: packages/nodes/src/i18n/definition-messages.ts
 msgid "editor.inspector.group.levels.1s6yaru"
@@ -3353,6 +3449,10 @@ msgstr "Shoulder"
 #: packages/nodes/src/i18n/definition-messages.ts
 msgid "editor.inspector.group.size.1a4x3zw"
 msgstr "Size"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.group.stone.uh2n4q"
+msgstr "Stone"
 
 #: packages/nodes/src/i18n/definition-messages.ts
 msgid "editor.inspector.group.structure.gezdra"
@@ -3449,6 +3549,10 @@ msgstr "Both"
 #: packages/nodes/src/i18n/definition-messages.ts
 msgid "editor.inspector.option.bottom.9mpruy"
 msgstr "Bottom"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.option.boulder.lm7olu"
+msgstr "Boulder"
 
 #: packages/nodes/src/i18n/definition-messages.ts
 msgid "editor.inspector.option.box.1nbjcuq"
@@ -3555,6 +3659,10 @@ msgid "editor.inspector.option.double.13h5354"
 msgstr "Double"
 
 #: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.option.drifts.17eavp"
+msgstr "Drifts"
+
+#: packages/nodes/src/i18n/definition-messages.ts
 msgid "editor.inspector.option.ductBoard.lc3o4t"
 msgstr "Duct board"
 
@@ -3579,12 +3687,20 @@ msgid "editor.inspector.option.equalFit.11vw52c"
 msgstr "Equal fit"
 
 #: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.option.faceted.1r5ovix"
+msgstr "Faceted"
+
+#: packages/nodes/src/i18n/definition-messages.ts
 msgid "editor.inspector.option.fixedCount.1o3dznu"
 msgstr "Fixed count"
 
 #: packages/nodes/src/i18n/definition-messages.ts
 msgid "editor.inspector.option.fixedSpacing.hl4dr4"
 msgstr "Fixed spacing"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.option.fjord.6kqv8s"
+msgstr "Fjord"
 
 #: packages/nodes/src/i18n/definition-messages.ts
 msgid "editor.inspector.option.flat.ly0bei"
@@ -3637,6 +3753,10 @@ msgstr "Glass frame"
 #: packages/nodes/src/i18n/definition-messages.ts
 msgid "editor.inspector.option.globe.1avkqoy"
 msgstr "Globe"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.option.granite.18t7615"
+msgstr "Granite"
 
 #: packages/nodes/src/i18n/definition-messages.ts
 msgid "editor.inspector.option.grounded.jwoq73"
@@ -3747,8 +3867,16 @@ msgid "editor.inspector.option.minimal.fwmiwg"
 msgstr "Minimal"
 
 #: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.option.mixed.1fii6jc"
+msgstr "Mixed"
+
+#: packages/nodes/src/i18n/definition-messages.ts
 msgid "editor.inspector.option.mono.oszvd6"
 msgstr "Mono"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.option.mulch.1xqhdoq"
+msgstr "Mulch"
 
 #: packages/nodes/src/i18n/definition-messages.ts
 msgid "editor.inspector.option.none.deku7v"
@@ -3847,12 +3975,20 @@ msgid "editor.inspector.option.right.8humpx"
 msgstr "Right"
 
 #: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.option.river.1u771dd"
+msgstr "River"
+
+#: packages/nodes/src/i18n/definition-messages.ts
 msgid "editor.inspector.option.round.1vx0wyj"
 msgstr "Round"
 
 #: packages/nodes/src/i18n/definition-messages.ts
 msgid "editor.inspector.option.rounded.199nwpm"
 msgstr "Rounded"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.option.rows.1ba1neg"
+msgstr "Rows"
 
 #: packages/nodes/src/i18n/definition-messages.ts
 msgid "editor.inspector.option.sanitaryTee.oro3d4"
@@ -3923,6 +4059,10 @@ msgid "editor.inspector.option.sloped.lo4sh0"
 msgstr "Sloped"
 
 #: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.option.soil.12gbeoy"
+msgstr "Soil"
+
+#: packages/nodes/src/i18n/definition-messages.ts
 msgid "editor.inspector.option.solid.o4uy6s"
 msgstr "Solid"
 
@@ -3947,6 +4087,10 @@ msgid "editor.inspector.option.square.1xl1lk6"
 msgstr "Square"
 
 #: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.option.stacked.13qbfby"
+msgstr "Stacked"
+
+#: packages/nodes/src/i18n/definition-messages.ts
 msgid "editor.inspector.option.stair.1xf86e"
 msgstr "Stair"
 
@@ -3959,12 +4103,24 @@ msgid "editor.inspector.option.start.30xvgf"
 msgstr "Start"
 
 #: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.option.steel.1ea4gpw"
+msgstr "Steel"
+
+#: packages/nodes/src/i18n/definition-messages.ts
 msgid "editor.inspector.option.step.jtn9kf"
 msgstr "Step"
 
 #: packages/nodes/src/i18n/definition-messages.ts
 msgid "editor.inspector.option.stepped.naxzh0"
 msgstr "Stepped"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.option.stepping.606bwz"
+msgstr "Stepping"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.option.stone.uh2n4q"
+msgstr "Stone"
 
 #: packages/nodes/src/i18n/definition-messages.ts
 msgid "editor.inspector.option.straight.lxqbfr"
@@ -4011,6 +4167,10 @@ msgid "editor.inspector.option.vent.xda5j2"
 msgstr "Vent"
 
 #: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.option.volcanic.yuogew"
+msgstr "Volcanic"
+
+#: packages/nodes/src/i18n/definition-messages.ts
 msgid "editor.inspector.option.walkOn.1n5sg9l"
 msgstr "Walk on"
 
@@ -4033,6 +4193,10 @@ msgstr "Wall shelf"
 #: packages/nodes/src/i18n/definition-messages.ts
 msgid "editor.inspector.option.waste.3xrp79"
 msgstr "Waste"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.option.weathered.1rrqhyq"
+msgstr "Weathered"
 
 #: packages/nodes/src/i18n/definition-messages.ts
 msgid "editor.inspector.option.wye.14vupc8"
@@ -6516,6 +6680,14 @@ msgid "editor.toolHint.addACornerClickTheFirst.o4r67t"
 msgstr "Add a corner · click the first to close"
 
 #: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.toolHint.addAnOutlinePoint.18dq97f"
+msgstr "Add an outline point"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.toolHint.addAPointOfTheHedge.xrlpu0"
+msgstr "Add a point of the hedge"
+
+#: packages/nodes/src/i18n/definition-messages.ts
 msgid "editor.toolHint.anotherOpeningIsInTheWay.11l9dd0"
 msgstr "Another opening is in the way at the corner"
 
@@ -6796,6 +6968,10 @@ msgid "editor.toolHint.placeAndContinue.qfwkrq"
 msgstr "Place and continue"
 
 #: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.toolHint.placeARock.ip784s"
+msgstr "Place a rock"
+
+#: packages/nodes/src/i18n/definition-messages.ts
 msgid "editor.toolHint.placeBlock.1aylwrx"
 msgstr "Place block"
 
@@ -6942,6 +7118,14 @@ msgstr "Place window on wall"
 #: packages/nodes/src/i18n/definition-messages.ts
 msgid "editor.toolHint.placeWithoutTheCornerSnap.1nifqew"
 msgstr "Place without the corner snap"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.toolHint.plantIt.cwzva3"
+msgstr "Plant it"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.toolHint.plantTheBed.r4x8fy"
+msgstr "Plant the bed"
 
 #: packages/nodes/src/i18n/definition-messages.ts
 msgid "editor.toolHint.pointInsideARoomPorchOr.58w64l"
@@ -7142,6 +7326,10 @@ msgstr "Style: Wide grid"
 #: packages/nodes/src/i18n/definition-messages.ts
 msgid "editor.toolHint.switchRotationAxisYXZ.15lohm6"
 msgstr "Switch rotation axis (Y → X → Z)"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.toolHint.takeTheLastPointBack.1bfgd5k"
+msgstr "Take the last point back"
 
 #: packages/nodes/src/i18n/definition-messages.ts
 msgid "editor.toolHint.theWallsMeetAtTooSharp.kh3wi3"
@@ -11168,6 +11356,14 @@ msgstr "Remove downspout"
 msgid "node.gutter.label"
 msgstr "Gutter"
 
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "node.hedge.description"
+msgstr "A planted hedge along a line, freshly clipped or left to grow."
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "node.hedge.label"
+msgstr "Hedge"
+
 #: packages/nodes/src/ceiling/panel.tsx
 #: packages/nodes/src/slab/panel.tsx
 msgid "node.hole.manual"
@@ -11607,6 +11803,110 @@ msgstr "{diameter}\" Trap"
 msgid "node.pipeTrap.tool.rTRotate"
 msgstr "R/T rotate"
 
+#: packages/nodes/src/planting/area-control.tsx
+msgid "node.planting.area.label"
+msgstr "Area"
+
+#: packages/nodes/src/planting/area-control.tsx
+msgid "node.planting.area.outsideSite"
+msgstr "This area would put the outline outside the supported Site bounds."
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "node.planting.description"
+msgstr "An organic bed of layered plants, with soil or mulch and optional edging."
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "node.planting.label"
+msgstr "Planting bed"
+
+#: packages/nodes/src/planting/plants-panel.tsx
+msgid "node.planting.plants.add"
+msgstr "Add plant"
+
+#: packages/nodes/src/planting/plants-panel.tsx
+msgid "node.planting.plants.flowerColour"
+msgstr "Flower colour"
+
+#: packages/nodes/src/planting/plants-panel.tsx
+msgid "node.planting.plants.flowers"
+msgstr "Flowers"
+
+#: packages/nodes/src/planting/plants-panel.tsx
+msgid "node.planting.plants.habit"
+msgstr "Habit"
+
+#: packages/nodes/src/planting/plants-panel.tsx
+msgid "node.planting.plants.habit.ball"
+msgstr "Ball"
+
+#: packages/nodes/src/planting/plants-panel.tsx
+msgid "node.planting.plants.habit.carpet"
+msgstr "Carpet"
+
+#: packages/nodes/src/planting/plants-panel.tsx
+msgid "node.planting.plants.habit.mound"
+msgstr "Mound"
+
+#: packages/nodes/src/planting/plants-panel.tsx
+msgid "node.planting.plants.habit.spike"
+msgstr "Spike"
+
+#: packages/nodes/src/planting/plants-panel.tsx
+msgid "node.planting.plants.habit.tuft"
+msgstr "Tuft"
+
+#: packages/nodes/src/planting/plants-panel.tsx
+msgid "node.planting.plants.height"
+msgstr "Height"
+
+#: packages/nodes/src/planting/plants-panel.tsx
+msgid "node.planting.plants.help"
+msgstr "One to eight plant types. Back is away from the seen side (+Z); edge is nearest it. Spread is the mature width; spacing and relative share control the mix."
+
+#: packages/nodes/src/planting/plants-panel.tsx
+msgid "node.planting.plants.layer"
+msgstr "Layer"
+
+#: packages/nodes/src/planting/plants-panel.tsx
+msgid "node.planting.plants.layer.back"
+msgstr "Back"
+
+#: packages/nodes/src/planting/plants-panel.tsx
+msgid "node.planting.plants.layer.edge"
+msgstr "Edge"
+
+#: packages/nodes/src/planting/plants-panel.tsx
+msgid "node.planting.plants.layer.mid"
+msgstr "Middle"
+
+#: packages/nodes/src/planting/plants-panel.tsx
+msgid "node.planting.plants.leafColour"
+msgstr "Leaf colour"
+
+#: packages/nodes/src/planting/plants-panel.tsx
+msgid "node.planting.plants.plant"
+msgstr "Plant {number}"
+
+#: packages/nodes/src/planting/plants-panel.tsx
+msgid "node.planting.plants.remove"
+msgstr "Remove plant"
+
+#: packages/nodes/src/planting/plants-panel.tsx
+msgid "node.planting.plants.share"
+msgstr "Relative share"
+
+#: packages/nodes/src/planting/plants-panel.tsx
+msgid "node.planting.plants.spacing"
+msgstr "Spacing"
+
+#: packages/nodes/src/planting/plants-panel.tsx
+msgid "node.planting.plants.spread"
+msgstr "Spread"
+
+#: packages/nodes/src/planting/plants-panel.tsx
+msgid "node.planting.plants.title"
+msgstr "Plants"
+
 #: packages/nodes/src/i18n/definition-messages.ts
 msgid "node.proceduralItem.description"
 msgstr "Experimental editable recipe"
@@ -11690,6 +11990,30 @@ msgstr "Style"
 #: packages/nodes/src/ridge-vent/panel.tsx
 msgid "node.ridgeVent.panel.width"
 msgstr "Width"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "node.rock.description"
+msgstr "A boulder or outcrop on the ground that can rise through floors."
+
+#: packages/nodes/src/rock/generation-field.tsx
+msgid "node.rock.generation.current"
+msgstr "Generator 2 · Rock type, weathering and moss are available."
+
+#: packages/nodes/src/rock/generation-field.tsx
+msgid "node.rock.generation.legacy"
+msgstr "Generator 1 · Legacy look. Upgrade to generator 2 to choose a rock type, weathering and moss. Upgrading changes the shape and stone finish, including any slab holes."
+
+#: packages/nodes/src/rock/generation-field.tsx
+msgid "node.rock.generation.randomise"
+msgstr "Randomise changes only the seed, keeping the type and looks."
+
+#: packages/nodes/src/rock/generation-field.tsx
+msgid "node.rock.generation.upgradeUnavailable"
+msgstr "Upgrade unavailable: {problem}"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "node.rock.label"
+msgstr "Rock"
 
 #: packages/nodes/src/roof/barrel-panel.tsx
 msgid "node.roof.barrelPanel.archBays"
