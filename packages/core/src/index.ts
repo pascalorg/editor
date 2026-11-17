@@ -589,6 +589,17 @@ export {
   type ShedPlanPolygon,
   sanitizeRoofPlanPolygon,
 } from './lib/roof-shed-pieces'
+export {
+  bendShedBandPoint,
+  getShedEdgeSibling,
+  getShedPieceSurface,
+  getShedSiblingTopY,
+} from './lib/roof-shed-surface'
+export {
+  getDutchRakeBoardTops,
+  getRoofFasciaBoardFaces,
+  wearsRoofFascia,
+} from './lib/roof-trim-faces'
 export { type RoomDrawnFloor, roomDrawnFloor } from './lib/room-drawn-floor'
 export { type RoomFloorChoice, roomFloorChoices } from './lib/room-floor-choices'
 export * from './lib/room-floor-elevation'
