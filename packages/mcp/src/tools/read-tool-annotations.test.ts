@@ -73,6 +73,8 @@ const TOOL_POLICIES = [
       'add_fence',
       'add_level',
       'add_roof_element',
+      'add_site_surface',
+      'add_steps',
       'add_wall',
       'add_window',
       'create_mezzanine',

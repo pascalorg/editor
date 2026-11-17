@@ -39,6 +39,7 @@ import { searchMaterials } from './search-materials'
 import { setCheckpoint } from './set-checkpoint'
 import { setGroundLevel } from './set-ground-level'
 import { getSite, placeBuilding } from './site'
+import { addSiteSurface, addSteps } from './site-works'
 import { fitStair, measureStairOperation } from './stairs'
 import type { AgentOperation, AgentOperationSteps, AgentOperations } from './types'
 import { createUnit, listUnits, setUnitMembers } from './units'
@@ -116,6 +117,7 @@ export * from './scene-view'
 export * from './search-assets'
 export * from './search-materials'
 export * from './site'
+export * from './site-works'
 export * from './slab-surface-script'
 export * from './stairs'
 export * from './types'
@@ -153,6 +155,8 @@ const SINGLE_OPERATIONS = {
   add_hedge: addHedge,
   add_planting: addPlanting,
   add_rock: addRock,
+  add_site_surface: addSiteSurface,
+  add_steps: addSteps,
   add_corner_window: addCornerWindow,
   merge_windows: mergeWindowsOperation,
   add_level: addLevel,

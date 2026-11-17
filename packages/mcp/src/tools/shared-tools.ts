@@ -34,6 +34,8 @@ import {
   addRockTool,
   addRoofElementOutput,
   addRoofElementTool,
+  addSiteSurfaceTool,
+  addStepsTool,
   addWallTool,
   createRoofTool,
   createRoomTool,
@@ -433,6 +435,16 @@ const SHARED_TOOLS: SharedTool[] = [
     contract: addRockTool,
     operation: AGENT_OPERATIONS.add_rock,
     annotations: DESTRUCTIVE_TOOL_ANNOTATIONS,
+  },
+  {
+    contract: addSiteSurfaceTool,
+    operation: AGENT_OPERATIONS.add_site_surface,
+    annotations: ADDITIVE_TOOL_ANNOTATIONS,
+  },
+  {
+    contract: addStepsTool,
+    operation: AGENT_OPERATIONS.add_steps,
+    annotations: ADDITIVE_TOOL_ANNOTATIONS,
   },
   {
     contract: addCornerWindowTool,

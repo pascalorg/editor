@@ -22,6 +22,8 @@ export const EXPECTED_OPENAI_TOOL_ANNOTATIONS = {
   add_planting: policy(false, true, false),
   add_rock: policy(false, true, false),
   add_roof_element: policy(false, false, false),
+  add_site_surface: policy(false, false, false),
+  add_steps: policy(false, false, false),
   add_wall: policy(false, false, false),
   set_wall_trim: policy(false, true, false),
   set_wall_type: policy(false, true, false),

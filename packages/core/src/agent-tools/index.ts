@@ -39,6 +39,7 @@ import { createRoofTool, moveRoofsToRoofLevelTool } from './roofs'
 import { ROOM_TOOL_CONTRACTS } from './room-structure'
 import { searchMaterialsTool } from './search-materials'
 import { getSiteTool, placeBuildingTool } from './site'
+import { addSiteSurfaceTool, addStepsTool } from './site-works'
 import { createStairTool, fitStairTool, measureStairTool } from './stairs'
 import { UNIT_TOOL_CONTRACTS } from './units'
 import { verifySceneTool } from './verify-scene'
@@ -83,6 +84,7 @@ export * from './roofs'
 export * from './room-structure'
 export * from './search-materials'
 export * from './site'
+export * from './site-works'
 export { CATALOG_SOURCE, OTHER_SOURCES, OUTSIDE_SOURCES } from './sources'
 export * from './stairs'
 export * from './units'
@@ -126,6 +128,8 @@ export const AGENT_TOOL_CONTRACTS = [
   addHedgeTool,
   addPlantingTool,
   addRockTool,
+  addSiteSurfaceTool,
+  addStepsTool,
   addCornerWindowTool,
   mergeWindowsTool,
   addLevelTool,

@@ -267,6 +267,8 @@ describe('pascal://agent-guide', () => {
     'roof_mixed_in_storey',
     'room_named_by_person',
     'scene_wipe_blocked',
+    'steps_too_tall',
+    'surface_degenerate',
     'unknown_wall_type',
     'view_unavailable',
   ]

@@ -25,6 +25,8 @@ export const BATCHABLE_TOOLS = [
   'set_wall_trim',
   'add_fence',
   'add_rock',
+  'add_site_surface',
+  'add_steps',
   'add_level',
   'create_unit',
   'create_stair',

@@ -150,6 +150,32 @@
       }
     },
     {
+      "name": "add_site_surface",
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "openWorldHint": false
+      },
+      "justifications": {
+        "readOnlyHint": "Adds one driveway, path, patio or lawn surface to a level of the connected Pascal scene.",
+        "destructiveHint": "Adds one slab without replacing or deleting existing scene nodes.",
+        "openWorldHint": "Uses only the connected scene without network access."
+      }
+    },
+    {
+      "name": "add_steps",
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "openWorldHint": false
+      },
+      "justifications": {
+        "readOnlyHint": "Adds one short outside flight of steps to a level of the connected Pascal scene.",
+        "destructiveHint": "Adds one stair and its segment without replacing or deleting existing scene nodes.",
+        "openWorldHint": "Uses only the connected scene without network access."
+      }
+    },
+    {
       "name": "add_wall",
       "annotations": {
         "readOnlyHint": false,
