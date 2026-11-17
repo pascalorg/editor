@@ -275,6 +275,7 @@ export {
   isOperationDoorType,
   SECTIONAL_GARAGE_RENDER_OPEN_SCALE,
 } from './lib/door-operation'
+export { triangulatePlanPolygon } from './lib/earcut'
 export {
   resolveElevatorNodeSupportY,
   resolveElevatorSupportLevelId,
@@ -581,6 +582,13 @@ export {
   roofPlanBoundsOverlap,
   roofPlanOverlapEntryOwns,
 } from './lib/roof-overlap'
+export {
+  getShedBandFacetCount,
+  getShedFootprintPieces,
+  getShedRenderOutlines,
+  type ShedPlanPolygon,
+  sanitizeRoofPlanPolygon,
+} from './lib/roof-shed-pieces'
 export { type RoomDrawnFloor, roomDrawnFloor } from './lib/room-drawn-floor'
 export { type RoomFloorChoice, roomFloorChoices } from './lib/room-floor-choices'
 export * from './lib/room-floor-elevation'

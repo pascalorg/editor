@@ -19,6 +19,9 @@ import {
   getRoofShapeInsets,
   getRoofShapeRatios,
   getSegmentSlopeFrame,
+  getShedBandFacetCount,
+  getShedFootprintPieces,
+  getShedRenderOutlines,
   hasSegmentMaterialOverride,
   isBandedShedSegment,
   isGlazedRoofSegment,
@@ -37,7 +40,9 @@ import {
   roofPlanBoundsOverlap,
   roofSegmentEaveProfile,
   roofStructureDepth,
+  sanitizeRoofPlanPolygon,
   sceneRegistry,
+  triangulatePlanPolygon,
   unionPolygons,
   useLiveNodeOverrides,
   useScene,
@@ -1224,21 +1229,6 @@ function pushDoubleSidedFace(targetFaces: THREE.Vector3[][], face: THREE.Vector3
 
 type ShedEndSide = 'left' | 'right'
 type RoofPlanPolygon = [number, number][]
-
-function readShedFootprintPieces(node: RoofSegmentNode): RoofPlanPolygon[] {
-  const value = node.shedFootprintPieces
-  if (!Array.isArray(value)) return []
-  return value.flatMap((polygon) => {
-    if (!Array.isArray(polygon)) return []
-    const points = polygon.flatMap((point): [number, number][] => {
-      if (!Array.isArray(point) || point.length < 2) return []
-      const x = readFiniteNumber(point[0])
-      const z = readFiniteNumber(point[1])
-      return x === null || z === null ? [] : [[x, z]]
-    })
-    return points.length >= 3 && points.length === polygon.length ? [points] : []
-  })
-}
 
 function readShedOpenEndSides(node: RoofSegmentNode): Set<ShedEndSide> {
   const value = node.shedOpenEndSides
@@ -2857,7 +2847,7 @@ function buildConcentricBandDeckGeometry(node: RoofSegmentNode): THREE.BufferGeo
   const { cosTheta } = getSegmentSlopeFrame(node)
   const verticalThickness =
     node.deckThickness / Math.max(0.1, cosTheta) + node.shingleThickness * cosTheta
-  const facetCount = Math.max(4, Math.min(32, Math.ceil(width / 0.4)))
+  const facetCount = getShedBandFacetCount(width)
 
   const bend = (localX: number, localZ: number) => {
     const bent = bendBandPoint(arc, signedRef, localX, localZ)
@@ -3087,80 +3077,11 @@ function buildDirectConicalSectorGeometry(node: RoofSegmentNode): THREE.BufferGe
   return merged
 }
 
-function clipRoofPolygonAtX(
-  polygon: readonly [number, number][],
-  boundaryX: number,
-  keepGreater: boolean,
-): RoofPlanPolygon {
-  const clipped: RoofPlanPolygon = []
-  for (let index = 0; index < polygon.length; index++) {
-    const current = polygon[index]!
-    const next = polygon[(index + 1) % polygon.length]!
-    const currentInside = keepGreater ? current[0] >= boundaryX : current[0] <= boundaryX
-    const nextInside = keepGreater ? next[0] >= boundaryX : next[0] <= boundaryX
-    if (currentInside) clipped.push([current[0], current[1]])
-    if (currentInside === nextInside) continue
-    const ratio = (boundaryX - current[0]) / (next[0] - current[0])
-    clipped.push([boundaryX, current[1] + (next[1] - current[1]) * ratio])
-  }
-  return clipped
-}
-
-function sanitizeRoofPlanPolygon(polygon: RoofPlanPolygon): RoofPlanPolygon {
-  const tolerance = 1e-8
-  const points = polygon.filter((point, index) => {
-    const previous = polygon[(index + polygon.length - 1) % polygon.length]!
-    return Math.hypot(point[0] - previous[0], point[1] - previous[1]) > tolerance
-  })
-
-  let changed = true
-  while (changed && points.length >= 3) {
-    changed = false
-    for (let index = 0; index < points.length; index++) {
-      const previous = points[(index + points.length - 1) % points.length]!
-      const point = points[index]!
-      const next = points[(index + 1) % points.length]!
-      const cross =
-        (point[0] - previous[0]) * (next[1] - point[1]) -
-        (point[1] - previous[1]) * (next[0] - point[0])
-      if (Math.abs(cross) > tolerance) continue
-      points.splice(index, 1)
-      changed = true
-      break
-    }
-  }
-
-  return points
-}
-
-function facetBandedRoofPieces(
-  pieces: readonly RoofPlanPolygon[],
-  width: number,
-): RoofPlanPolygon[] {
-  const facetCount = Math.max(4, Math.min(32, Math.ceil(width / 0.4)))
-  const halfWidth = width / 2
-  const facetWidth = width / facetCount
-  const faceted: RoofPlanPolygon[] = []
-  for (const piece of pieces) {
-    for (let index = 0; index < facetCount; index++) {
-      const minX = -halfWidth + index * facetWidth
-      const maxX = index === facetCount - 1 ? halfWidth : minX + facetWidth
-      const clipped = clipRoofPolygonAtX(clipRoofPolygonAtX(piece, minX, true), maxX, false)
-      const area = clipped.reduce((sum, point, pointIndex) => {
-        const next = clipped[(pointIndex + 1) % clipped.length]!
-        return sum + point[0] * next[1] - next[0] * point[1]
-      }, 0)
-      if (clipped.length >= 3 && Math.abs(area) > 1e-8) faceted.push(clipped)
-    }
-  }
-  return faceted
-}
-
 function facetBandedRoofBoundary(
   polygon: RoofPlanPolygon,
   width: number,
 ): [RoofPlanPolygon[number], RoofPlanPolygon[number]][] {
-  const facetCount = Math.max(4, Math.min(32, Math.ceil(width / 0.4)))
+  const facetCount = getShedBandFacetCount(width)
   const halfWidth = width / 2
   const facetWidth = width / facetCount
   const boundaries = Array.from(
@@ -3357,13 +3278,7 @@ function edgeTouchesSiblingShed(
       if (
         siblings.some((sibling) => {
           const local = inverseTransformShedPlanPoint(sibling, sample)
-          const footprints = readShedFootprintPieces(sibling)
-          const polygons =
-            footprints.length > 0
-              ? footprints
-              : sibling.managedByParent
-                ? [managedShedFootprint(sibling)]
-                : []
+          const polygons = getShedFootprintPieces(sibling)
           return polygons.some((polygon) =>
             pointInOrNearShedPolygon(local, polygon, shedJoinTolerance(node, sibling)),
           )
@@ -3401,13 +3316,7 @@ function findSiblingShedAcrossEdge(
       ]
       return samples.some((sample) => {
         const local = inverseTransformShedPlanPoint(sibling, sample)
-        const footprints = readShedFootprintPieces(sibling)
-        const polygons =
-          footprints.length > 0
-            ? footprints
-            : sibling.managedByParent
-              ? [managedShedFootprint(sibling)]
-              : []
+        const polygons = getShedFootprintPieces(sibling)
         return polygons.some((polygon) =>
           pointInOrNearShedPolygon(local, polygon, shedJoinTolerance(node, sibling)),
         )
@@ -3511,140 +3420,22 @@ function buildShedJointTransitionFaces(
   return faces
 }
 
-function clipShedPolygonByLine(
-  polygon: RoofPlanPolygon,
-  lineStart: readonly [number, number],
-  lineEnd: readonly [number, number],
-  outsidePoint: readonly [number, number],
-): RoofPlanPolygon {
-  const lineDx = lineEnd[0] - lineStart[0]
-  const lineDz = lineEnd[1] - lineStart[1]
-  const outsideSide =
-    Math.sign(
-      lineDx * (outsidePoint[1] - lineStart[1]) - lineDz * (outsidePoint[0] - lineStart[0]),
-    ) || 1
-  const side = (point: readonly [number, number]) =>
-    outsideSide * (lineDx * (point[1] - lineStart[1]) - lineDz * (point[0] - lineStart[0]))
-  const clipped: RoofPlanPolygon = []
-  for (let index = 0; index < polygon.length; index++) {
-    const current = polygon[index]!
-    const next = polygon[(index + 1) % polygon.length]!
-    const currentSide = side(current)
-    const nextSide = side(next)
-    const currentInside = currentSide <= 1e-7
-    const nextInside = nextSide <= 1e-7
-    if (currentInside) clipped.push([current[0], current[1]])
-    if (currentInside !== nextInside) {
-      const ratio = currentSide / (currentSide - nextSide)
-      clipped.push([
-        current[0] + (next[0] - current[0]) * ratio,
-        current[1] + (next[1] - current[1]) * ratio,
-      ])
-    }
-  }
-  return clipped
-}
-
-function managedShedFootprint(node: RoofSegmentNode): RoofPlanPolygon {
-  const trim = normalizeRoofSegmentTrim(node)
-  let polygon: RoofPlanPolygon = [
-    [-node.width / 2 + trim.left, -node.depth / 2 + trim.back],
-    [node.width / 2 - trim.right, -node.depth / 2 + trim.back],
-    [node.width / 2 - trim.right, node.depth / 2 - trim.front],
-    [-node.width / 2 + trim.left, node.depth / 2 - trim.front],
-  ]
-  const diagonalTrims = [
-    {
-      x: trim.frontLeftX,
-      z: trim.frontLeftZ,
-      start: [-node.width / 2 + trim.left + trim.frontLeftX, node.depth / 2 - trim.front] as [
-        number,
-        number,
-      ],
-      end: [-node.width / 2 + trim.left, node.depth / 2 - trim.front - trim.frontLeftZ] as [
-        number,
-        number,
-      ],
-      outside: [-node.width / 2 - 1, node.depth / 2 + 1] as [number, number],
-    },
-    {
-      x: trim.frontRightX,
-      z: trim.frontRightZ,
-      start: [node.width / 2 - trim.right, node.depth / 2 - trim.front - trim.frontRightZ] as [
-        number,
-        number,
-      ],
-      end: [node.width / 2 - trim.right - trim.frontRightX, node.depth / 2 - trim.front] as [
-        number,
-        number,
-      ],
-      outside: [node.width / 2 + 1, node.depth / 2 + 1] as [number, number],
-    },
-    {
-      x: trim.backLeftX,
-      z: trim.backLeftZ,
-      start: [-node.width / 2 + trim.left, -node.depth / 2 + trim.back + trim.backLeftZ] as [
-        number,
-        number,
-      ],
-      end: [-node.width / 2 + trim.left + trim.backLeftX, -node.depth / 2 + trim.back] as [
-        number,
-        number,
-      ],
-      outside: [-node.width / 2 - 1, -node.depth / 2 - 1] as [number, number],
-    },
-    {
-      x: trim.backRightX,
-      z: trim.backRightZ,
-      start: [node.width / 2 - trim.right - trim.backRightX, -node.depth / 2 + trim.back] as [
-        number,
-        number,
-      ],
-      end: [node.width / 2 - trim.right, -node.depth / 2 + trim.back + trim.backRightZ] as [
-        number,
-        number,
-      ],
-      outside: [node.width / 2 + 1, -node.depth / 2 - 1] as [number, number],
-    },
-  ]
-  for (const diagonal of diagonalTrims) {
-    if (diagonal.x <= 0 || diagonal.z <= 0 || polygon.length < 3) continue
-    polygon = clipShedPolygonByLine(polygon, diagonal.start, diagonal.end, diagonal.outside)
-  }
-  return polygon
-}
-
 function buildCustomShedGeometry(
   node: RoofSegmentNode,
   nodes?: Record<string, AnyNode>,
 ): THREE.BufferGeometry | null {
   if (node.roofType !== 'shed') return null
-  const storedPieces = readShedFootprintPieces(node)
-  const pieces =
-    storedPieces.length > 0
-      ? storedPieces
-      : node.managedByParent
-        ? [managedShedFootprint(node)]
-        : []
+  const pieces = getShedFootprintPieces(node)
   const banded = isBandedShedSegment(node) && node.arc
   if (pieces.length === 0) return banded ? buildConcentricBandDeckGeometry(node) : null
-  const renderPieces = banded
-    ? [...facetBandedRoofPieces(pieces.slice(0, 1), node.width), ...pieces.slice(1)]
-    : pieces
+  const renderPieces = getShedRenderOutlines(node, pieces)
 
   const { cosTheta } = getSegmentSlopeFrame(node)
   const verticalThickness =
     node.deckThickness / Math.max(0.1, cosTheta) + node.shingleThickness * cosTheta
   const geometries: THREE.BufferGeometry[] = []
 
-  for (const polygon of renderPieces) {
-    const sanitized = sanitizeRoofPlanPolygon(polygon)
-    const signedArea = sanitized.reduce((area, point, index) => {
-      const next = sanitized[(index + 1) % sanitized.length]!
-      return area + point[0] * next[1] - next[0] * point[1]
-    }, 0)
-    if (Math.abs(signedArea) <= 1e-9) continue
-    const outline = signedArea > 0 ? sanitized : [...sanitized].reverse()
+  for (const outline of renderPieces) {
     const edgeSiblings = banded
       ? outline.map(() => undefined)
       : outline.map((point, index) => {
@@ -3669,10 +3460,7 @@ function buildCustomShedGeometry(
     const bottom = outline.map(
       ([x, z], index) => new THREE.Vector3(x, topY[index]! - verticalThickness, z),
     )
-    const triangles = THREE.ShapeUtils.triangulateShape(
-      outline.map(([x, z]) => new THREE.Vector2(x, z)),
-      [],
-    )
+    const triangles = triangulatePlanPolygon(outline)
     const jointTransitionFaces: THREE.Vector3[][] = []
     const faces: THREE.Vector3[][] = triangles.flatMap((triangle) => {
       const bottomFace = triangle.map((index) => bottom[index]!.clone())
