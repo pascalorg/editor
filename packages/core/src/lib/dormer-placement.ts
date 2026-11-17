@@ -315,6 +315,9 @@ export function planDormerCreation(
       'Dormer options must match the native schema.',
     )
   const dormer = parsed.data
+  // A new dormer is flashed at its roof junction unless asked otherwise; circular conical walls
+  // have no supported apron yet. Stored dormers keep their authored (absent) flashing.
+  dormer.flashing ??= dormer.roofType !== 'conical'
   if (!validDormer(dormer))
     return refuse(
       'invalid_dormer',

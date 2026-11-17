@@ -160,7 +160,7 @@ const DormerRenderer = ({ node: storeNode }: { node: DormerNode }) => {
   const sceneTheme = useViewer((s) => s.sceneTheme)
 
   // Geometry material slots: 0=Wall, 1=Deck/side, 2=Interior, 3=Roof
-  // shingle, 4=Gable wall. Walls take the 'wall' role, the deck side and
+  // shingle, 4=Gable wall, 5=Flashing. Walls take the 'wall' role, the deck side and
   // shingle take 'roof'. When textures are off, every slot snaps to its
   // role colour regardless of explicit paint (the render-modes invariant).
   // biome-ignore lint/correctness/useExhaustiveDependencies: deps deliberately list the build inputs; depending on the whole object would rebuild on unrelated field changes.
@@ -186,7 +186,28 @@ const DormerRenderer = ({ node: storeNode }: { node: DormerNode }) => {
     const w = resolve(wall, wallRole)
     const s = resolve(side, roofRole)
     const t = resolve(top, roofRole)
-    return [w, s, w, t, w] as THREE.Material[]
+    const f = resolve(
+      { material: node.sideMaterial, materialPreset: node.sideMaterialPreset },
+      () =>
+        textures
+          ? createMaterial(
+              {
+                preset: 'metal',
+                properties: {
+                  color: '#777b80',
+                  roughness: 0.65,
+                  metalness: 0.65,
+                  opacity: 1,
+                  transparent: false,
+                  side: 'double',
+                },
+              },
+              shading,
+            )
+          : roofRole(),
+    )
+    // These materials belong to the viewer's material cache, not this mesh.
+    return [w, s, w, t, w, f] as THREE.Material[]
   }, [
     textures,
     colorPreset,
@@ -222,6 +243,7 @@ const DormerRenderer = ({ node: storeNode }: { node: DormerNode }) => {
     node.height,
     node.roofHeight,
     node.wallSkirtHeight,
+    node.flashing,
     node.position[0],
     node.position[1],
     node.position[2],

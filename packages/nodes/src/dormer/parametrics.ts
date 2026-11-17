@@ -38,6 +38,7 @@ export const dormerParametrics: ParametricDescriptor<DormerNode> = {
       label: 'Hung wall',
       fields: [
         { key: 'wallSkirtHeight', kind: 'number', unit: 'm', min: 0.2, max: 1000, step: 0.05 },
+        { key: 'flashing', kind: 'boolean' },
       ],
     },
   ],

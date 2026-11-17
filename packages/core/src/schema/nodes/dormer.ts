@@ -81,6 +81,8 @@ export const DormerNode = BaseNode.extend({
   roofType: RoofType.default('gable'),
   roofHeight: z.number().default(DORMER_DEFAULTS.ROOF_HEIGHT),
   shedHighSide: z.enum(['back', 'front']).default('back'),
+  // Roof-junction flashing. Opt-in so stored dormers keep their authored wall-to-roof finish.
+  flashing: z.boolean().optional(),
 
   // Height of the hung wall (the "skirt") that extends below the eave
   // into the host roof — this is the wall area the window opening is

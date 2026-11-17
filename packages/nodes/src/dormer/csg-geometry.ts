@@ -24,6 +24,7 @@ import {
   SUBTRACTION,
 } from '@pascal-app/viewer'
 import * as THREE from 'three'
+import { addDormerFlashing } from './flashing-geometry'
 import { buildDormerShellGeometry, getDormerBodyYaw } from './geometry'
 
 // Legacy default for the hung-wall (skirt) height. Used as a fallback
@@ -320,7 +321,9 @@ export function generateDormerGeometry(
 
   resultGeo.computeVertexNormals()
   ensureUv2Attribute(resultGeo)
-  return resultGeo
+  return dormer.flashing
+    ? addDormerFlashing(resultGeo, dormer, hostSegment, hostedWindows, nodes)
+    : resultGeo
 }
 
 /**
