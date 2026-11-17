@@ -4,7 +4,7 @@ import { createPortal, useFrame, useThree } from '@react-three/fiber'
 import { type ReactNode, useLayoutEffect, useRef } from 'react'
 import { Group, type Object3D } from 'three'
 import { sectionActive } from '../../lib/section'
-import { useSiteSurfaceOwner } from '../../lib/site-surfaces'
+import { SITE_GROUND, useSiteSurfaceOwner } from '../../lib/site-surfaces'
 import useViewer from '../../store/use-viewer'
 
 type SiteSurfaceScopeProps = {
@@ -65,6 +65,8 @@ function PortaledSiteSurfaces({ siteId, object, objects, children }: SiteSurface
       if (surface.matrixAutoUpdate) surface.updateMatrix()
       carrier.matrix.copy(surface.matrix)
       carrier.userData = { ...surface.userData }
+      // The carrier owns the clipped descendants' frame, never the escaped ground's draw.
+      delete carrier.userData[SITE_GROUND]
       carrier.add(...[...surface.children])
       const index = mountParent.children.indexOf(surface)
       mountParent.add(carrier)

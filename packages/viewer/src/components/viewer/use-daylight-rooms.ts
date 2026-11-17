@@ -51,7 +51,6 @@ export function useDaylightRooms() {
   const nodesVersion = useRef(0)
   const state = useRef({
     signature: '',
-    built: false,
     pendingSince: -1,
     sinceCheck: CHECK_INTERVAL,
     /** Times the scene finished rebuilding geometry (no dirty nodes left), and whether it is now. */
@@ -60,9 +59,8 @@ export function useDaylightRooms() {
     dirtyRooms: false,
     /** Dirty nodes left when rooms were last built mid-load (they rebuild as the count falls). */
     builtDirty: Number.POSITIVE_INFINITY,
-    /** Level offsets last frame: rays are cast at stacked heights, so no build while levels move. */
-    offsets: [] as number[],
-    levelsMoved: false,
+    /** Presentation heights last frame: no room build while levels are moving. */
+    heights: new WeakMap<Object3D, number>(),
     live: true,
     bakedRoot: null as Object3D | null,
     levelObjects: [] as (Object3D | undefined)[],
@@ -104,7 +102,15 @@ export function useDaylightRooms() {
       syncLampEmitters()
       const live = (sceneRegistry.byType.zone?.size ?? 0) > 0
       const baked = live ? null : findBakedRoot(scene)
-      const feedKeys = feedSignature()
+      // Presentation motion carries lamps with their level; only a change in their assembled
+      // placement should queue a room rebuild. Restore before observing motion below.
+      const restore = restRoomLevels(live, baked)
+      let feedKeys: string
+      try {
+        feedKeys = feedSignature()
+      } finally {
+        restore()
+      }
       const signature = live
         ? `live|${roomObjectsSignature()}|${nodesVersion.current}|${useViewer.getState().geometryRevision}|${s.settles}|${feedKeys}`
         : `baked|${baked?.uuid ?? ''}|${baked?.children.length ?? 0}|${feedKeys}`
@@ -113,20 +119,27 @@ export function useDaylightRooms() {
         s.pendingSince = 0
         s.live = live
         s.bakedRoot = baked
+        s.levelObjects = live ? liveLevelObjects() : bakedLevelObjects(baked)
       }
+    }
+    let levelsMoved = false
+    for (const object of s.levelObjects) {
+      if (!object) continue
+      const y = object.getWorldPosition(scratch).y
+      if (Math.abs(y - (s.heights.get(object) ?? y)) > 1e-4) levelsMoved = true
+      s.heights.set(object, y)
     }
     if (s.pendingSince >= 0) {
       s.pendingSince += delta
-      const exploded = useViewer.getState().levelMode === 'exploded' || s.levelsMoved
       if (
         s.pendingSince >= REBUILD_DELAY &&
-        (!exploded || !s.built) &&
+        !levelsMoved &&
         (!(s.live && dirty) || s.pendingSince > SETTLE_WAIT)
       ) {
         s.pendingSince = -1
-        // A viewer can open with its levels already displaced. Bootstrap in the same rest
-        // frame as a stacked build; subsequent edits keep the existing motion/explode gate.
-        const restore = !s.built ? restRoomLevels(s.live, s.bakedRoot) : undefined
+        // At rest, any presentation mode builds in the assembled frame. The whole build and
+        // restoration are synchronous, so neither a render nor the live offsets see this frame.
+        const restore = restRoomLevels(s.live, s.bakedRoot)
         try {
           const input = s.live
             ? liveRoomScene(lampDefault)
@@ -147,10 +160,8 @@ export function useDaylightRooms() {
             },
           )
           s.levelObjects = s.live ? liveLevelObjects() : bakedLevelObjects(s.bakedRoot)
-          // An empty/loading scene must not consume the first real build's exception.
-          s.built ||= input !== null
         } finally {
-          restore?.()
+          restore()
         }
         // Built before the scene settled (a large scene still building walls and windows): build
         // again after the next wait while geometry keeps arriving, so the rooms catch up.
@@ -168,10 +179,6 @@ export function useDaylightRooms() {
     const offsets = s.levelObjects.map((object, index) =>
       object ? object.getWorldPosition(scratch).y - (levels[index]?.y ?? 0) : 0,
     )
-    s.levelsMoved = offsets.some(
-      (offset, index) => Math.abs(offset - (s.offsets[index] ?? offset)) > 1e-4,
-    )
-    s.offsets = offsets
     const shown = s.levelObjects.map((object) => !!object && presented(object))
     const focus = selectedFocusLevel()
     const selected = s.levelObjects.map((object) => !!object && object === focus)

@@ -245,9 +245,9 @@ export function bakedLevelObjects(root: Object3D | null): Object3D[] {
 }
 
 /**
- * Room rays and fed lamp positions must share the assembled frame. Only the first build may
- * run before levels have ever stacked; restore presentation (including descendant matrices)
- * synchronously, before the hook sends the live level offsets or anything renders.
+ * Room rays and fed lamp positions must share the assembled frame in every presentation mode.
+ * Restore presentation (including descendant matrices) synchronously, before the hook sends the
+ * live level offsets or anything renders.
  */
 export function restRoomLevels(live: boolean, root: Object3D | null): () => void {
   const elevations = live ? getLevelElevations(useScene.getState().nodes) : null

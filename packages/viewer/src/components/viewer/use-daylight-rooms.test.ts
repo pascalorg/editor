@@ -148,7 +148,7 @@ function roomFixture(path: 'live' | 'baked') {
   }
   lampFeeds.add(feed)
   root.updateWorldMatrix(true, true)
-  return { root, levels, feed }
+  return { root, levels, feed, objects }
 }
 
 function Rooms() {
@@ -264,25 +264,17 @@ for (const path of ['live', 'baked'] as const) {
         expect(exploded.presentation.mock.calls.at(-1)?.[0]).toEqual([0, 12])
         await exploded.renderer.advanceFrames(30, 0.1)
         expect(exploded.inputs).toHaveLength(1)
-        if (mode !== 'exploded') {
-          // Moving solo/manual levels share the gate, including when a lamp's feed moves.
-          for (let i = 0; i < 20; i++) {
-            exploded.levels[1]!.position.y += 0.1
-            await exploded.renderer.advanceFrames(1, 0.1)
-          }
-          expect(exploded.inputs).toHaveLength(1)
-          return
+        // A burst of edits rebuilds once at rest, in the same assembled frame.
+        for (let revision = 1; revision <= 3; revision++) {
+          useViewer.setState({ geometryRevision: revision })
+          if (path === 'baked') exploded.root.add(new Group())
         }
-        // Edits remain pending while exploded, then rebuild after returning to rest.
-        useViewer.setState({ geometryRevision: 1 })
-        // Baked edits are observed as identity-tree changes rather than geometry revisions.
-        if (path === 'baked') exploded.root.add(new Group())
-        await exploded.renderer.advanceFrames(20, 0.1)
-        expect(exploded.inputs).toHaveLength(1)
-        useViewer.setState({ levelMode: 'stacked' })
-        exploded.levels[1]!.position.y = exploded.positions[1]!
-        await exploded.renderer.advanceFrames(6, 0.1)
-        expect(exploded.inputs.length).toBeGreaterThan(1)
+        await exploded.renderer.advanceFrames(10, 0.1)
+        expect(exploded.inputs).toHaveLength(2)
+        expect(exploded.inputs[1]).toEqual(inputs![0])
+        expect(exploded.outputs[1]).toEqual(outputs![0])
+        await exploded.renderer.advanceFrames(30, 0.1)
+        expect(exploded.inputs).toHaveLength(2)
       } finally {
         await exploded.close()
       }
@@ -333,6 +325,118 @@ for (const path of ['live', 'baked'] as const) {
         expect(rooms.map((room) => room.enclosed)).toEqual([true, true])
         expect(rooms.map((room) => room.lamps[0]?.itemId)).toEqual(['lamp_0', 'lamp_1'])
       }
+    } finally {
+      await scene.close()
+    }
+  })
+}
+
+test('exploded mid-load rooms catch up with late walls and openings without stacking', async () => {
+  const stacked = await mountedRooms('live', 'stacked')
+  let input: unknown, output: unknown
+  try {
+    await stacked.renderer.advanceFrames(4, 0.1)
+    input = stacked.inputs[0]
+    output = stacked.outputs[0]
+  } finally {
+    await stacked.close()
+  }
+  const scene = await mountedRooms('live', 'exploded')
+  const late = [...scene.objects].filter(([, object]) =>
+    ['wall', 'window'].includes(object.userData.kind),
+  )
+  const children = late.map(([, object]) => [...object.children])
+  try {
+    for (const [, object] of late) object.clear()
+    useScene.setState({ dirtyNodes: new Set(late.map(([id]) => id)) } as never)
+    await scene.renderer.advanceFrames(100, 0.1)
+    expect(scene.inputs).toHaveLength(0)
+    await scene.renderer.advanceFrames(1, 0.1)
+    expect(scene.inputs).toHaveLength(1)
+    expect((scene.inputs[0] as { walls: unknown[] }).walls).toHaveLength(0)
+    expect((scene.inputs[0] as { openings: Box3[] }).openings.every((box) => box.isEmpty())).toBe(
+      true,
+    )
+    // Geometry systems can finish without a document or geometryRevision change.
+    late.forEach(([, object], index) => {
+      object.add(...children[index]!)
+    })
+    useScene.setState({ dirtyNodes: new Set(late.slice(0, 2).map(([id]) => id)) } as never)
+    await scene.renderer.advanceFrames(100, 0.1)
+    expect(scene.inputs).toHaveLength(1)
+    await scene.renderer.advanceFrames(1, 0.1)
+    expect(scene.inputs).toHaveLength(2)
+    expect(scene.inputs[1]).toEqual(input)
+    expect(scene.outputs[1]).toEqual(output)
+    expect(scene.levels[1]!.position.y).toBe(scene.positions[1]! + 12)
+    useScene.setState({ dirtyNodes: new Set() })
+    await scene.renderer.advanceFrames(10, 0.1)
+    expect(scene.inputs).toHaveLength(3)
+    await scene.renderer.advanceFrames(100, 0.1)
+    expect(scene.inputs).toHaveLength(3)
+  } finally {
+    await scene.close()
+  }
+})
+
+function transforms(root: Group) {
+  const result: unknown[] = []
+  root.traverse((object) => {
+    result.push({
+      position: object.position.toArray(),
+      quaternion: object.quaternion.toArray(),
+      scale: object.scale.toArray(),
+      matrix: object.matrix.toArray(),
+      world: object.matrixWorld.toArray(),
+    })
+  })
+  return result
+}
+
+for (const path of ['live', 'baked'] as const) {
+  test.each(['exploded', 'solo', 'manual', 'stacked'] as const)(
+    `${path}: pending edits wait for moving levels, then rebuild once at rest in %s`,
+    async (mode) => {
+      const scene = await mountedRooms(path, 'stacked')
+      try {
+        await scene.renderer.advanceFrames(4, 0.1)
+        const input = scene.inputs[0]
+        const output = scene.outputs[0]
+        useViewer.setState({ levelMode: mode, geometryRevision: 1 })
+        if (path === 'baked') scene.root.add(new Group())
+        for (let frame = 0; frame < 20; frame++) {
+          scene.levels[1]!.position.y += 0.4
+          await scene.renderer.advanceFrames(1, 0.1)
+          expect(scene.inputs).toHaveLength(1)
+        }
+        scene.root.updateWorldMatrix(true, true)
+        const before = transforms(scene.root)
+        await scene.renderer.advanceFrames(1, 0.1)
+        expect(scene.inputs).toHaveLength(2)
+        expect(scene.inputs[1]).toEqual(input)
+        expect(scene.outputs[1]).toEqual(output)
+        // Both descendant and ancestor matrices are restored when the frame callback returns.
+        expect(transforms(scene.root)).toEqual(before)
+        await scene.renderer.advanceFrames(30, 0.1)
+        expect(scene.inputs).toHaveLength(2)
+      } finally {
+        await scene.close()
+      }
+    },
+  )
+
+  test(`${path}: an initial build also waits for animation to rest`, async () => {
+    const scene = await mountedRooms(path, 'exploded')
+    try {
+      for (let frame = 0; frame < 20; frame++) {
+        scene.levels[1]!.position.y += 0.4
+        await scene.renderer.advanceFrames(1, 0.1)
+        expect(scene.inputs).toHaveLength(0)
+      }
+      await scene.renderer.advanceFrames(1, 0.1)
+      expect(scene.inputs).toHaveLength(1)
+      await scene.renderer.advanceFrames(30, 0.1)
+      expect(scene.inputs).toHaveLength(1)
     } finally {
       await scene.close()
     }

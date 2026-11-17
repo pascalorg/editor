@@ -35,11 +35,19 @@ export function useSiteSurfaceOwner(siteId: string, ref: RefObject<Object3D | nu
   }, [siteId, ref])
 }
 
-function siteChildren(siteId: string): Object3D[] {
-  return [
-    ...(sceneRegistry.nodes.get(siteId)?.children ?? []),
-    ...[...(ownedRoots.get(siteId) ?? [])].flatMap((root) => root.children),
-  ]
+/** Own drawables can be nested in a baked site or escaped into a section portal. */
+function siteDrawables(siteId: string): Object3D[] {
+  const surfaces = new Set<Object3D>()
+  const visit = (object: Object3D) => {
+    const owner = object.userData.pascalId
+    if (owner && owner !== siteId) return
+    if ('geometry' in object) surfaces.add(object)
+    for (const child of object.children) visit(child)
+  }
+  const site = sceneRegistry.nodes.get(siteId)
+  if (site) visit(site)
+  for (const root of ownedRoots.get(siteId) ?? []) visit(root)
+  return [...surfaces]
 }
 
 /**
@@ -55,8 +63,8 @@ export type SiteGroundRole = 'solid' | 'veil'
 export function siteSurfaces(): Object3D[] {
   const surfaces: Object3D[] = []
   for (const siteId of sceneRegistry.byType.site ?? []) {
-    for (const child of siteChildren(siteId)) {
-      if (child.visible && !(child.type === 'Group' && child.children.length > 0)) {
+    for (const child of siteDrawables(siteId)) {
+      if (child.visible) {
         surfaces.push(child)
       }
     }
@@ -68,7 +76,7 @@ export function siteSurfaces(): Object3D[] {
 export function siteGround(): Record<SiteGroundRole, Object3D[]> {
   const ground: Record<SiteGroundRole, Object3D[]> = { solid: [], veil: [] }
   for (const siteId of sceneRegistry.byType.site ?? []) {
-    for (const child of siteChildren(siteId)) {
+    for (const child of siteDrawables(siteId)) {
       const role: unknown = child.userData[SITE_GROUND]
       if (role === 'solid' || role === 'veil') ground[role].push(child)
     }

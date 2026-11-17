@@ -7,13 +7,32 @@ import type { ClippingGroup } from 'three/webgpu'
 import { SectionGroup, useViewer } from '../../index'
 import { PointerRaycastLayers } from './pointer-raycast-layers'
 
+const globals = [
+  'requestAnimationFrame',
+  'cancelAnimationFrame',
+  'IS_REACT_ACT_ENVIRONMENT',
+] as const
+let descriptors: (PropertyDescriptor | undefined)[]
 let previous: ReturnType<typeof useViewer.getState>
 beforeEach(() => {
+  descriptors = globals.map((key) => Object.getOwnPropertyDescriptor(globalThis, key))
+  Object.assign(globalThis, {
+    requestAnimationFrame: () => 0,
+    cancelAnimationFrame: () => {},
+    IS_REACT_ACT_ENVIRONMENT: true,
+  })
   previous = useViewer.getState()
   useViewer.getState().setProjectId('section-component-test')
   useViewer.getState().setWalkthroughMode(false)
 })
-afterEach(() => useViewer.setState(previous, true))
+afterEach(() => {
+  useViewer.setState(previous, true)
+  globals.forEach((key, index) => {
+    const descriptor = descriptors[index]
+    if (descriptor) Object.defineProperty(globalThis, key, descriptor)
+    else Reflect.deleteProperty(globalThis, key)
+  })
+})
 
 test('updates the same world plane and restores the section after walkthrough', async () => {
   const renderer = await create(
@@ -341,40 +360,82 @@ test('room labels update with the section and a moving level, then return to the
 })
 
 test.each([false, true])(
-  'baked own surfaces preserve clipped descendants (site mesh: %s)',
+  'baked ground lookups and capture veiling survive section cycles (site mesh: %s)',
   async (siteMesh) => {
     const { BakedSiteSurfaces, bakedSiteSurfaceScopes } = await import('./site-surface-scope')
     const { isSectionObject } = await import('./section-group')
     const { Group, Mesh, BoxGeometry } = await import('three')
+    const { sceneRegistry } = await import('@pascal-app/core')
+    const { SITE_GROUND, siteGround, siteSurfaces, temporarilyVeilGround, SCENE_LAYER } =
+      await import('../../index')
     const root = new Group()
     const site = siteMesh ? new Mesh(new BoxGeometry()) : new Group()
     site.userData = { kind: 'site', pascalId: 'site_nested' }
+    if (siteMesh) site.userData[SITE_GROUND] = 'solid'
     const ground = new Mesh(new BoxGeometry())
+    ground.userData[SITE_GROUND] = 'solid'
+    const veil = new Mesh(new BoxGeometry())
+    veil.userData[SITE_GROUND] = 'veil'
+    veil.visible = false
     const tree = new Group()
     tree.userData = { kind: 'item', pascalId: 'item_nested_tree' }
     const canopy = new Mesh(new BoxGeometry())
     tree.add(canopy)
-    site.add(ground)
+    site.add(ground, veil)
     ground.add(tree)
     root.add(site)
+    sceneRegistry.nodes.set('site_nested', site)
+    sceneRegistry.byType.site!.add('site_nested')
     const scopes = bakedSiteSurfaceScopes(root)
+    useViewer.setState({ sectionEnabled: false })
     const renderer = await create(
       <SectionGroup>
         <primitive object={root} />
         <BakedSiteSurfaces scopes={scopes} />
       </SectionGroup>,
     )
+    const solid = siteMesh ? [site, ground] : [ground]
+    const check = () => {
+      expect(siteGround().solid).toHaveLength(solid.length)
+      expect(new Set(siteGround().solid)).toEqual(new Set(solid))
+      expect(siteGround().veil).toEqual([veil])
+      expect(new Set(siteSurfaces())).toEqual(new Set(solid))
+      expect(siteSurfaces()).toHaveLength(solid.length)
+      const restore = temporarilyVeilGround(true)
+      try {
+        for (const surface of solid) expect(surface.layers.isEnabled(SCENE_LAYER)).toBe(false)
+        expect(veil.visible).toBe(true)
+        for (let object = canopy.parent; object; object = object.parent)
+          expect(object.visible).toBe(true)
+        expect(canopy.layers.isEnabled(SCENE_LAYER)).toBe(true)
+      } finally {
+        restore()
+      }
+      for (const surface of solid) expect(surface.layers.isEnabled(SCENE_LAYER)).toBe(true)
+      expect(veil.visible).toBe(false)
+    }
     try {
-      await act(async () => useViewer.getState().setSectionEnabled(true))
-      expect(isSectionObject(ground)).toBe(false)
-      if (siteMesh) expect(isSectionObject(site)).toBe(false)
-      expect(isSectionObject(canopy)).toBe(true)
-      await act(async () => useViewer.getState().setSectionEnabled(false))
-      expect(root.children.map((child) => child.uuid)).toEqual([site.uuid])
-      expect(site.children.map((child) => child.uuid)).toEqual([ground.uuid])
-      expect(ground.children.map((child) => child.uuid)).toEqual([tree.uuid])
+      check()
+      for (let cycle = 0; cycle < 2; cycle++) {
+        await act(async () => useViewer.getState().setSectionEnabled(true))
+        await renderer.advanceFrames(1, 0.01)
+        expect(isSectionObject(ground)).toBe(false)
+        if (siteMesh) expect(isSectionObject(site)).toBe(false)
+        expect(isSectionObject(canopy)).toBe(true)
+        const carriers = [tree.parent!, ...(siteMesh ? [tree.parent!.parent!] : [])]
+        check()
+        for (const carrier of carriers) expect(carrier.userData[SITE_GROUND]).toBeUndefined()
+        await act(async () => useViewer.getState().setSectionEnabled(false))
+        expect(root.children.map((child) => child.uuid)).toEqual([site.uuid])
+        expect(site.children.map((child) => child.uuid)).toEqual([ground.uuid, veil.uuid])
+        expect(ground.children.map((child) => child.uuid)).toEqual([tree.uuid])
+        for (const carrier of carriers) expect(carrier.parent).toBeNull()
+        check()
+      }
     } finally {
       await renderer.unmount()
+      sceneRegistry.nodes.delete('site_nested')
+      sceneRegistry.byType.site!.delete('site_nested')
     }
   },
 )
