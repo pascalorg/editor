@@ -14,7 +14,7 @@ import { useViewer } from '@pascal-app/viewer'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import * as THREE from 'three'
 import { RoofAttachmentFallbackPreview } from '../shared/roof-attachment-fallback-preview'
-import { resolveRoofSegmentHit } from '../shared/roof-segment-hit'
+import { resolveRoofSegmentHit, roofElementAtClick } from '../shared/roof-segment-hit'
 import { getAnalyticalNormal, getDownSlopeYaw, surfaceQuatFromNormal } from '../shared/roof-surface'
 import {
   clearRoofSurfacePlacementGuides,
@@ -98,24 +98,13 @@ const TurbineVentTool = () => {
     }
 
     const onClick = (event: RoofEvent) => {
-      const hit = resolveRoofSegmentHit(
-        event.node as RoofNode,
-        event.position[0],
-        event.position[1],
-        event.position[2],
-      )
-      if (!hit) return
+      const placed = roofElementAtClick('turbine-vent', event.node as RoofNode, event.position)
+      if (!placed) return
+      const { node: vent, segmentId } = placed
       const state = useScene.getState()
 
-      const vent = TurbineVentNode.parse({
-        ...turbineVentDefinition.defaults(),
-        name: 'Turbine Vent',
-        roofSegmentId: hit.segment.id,
-        position: [hit.localX, hit.localY, hit.localZ],
-        rotation: getDownSlopeYaw(hit.localX, hit.localZ, hit.segment),
-      })
-      state.createNode(vent, hit.segment.id as AnyNodeId)
-      state.dirtyNodes.add(hit.segment.id as AnyNodeId)
+      state.createNode(vent, segmentId)
+      state.dirtyNodes.add(segmentId)
       setSelection({ selectedIds: [vent.id] })
       triggerSFX('sfx:item-place')
       clearRoofSurfacePlacementGuides()

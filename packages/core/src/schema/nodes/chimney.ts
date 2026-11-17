@@ -3,6 +3,17 @@ import { z } from 'zod'
 import { BaseNode, nodeType, objectId } from '../base'
 import { MaterialSchema } from '../material'
 
+export const CHIMNEY_DEFAULT_MATERIAL = {
+  properties: {
+    color: '#ffffff',
+    roughness: 0.85,
+    metalness: 0,
+    opacity: 1,
+    transparent: false,
+    side: 'front' as const,
+  },
+}
+
 export const ChimneyMaterialRole = z.enum(['body', 'top'])
 export type ChimneyMaterialRole = z.infer<typeof ChimneyMaterialRole>
 

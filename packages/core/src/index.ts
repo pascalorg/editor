@@ -571,6 +571,10 @@ export {
   roofSegmentEaveProfile,
   SOFFIT_THICKNESS,
 } from './lib/roof-eave'
+export {
+  getRoofSegmentDownSlopeYaw,
+  getRoofSegmentSurfaceNormal,
+} from './lib/roof-element-orientation'
 export { roofSegmentFrame } from './lib/roof-frame'
 export {
   clipRoofTrianglesByTrim,
@@ -589,6 +593,7 @@ export {
   roofPlanBoundsOverlap,
   roofPlanOverlapEntryOwns,
 } from './lib/roof-overlap'
+export { type RidgeSnap, resolveRidgeSnap } from './lib/roof-ridge-snap'
 export {
   getShedBandFacetCount,
   getShedFootprintPieces,

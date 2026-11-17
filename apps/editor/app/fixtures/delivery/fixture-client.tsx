@@ -38,6 +38,15 @@ type Probe = {
   geometry: Record<string, number>
   camera: number[]
   itemFailures: Record<string, string>
+  sceneData: string | null
+  view: {
+    textures: boolean
+    shading: string
+    wallMode: string
+    selectedIds: string[]
+    zoneId: string | null
+    roomId: string | null
+  }
   roof: {
     pendingMerges: number
     failures: Record<string, string>
@@ -59,6 +68,7 @@ type Bridge = {
   history: () => { undo: number; redo: number }
   reset: (scene?: SceneGraph) => void
   selectRoom: typeof selectZoneOrRoom
+  clearSelection: () => void
   camera: (pose: Pose) => Promise<void>
   roofCases: readonly RoofFixtureCase[]
   loadRoof: typeof loadRoof
@@ -80,11 +90,20 @@ function selectRoom(id: string) {
   return selectZoneOrRoom(id)
 }
 
+function clearSelection() {
+  useEditor.getState().clearRoom()
+  useEditor.getState().setSelectedMaterialTarget(null)
+  useViewer.getState().setSelection({ selectedIds: [], zoneId: null })
+  useViewer.getState().setHoveredId(null)
+}
+
 function reset(scene = deliveryScene()) {
   applySceneGraphToEditor(structuredClone(scene))
   useViewer.getState().setCameraMode('perspective')
   useViewer.getState().setShading('rendered')
-  useViewer.getState().setTextures(false)
+  // Textures-off is clay mode: it also suppresses authored flat finish colors.
+  useViewer.getState().setTextures(true)
+  useViewer.getState().setWallMode('up')
   useViewer.getState().setUnit('metric')
   selectRoom('zone_salon')
 }
@@ -97,7 +116,7 @@ function loadRoof(caseId: RoofFixtureCase) {
   useViewer.getState().resetSelection()
   useViewer.getState().setCameraMode('perspective')
   useViewer.getState().setShading('rendered')
-  useViewer.getState().setTextures(false)
+  useViewer.getState().setTextures(true)
   useViewer.getState().setUnit('metric')
   selectPlacedNode(description.segmentId)
   return description
@@ -189,6 +208,15 @@ function FixtureProbe({ bridge }: { bridge: Bridge }) {
       geometry,
       camera: camera.position.toArray(),
       itemFailures: { ...useViewer.getState().itemLoadFailures },
+      sceneData: document.documentElement.getAttribute('data-scene-data'),
+      view: {
+        textures: useViewer.getState().textures,
+        shading: useViewer.getState().shading,
+        wallMode: useViewer.getState().wallMode,
+        selectedIds: [...useViewer.getState().selection.selectedIds],
+        zoneId: useViewer.getState().selection.zoneId,
+        roomId: useEditor.getState().room?.zoneId ?? null,
+      },
       roof: {
         pendingMerges: getPendingRoofMergeCount(),
         failures: Object.fromEntries(useGeometryStatus.getState().failures),
@@ -213,6 +241,7 @@ export default function DeliveryFixture() {
     }),
     reset,
     selectRoom,
+    clearSelection,
     roofCases: roofFixtureCases,
     loadRoof,
     camera: async () => {

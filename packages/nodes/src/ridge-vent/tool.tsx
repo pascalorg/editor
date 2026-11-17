@@ -15,7 +15,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import * as THREE from 'three'
 import { resolveRidgeSnap } from '../shared/ridge-snap'
 import { RoofAttachmentFallbackPreview } from '../shared/roof-attachment-fallback-preview'
-import { resolveRoofSegmentHit } from '../shared/roof-segment-hit'
+import { resolveRoofSegmentHit, roofElementAtClick } from '../shared/roof-segment-hit'
 import { getRoofTopSurfaceY } from '../shared/roof-surface'
 import {
   clearRoofSurfacePlacementGuides,
@@ -120,26 +120,13 @@ const RidgeVentTool = () => {
     }
 
     const onClick = (event: RoofEvent) => {
-      const hit = resolveRoofSegmentHit(
-        event.node as RoofNode,
-        event.position[0],
-        event.position[1],
-        event.position[2],
-      )
-      if (!hit) return
-      const snap = resolveRidgeSnap(hit.segment, hit.localX, hit.localZ)
-      if (!snap) return
+      const placed = roofElementAtClick('ridge-vent', event.node as RoofNode, event.position)
+      if (!placed) return
+      const { node: vent, segmentId } = placed
       const state = useScene.getState()
 
-      const vent = RidgeVentNode.parse({
-        ...ridgeVentDefinition.defaults(),
-        name: 'Ridge Vent',
-        roofSegmentId: hit.segment.id,
-        position: [snap.localX, 0, snap.localZ],
-        rotation: snap.rotation,
-      })
-      state.createNode(vent, hit.segment.id as AnyNodeId)
-      state.dirtyNodes.add(hit.segment.id as AnyNodeId)
+      state.createNode(vent, segmentId)
+      state.dirtyNodes.add(segmentId)
       setSelection({ selectedIds: [vent.id] })
       triggerSFX('sfx:item-place')
       clearRoofSurfacePlacementGuides()

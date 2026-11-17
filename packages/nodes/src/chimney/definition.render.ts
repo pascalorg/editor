@@ -1,21 +1,7 @@
-import { ChimneyNode as ChimneyNodeSchema } from '@pascal-app/core'
+import { CHIMNEY_DEFAULT_MATERIAL, ChimneyNode as ChimneyNodeSchema } from '@pascal-app/core'
 import type { NodeRenderDefinition } from '../definition-contributions'
 import { buildChimneyFloorplan } from './floorplan'
 import { ChimneyNode } from './schema'
-
-// Every fresh chimney starts as plain white (body + top). The paint
-// flow / material picker writes preset refs or full `MaterialSchema`
-// objects on top of this; until then both roles render `#ffffff`.
-const WHITE_MATERIAL = {
-  properties: {
-    color: '#ffffff',
-    roughness: 0.85,
-    metalness: 0,
-    opacity: 1,
-    transparent: false,
-    side: 'front' as const,
-  },
-}
 
 export const chimneyRenderDefinition: NodeRenderDefinition<typeof ChimneyNode> & {
   kind: 'chimney'
@@ -29,8 +15,8 @@ export const chimneyRenderDefinition: NodeRenderDefinition<typeof ChimneyNode> &
     const stub = ChimneyNodeSchema.parse({
       id: 'chimney_default' as never,
       type: 'chimney',
-      material: WHITE_MATERIAL,
-      topMaterial: WHITE_MATERIAL,
+      material: CHIMNEY_DEFAULT_MATERIAL,
+      topMaterial: CHIMNEY_DEFAULT_MATERIAL,
     })
     const { id: _id, type: _type, ...rest } = stub
     return rest

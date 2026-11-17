@@ -136,7 +136,7 @@ export {
   CabinetTopFinishSchema,
 } from './nodes/cabinet'
 export { CeilingNode } from './nodes/ceiling'
-export { ChimneyMaterialRole, ChimneyNode } from './nodes/chimney'
+export { CHIMNEY_DEFAULT_MATERIAL, ChimneyMaterialRole, ChimneyNode } from './nodes/chimney'
 export {
   COLUMN_PRESETS,
   ColumnBaseStyle,
@@ -332,6 +332,12 @@ export {
 } from './nodes/ridge-vent'
 export type { RoofSupport, RoofSurfaceMaterialRole, RoofSurfaceMaterialSpec } from './nodes/roof'
 export { getEffectiveRoofSurfaceMaterial, RoofNode } from './nodes/roof'
+export {
+  buildRoofElementNode,
+  type RoofElementNode,
+  type RoofElementOptions,
+} from './nodes/roof-element'
+export { ROOF_ELEMENT_KINDS, type RoofElementKind } from './nodes/roof-element-kinds'
 export {
   clipGlazedRoofPolygon,
   DEFAULT_ROOF_GLAZING,

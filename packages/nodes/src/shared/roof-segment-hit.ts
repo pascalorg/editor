@@ -1,9 +1,13 @@
 import {
   type AnyNodeId,
+  buildRoofElementNode,
   getRoofSegmentDeckReach,
   getRoofSegmentSurfaceY,
   glazedRoofSupportsPoint,
   isGlazedRoofSegment,
+  type RoofElementKind,
+  type RoofElementNode,
+  type RoofElementOptions,
   type RoofNode,
   type RoofSegmentNode,
   sceneRegistry,
@@ -59,7 +63,7 @@ export function resolveRoofSegmentHit(
 
   for (const childId of roof.children ?? []) {
     const seg = state.nodes[childId as AnyNodeId] as RoofSegmentNode | undefined
-    if (seg?.type !== 'roof-segment') continue
+    if (seg?.type !== 'roof-segment' || seg.parentId !== roof.id) continue
     const segObj = sceneRegistry.nodes.get(seg.id)
     if (!segObj) continue
     segObj.updateWorldMatrix(true, false)
@@ -95,4 +99,22 @@ export function resolveRoofSegmentHit(
     }
   }
   return null
+}
+
+/** A witnessed native click supplies its height; strict plan-point seating is separate. */
+export function roofElementAtClick(
+  kind: RoofElementKind,
+  roof: RoofNode,
+  [wx, wy, wz]: readonly [number, number, number],
+  options?: RoofElementOptions,
+): { node: RoofElementNode; segmentId: RoofSegmentNode['id'] } | null {
+  const hit = resolveRoofSegmentHit(roof, wx, wy, wz)
+  if (!hit) return null
+  const node = buildRoofElementNode(
+    kind,
+    hit.segment,
+    [hit.localX, hit.localY, hit.localZ],
+    options,
+  )
+  return node ? { node, segmentId: hit.segment.id } : null
 }

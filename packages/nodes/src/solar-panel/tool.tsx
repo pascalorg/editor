@@ -14,7 +14,7 @@ import { useViewer } from '@pascal-app/viewer'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import * as THREE from 'three'
 import { RoofAttachmentFallbackPreview } from '../shared/roof-attachment-fallback-preview'
-import { resolveRoofSegmentHit } from '../shared/roof-segment-hit'
+import { resolveRoofSegmentHit, roofElementAtClick } from '../shared/roof-segment-hit'
 import { getAnalyticalNormal, surfaceQuatFromNormal } from '../shared/roof-surface'
 import {
   clearRoofSurfacePlacementGuides,
@@ -45,7 +45,7 @@ const SolarPanelTool = () => {
 
   // Compact 2×3 ghost (rows × columns) — small enough to read as a
   // pointer, large enough to show the array's orientation/aspect.
-  // The committed panel still uses the full residential defaults (4×5).
+  // The committed panel uses the same native 2×3 defaults.
   const previewNode = useMemo(
     () =>
       SolarPanelNode.parse({
@@ -110,32 +110,13 @@ const SolarPanelTool = () => {
     }
 
     const onClick = (event: RoofEvent) => {
-      const hit = resolveRoofSegmentHit(
-        event.node as RoofNode,
-        event.position[0],
-        event.position[1],
-        event.position[2],
-      )
-      if (!hit) return
+      const placed = roofElementAtClick('solar-panel', event.node as RoofNode, event.position)
+      if (!placed) return
+      const { node: panel, segmentId } = placed
       const state = useScene.getState()
 
-      // Use the raycast hit Y (segment-local) and analytical normal so the
-      // committed panel sits exactly where the ghost was rendered. The
-      // analytical `getSurfaceY` is the bare-rafter height — it ignores
-      // deck/shingle layers and sinks the panel into the roof, producing
-      // a visible jump between ghost and committed mesh.
-      const normal = getAnalyticalNormal(hit.localX, hit.localZ, hit.segment)
-
-      const panel = SolarPanelNode.parse({
-        ...solarPanelDefinition.defaults(),
-        name: 'Solar Panel',
-        roofSegmentId: hit.segment.id,
-        position: [hit.localX, hit.localY, hit.localZ],
-        rotation: 0,
-        surfaceNormal: [normal.x, normal.y, normal.z],
-      })
-      state.createNode(panel, hit.segment.id as AnyNodeId)
-      state.dirtyNodes.add(hit.segment.id as AnyNodeId)
+      state.createNode(panel, segmentId)
+      state.dirtyNodes.add(segmentId)
       setSelection({ selectedIds: [panel.id] })
       triggerSFX('sfx:item-place')
       const placementPreview = usePlacementPreview.getState()

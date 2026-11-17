@@ -14,7 +14,7 @@ import { useViewer } from '@pascal-app/viewer'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import * as THREE from 'three'
 import { RoofAttachmentFallbackPreview } from '../shared/roof-attachment-fallback-preview'
-import { resolveRoofSegmentHit } from '../shared/roof-segment-hit'
+import { resolveRoofSegmentHit, roofElementAtClick } from '../shared/roof-segment-hit'
 import { getAnalyticalNormal, surfaceQuatFromNormal } from '../shared/roof-surface'
 import {
   clearRoofSurfacePlacementGuides,
@@ -96,24 +96,13 @@ const SkylightTool = () => {
     }
 
     const onClick = (event: RoofEvent) => {
-      const hit = resolveRoofSegmentHit(
-        event.node as RoofNode,
-        event.position[0],
-        event.position[1],
-        event.position[2],
-      )
-      if (!hit) return
+      const placed = roofElementAtClick('skylight', event.node as RoofNode, event.position)
+      if (!placed) return
+      const { node: skylight, segmentId } = placed
       const state = useScene.getState()
 
-      const skylight = SkylightNode.parse({
-        ...skylightDefinition.defaults(),
-        name: 'Skylight',
-        roofSegmentId: hit.segment.id,
-        position: [hit.localX, hit.localY, hit.localZ],
-        rotation: 0,
-      })
-      state.createNode(skylight, hit.segment.id as AnyNodeId)
-      state.dirtyNodes.add(hit.segment.id as AnyNodeId)
+      state.createNode(skylight, segmentId)
+      state.dirtyNodes.add(segmentId)
       setSelection({ selectedIds: [skylight.id] })
       triggerSFX('sfx:item-place')
       const placementPreview = usePlacementPreview.getState()
