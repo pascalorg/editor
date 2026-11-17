@@ -427,7 +427,7 @@ type SceneExportPreparation = {
   builders: Map<
     string,
     {
-      sync: ((node: AnyNode, ctx: GeometryContext) => THREE.Object3D) | undefined
+      sync: ((node: AnyNode, ctx: GeometryContext) => THREE.Object3D | null) | undefined
       async: ((node: AnyNode, ctx: GeometryContext) => Promise<THREE.Object3D>) | undefined
     }
   >
@@ -499,7 +499,7 @@ function startSceneExportPreparation(
     const definition = nodeRegistry.get(node.type)
     builders.set(id, {
       sync: definition?.bakeGeometry as
-        | ((node: AnyNode, ctx: GeometryContext) => THREE.Object3D)
+        | ((node: AnyNode, ctx: GeometryContext) => THREE.Object3D | null)
         | undefined,
       async: definition?.bakeGeometryAsync as
         | ((node: AnyNode, ctx: GeometryContext) => Promise<THREE.Object3D>)
@@ -693,9 +693,10 @@ function replaceBakedNode(
   preparation: SceneExportPreparation,
   id: string,
   original: THREE.Object3D,
-  replacement: THREE.Object3D,
+  replacement: THREE.Object3D | null,
   hook: 'bakeGeometry' | 'bakeGeometryAsync',
 ): void {
+  if (replacement === null) return
   const cloned = preparation.cloneByOriginal.get(original)
   if (!cloned || !isDescendantOf(cloned, preparation.scene)) return
   const parent = cloned.parent
@@ -826,6 +827,7 @@ function buildBakeGeometryContext(
 
   return {
     resolve,
+    sceneNodes: nodes,
     children,
     siblings,
     parent,

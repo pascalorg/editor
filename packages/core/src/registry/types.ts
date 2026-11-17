@@ -80,8 +80,8 @@ export type GeometryContext = {
   materials?: Record<SceneMaterialId, SceneMaterial>
   /** Opaque host/plugin context. Core never interprets extension values. */
   extensions?: Readonly<Record<string, unknown>>
-  /** Read-only scene snapshot for pure floor-plan builders that need to
-   *  inspect cross-kind spatial relationships such as connected ports. */
+  /** Read-only scene snapshot for pure floor-plan and export builders that need to
+   *  inspect cross-kind spatial relationships such as connected ports or terrain. */
   sceneNodes?: Readonly<Record<AnyNodeId, AnyNode>>
   /**
    * Optional view state — only populated for `def.floorplan` builders. The
@@ -1154,6 +1154,8 @@ export type NodeDefinition<S extends ZodObject<any>> = {
    * example, a procedural NodeMaterial that masks a maximum candidate
    * population on the GPU). The returned tree must be a complete static
    * snapshot for this node and use exporter-supported Three.js materials.
+   * Return null to retain the existing live-tree clone unchanged, for instances
+   * whose rendered geometry is already suitable (for example a legacy generator).
    */
   bakeGeometry?: BakeGeometryBuilder<z.infer<S>>
   /**
@@ -1684,7 +1686,8 @@ export type BakeReplaceRenderer<N> = {
   }>
 }
 
-export type BakeGeometryBuilder<N> = (node: N, ctx: GeometryContext) => Object3D
+/** A detached export tree, or null to retain this instance's existing live-tree clone. */
+export type BakeGeometryBuilder<N> = (node: N, ctx: GeometryContext) => Object3D | null
 export type BakeGeometryAsyncBuilder<N> = (node: N, ctx: GeometryContext) => Promise<Object3D>
 
 export type AssetRef = {
