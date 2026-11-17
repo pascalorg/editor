@@ -109,6 +109,14 @@ const REQUIRED_FIELDS: Record<string, Record<string, unknown>> = {
     ],
   },
   planting: { area: 4 },
+  rock: {
+    polygon: [
+      [0, 0],
+      [2, 0],
+      [2, 2],
+      [0, 2],
+    ],
+  },
   separator: { start: [20, 0], end: [22, 0] },
   slab: {
     polygon: [

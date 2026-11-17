@@ -68,6 +68,7 @@ export const NODE_REQUIRED_FIELDS: Record<string, Record<string, unknown>> = {
   },
   planting: { area: 4 },
   'procedural-item': { recipe: shelfRecipe },
+  rock: { polygon: [[0, 0], [2, 0], [2, 2], [0, 2]] },
   slab: {
     polygon: [
       [0, 0],

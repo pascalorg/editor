@@ -108,6 +108,7 @@ const TOOL_POLICIES = [
       'add_object',
       'add_hedge',
       'add_planting',
+      'add_rock',
       'author_scene',
       'add_column',
       'set_wall_type',

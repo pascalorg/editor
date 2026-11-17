@@ -259,6 +259,9 @@ describe('pascal://agent-guide', () => {
     'editor_tab_hidden',
     'editor_tab_required',
     'invalid_input',
+    'rock_budget_exceeded',
+    'rock_gen_upgrade_required',
+    'rock_outline_invalid',
     'roof_exists',
     // verify_scene's issue type, which names move_roofs_to_roof_level
     'roof_mixed_in_storey',
