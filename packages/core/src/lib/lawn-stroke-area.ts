@@ -5,12 +5,7 @@ import { assertLawnStrokeWork, type LawnFacts } from './lawn-types'
 
 type Bounds = { minX: number; minZ: number; maxX: number; maxZ: number }
 
-export function lawnStrokeAreas(
-  node: LawnNode,
-  coverage: LawnCoverage,
-  bounds: Bounds,
-  initialWork: number,
-) {
+function strokeAreaSampling(strokes: readonly LawnStroke[]) {
   const byEffect: Record<LawnStroke['effect'], number> = {
     bare: 0,
     grass: 0,
@@ -20,17 +15,27 @@ export function lawnStrokeAreas(
     'fewer-flowers': 0,
   }
   const resolution = 0.25
-  let unionAreaM2 = 0,
-    sampleCount = 0,
-    minimumSamplingResolutionM = resolution,
-    strokeWork = initialWork
-  const points = node.strokes.reduce((sum, stroke) => sum + stroke.points.length, 0)
-  const fine = node.strokes
+  const points = strokes.reduce((sum, stroke) => sum + stroke.points.length, 0)
+  const fine = strokes
     .filter((stroke) => stroke.radiusM < resolution && stroke.strength > 0)
     .map((stroke) => ({
       stroke: { ...stroke, radiusM: stroke.radiusM + resolution / Math.SQRT2 },
       divisions: Math.ceil(resolution / (stroke.radiusM / 2)),
     }))
+  return { byEffect, resolution, points, fine }
+}
+
+export function lawnStrokeAreas(
+  node: LawnNode,
+  coverage: LawnCoverage,
+  bounds: Bounds,
+  initialWork: number,
+) {
+  const { byEffect, resolution, points, fine } = strokeAreaSampling(node.strokes)
+  let unionAreaM2 = 0,
+    sampleCount = 0,
+    minimumSamplingResolutionM = resolution,
+    strokeWork = initialWork
   if (points)
     for (let row = bounds.minZ / resolution; row < bounds.maxZ / resolution; row++)
       for (let col = bounds.minX / resolution; col < bounds.maxX / resolution; col++) {
