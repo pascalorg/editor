@@ -8,6 +8,7 @@ import {
 } from '../building/wall-openings'
 import { getDoorOpeningSize } from '../lib/door-opening'
 import { openingHostFacing } from '../lib/opening-casing'
+import { treeFacts } from '../lib/tree-facts'
 import {
   type AnyNode,
   type AnyNodeId,
@@ -15,6 +16,7 @@ import {
   getCurtainWallConfig,
   getScaledDimensions,
   type ItemNode,
+  TreeNode,
   type WallNode,
   type WindowNode,
 } from '../schema'
@@ -112,6 +114,7 @@ export function moveHostClass(nodes: SceneNodes, node: AnyNode): MoveHostClass {
     )
   if (parent?.type === 'roof-segment') return 'roof'
   if (node.type === 'wall' && parent?.type === 'level') return 'level'
+  if (node.type === 'tree' && parent?.type === 'site') return 'free'
   if (parent?.type === 'level' && FREE_ON_LEVEL.has(node.type) && positionOf(node)) return 'free'
   if (parent?.type === 'item')
     refuse(
@@ -175,6 +178,33 @@ function planFreeMove(node: AnyNode, target: MoveTarget, host: MoveHostClass): M
     position,
     clamped: false,
     data: { position, ...yawData(node, target, host === 'roof') } as Partial<AnyNode>,
+  }
+}
+
+function planTreeMove(nodes: SceneNodes, node: TreeNode, target: MoveTarget): MovePlan {
+  refuseStrayY(target, node)
+  if (target.rotation !== undefined)
+    refuse(
+      'rotation_not_supported',
+      `Tree ${node.id} has a seeded form, not a stored rotation; move its ground anchor instead.`,
+      { id: node.id },
+    )
+  const [x, z] = planTargetXZ(node.position, target)
+  const candidate = TreeNode.safeParse({ ...node, position: [x, 0, z] })
+  if (!candidate.success) refuse('invalid_input', candidate.error.message, { id: node.id })
+  const { trunkBuildingId } = treeFacts(candidate.data, nodes)
+  if (trunkBuildingId)
+    refuse(
+      'tree_inside_building',
+      'A tree trunk is inside a building footprint; move its anchor outside.',
+      { id: node.id, buildingId: trunkBuildingId },
+    )
+  return {
+    host: 'free',
+    hostId: node.parentId,
+    position: candidate.data.position,
+    clamped: false,
+    data: { position: candidate.data.position },
   }
 }
 
@@ -405,6 +435,7 @@ export function planNodeMove(
   requireTarget(target)
   const host = moveHostClass(nodes, node)
   const checkOverlap = options.checkOverlap ?? true
+  if (node.type === 'tree' && host === 'free') return planTreeMove(nodes, node, target)
   if (host === 'wall') return planWallHostedMove(nodes, node, target, checkOverlap)
   if (host === 'level') return planWallMove(node as WallNode, target)
   if (host === 'roof') {

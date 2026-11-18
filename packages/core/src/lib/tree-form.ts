@@ -1,6 +1,7 @@
+import type { TREE_FORMS } from '../schema/nodes/tree-limits'
 import type { Rgb } from './foliage'
 
-export const TREE_FORMS = ['round', 'spreading', 'upright', 'weeping', 'multistem'] as const
+export { TREE_FORMS } from '../schema/nodes/tree-limits'
 export type TreeForm = (typeof TREE_FORMS)[number]
 export const TREE_MAX_TRIANGLES = 12_000
 export const TREE_FAR_MAX_TRIANGLES = 600
@@ -14,6 +15,8 @@ export type TreeParameters = {
   seed: number
   gen: 1
 }
+
+export type TreeInput = Omit<TreeParameters, 'spreadM'> & { spreadM?: number }
 
 type Habit = {
   spread: number
@@ -100,6 +103,10 @@ export const TREE_HABITS: Readonly<Record<TreeForm, Readonly<Habit>>> = {
 
 export function defaultTreeSpread(form: TreeForm, heightM: number): number {
   return heightM * TREE_HABITS[form].spread
+}
+
+export function resolveTreeParameters(input: TreeInput): TreeParameters {
+  return { ...input, spreadM: input.spreadM ?? defaultTreeSpread(input.form, input.heightM) }
 }
 
 export type TreeMesh = {

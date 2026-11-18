@@ -1,5 +1,10 @@
 import { treePrimaryCount, treeSkeleton, treeStemCount } from './tree-branches'
-import { TREE_MAX_TRIANGLES, type TreeEstimate, type TreeParameters } from './tree-form'
+import {
+  resolveTreeParameters,
+  TREE_MAX_TRIANGLES,
+  type TreeEstimate,
+  type TreeInput,
+} from './tree-form'
 import {
   finishTreeMesh,
   treeWriter,
@@ -9,7 +14,7 @@ import {
 } from './tree-mesh'
 
 /** Counts use only numbers, never a skeleton or attribute arrays. Detail is thinned uniformly. */
-export function estimateTree(input: TreeParameters): TreeEstimate {
+export function estimateTree(input: TreeInput): TreeEstimate {
   const primaries = treePrimaryCount(input)
   const woodTriangles = treeStemCount(input) * 80 + primaries * (48 + 3 * (30 + 2 * 12 + 4 * 6))
   const wanted = Math.round((4900 + input.heightM * 200) * input.density)
@@ -23,7 +28,8 @@ export function estimateTree(input: TreeParameters): TreeEstimate {
 }
 
 /** Root-local metres and linear RGB; one ordinary mesh per level, with caller-owned arrays. */
-export function buildTree(input: TreeParameters) {
+export function buildTree(rawInput: TreeInput) {
+  const input = resolveTreeParameters(rawInput)
   const estimate = estimateTree(input)
   const skeleton = treeSkeleton(input)
   const near = treeWriter(estimate.triangles)

@@ -8,12 +8,12 @@ import {
   type TreeSkeleton,
 } from './tree-form'
 
-export function treeStemCount(input: TreeParameters): number {
+export function treeStemCount(input: Pick<TreeParameters, 'form' | 'seed'>): number {
   const habit = TREE_HABITS[input.form]
   return habit.stems + Math.floor(hash3(input.seed, 1, 2, 3) * (habit.stemVariation + 1))
 }
 
-export function treePrimaryCount(input: TreeParameters): number {
+export function treePrimaryCount(input: Pick<TreeParameters, 'form' | 'seed'>): number {
   const habit = TREE_HABITS[input.form]
   return treeStemCount(input) * habit.scaffolds
 }

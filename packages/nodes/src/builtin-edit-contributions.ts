@@ -54,6 +54,7 @@ import { spawnEditContribution } from './spawn/definition.edit'
 import { stairEditContribution } from './stair/definition.edit'
 import { stairSegmentEditContribution } from './stair-segment/definition.edit'
 import { structuralGridEditContribution } from './structural-grid/definition.edit'
+import { treeEditContribution } from './tree/definition.edit'
 import { turbineVentEditContribution } from './turbine-vent/definition.edit'
 import { unitEditContribution } from './unit/definition.edit'
 import { wallEditContribution } from './wall/definition.edit'
@@ -93,6 +94,7 @@ export const builtinEditContributions = {
   rock: rockEditContribution,
   hedge: hedgeEditContribution,
   planting: plantingEditContribution,
+  tree: treeEditContribution,
   building: buildingEditContribution,
   level: levelEditContribution,
   guide: guideEditContribution,

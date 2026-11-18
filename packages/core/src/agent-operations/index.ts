@@ -41,6 +41,7 @@ import { setGroundLevel } from './set-ground-level'
 import { getSite, placeBuilding } from './site'
 import { addSiteSurface, addSteps } from './site-works'
 import { fitStair, measureStairOperation } from './stairs'
+import { addTree } from './tree'
 import type { AgentOperation, AgentOperationSteps, AgentOperations } from './types'
 import { createUnit, listUnits, setUnitMembers } from './units'
 import { verifyScene, verifySceneSteps } from './verify-scene'
@@ -120,6 +121,7 @@ export * from './site'
 export * from './site-works'
 export * from './slab-surface-script'
 export * from './stairs'
+export * from './tree'
 export * from './types'
 export * from './units'
 export * from './verify-scene'
@@ -154,6 +156,7 @@ const SINGLE_OPERATIONS = {
   add_fence: addFence,
   add_hedge: addHedge,
   add_planting: addPlanting,
+  add_tree: addTree,
   add_rock: addRock,
   add_site_surface: addSiteSurface,
   add_steps: addSteps,

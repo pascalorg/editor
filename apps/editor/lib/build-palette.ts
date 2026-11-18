@@ -76,6 +76,13 @@ export const BASE_BUILD_TYPES: BuildType[] = [
     section: 'outdoor',
   },
   {
+    id: 'tree',
+    label: /* i18n */ { id: 'app.lib.buildPalette.tree', message: 'Tree' },
+    iconSrc: '/icons/tree.webp',
+    kind: 'tree',
+    section: 'outdoor',
+  },
+  {
     id: 'slab',
     label: /* i18n */ { id: 'app.lib.buildPalette.slab', message: 'Slab' },
     iconSrc: '/icons/floor.webp',

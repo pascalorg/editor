@@ -16,7 +16,11 @@
 <div id="label"></div>
 <script type="module">
 import * as THREE from 'three/webgpu'
-import { buildTree, defaultTreeSpread, buildPlanting, PlantingNode, buildHedge, HedgeNode, FLAT_GROUND } from './tree-bundle.js'
+import {
+  buildTree, defaultTreeSpread, buildPlanting, PlantingNode, buildHedge, HedgeNode, FLAT_GROUND,
+  addTree, SiteNode, TreeNode, resolveTreeParameters, createTerrainField, encodeTerrainField,
+  buildTreeFloorplan, buildTreeGeometry, buildTreeFarGeometry, estimateTree,
+} from './tree-bundle.js'
 
 const query = new URLSearchParams(location.search)
 const mode = query.get('scene') ?? 'single'
@@ -44,6 +48,7 @@ sun.shadow.normalBias = 0.04
 scene.add(sun)
 const material = new THREE.MeshStandardNodeMaterial({vertexColors:true,roughness:0.9,side:THREE.DoubleSide})
 const metrics = []
+let operationResult
 
 function meshOf(attributes, position = [0,0,0]) {
   const geometry = new THREE.BufferGeometry()
@@ -65,6 +70,30 @@ function treeAt(form, heightM, seed, at, extra = {}) {
   const buildMs = performance.now() - start
   meshOf(built[extra.level ?? 'near'],at)
   metrics.push({input,at,buildMs,...built.estimate})
+}
+
+function sceneTreeAt(node, nodes, level = 'near') {
+  const input = resolveTreeParameters(node)
+  const start = performance.now()
+  const context = {sceneNodes:nodes,parent:nodes[node.parentId],resolve:id=>nodes[id]}
+  const group = level === 'far' ? buildTreeFarGeometry(node,context) : buildTreeGeometry(node,context)
+  group.position.set(node.position[0],0,node.position[2])
+  scene.add(group)
+  metrics.push({input,at:node.position,buildMs:performance.now()-start,...estimateTree(input)})
+}
+
+function treePlan(node, nodes) {
+  const symbol = buildTreeFloorplan(node,{sceneNodes:nodes,resolve:id=>nodes[id]})
+  const element = part => {
+    const item = document.createElementNS('http://www.w3.org/2000/svg',part.kind === 'group' ? 'g' : part.kind)
+    for (const [key,value] of Object.entries(part)) {
+      if (key === 'children') for (const child of value) item.appendChild(element(child))
+      else if (key !== 'kind' && key !== 'metadata')
+        item.setAttribute(key.replace(/[A-Z]/g,letter=>`-${letter.toLowerCase()}`),String(value))
+    }
+    return item
+  }
+  return element(symbol)
 }
 
 function box(size, at, color) {
@@ -143,10 +172,35 @@ if (mode === 'trio') {
   treeAt(form,heightM,seed,[5,0,0],{foliage:'#c17c28'})
   cameraPosition = [14,9,25]; target = [0,3.5,0]
 } else if (mode === 'alley') {
-  for(let side=-1;side<=1;side+=2)
-    for(let index=0;index<4;index++) treeAt('round',8,19+index*31+(side+1)*7,[side*4,0,index*8])
+  const site = SiteNode.parse({polygon:{type:'polygon',points:[[-20,-20],[20,-20],[20,40],[-20,40]]}})
+  const nodes = {[site.id]:site}
+  const trees = [-1,1].flatMap(side=>Array.from({length:4},(_,index)=>({at:[side*4,index*8]})))
+  const outcome = addTree(nodes,{heightM:8,seed:19,trees},{activeLevelId:null})
+  operationResult = outcome.result
+  for (const {node} of outcome.changes.create) sceneTreeAt(node,nodes)
   box([3,0.02,40],[0,0.01,12],'#c6bea7')
   cameraPosition = [1,3,-12]; target = [0,4,15]; fov = 57
+} else if (mode === 'slope') {
+  const field = createTerrainField({origin:[-16,-16],spacing:1,cols:33,rows:33})
+  for(let row=0;row<33;row++)
+    for(let column=0;column<33;column++) field.heights[row*33+column]=(column-16)*12
+  const site = SiteNode.parse({terrain:encodeTerrainField(field)})
+  const node = TreeNode.parse({parentId:site.id,position:[4,0,0],heightM,form,seed})
+  sceneTreeAt(node,{[site.id]:site})
+  cameraPosition = [9,2.4,12]; target = [4,3.8,0]; fov = 48
+} else if (mode === 'plan') {
+  const site = SiteNode.parse({})
+  const svg = document.createElementNS('http://www.w3.org/2000/svg','svg')
+  svg.setAttribute('viewBox','-16 -10 32 20')
+  Object.assign(svg.style,{position:'fixed',inset:0,width:'100%',height:'100%',background:'#f7f5ee'})
+  for (const [index,form] of ['round','upright','weeping'].entries()) {
+    const node = TreeNode.parse({parentId:site.id,position:[(index-1)*9,0,0],form,heightM:8,seed:19})
+    svg.appendChild(treePlan(node,{[site.id]:site}))
+    const input = resolveTreeParameters(node)
+    metrics.push({input,at:node.position,buildMs:0,...estimateTree(input)})
+  }
+  document.body.appendChild(svg)
+  document.getElementById('label').style.zIndex = 1
 } else {
   treeAt(form,heightM,seed,[0,0,0])
   if(mode === 'close') { cameraPosition = [1.5,1.7,4]; target = [0,5.2,0]; fov = 62 }
@@ -156,7 +210,7 @@ camera.position.set(...cameraPosition); camera.lookAt(...target)
 for(let frame=0;frame<4;frame++){renderer.render(scene,camera);await new Promise(requestAnimationFrame)}
 const backend = renderer.backend.isWebGPUBackend ? 'WebGPU' : 'WebGL2'
 document.getElementById('label').innerHTML = `Procedural tree · ${mode === 'sheet' || mode === 'trio' ? `${form} · ${heightM} m · seeds 19 / 41 / 83` : mode}<small>${metrics.length} trees · ${metrics.reduce((sum,item)=>sum+item.triangles,0).toLocaleString('en-US')} near triangles · ${backend}</small>`
-window.__stats = {mode,form,metrics,backend,camera:{position:cameraPosition,target,fov},trianglesDrawn:renderer.info.render.triangles}
+window.__stats = {mode,form,metrics,operationResult,backend,camera:{position:cameraPosition,target,fov},trianglesDrawn:renderer.info.render.triangles}
 window.__done = true
 </script>
 </body>

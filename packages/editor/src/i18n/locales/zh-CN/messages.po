@@ -766,6 +766,14 @@ msgstr "露台"
 msgid "app.lib.buildPalette.terrain"
 msgstr "地形"
 
+# Source-Hash: 32f9f40b4513e783
+# English: "Tree"
+# Review: required
+#: apps/editor/lib/build-palette.ts
+#, fuzzy
+msgid "app.lib.buildPalette.tree"
+msgstr "树木"
+
 # Source-Hash: 2210e5ee50b74dc9
 # Review: required
 # AI-Provider: claude-code
@@ -5854,6 +5862,14 @@ msgstr "平台厚度"
 msgid "editor.inspector.field.defaultLevelId.xmrjzp"
 msgstr "默认楼层 ID"
 
+# Source-Hash: f4a09d26c1ec5258
+# English: "Density"
+# Review: required
+#: packages/nodes/src/i18n/definition-messages.ts
+#, fuzzy
+msgid "editor.inspector.field.density.1q5zigr"
+msgstr "密度"
+
 # Source-Hash: 99ac4d03c3061f3a
 # Review: required
 # AI-Provider: claude-code
@@ -6216,6 +6232,14 @@ msgstr "烟道形状"
 msgid "editor.inspector.field.flueSpacing.exhzco"
 msgstr "烟道间距"
 
+# Source-Hash: d04366bc15791583
+# English: "Foliage"
+# Review: required
+#: packages/nodes/src/i18n/definition-messages.ts
+#, fuzzy
+msgid "editor.inspector.field.foliage.166kiw8"
+msgstr "叶丛"
+
 # Source-Hash: 0a64209c0edacaa1
 # Review: required
 # AI-Provider: claude-code
@@ -6457,6 +6481,14 @@ msgstr "高度 2"
 #, fuzzy
 msgid "editor.inspector.field.heightAboveRidge.1k99brk"
 msgstr "高出屋脊"
+
+# Source-Hash: dd265ca5023f3b95
+# English: "Height m"
+# Review: required
+#: packages/nodes/src/i18n/definition-messages.ts
+#, fuzzy
+msgid "editor.inspector.field.heightM.1wq86hd"
+msgstr "高度（m）"
 
 # Source-Hash: b4905e5ec62a170f
 # Review: required
@@ -8671,6 +8703,14 @@ msgstr "变换"
 msgid "editor.inspector.group.trap.1qc7vhe"
 msgstr "存水弯"
 
+# Source-Hash: 32f9f40b4513e783
+# English: "Tree"
+# Review: required
+#: packages/nodes/src/i18n/definition-messages.ts
+#, fuzzy
+msgid "editor.inspector.group.tree.1tyhj3p"
+msgstr "树木"
+
 # Source-Hash: c44f7ab8bbd24858
 # Review: required
 # AI-Provider: claude-code
@@ -9656,6 +9696,14 @@ msgstr "单坡"
 msgid "editor.inspector.option.mulch.1xqhdoq"
 msgstr "覆盖物"
 
+# Source-Hash: 7929bdf68e7d00cf
+# English: "Multistem"
+# Review: required
+#: packages/nodes/src/i18n/definition-messages.ts
+#, fuzzy
+msgid "editor.inspector.option.multistem.3bsvcn"
+msgstr "多干型"
+
 # Source-Hash: f2953d2931e36d0c
 # Review: required
 # AI-Provider: claude-code
@@ -10169,6 +10217,14 @@ msgstr "溅水板"
 msgid "editor.inspector.option.spread.1g1zysu"
 msgstr "展开"
 
+# Source-Hash: 33bc4c6dfdecc051
+# English: "Spreading"
+# Review: required
+#: packages/nodes/src/i18n/definition-messages.ts
+#, fuzzy
+msgid "editor.inspector.option.spreading.is7i8y"
+msgstr "开展型"
+
 # Source-Hash: 39287346366fc206
 # Review: required
 # AI-Provider: claude-code
@@ -10373,6 +10429,14 @@ msgstr "顶部"
 msgid "editor.inspector.option.transition.1rziz9e"
 msgstr "过渡"
 
+# Source-Hash: 798f6822fbf3a89a
+# English: "Upright"
+# Review: required
+#: packages/nodes/src/i18n/definition-messages.ts
+#, fuzzy
+msgid "editor.inspector.option.upright.136p3r6"
+msgstr "直立型"
+
 # Source-Hash: 04bc0909a133a7e9
 # Review: required
 # AI-Provider: claude-code
@@ -10464,6 +10528,14 @@ msgstr "排污"
 #, fuzzy
 msgid "editor.inspector.option.weathered.1rrqhyq"
 msgstr "风化"
+
+# Source-Hash: e7dbb75458d3c989
+# English: "Weeping"
+# Review: required
+#: packages/nodes/src/i18n/definition-messages.ts
+#, fuzzy
+msgid "editor.inspector.option.weeping.1kqivx8"
+msgstr "垂枝型"
 
 # Source-Hash: 00249876bb37079f
 # Review: required
@@ -17769,6 +17841,14 @@ msgstr "种植"
 #, fuzzy
 msgid "editor.toolHint.plantTheBed.r4x8fy"
 msgstr "种植种植床"
+
+# Source-Hash: 9004b94324e6fa3a
+# English: "Plant the tree"
+# Review: required
+#: packages/nodes/src/i18n/definition-messages.ts
+#, fuzzy
+msgid "editor.toolHint.plantTheTree.bl41e3"
+msgstr "种植树木"
 
 # Source-Hash: dd2ea442152dca5b
 # Review: required
@@ -36221,6 +36301,62 @@ msgstr "带编号圆圈的持久结构轴线。"
 #, fuzzy
 msgid "node.structuralGrid.label"
 msgstr "结构轴网"
+
+# Source-Hash: 953a0fa0fa0cdd5a
+# English: "A seeded garden tree, rooted on the Site ground."
+# Review: required
+#: packages/nodes/src/i18n/definition-messages.ts
+#, fuzzy
+msgid "node.tree.description"
+msgstr "由随机种子生成、扎根于场地地面的庭院树木。"
+
+# Source-Hash: 32f9f40b4513e783
+# English: "Tree"
+# Review: required
+#: packages/nodes/src/i18n/definition-messages.ts
+#, fuzzy
+msgid "node.tree.label"
+msgstr "树木"
+
+# Source-Hash: e7e8803af151e5a7
+# English: "Plant the trunk outside the building footprint."
+# Review: required
+#: packages/nodes/src/tree/placement-message.ts
+#, fuzzy
+msgid "node.tree.placement.insideBuilding"
+msgstr "请将树干种在建筑占地范围之外。"
+
+# Source-Hash: 0fc909bd43acb876
+# English: "The tree cannot be planted here. Choose another ground position."
+# Review: required
+#: packages/nodes/src/tree/placement-message.ts
+#, fuzzy
+msgid "node.tree.placement.invalid"
+msgstr "无法在此处种植树木。请选择地面上的其他位置。"
+
+# Source-Hash: d2bb985f38a13d39
+# English: "Choose a Site before planting a tree."
+# Review: required
+#: packages/nodes/src/tree/placement-message.ts
+#, fuzzy
+msgid "node.tree.placement.noSite"
+msgstr "种植树木前，请先选择场地。"
+
+# Source-Hash: ee292fa43e81e186
+# English: "This building transform cannot be used for tree placement."
+# Review: required
+#: packages/nodes/src/tree/placement-message.ts
+#, fuzzy
+msgid "node.tree.placement.transform"
+msgstr "无法使用此建筑的变换来放置树木。"
+
+# Source-Hash: 324677a79ab15e22
+# English: "Spread"
+# Review: required
+#: packages/nodes/src/tree/spread-control.tsx
+#, fuzzy
+msgid "node.tree.spread.label"
+msgstr "冠幅"
 
 # Source-Hash: 36b714210f25c284
 # Review: required

@@ -8,6 +8,7 @@ import {
   PlantingNode,
   type SceneSnapshot,
   SiteNode,
+  TreeNode,
 } from '@pascal-app/core'
 import { buildSitePlanDrawing, registerSitePlanContributor } from '@pascal-app/editor'
 import { builtinPlugin } from '@pascal-app/nodes'
@@ -101,16 +102,22 @@ test.each([
       area: 12,
       seed: 19,
     })
+    const tree = TreeNode.parse({
+      id: 'tree_contributions',
+      parentId: site.id,
+      position: [8, 0, 4],
+    })
     const scene: SceneSnapshot = {
       ...snapshot,
       nodes: {
         ...snapshot.nodes,
-        [site.id]: { ...site, children: [hedge.id, planting.id] },
+        [site.id]: { ...site, children: [hedge.id, planting.id, tree.id] },
         [planting.id]: planting,
+        [tree.id]: tree,
       },
     }
     const drawing = buildSitePlanDrawing(scene)
-    for (const node of [hedge, planting]) {
+    for (const node of [hedge, planting, tree]) {
       const definition = nodeRegistry.get(node.type)!
       expect(definition.sitePlan).toBe(true)
       const expected = definition.floorplan!(
