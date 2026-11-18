@@ -9,12 +9,14 @@ import {
   PlantingNode,
   SiteNode,
   SlabNode,
+  TreeNode,
   WallNode,
   ZoneNode,
 } from '@pascal-app/core'
 import { builtinPlugin } from '@pascal-app/nodes'
 import { hedgesOnChangedGround } from '../hedge/ground-invalidation'
 import { plantingsOnChangedScene } from '../planting/ground-invalidation'
+import { treesOnChangedGround } from '../tree/ground-invalidation'
 
 const ring: [number, number][] = [
   [0, 0],
@@ -120,6 +122,8 @@ const otherPlanting = PlantingNode.parse({
   id: 'planting_other_support',
   parentId: otherSite.id,
 })
+const tree = TreeNode.parse({ id: 'tree_supported', parentId: site.id, position: [5, 0, 5] })
+const otherTree = TreeNode.parse({ ...tree, id: 'tree_other_support', parentId: otherSite.id })
 const nodes = Object.fromEntries(
   [
     site,
@@ -136,12 +140,15 @@ const nodes = Object.fromEntries(
     planting,
     otherHedge,
     otherPlanting,
+    tree,
+    otherTree,
   ].map((node) => [node.id, node]),
 ) as Record<AnyNodeId, AnyNode>
 
 test.each([
   ['hedge', hedgesOnChangedGround, hedge, otherHedge],
   ['planting', plantingsOnChangedScene, planting, otherPlanting],
+  ['tree', treesOnChangedGround, tree, otherTree],
 ] as const)(
   '%s rebuilds for changed rendered-support inputs only in the owning Site',
   (_kind, invalidate, node, other) => {

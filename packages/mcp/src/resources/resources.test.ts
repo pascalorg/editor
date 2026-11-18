@@ -259,6 +259,10 @@ describe('pascal://agent-guide', () => {
     'editor_tab_hidden',
     'editor_tab_required',
     'invalid_input',
+    'ambiguous_site',
+    'building_not_found',
+    'building_site_mismatch',
+    'no_site',
     'rock_budget_exceeded',
     'rock_gen_upgrade_required',
     'rock_outline_invalid',
@@ -269,6 +273,11 @@ describe('pascal://agent-guide', () => {
     'scene_wipe_blocked',
     'steps_too_tall',
     'surface_degenerate',
+    'tree_inside_building',
+    'tree_transform_unsupported',
+    // add_tree reports these non-blocking crown conflicts.
+    'tree_crown_over_roof',
+    'tree_crown_crosses_lot',
     'unknown_wall_type',
     'view_unavailable',
   ]

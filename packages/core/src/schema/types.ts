@@ -51,6 +51,7 @@ import { SpawnNode } from './nodes/spawn'
 import { StairNode } from './nodes/stair'
 import { StairSegmentNode } from './nodes/stair-segment'
 import { StructuralGridNode } from './nodes/structural-grid'
+import { TreeNode } from './nodes/tree'
 import { TurbineVentNode } from './nodes/turbine-vent'
 import { UnitNode } from './nodes/unit'
 import { WallNode } from './nodes/wall'
@@ -118,6 +119,7 @@ export const AnyNode = nodeUnion([
   SlabNode,
   HedgeNode,
   PlantingNode,
+  TreeNode,
   RockNode,
   CeilingNode,
   RoofNode,

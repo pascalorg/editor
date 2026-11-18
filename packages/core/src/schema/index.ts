@@ -491,6 +491,7 @@ export {
 export { StructuralGridNode } from './nodes/structural-grid'
 export { SurfaceHoleMetadata } from './nodes/surface-hole-metadata'
 export { SurfacePaintRegion } from './nodes/surface-paint-region'
+export { TreeNode } from './nodes/tree'
 export { TurbineVentMaterialRole, TurbineVentNode } from './nodes/turbine-vent'
 export { DEFAULT_UNIT_COLOR, UNIT_KINDS, type UnitKind, UnitNode } from './nodes/unit'
 export type {

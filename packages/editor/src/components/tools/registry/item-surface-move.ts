@@ -362,7 +362,11 @@ export function createRegistryItemSurfaceMove(node: AnyNode) {
     rotate(yaw: number) {
       if (!session.hosted) return null
       const live = liveNode() as typeof original
-      const position: [number, number, number] = [...live.position]
+      const position: [number, number, number] = [
+        live.position[0],
+        live.position[1],
+        live.position[2],
+      ]
       const host = live.parentId ? scene.get(live.parentId as AnyNodeId) : undefined
       const storedRotation = Array.isArray(live.rotation)
         ? ([live.rotation[0], yaw, live.rotation[2]] as [number, number, number])

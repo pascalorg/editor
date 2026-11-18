@@ -41,6 +41,7 @@ import { searchMaterialsTool } from './search-materials'
 import { getSiteTool, placeBuildingTool } from './site'
 import { addSiteSurfaceTool, addStepsTool } from './site-works'
 import { createStairTool, fitStairTool, measureStairTool } from './stairs'
+import { addTreeTool } from './tree'
 import { UNIT_TOOL_CONTRACTS } from './units'
 import { verifySceneTool } from './verify-scene'
 import { viewSceneTool } from './view-scene'
@@ -87,6 +88,7 @@ export * from './site'
 export * from './site-works'
 export { CATALOG_SOURCE, OTHER_SOURCES, OUTSIDE_SOURCES } from './sources'
 export * from './stairs'
+export * from './tree'
 export * from './units'
 export * from './verify-scene'
 export * from './view-scene'
@@ -127,6 +129,7 @@ export const AGENT_TOOL_CONTRACTS = [
   addFenceTool,
   addHedgeTool,
   addPlantingTool,
+  addTreeTool,
   addRockTool,
   addSiteSurfaceTool,
   addStepsTool,

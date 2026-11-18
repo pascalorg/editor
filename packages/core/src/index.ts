@@ -945,6 +945,21 @@ export {
   SITE_DATUM_Y,
   terrainSupportLift,
 } from './lib/terrain-support'
+export { buildTree, estimateTree } from './lib/tree-build'
+export { type TreeFacts, treeFacts } from './lib/tree-facts'
+export {
+  defaultTreeSpread,
+  resolveTreeParameters,
+  TREE_FAR_MAX_TRIANGLES,
+  TREE_FORMS,
+  TREE_MAX_TRIANGLES,
+  type TreeEstimate,
+  type TreeForm,
+  type TreeInput,
+  type TreeMesh,
+  type TreeParameters,
+} from './lib/tree-form'
+export { resolveTreeGround } from './lib/tree-scene'
 export {
   deriveUnit,
   type UnitDerivation,

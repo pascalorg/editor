@@ -206,7 +206,8 @@ function namedSurfaceRejection(
   if (surfaceId === null) return null
   const scene = createSceneApi(useScene)
   const host = root.parentId ? scene.get(root.parentId as AnyNodeId) : undefined
-  if (!host || !('position' in root) || !Array.isArray(root.rotation)) return 'no-surface'
+  if (!host || !('position' in root) || !('rotation' in root) || !Array.isArray(root.rotation))
+    return 'no-surface'
   const surface = getSurfaceProvider(host)
     .surfaces?.(host, { scene })
     .find((s) => s.id === surfaceId)

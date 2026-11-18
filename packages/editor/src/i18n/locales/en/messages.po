@@ -308,6 +308,10 @@ msgid "app.lib.buildPalette.terrain"
 msgstr "Terrain"
 
 #: apps/editor/lib/build-palette.ts
+msgid "app.lib.buildPalette.tree"
+msgstr "Tree"
+
+#: apps/editor/lib/build-palette.ts
 msgid "app.lib.buildPalette.wall"
 msgstr "Wall"
 
@@ -2367,6 +2371,10 @@ msgid "editor.inspector.field.defaultLevelId.xmrjzp"
 msgstr "Default level id"
 
 #: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.density.1q5zigr"
+msgstr "Density"
+
+#: packages/nodes/src/i18n/definition-messages.ts
 msgid "editor.inspector.field.depth.1lu11u2"
 msgstr "Depth"
 
@@ -2511,6 +2519,10 @@ msgid "editor.inspector.field.flueSpacing.exhzco"
 msgstr "Flue spacing"
 
 #: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.foliage.166kiw8"
+msgstr "Foliage"
+
+#: packages/nodes/src/i18n/definition-messages.ts
 msgid "editor.inspector.field.footingStyle.e3btg6"
 msgstr "Footing style"
 
@@ -2605,6 +2617,10 @@ msgstr "Height2"
 #: packages/nodes/src/i18n/definition-messages.ts
 msgid "editor.inspector.field.heightAboveRidge.1k99brk"
 msgstr "Height above ridge"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.heightM.1wq86hd"
+msgstr "Height m"
 
 #: packages/nodes/src/i18n/definition-messages.ts
 msgid "editor.inspector.field.highEdgeHeight.1s7v90t"
@@ -3487,6 +3503,10 @@ msgid "editor.inspector.group.trap.1qc7vhe"
 msgstr "Trap"
 
 #: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.group.tree.1tyhj3p"
+msgstr "Tree"
+
+#: packages/nodes/src/i18n/definition-messages.ts
 msgid "editor.inspector.group.type.1m2zofh"
 msgstr "Type"
 
@@ -3601,6 +3621,10 @@ msgstr "Condenser"
 #: packages/nodes/src/i18n/definition-messages.ts
 msgid "editor.inspector.option.conical.1d9dreq"
 msgstr "Conical"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.option.conifer.12sy81j"
+msgstr "Conifer"
 
 #: packages/nodes/src/i18n/definition-messages.ts
 msgid "editor.inspector.option.corbeled.bovs4v"
@@ -3879,6 +3903,10 @@ msgid "editor.inspector.option.mulch.1xqhdoq"
 msgstr "Mulch"
 
 #: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.option.multistem.3bsvcn"
+msgstr "Multistem"
+
+#: packages/nodes/src/i18n/definition-messages.ts
 msgid "editor.inspector.option.none.deku7v"
 msgstr "None"
 
@@ -4083,6 +4111,10 @@ msgid "editor.inspector.option.spread.1g1zysu"
 msgstr "Spread"
 
 #: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.option.spreading.is7i8y"
+msgstr "Spreading"
+
+#: packages/nodes/src/i18n/definition-messages.ts
 msgid "editor.inspector.option.square.1xl1lk6"
 msgstr "Square"
 
@@ -4163,6 +4195,10 @@ msgid "editor.inspector.option.transition.1rziz9e"
 msgstr "Transition"
 
 #: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.option.upright.136p3r6"
+msgstr "Upright"
+
+#: packages/nodes/src/i18n/definition-messages.ts
 msgid "editor.inspector.option.vent.xda5j2"
 msgstr "Vent"
 
@@ -4197,6 +4233,10 @@ msgstr "Waste"
 #: packages/nodes/src/i18n/definition-messages.ts
 msgid "editor.inspector.option.weathered.1rrqhyq"
 msgstr "Weathered"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.option.weeping.1kqivx8"
+msgstr "Weeping"
 
 #: packages/nodes/src/i18n/definition-messages.ts
 msgid "editor.inspector.option.wye.14vupc8"
@@ -7126,6 +7166,10 @@ msgstr "Plant it"
 #: packages/nodes/src/i18n/definition-messages.ts
 msgid "editor.toolHint.plantTheBed.r4x8fy"
 msgstr "Plant the bed"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.toolHint.plantTheTree.bl41e3"
+msgstr "Plant the tree"
 
 #: packages/nodes/src/i18n/definition-messages.ts
 msgid "editor.toolHint.pointInsideARoomPorchOr.58w64l"
@@ -14503,6 +14547,34 @@ msgstr "Persistent construction grid axis with identification bubbles."
 #: packages/nodes/src/i18n/definition-messages.ts
 msgid "node.structuralGrid.label"
 msgstr "Structural Grid"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "node.tree.description"
+msgstr "A seeded garden tree, rooted on the Site ground."
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "node.tree.label"
+msgstr "Tree"
+
+#: packages/nodes/src/tree/placement-message.ts
+msgid "node.tree.placement.insideBuilding"
+msgstr "Plant the trunk outside the building footprint."
+
+#: packages/nodes/src/tree/placement-message.ts
+msgid "node.tree.placement.invalid"
+msgstr "The tree cannot be planted here. Choose another ground position."
+
+#: packages/nodes/src/tree/placement-message.ts
+msgid "node.tree.placement.noSite"
+msgstr "Choose a Site before planting a tree."
+
+#: packages/nodes/src/tree/placement-message.ts
+msgid "node.tree.placement.transform"
+msgstr "This building transform cannot be used for tree placement."
+
+#: packages/nodes/src/tree/spread-control.tsx
+msgid "node.tree.spread.label"
+msgstr "Spread"
 
 #: packages/nodes/src/i18n/definition-messages.ts
 msgid "node.turbineVent.description"

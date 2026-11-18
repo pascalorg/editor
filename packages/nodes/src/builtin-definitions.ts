@@ -55,6 +55,7 @@ import { spawnRenderDefinition } from './spawn/definition.render'
 import { stairRenderDefinition } from './stair/definition.render'
 import { stairSegmentRenderDefinition } from './stair-segment/definition.render'
 import { structuralGridRenderDefinition } from './structural-grid/definition.render'
+import { treeRenderDefinition } from './tree/definition.render'
 import { turbineVentRenderDefinition } from './turbine-vent/definition.render'
 import { unitRenderDefinition } from './unit/definition.render'
 import { wallRenderDefinition } from './wall/definition.render'
@@ -94,6 +95,7 @@ export const builtinRenderDefinitions = [
   rockRenderDefinition,
   hedgeRenderDefinition,
   plantingRenderDefinition,
+  treeRenderDefinition,
   buildingRenderDefinition,
   levelRenderDefinition,
   guideRenderDefinition,

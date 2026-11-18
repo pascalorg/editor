@@ -766,6 +766,14 @@ msgstr "テラス"
 msgid "app.lib.buildPalette.terrain"
 msgstr "地形"
 
+# Source-Hash: 32f9f40b4513e783
+# Review: required
+# English: "Tree"
+#: apps/editor/lib/build-palette.ts
+#, fuzzy
+msgid "app.lib.buildPalette.tree"
+msgstr "樹木"
+
 # Source-Hash: 2210e5ee50b74dc9
 # Review: required
 # AI-Provider: claude-code
@@ -5854,6 +5862,14 @@ msgstr "デッキの厚さ"
 msgid "editor.inspector.field.defaultLevelId.xmrjzp"
 msgstr "既定の階層 ID"
 
+# Source-Hash: f4a09d26c1ec5258
+# Review: required
+# English: "Density"
+#: packages/nodes/src/i18n/definition-messages.ts
+#, fuzzy
+msgid "editor.inspector.field.density.1q5zigr"
+msgstr "密度"
+
 # Source-Hash: 99ac4d03c3061f3a
 # Review: required
 # AI-Provider: claude-code
@@ -6216,6 +6232,14 @@ msgstr "煙道の形状"
 msgid "editor.inspector.field.flueSpacing.exhzco"
 msgstr "煙道の間隔"
 
+# Source-Hash: d04366bc15791583
+# Review: required
+# English: "Foliage"
+#: packages/nodes/src/i18n/definition-messages.ts
+#, fuzzy
+msgid "editor.inspector.field.foliage.166kiw8"
+msgstr "葉"
+
 # Source-Hash: 0a64209c0edacaa1
 # Review: required
 # AI-Provider: claude-code
@@ -6457,6 +6481,14 @@ msgstr "高さ2"
 #, fuzzy
 msgid "editor.inspector.field.heightAboveRidge.1k99brk"
 msgstr "棟からの高さ"
+
+# Source-Hash: dd265ca5023f3b95
+# Review: required
+# English: "Height m"
+#: packages/nodes/src/i18n/definition-messages.ts
+#, fuzzy
+msgid "editor.inspector.field.heightM.1wq86hd"
+msgstr "高さ（m）"
 
 # Source-Hash: b4905e5ec62a170f
 # Review: required
@@ -8671,6 +8703,14 @@ msgstr "変形"
 msgid "editor.inspector.group.trap.1qc7vhe"
 msgstr "トラップ"
 
+# Source-Hash: 32f9f40b4513e783
+# Review: required
+# English: "Tree"
+#: packages/nodes/src/i18n/definition-messages.ts
+#, fuzzy
+msgid "editor.inspector.group.tree.1tyhj3p"
+msgstr "樹木"
+
 # Source-Hash: c44f7ab8bbd24858
 # Review: required
 # AI-Provider: claude-code
@@ -8959,6 +8999,14 @@ msgstr "室外機"
 #, fuzzy
 msgid "editor.inspector.option.conical.1d9dreq"
 msgstr "円錐"
+
+# Source-Hash: 81318a19591adf07
+# Review: required
+# English: "Conifer"
+#: packages/nodes/src/i18n/definition-messages.ts
+#, fuzzy
+msgid "editor.inspector.option.conifer.12sy81j"
+msgstr "針葉樹"
 
 # Source-Hash: 6786ac75cbe9af57
 # Review: required
@@ -9656,6 +9704,14 @@ msgstr "片流れ"
 msgid "editor.inspector.option.mulch.1xqhdoq"
 msgstr "マルチ"
 
+# Source-Hash: 7929bdf68e7d00cf
+# Review: required
+# English: "Multistem"
+#: packages/nodes/src/i18n/definition-messages.ts
+#, fuzzy
+msgid "editor.inspector.option.multistem.3bsvcn"
+msgstr "株立ち"
+
 # Source-Hash: f2953d2931e36d0c
 # Review: required
 # AI-Provider: claude-code
@@ -10169,6 +10225,14 @@ msgstr "跳ね返り"
 msgid "editor.inspector.option.spread.1g1zysu"
 msgstr "広がり"
 
+# Source-Hash: 33bc4c6dfdecc051
+# Review: required
+# English: "Spreading"
+#: packages/nodes/src/i18n/definition-messages.ts
+#, fuzzy
+msgid "editor.inspector.option.spreading.is7i8y"
+msgstr "開張型"
+
 # Source-Hash: 39287346366fc206
 # Review: required
 # AI-Provider: claude-code
@@ -10373,6 +10437,14 @@ msgstr "上"
 msgid "editor.inspector.option.transition.1rziz9e"
 msgstr "トランジション"
 
+# Source-Hash: 798f6822fbf3a89a
+# Review: required
+# English: "Upright"
+#: packages/nodes/src/i18n/definition-messages.ts
+#, fuzzy
+msgid "editor.inspector.option.upright.136p3r6"
+msgstr "直立型"
+
 # Source-Hash: 04bc0909a133a7e9
 # Review: required
 # AI-Provider: claude-code
@@ -10464,6 +10536,14 @@ msgstr "排水"
 #, fuzzy
 msgid "editor.inspector.option.weathered.1rrqhyq"
 msgstr "風化"
+
+# Source-Hash: e7dbb75458d3c989
+# Review: required
+# English: "Weeping"
+#: packages/nodes/src/i18n/definition-messages.ts
+#, fuzzy
+msgid "editor.inspector.option.weeping.1kqivx8"
+msgstr "枝垂れ"
 
 # Source-Hash: 00249876bb37079f
 # Review: required
@@ -17769,6 +17849,14 @@ msgstr "植える"
 #, fuzzy
 msgid "editor.toolHint.plantTheBed.r4x8fy"
 msgstr "植栽帯を植える"
+
+# Source-Hash: 9004b94324e6fa3a
+# Review: required
+# English: "Plant the tree"
+#: packages/nodes/src/i18n/definition-messages.ts
+#, fuzzy
+msgid "editor.toolHint.plantTheTree.bl41e3"
+msgstr "樹木を植える"
 
 # Source-Hash: dd2ea442152dca5b
 # Review: required
@@ -36221,6 +36309,62 @@ msgstr "符号付きバブルのある常設の通り芯。"
 #, fuzzy
 msgid "node.structuralGrid.label"
 msgstr "構造通り芯"
+
+# Source-Hash: 953a0fa0fa0cdd5a
+# Review: required
+# English: "A seeded garden tree, rooted on the Site ground."
+#: packages/nodes/src/i18n/definition-messages.ts
+#, fuzzy
+msgid "node.tree.description"
+msgstr "シード値から生成され、敷地の地面に根を張る庭木。"
+
+# Source-Hash: 32f9f40b4513e783
+# Review: required
+# English: "Tree"
+#: packages/nodes/src/i18n/definition-messages.ts
+#, fuzzy
+msgid "node.tree.label"
+msgstr "樹木"
+
+# Source-Hash: e7e8803af151e5a7
+# Review: required
+# English: "Plant the trunk outside the building footprint."
+#: packages/nodes/src/tree/placement-message.ts
+#, fuzzy
+msgid "node.tree.placement.insideBuilding"
+msgstr "建物の平面輪郭の外側に幹を植えてください。"
+
+# Source-Hash: 0fc909bd43acb876
+# Review: required
+# English: "The tree cannot be planted here. Choose another ground position."
+#: packages/nodes/src/tree/placement-message.ts
+#, fuzzy
+msgid "node.tree.placement.invalid"
+msgstr "ここには樹木を植えられません。地面上の別の位置を選択してください。"
+
+# Source-Hash: d2bb985f38a13d39
+# Review: required
+# English: "Choose a Site before planting a tree."
+#: packages/nodes/src/tree/placement-message.ts
+#, fuzzy
+msgid "node.tree.placement.noSite"
+msgstr "樹木を植える前に敷地を選択してください。"
+
+# Source-Hash: ee292fa43e81e186
+# Review: required
+# English: "This building transform cannot be used for tree placement."
+#: packages/nodes/src/tree/placement-message.ts
+#, fuzzy
+msgid "node.tree.placement.transform"
+msgstr "この建物の座標変換では樹木を配置できません。"
+
+# Source-Hash: 324677a79ab15e22
+# Review: required
+# English: "Spread"
+#: packages/nodes/src/tree/spread-control.tsx
+#, fuzzy
+msgid "node.tree.spread.label"
+msgstr "広がり"
 
 # Source-Hash: 36b714210f25c284
 # Review: required
