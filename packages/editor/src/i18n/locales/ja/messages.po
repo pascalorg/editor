@@ -28902,15 +28902,15 @@ msgstr "花を追加で塗る前に、花の種類を選び、花の密度をゼ
 msgid "node.lawn.brush.empty"
 msgstr "ここには芝生を配置できる地面が残っていません。塗る前に輪郭と地面の所有元を確認してください。"
 
-# Source-Hash: fe0519db738ca3e9
-# Review: required
 # AI-Provider: openai-codex
 # AI-Model: gpt-6.1-sol
-# English: "This lawn has 64 strokes. Remove an older stroke before painting again."
+# English: "This lawn’s {pointBudget}-point budget is full. Remove older strokes to paint again."
+# Source-Hash: 80df656944cd7995
+# Review: required
 #: packages/nodes/src/lawn/brush-controller.ts
 #, fuzzy
 msgid "node.lawn.brush.full"
-msgstr "この芝生には64本のストロークがあります。再び塗る前に古いストロークを削除してください。"
+msgstr "この芝生は上限の {pointBudget} ポイントに達しました。古いストロークを削除すると再びペイントできます。"
 
 # Source-Hash: 52b4f4e833a09451
 # Review: required
@@ -28921,6 +28921,16 @@ msgstr "この芝生には64本のストロークがあります。再び塗る�
 #, fuzzy
 msgid "node.lawn.brush.invalid"
 msgstr "このストロークの座標または設定が無効です。ブラシ設定を確認して、もう一度お試しください。"
+
+# AI-Model: gpt-6.1-sol
+# AI-Provider: openai-codex
+# Source-Hash: 8ccb2ae038ac3038
+# English: "Near this lawn’s {pointBudget}-point budget. Remove older strokes to make room."
+# Review: required
+#: packages/nodes/src/lawn/brush-controller.ts
+#, fuzzy
+msgid "node.lawn.brush.nearBudget"
+msgstr "この芝生の上限 {pointBudget} ポイントに近づいています。古いストロークを削除して空きを作ってください。"
 
 # Source-Hash: c63c0e423c01c95d
 # Review: required
@@ -28952,15 +28962,15 @@ msgstr "1つの芝生エリアの内側から始めてください。重なっ�
 msgid "node.lawn.brush.terrainBudget"
 msgstr "この芝生は地形の詳細度の上限を超えています。塗る前に輪郭を小さくするか、地形を簡略化してください。"
 
-# Source-Hash: 40900fc51c16829e
-# Review: required
 # AI-Provider: openai-codex
 # AI-Model: gpt-6.1-sol
-# English: "This stroke exceeds the lawn’s combined work budget. Use a shorter stroke or remove older strokes."
+# English: "Lawn work budget reached (32M stroke visits / 250k cells). Use fewer points or a smaller lawn."
+# Source-Hash: c44267646572171d
+# Review: required
 #: packages/nodes/src/lawn/brush-controller.ts
 #, fuzzy
 msgid "node.lawn.brush.workBudget"
-msgstr "このストロークは芝生全体の処理量の上限を超えています。ストロークを短くするか、古いストロークを削除してください。"
+msgstr "計算量の上限に達しました（ストローク走査 3,200 万回 / 25 万セル）。ポイントを減らすか、芝生を小さくしてください。"
 
 # Source-Hash: 38235a44d8b30ac5
 # Review: required

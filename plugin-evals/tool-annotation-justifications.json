@@ -157,8 +157,8 @@
         "openWorldHint": false
       },
       "justifications": {
-        "readOnlyHint": "Adds one driveway, path, patio or lawn surface to a level of the connected Pascal scene.",
-        "destructiveHint": "Adds one slab without replacing or deleting existing scene nodes.",
+        "readOnlyHint": "Adds one level-owned driveway, path or patio slab, or one Site-owned procedural lawn, in the connected Pascal scene.",
+        "destructiveHint": "Adds one slab or lawn without replacing or deleting existing scene nodes, including legacy lawn slabs and plugin ground cover.",
         "openWorldHint": "Uses only the connected scene without network access."
       }
     },

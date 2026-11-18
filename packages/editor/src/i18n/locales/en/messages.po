@@ -11594,11 +11594,15 @@ msgstr "No lawn ground remains here. Check the outline and ground owners before 
 
 #: packages/nodes/src/lawn/brush-controller.ts
 msgid "node.lawn.brush.full"
-msgstr "This lawn has 64 strokes. Remove an older stroke before painting again."
+msgstr "This lawn’s {pointBudget}-point budget is full. Remove older strokes to paint again."
 
 #: packages/nodes/src/lawn/brush-controller.ts
 msgid "node.lawn.brush.invalid"
 msgstr "This stroke has invalid coordinates or settings. Check the brush settings and try again."
+
+#: packages/nodes/src/lawn/brush-controller.ts
+msgid "node.lawn.brush.nearBudget"
+msgstr "Near this lawn’s {pointBudget}-point budget. Remove older strokes to make room."
 
 #: packages/nodes/src/lawn/brush-controller.ts
 msgid "node.lawn.brush.noSite"
@@ -11614,7 +11618,7 @@ msgstr "This lawn exceeds the terrain detail budget. Reduce its outline or simpl
 
 #: packages/nodes/src/lawn/brush-controller.ts
 msgid "node.lawn.brush.workBudget"
-msgstr "This stroke exceeds the lawn’s combined work budget. Use a shorter stroke or remove older strokes."
+msgstr "Lawn work budget reached (32M stroke visits / 250k cells). Use fewer points or a smaller lawn."
 
 #: packages/nodes/src/i18n/definition-messages.ts
 msgid "node.lawn.description"

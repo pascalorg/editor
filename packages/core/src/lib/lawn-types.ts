@@ -21,7 +21,7 @@ export function assertLawnStrokeWork(work: number): void {
   if (work > LAWN_MAX_STROKE_WORK)
     throw new LawnBuildError(
       'lawn_work_budget',
-      'Lawn combined stroke work exceeds the stroke-work budget.',
+      `Lawn combined stroke work requires ${work} segment visits; the compute budget is 32,000,000. Use fewer brush points or a smaller lawn.`,
     )
 }
 

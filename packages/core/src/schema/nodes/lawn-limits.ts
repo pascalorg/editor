@@ -13,11 +13,18 @@ export const LAWN_LIMITS = {
   maxEdgeFade: 0.5,
   maxFlowerDensity: 2,
   maxSpecies: 3,
-  maxStrokes: 64,
-  maxStrokePoints: 128,
+  /** Shared by every saved stroke on one lawn, including single-point dabs. */
+  maxStrokePoints: 20000,
   minStrokeRadius: 0.05,
   maxStrokeRadius: 10,
   maxCandidates: 250000,
   maxBaseTriangles: 131072,
   maxFlowers: 1024,
 } as const
+
+export const LAWN_STROKE_BUDGET_MESSAGE =
+  'A lawn has a shared budget of 20,000 brush points across all strokes. Remove older strokes or use fewer points.'
+
+export function lawnStrokePointCount(strokes: readonly { points: readonly unknown[] }[]): number {
+  return strokes.reduce((count, stroke) => count + stroke.points.length, 0)
+}

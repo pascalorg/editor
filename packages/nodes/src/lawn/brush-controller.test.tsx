@@ -2,6 +2,7 @@ import { expect, test } from 'bun:test'
 import {
   clearSceneHistory,
   createSceneApi,
+  LAWN_LIMITS,
   LawnNode,
   SiteNode,
   useLiveNodeOverrides,
@@ -23,6 +24,7 @@ type ControllerDriver = {
   cancel: () => Promise<void>
   camera: (active: boolean) => void
   error: () => string | null
+  message: () => string | null
   canvas: Element
 }
 type ControllerRuntime = {
@@ -117,6 +119,7 @@ function controllerDriver(canvas: Element, runtime: ControllerRuntime): Controll
       runtime.cameraDragging = active
     },
     error: () => currentBrushOwner(runtime).controller.error,
+    message: () => currentBrushOwner(runtime).controller.message,
     start: async (point, options, target = canvas) =>
       act(async () => {
         const event = pointer('pointerdown', options)
@@ -201,7 +204,70 @@ async function withController(view: '2d' | '3d', run: (driver: ControllerDriver)
   }
 }
 
+function seedPointBudgetLawn(count: number) {
+  const lawn = LawnNode.parse({
+    id: 'lawn_pointer',
+    parentId: 'site_lawn_pointer',
+    outline: [
+      [0, 0],
+      [1, 0],
+      [1, 1],
+      [0, 1],
+    ],
+    strokes: [
+      {
+        points: Array.from({ length: count }, () => [100, 100]),
+        radiusM: 0.5,
+        effect: 'bare',
+        strength: 1,
+      },
+    ],
+  })
+  useScene.setState({ nodes: { ...useScene.getState().nodes, [lawn.id]: lawn } })
+  clearSceneHistory()
+  return lawn
+}
+
 for (const view of ['2d', '3d'] as const) {
+  test(`${view}: the near-budget line is shown while painting and the final point commits once`, async () =>
+    withController(view, async (driver) => {
+      const lawn = seedPointBudgetLawn(LAWN_LIMITS.maxStrokePoints - 1)
+      await driver.start([0.5, 0.5])
+      expect(driver.error()).toBeNull()
+      expect(driver.message()).toMatch(/Near.*20,000-point budget/)
+      await driver.release()
+      const saved = useScene.getState().nodes[lawn.id]
+      if (saved?.type !== 'lawn') throw new Error('Expected a lawn')
+      expect(saved.strokes).toHaveLength(2)
+      expect(saved.strokes[0]).toEqual(lawn.strokes[0])
+      expect(useScene.temporal.getState().pastStates).toHaveLength(1)
+      useScene.temporal.getState().undo()
+      expect(useScene.getState().nodes[lawn.id]).toEqual(lawn)
+    }))
+  test(`${view}: a full point budget is refused visibly without a preview or undo entry`, async () =>
+    withController(view, async (driver) => {
+      const lawn = seedPointBudgetLawn(LAWN_LIMITS.maxStrokePoints)
+      const before = useScene.getState().nodes
+      await driver.start([0.5, 0.5])
+      expect(driver.message()).toMatch(/20,000-point budget.*full/)
+      await driver.release()
+      expect(useScene.getState().nodes).toBe(before)
+      expect(useLiveNodeOverrides.getState().overrides.has(lawn.id)).toBe(false)
+      expect(useScene.temporal.getState().pastStates).toHaveLength(0)
+    }))
+  test(`${view}: exhausting the budget mid-stroke shows a refusal and rolls back the preview`, async () =>
+    withController(view, async (driver) => {
+      const lawn = seedPointBudgetLawn(LAWN_LIMITS.maxStrokePoints - 1)
+      const before = useScene.getState().nodes
+      await driver.start([0.5, 0.5])
+      await driver.move([0.75, 0.5])
+      expect(driver.message()).toMatch(/20,000-point budget.*full/)
+      await driver.release()
+      expect(useScene.getState().nodes).toBe(before)
+      expect(useLiveNodeOverrides.getState().overrides.has(lawn.id)).toBe(false)
+      expect(useScene.temporal.getState().pastStates).toHaveLength(0)
+      expect(useInteractionScope.getState().scope.kind).toBe('idle')
+    }))
   test(`${view}: a generator budget refusal is shown without leaving a preview or undo entry`, async () =>
     withController(view, async (driver) => {
       const outline: [number, number][] = [
@@ -235,6 +301,7 @@ for (const view of ['2d', '3d'] as const) {
       const before = useScene.getState().nodes
       await driver.start([1, 1])
       expect(driver.error()).toMatch(/work budget/)
+      expect(driver.message()).toMatch(/32M stroke visits/)
       await driver.release()
       expect(useScene.getState().nodes).toBe(before)
       expect(useLiveNodeOverrides.getState().overrides.has(lawn.id)).toBe(false)

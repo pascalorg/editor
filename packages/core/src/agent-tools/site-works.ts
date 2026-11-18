@@ -1,5 +1,9 @@
 import { z } from 'zod'
-import { LAWN_LIMITS } from '../schema/nodes/lawn-limits'
+import {
+  LAWN_LIMITS,
+  LAWN_STROKE_BUDGET_MESSAGE,
+  lawnStrokePointCount,
+} from '../schema/nodes/lawn-limits'
 import { levelTarget } from './levels'
 import { measurement } from './measurement'
 import { NodeId } from './node-id'
@@ -23,7 +27,7 @@ export const addSiteSurfaceTool = {
   name: 'add_site_surface',
   title: 'Add site surface',
   description:
-    'Add a driveway, path or patio slab, or an editable core lawn; returns a real slabId for paving, lawnId and retained-area, exclusion, blade, flower and brush facts for lawn. Paving remains flat above ground in the level frame. Lawn follows Site ground, clears buildings, paving and beds, and stores parameters and seed, never meshes. Give exactly one polygon or corners. Lawn defaults to 6 cm mown grass with flowers off; specify flower species and shares explicitly. With siteId, lawn coordinates and strokes are Site metres and level/building targets are refused; otherwise both convert once from the level or building frame. Existing flat lawn slabs and plugin lawns are not changed or hidden; preserve them and avoid deliberate overlap. materialPreset is paving-only. Refuses before writes: surface_degenerate, lawn_outline_required, lawn_target_conflict, lawn_transform_unsupported, lawn_material_unsupported, missing or ambiguous Site, roof level, invalid_input, lawn_work_budget, lawn_terrain_budget or lawn_empty. Lawn bounds: 0.25–2500 m², 200 outline points, 250000 candidates, 64 strokes of 128 points; no silent stroke eviction. Coverage is retained ground area/requested area, not blade opacity. Counts are canonical, not current-camera detail; thinning and estimated brush areas are disclosed. Edit an existing lawn through the generic node edit path.',
+    'Add a driveway, path or patio slab, or an editable core lawn; returns a real slabId for paving, lawnId and retained-area, exclusion, blade, flower and brush facts for lawn. Paving remains flat above ground in the level frame. Lawn follows Site ground, clears buildings, paving and beds, and stores parameters and seed, never meshes. Give exactly one polygon or corners. Lawn defaults to 6 cm mown grass with flowers off; specify flower species and shares explicitly. With siteId, lawn coordinates and strokes are Site metres and level/building targets are refused; otherwise both convert once from the level or building frame. Existing flat lawn slabs and plugin lawns are not changed or hidden; preserve them and avoid deliberate overlap. materialPreset is paving-only. Refuses before writes: surface_degenerate, lawn_outline_required, lawn_target_conflict, lawn_transform_unsupported, lawn_material_unsupported, missing or ambiguous Site, roof level, invalid_input, lawn_work_budget, lawn_terrain_budget or lawn_empty. Lawn bounds: 0.25–2500 m², 200 outline points, 250000 candidates, 20,000 total brush points shared across all strokes; no silent stroke eviction. Generation also caps combined stroke work at 32 million segment visits: use fewer points or a smaller lawn if refused. Coverage is retained ground area/requested area, not blade opacity. Counts are canonical, not current-camera detail; thinning and estimated brush areas are disclosed. Edit an existing lawn through the generic node edit path.',
   input: {
     kind: z.enum(SITE_SURFACE_KINDS),
     polygon: z
@@ -106,7 +110,10 @@ export const addSiteSurfaceTool = {
     strokes: z
       .array(
         z.strictObject({
-          points: z.array(lawnPoint).min(1).max(LAWN_LIMITS.maxStrokePoints),
+          points: z
+            .array(lawnPoint)
+            .min(1)
+            .max(LAWN_LIMITS.maxStrokePoints, LAWN_STROKE_BUDGET_MESSAGE),
           radiusM: measurement('length', 'm', {
             min: LAWN_LIMITS.minStrokeRadius,
             max: LAWN_LIMITS.maxStrokeRadius,
@@ -115,10 +122,13 @@ export const addSiteSurfaceTool = {
           strength: z.number().finite().min(0).max(1),
         }),
       )
-      .max(LAWN_LIMITS.maxStrokes)
+      .max(LAWN_LIMITS.maxStrokePoints, LAWN_STROKE_BUDGET_MESSAGE)
+      .refine((strokes) => lawnStrokePointCount(strokes) <= LAWN_LIMITS.maxStrokePoints, {
+        message: LAWN_STROKE_BUDGET_MESSAGE,
+      })
       .optional()
       .describe(
-        'Ordered soft vector strokes, in the same frame as the outline; a single point is a dab.',
+        'Ordered soft vector strokes, in the same frame as the outline; a single point is a dab. All strokes on one lawn share a budget of 20,000 points, for hand and agent edits alike.',
       ),
     name: z.string().min(1).max(120).optional().describe('What it is: "Front lawn", "Driveway".'),
     ...levelTarget,

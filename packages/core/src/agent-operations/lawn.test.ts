@@ -2,7 +2,15 @@ import { describe, expect, test } from 'bun:test'
 import { z } from 'zod'
 import { addSiteSurfaceTool } from '../agent-tools'
 import { isAgentRefusal } from '../agent-tools/refusal'
-import { AnyNode, BuildingNode, LawnNode, LevelNode, SiteNode, SlabNode } from '../schema'
+import {
+  AnyNode,
+  BuildingNode,
+  LAWN_LIMITS,
+  LawnNode,
+  LevelNode,
+  SiteNode,
+  SlabNode,
+} from '../schema'
 import { AGENT_OPERATIONS, applySceneChanges, honestNodePatch, lawnPatchFacts } from './index'
 import type { SceneNodes } from './types'
 
@@ -267,6 +275,48 @@ describe('lawn through the existing site-surface operation', () => {
 })
 
 describe('generic lawn stroke editing', () => {
+  test('the contract, creation and replacement share the explicit total-point budget', () => {
+    const dab = { ...strokes[0]!, points: [[100, 100]] }
+    const dabs = Array.from({ length: 65 }, () => dab)
+    const created = run(scene(), { kind: 'lawn', siteId: 'site_a', corners, strokes: dabs })
+    expect(lawn(created.nodes).strokes).toEqual(dabs)
+    const current = lawn(created.nodes)
+    expect(honestNodePatch(current, { strokes: dabs })).toEqual({ strokes: dabs })
+
+    const points = Array.from({ length: LAWN_LIMITS.maxStrokePoints }, () => [100, 100])
+    const atBudget = [{ ...dab, points }]
+    const contract = z.object(addSiteSurfaceTool.input)
+    expect(contract.safeParse({ kind: 'lawn', corners, strokes: atBudget }).success).toBe(true)
+    expect(honestNodePatch(current, { strokes: atBudget })).toEqual({ strokes: atBudget })
+    const full = run(scene(), {
+      kind: 'lawn',
+      siteId: 'site_a',
+      corners: [
+        [0, 0],
+        [1, 1],
+      ],
+      strokes: atBudget,
+    })
+    expect(lawn(full.nodes).strokes).toEqual(atBudget)
+    const overBudget = [...atBudget, dab]
+    const input = { kind: 'lawn', siteId: 'site_a', corners, strokes: overBudget }
+    const parsed = contract.safeParse(input)
+    expect(parsed.success).toBe(false)
+    if (!parsed.success) expect(parsed.error.message).toMatch(/20,000.*points/)
+
+    const before = JSON.stringify(created.nodes)
+    for (const action of [
+      () =>
+        AGENT_OPERATIONS.add_site_surface(created.nodes, input as never, { activeLevelId: null }),
+      () => honestNodePatch(current, { strokes: overBudget }),
+      () => lawnPatchFacts(current, { strokes: overBudget }, created.nodes),
+    ]) {
+      expect(refusal(action)).toBe('invalid_input')
+      expect(action).toThrow(/20,000.*points/)
+    }
+    expect(JSON.stringify(created.nodes)).toBe(before)
+  })
+
   test('stores exactly the same bounded stroke representation as creation', () => {
     const current = LawnNode.parse({
       outline: [
@@ -302,7 +352,6 @@ describe('generic lawn stroke editing', () => {
     { replacement: [{ points: [], radiusM: 1, effect: 'bare', strength: 1 }] },
     { replacement: [{ points: [[NaN, 0]], radiusM: 1, effect: 'bare', strength: 1 }] },
     { replacement: [{ points: [[0, 0]], radiusM: 11, effect: 'bare', strength: 1 }] },
-    { replacement: Array.from({ length: 65 }, () => strokes[0]) },
   ])('refuses invalid replacement strokes without mutating the node', ({ replacement }) => {
     const current = LawnNode.parse({
       outline: [

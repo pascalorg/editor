@@ -86,7 +86,6 @@ export function lawnBladeMaterial(
   material.opacityNode = leaf.g
   material.maskShadowNode = leaf.g.greaterThan(0.32)
   material.alphaTest = 0.32
-  material.alphaToCoverage = true
   const gust = sin(root.x.mul(0.19).add(root.z.mul(0.13)).add(time.mul(1.7)))
     .mul(0.65)
     .add(sin(root.x.mul(0.43).sub(root.z.mul(0.27)).add(time.mul(2.3))).mul(0.35))

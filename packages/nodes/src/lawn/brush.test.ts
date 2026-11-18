@@ -2,6 +2,7 @@ import { afterEach, beforeEach, expect, test } from 'bun:test'
 import {
   buildLawn,
   clearSceneHistory,
+  LAWN_LIMITS,
   LawnNode,
   type LawnStroke,
   SiteNode,
@@ -104,7 +105,10 @@ test('cancelling a stroke drops overrides without a write or undo entry, includi
 test('stroke bounds reject before writing; long in-flight paths keep both endpoints without losing old intent', () => {
   const full = LawnNode.parse({
     ...lawn,
-    strokes: Array.from({ length: 64 }, () => ({ ...settings, points: [[1, 1]] })),
+    strokes: Array.from({ length: LAWN_LIMITS.maxStrokePoints }, () => ({
+      ...settings,
+      points: [[1, 1]],
+    })),
   })
   useScene.setState({ nodes: { [site.id]: site, [full.id]: full } })
   clearSceneHistory()
@@ -125,6 +129,146 @@ test('stroke bounds reject before writing; long in-flight paths keep both endpoi
   expect(points?.[0]).toEqual([0, 0])
   expect(points?.at(-1)).toEqual([5, 1])
   expect(useScene.temporal.getState().pastStates).toHaveLength(1)
+})
+
+test('more than 64 hand dabs share a point budget without rewriting earlier strokes', () => {
+  const saved = Array.from({ length: 65 }, () => ({ ...settings, points: [[1, 1]] }))
+  const painted = LawnNode.parse({ ...lawn, strokes: saved })
+  useScene.setState({ nodes: { [site.id]: site, [lawn.id]: painted } })
+  clearSceneHistory()
+  const stroke = createLawnBrushStroke(painted, settings, [2, 2])
+  if (!stroke) throw new Error('A 66th dab must fit the shared point budget')
+  expect(stroke.commit()).toBe(true)
+  expect(current().strokes).toHaveLength(66)
+  expect(current().strokes.slice(0, -1)).toEqual(saved)
+  expect(useScene.temporal.getState().pastStates).toHaveLength(1)
+  useScene.temporal.getState().undo()
+  expect(current().strokes).toEqual(saved)
+})
+
+test('long straight strokes stay at two saved points while corners and reversals remain', () => {
+  const stroke = createLawnBrushStroke(lawn, settings, [0, 1])
+  if (!stroke) throw new Error('A valid stroke must start')
+  for (let index = 1; index <= 500; index++) expect(stroke.move([index / 100, 1])).toBe(true)
+  expect(useLiveNodeOverrides.getState().overrides.get(lawn.id)?.strokes).toEqual([
+    {
+      ...settings,
+      points: [
+        [0, 1],
+        [5, 1],
+      ],
+    },
+  ])
+  expect(stroke.move([5, 2])).toBe(true)
+  expect(stroke.move([5, 1])).toBe(true)
+  expect(stroke.move([4, 1])).toBe(true)
+  expect(stroke.commit()).toBe(true)
+  expect(current().strokes[0]?.points).toEqual([
+    [0, 1],
+    [5, 1],
+    [5, 2],
+    [5, 1],
+    [4, 1],
+  ])
+  expect(useScene.temporal.getState().pastStates).toHaveLength(1)
+})
+
+test('small pointer jitter simplifies within brush-scale error rather than consuming a point per event', () => {
+  const stroke = createLawnBrushStroke(lawn, settings, [0, 1])
+  if (!stroke) throw new Error('A valid stroke must start')
+  for (let index = 1; index <= 500; index++)
+    expect(stroke.move([index / 100, 1 + (index % 2 ? 0.002 : 0)])).toBe(true)
+  expect(stroke.commit()).toBe(true)
+  const points = current().strokes[0]?.points
+  expect(points?.length).toBeLessThanOrEqual(8)
+  expect(points?.[0]).toEqual([0, 1])
+  expect(points?.at(-1)).toEqual([5, 1])
+})
+
+test('sustained near-stationary jitter finalizes bounded sample windows and keeps painting', () => {
+  const before = useScene.getState().nodes
+  const refused: string[] = []
+  const stroke = createLawnBrushStroke(lawn, settings, [0, 1], (code) => refused.push(code))
+  if (!stroke) throw new Error('A valid stroke must start')
+  for (let index = 0; index < 1024; index++)
+    expect(stroke.move([1, index % 2 ? 1.002 : 1])).toBe(true)
+  expect(useScene.getState().nodes).toBe(before)
+  expect(stroke.commit()).toBe(true)
+  const points = current().strokes[0]?.points
+  // Periodic endpoints make progress instead of retaining an unlimited raw pointer history.
+  expect(points?.length).toBeGreaterThan(2)
+  expect(points?.length).toBeLessThanOrEqual(16)
+  expect(points?.[0]).toEqual([0, 1])
+  expect(points?.at(-1)).toEqual([1, 1.002])
+  expect(refused).toEqual([])
+  expect(useScene.temporal.getState().pastStates).toHaveLength(1)
+  useScene.temporal.getState().undo()
+  expect(current().strokes).toEqual([])
+})
+
+test('detailed strokes may exceed 128 points without resampling away their corners', () => {
+  const small = LawnNode.parse({
+    ...lawn,
+    outline: [
+      [0, 0],
+      [1, 0],
+      [1, 1],
+      [0, 1],
+    ],
+  })
+  useScene.setState({ nodes: { [site.id]: site, [lawn.id]: small } })
+  clearSceneHistory()
+  const first: [number, number] = [0.1, 0.4]
+  const stroke = createLawnBrushStroke(small, { ...settings, effect: 'taller' }, first)
+  if (!stroke) throw new Error('A valid stroke must start')
+  const points: [number, number][] = [first]
+  for (let index = 1; index <= 160; index++) {
+    const point: [number, number] = [0.1 + index / 200, index % 2 ? 0.6 : 0.4]
+    points.push(point)
+    expect(stroke.move(point)).toBe(true)
+  }
+  expect(stroke.commit()).toBe(true)
+  expect(current().strokes[0]?.points).toEqual(points)
+})
+
+test('point-budget refusal during painting is explicit and drops the whole gesture atomically', () => {
+  const saved: LawnStroke[] = [
+    {
+      ...settings,
+      points: Array.from({ length: LAWN_LIMITS.maxStrokePoints - 1 }, () => [100, 100]),
+    },
+  ]
+  const almostFull = LawnNode.parse({
+    ...lawn,
+    outline: [
+      [0, 0],
+      [1, 0],
+      [1, 1],
+      [0, 1],
+    ],
+    strokes: saved,
+  })
+  useScene.setState({ nodes: { [site.id]: site, [lawn.id]: almostFull } })
+  clearSceneHistory()
+  const before = useScene.getState().nodes
+  const refused: string[] = []
+  const counts: number[] = []
+  const stroke = createLawnBrushStroke(
+    almostFull,
+    settings,
+    [0.5, 0.5],
+    (code) => refused.push(code),
+    (count) => counts.push(count),
+  )
+  if (!stroke) throw new Error('The final point must fit')
+  expect(counts).toEqual([LAWN_LIMITS.maxStrokePoints])
+  expect(stroke.move([0.75, 0.5])).toBe(false)
+  expect(refused).toEqual(['point-budget'])
+  expect(stroke.commit()).toBe(false)
+  expect(useScene.getState().nodes).toBe(before)
+  expect(current().strokes).toEqual(saved)
+  expect(useLiveNodeOverrides.getState().overrides.has(lawn.id)).toBe(false)
+  expect(useScene.temporal.getState().pastStates).toHaveLength(0)
 })
 
 test('an intervening agent edit to the stroke list is not overwritten by an in-flight hand stroke', () => {
@@ -256,11 +400,12 @@ test('hand and agent refuse combined stroke work before preview or history write
   const refused: string[] = []
   const stroke = createLawnBrushStroke(large, settings, [2, 2], (code) => refused.push(code))
   if (!stroke) throw new Error('One dab must fit the remaining stroke budget')
-  for (let index = 1; index <= 100; index++) stroke.move([2 + index / 100, 2])
+  for (let index = 1; index <= 100; index++) stroke.move([2 + index / 100, index % 2 ? 2.2 : 2])
   expect(refused).toContain('lawn_work_budget')
   expect(stroke.commit()).toBe(false)
   const overBudget = [...large.strokes, { ...settings, points }]
   expect(() => lawnPatchFacts(large, { strokes: overBudget }, before)).toThrow(/stroke.*budget/)
+  expect(() => lawnPatchFacts(large, { strokes: overBudget }, before)).toThrow(/32,000,000/)
   expect(useScene.getState().nodes).toBe(before)
   expect(useLiveNodeOverrides.getState().overrides.has(lawn.id)).toBe(false)
   expect(useScene.temporal.getState().pastStates).toHaveLength(0)

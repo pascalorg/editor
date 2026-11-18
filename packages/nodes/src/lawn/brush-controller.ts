@@ -3,6 +3,7 @@
 import {
   emitter,
   defaultI18n as i18n,
+  LAWN_LIMITS,
   type LawnNode,
   plantingContains,
   type SceneApi,
@@ -40,10 +41,12 @@ function refusalMessage(code: Refusal): string {
         id: 'node.lawn.brush.target',
         message: 'Start inside one lawn area. Overlapping lawns must be edited separately.',
       })
-    case 'stroke-limit':
+    case 'point-budget':
       return i18n._({
         id: 'node.lawn.brush.full',
-        message: 'This lawn has 64 strokes. Remove an older stroke before painting again.',
+        message:
+          'This lawn’s {pointBudget}-point budget is full. Remove older strokes to paint again.',
+        values: { pointBudget: LAWN_LIMITS.maxStrokePoints.toLocaleString(i18n.getLocale()) },
       })
     case 'flowers-required':
       return i18n._({
@@ -55,7 +58,7 @@ function refusalMessage(code: Refusal): string {
       return i18n._({
         id: 'node.lawn.brush.workBudget',
         message:
-          'This stroke exceeds the lawn’s combined work budget. Use a shorter stroke or remove older strokes.',
+          'Lawn work budget reached (32M stroke visits / 250k cells). Use fewer points or a smaller lawn.',
       })
     case 'lawn_terrain_budget':
       return i18n._({
@@ -153,6 +156,7 @@ function startBrush(
   runtime: BrushRuntime,
   cancel: () => void,
   refuse: (code: Refusal) => void,
+  onPointCount: (count: number) => void,
 ): boolean {
   if (
     useLawnAuthoring.getState().mode !== 'brush' ||
@@ -175,7 +179,7 @@ function startBrush(
     refuse('target')
     return false
   }
-  const next = createLawnBrushStroke(lawn, useLawnAuthoring.getState(), point, refuse)
+  const next = createLawnBrushStroke(lawn, useLawnAuthoring.getState(), point, refuse, onPointCount)
   if (!next) return false
   runtime.stroke = next
   runtime.pointer = event.pointerId
@@ -281,6 +285,7 @@ export function useLawnBrushController(context: BrushContext) {
   const { sceneApi, siteId, view, finishTool, isCameraDragging } = context
   const mode = useLawnAuthoring((state) => state.mode)
   const [error, setError] = useState<string | null>(null)
+  const [warning, setWarning] = useState<string | null>(null)
   const runtime = useRef<BrushRuntime>({ stroke: null, gesture: null, pointer: null })
   const cancel: () => void = useCallback(() => {
     if (activeBrush?.cancel === cancel) activeBrush = null
@@ -289,9 +294,22 @@ export function useLawnBrushController(context: BrushContext) {
     resetBrush(runtime.current, cancel)
   }, [])
   const refuse = useCallback((code: Refusal) => setError(refusalMessage(code)), [])
+  const onPointCount = useCallback((count: number) => {
+    setWarning(
+      count >= LAWN_LIMITS.maxStrokePoints * 0.9
+        ? i18n._({
+            id: 'node.lawn.brush.nearBudget',
+            message:
+              'Near this lawn’s {pointBudget}-point budget. Remove older strokes to make room.',
+            values: { pointBudget: LAWN_LIMITS.maxStrokePoints.toLocaleString(i18n.getLocale()) },
+          })
+        : null,
+    )
+  }, [])
   const start = useCallback(
     (point: Point, event: PointerEvent) => {
       setError(null)
+      setWarning(null)
       return startBrush(
         point,
         event,
@@ -299,9 +317,10 @@ export function useLawnBrushController(context: BrushContext) {
         runtime.current,
         cancel,
         refuse,
+        onPointCount,
       )
     },
-    [sceneApi, siteId, view, finishTool, isCameraDragging, cancel, refuse],
+    [sceneApi, siteId, view, finishTool, isCameraDragging, cancel, refuse, onPointCount],
   )
   const move = useCallback(
     (point: Point, event: { pointerId: number }) => {
@@ -326,5 +345,5 @@ export function useLawnBrushController(context: BrushContext) {
       cancel,
     )
   }, [sceneApi, siteId, view, finishTool, isCameraDragging, cancel, mode])
-  return { start, move, cancel, error }
+  return { start, move, cancel, error, message: error ?? warning }
 }

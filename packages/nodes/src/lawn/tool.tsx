@@ -209,7 +209,7 @@ export default function LawnTool() {
     <LawnFeedback
       line={draft.line}
       cursor={cursor}
-      error={settings.mode === 'brush' ? brush.error : draft.error}
+      error={settings.mode === 'brush' ? brush.message : draft.error}
       siteId={frame?.site.id}
       sceneApi={context.sceneApi}
       settings={settings}

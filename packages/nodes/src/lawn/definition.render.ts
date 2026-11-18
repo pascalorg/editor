@@ -6,6 +6,7 @@ import { buildLawnGeometry } from './geometry'
 
 export const lawnRenderDefinition: NodeRenderDefinition<typeof LawnNode> & { kind: 'lawn' } = {
   kind: 'lawn',
+  extensions: { 'pascal:viewer': { family: 'site' } },
   schemaVersion: 1,
   schema: LawnNode,
   category: 'site',

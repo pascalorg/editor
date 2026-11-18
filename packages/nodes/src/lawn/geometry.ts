@@ -12,22 +12,13 @@ import {
   Vector3,
 } from 'three'
 import type { MeshStandardNodeMaterial } from 'three/webgpu'
-import { disposeLawnBakeTexture } from './bake-blade-colors'
+import { disposeLawnBakeTexture } from './bake-textures'
 import { lawnBladeMaterial, setLawnBladeDraw } from './blade-material'
 import { lawnFlowerMaterial } from './flower-material'
 import { type LawnDetailChunk, registerLawnDetail, unregisterLawnDetail } from './lod'
 import { buildVisibleLawn } from './render-build'
+import { MID_ORDER, MID_TUFT, NEAR_ORDER, NEAR_TUFT } from './tuft-shape'
 import { lawnGroundMaterial } from './turf-ground'
-
-// XY describes a tuft silhouette and Z chooses its plane. One bent and one crossing
-// silhouette at the root share the two packed instance streams; mid uses just the first.
-const MID_TUFT = new Float32Array([-0.5, 0, 0, 0.5, 0, 0, -0.5, 1, 0, 0.5, 1, 0])
-const MID_ORDER = new Uint16Array([0, 1, 2, 2, 1, 3])
-const NEAR_TUFT = new Float32Array([
-  -0.5, 0, 0, 0.5, 0, 0, -0.5, 0.5, 0, 0.5, 0.5, 0, -0.5, 1, 0, 0.5, 1, 0, -0.5, 0, 1, 0.5, 0, 1,
-  -0.5, 1, 1, 0.5, 1, 1,
-])
-const NEAR_ORDER = new Uint16Array([0, 1, 2, 2, 1, 3, 2, 3, 4, 4, 3, 5, 6, 7, 8, 8, 7, 9])
 
 export type LawnMeshArrays = {
   positions: Float32Array

@@ -28902,15 +28902,15 @@ msgstr "Choisissez une espèce de fleur et une densité de fleurs supérieure à
 msgid "node.lawn.brush.empty"
 msgstr "Il ne reste ici aucun sol pour la pelouse. Vérifiez le contour et les éléments propriétaires du sol avant de peindre."
 
-# Source-Hash: fe0519db738ca3e9
-# Review: required
 # AI-Provider: openai-codex
 # AI-Model: gpt-6.1-sol
-# English: "This lawn has 64 strokes. Remove an older stroke before painting again."
+# English: "This lawn’s {pointBudget}-point budget is full. Remove older strokes to paint again."
+# Source-Hash: 80df656944cd7995
+# Review: required
 #: packages/nodes/src/lawn/brush-controller.ts
 #, fuzzy
 msgid "node.lawn.brush.full"
-msgstr "Cette pelouse compte 64 traits. Supprimez un ancien trait avant de peindre à nouveau."
+msgstr "La limite de {pointBudget} points de cette pelouse est atteinte. Supprimez des traits plus anciens pour peindre à nouveau."
 
 # Source-Hash: 52b4f4e833a09451
 # Review: required
@@ -28921,6 +28921,16 @@ msgstr "Cette pelouse compte 64 traits. Supprimez un ancien trait avant de peind
 #, fuzzy
 msgid "node.lawn.brush.invalid"
 msgstr "Ce trait comporte des coordonnées ou des réglages invalides. Vérifiez les réglages du pinceau et réessayez."
+
+# AI-Model: gpt-6.1-sol
+# AI-Provider: openai-codex
+# Source-Hash: 8ccb2ae038ac3038
+# English: "Near this lawn’s {pointBudget}-point budget. Remove older strokes to make room."
+# Review: required
+#: packages/nodes/src/lawn/brush-controller.ts
+#, fuzzy
+msgid "node.lawn.brush.nearBudget"
+msgstr "Cette pelouse approche de sa limite de {pointBudget} points. Supprimez des traits plus anciens pour faire de la place."
 
 # Source-Hash: c63c0e423c01c95d
 # Review: required
@@ -28952,15 +28962,15 @@ msgstr "Commencez à l’intérieur d’une seule zone de pelouse. Les pelouses 
 msgid "node.lawn.brush.terrainBudget"
 msgstr "Cette pelouse dépasse le budget de détail du terrain. Réduisez son contour ou simplifiez le terrain avant de peindre."
 
-# Source-Hash: 40900fc51c16829e
-# Review: required
 # AI-Provider: openai-codex
 # AI-Model: gpt-6.1-sol
-# English: "This stroke exceeds the lawn’s combined work budget. Use a shorter stroke or remove older strokes."
+# English: "Lawn work budget reached (32M stroke visits / 250k cells). Use fewer points or a smaller lawn."
+# Source-Hash: c44267646572171d
+# Review: required
 #: packages/nodes/src/lawn/brush-controller.ts
 #, fuzzy
 msgid "node.lawn.brush.workBudget"
-msgstr "Ce trait dépasse le budget de traitement cumulé de la pelouse. Utilisez un trait plus court ou supprimez d’anciens traits."
+msgstr "Limite de calcul atteinte (32 M de visites de traits / 250 k cellules). Utilisez moins de points ou une pelouse plus petite."
 
 # Source-Hash: 38235a44d8b30ac5
 # Review: required

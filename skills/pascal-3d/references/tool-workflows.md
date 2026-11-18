@@ -69,8 +69,8 @@ Read the existing lawn with `get_node` before an edit. `apply_patch` replaces it
 ordered `strokes` list, the same form the 2D/3D hand brush writes:
 `{ points: [[x,z], ...], radiusM, effect, strength }` in Site metres.
 Effects are `bare`, `grass`, `taller`, `shorter`, `more-flowers`, `fewer-flowers`;
-one point is a dab. At most 64 strokes, 128 points each, radius 0.05–10 m and
-strength 0–1. Explicitly remove or replace older intent when full; no silent
+one point is a dab. All strokes share a 20,000-point budget; radius is 0.05–10 m
+and strength 0–1. Explicitly remove or replace older intent when full; no silent
 merge or eviction. Creation may carry the same strokes in `add_site_surface`.
 Each generic edit is preflighted and atomic, with one undo step per batch.
 
@@ -81,6 +81,11 @@ generator and disclosed budget thinning. Generic patch results carry these as
 overlapping effect areas do not sum to the touched union.
 Invalid outlines, unsupported targets, work/terrain budgets or no retained area
 refuse before writes. Lawn bounds are 0.25–2,500 m² and 200 outline points.
+Refusal codes include `lawn_outline_required`, `surface_degenerate`,
+`invalid_input`, `lawn_target_conflict`, `lawn_transform_unsupported`,
+`lawn_material_unsupported`, `lawn_work_budget`, `lawn_terrain_budget` and
+`lawn_empty`. Inspect the refusal before retrying; changing a work-limited lawn
+may need fewer brush points even while the saved 20,000-point budget has room.
 
 Preserve existing flat lawn slabs and Environment ground cover unless the person
 requested replacement; plugin lawns still require Environment. Do not recreate

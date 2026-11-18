@@ -1,7 +1,7 @@
 import { z } from 'zod'
 import { plantingArea, plantingSimple } from '../../lib/planting-outline'
 import { BaseNode, nodeType, objectId } from '../base'
-import { LAWN_LIMITS } from './lawn-limits'
+import { LAWN_LIMITS, LAWN_STROKE_BUDGET_MESSAGE, lawnStrokePointCount } from './lawn-limits'
 
 export { LAWN_LIMITS } from './lawn-limits'
 
@@ -21,7 +21,7 @@ export const LawnFlower = z.object({
 export type LawnFlower = z.infer<typeof LawnFlower>
 
 export const LawnStroke = z.object({
-  points: z.array(Point).min(1).max(LAWN_LIMITS.maxStrokePoints),
+  points: z.array(Point).min(1).max(LAWN_LIMITS.maxStrokePoints, LAWN_STROKE_BUDGET_MESSAGE),
   radiusM: z.number().finite().min(LAWN_LIMITS.minStrokeRadius).max(LAWN_LIMITS.maxStrokeRadius),
   effect: z.enum(['bare', 'grass', 'taller', 'shorter', 'more-flowers', 'fewer-flowers']),
   strength: z.number().finite().min(0).max(1),
@@ -49,7 +49,13 @@ export const LawnNode = BaseNode.extend({
   flowerDensity: z.number().finite().min(0).max(LAWN_LIMITS.maxFlowerDensity).default(0),
   flowers: z.array(LawnFlower).max(LAWN_LIMITS.maxSpecies).default([]),
   season: z.enum(['spring', 'summer', 'autumn', 'winter']).default('summer'),
-  strokes: z.array(LawnStroke).max(LAWN_LIMITS.maxStrokes).default([]),
+  strokes: z
+    .array(LawnStroke)
+    .max(LAWN_LIMITS.maxStrokePoints, LAWN_STROKE_BUDGET_MESSAGE)
+    .refine((strokes) => lawnStrokePointCount(strokes) <= LAWN_LIMITS.maxStrokePoints, {
+      message: LAWN_STROKE_BUDGET_MESSAGE,
+    })
+    .default([]),
 })
   .superRefine((node, ctx) => {
     if (!plantingSimple(node.outline)) {

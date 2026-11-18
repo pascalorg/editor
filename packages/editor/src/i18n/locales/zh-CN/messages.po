@@ -28902,15 +28902,15 @@ msgstr "增加花朵前，请选择花卉品种并将花朵密度设为大于零
 msgid "node.lawn.brush.empty"
 msgstr "此处已无可用的草坪地面。绘制前请检查轮廓及地面所属对象。"
 
-# Source-Hash: fe0519db738ca3e9
-# Review: required
 # AI-Provider: openai-codex
 # AI-Model: gpt-6.1-sol
-# English: "This lawn has 64 strokes. Remove an older stroke before painting again."
+# English: "This lawn’s {pointBudget}-point budget is full. Remove older strokes to paint again."
+# Source-Hash: 80df656944cd7995
+# Review: required
 #: packages/nodes/src/lawn/brush-controller.ts
 #, fuzzy
 msgid "node.lawn.brush.full"
-msgstr "此草坪已有64个笔画。再次绘制前请删除旧笔画。"
+msgstr "此草坪已达到 {pointBudget} 个点的上限。请删除较早的笔画后再绘制。"
 
 # Source-Hash: 52b4f4e833a09451
 # Review: required
@@ -28921,6 +28921,16 @@ msgstr "此草坪已有64个笔画。再次绘制前请删除旧笔画。"
 #, fuzzy
 msgid "node.lawn.brush.invalid"
 msgstr "此笔画的坐标或设置无效。请检查笔刷设置后重试。"
+
+# AI-Model: gpt-6.1-sol
+# AI-Provider: openai-codex
+# Source-Hash: 8ccb2ae038ac3038
+# English: "Near this lawn’s {pointBudget}-point budget. Remove older strokes to make room."
+# Review: required
+#: packages/nodes/src/lawn/brush-controller.ts
+#, fuzzy
+msgid "node.lawn.brush.nearBudget"
+msgstr "此草坪已接近 {pointBudget} 个点的上限。请删除较早的笔画以腾出空间。"
 
 # Source-Hash: c63c0e423c01c95d
 # Review: required
@@ -28952,15 +28962,15 @@ msgstr "请从单个草坪区域内部开始。重叠的草坪必须分别编辑
 msgid "node.lawn.brush.terrainBudget"
 msgstr "此草坪超出地形细节预算。绘制前请缩小其轮廓或简化地形。"
 
-# Source-Hash: 40900fc51c16829e
-# Review: required
 # AI-Provider: openai-codex
 # AI-Model: gpt-6.1-sol
-# English: "This stroke exceeds the lawn’s combined work budget. Use a shorter stroke or remove older strokes."
+# English: "Lawn work budget reached (32M stroke visits / 250k cells). Use fewer points or a smaller lawn."
+# Source-Hash: c44267646572171d
+# Review: required
 #: packages/nodes/src/lawn/brush-controller.ts
 #, fuzzy
 msgid "node.lawn.brush.workBudget"
-msgstr "此笔画超出草坪的累计处理预算。请缩短笔画或删除旧笔画。"
+msgstr "已达到计算量上限（3,200 万次笔画访问 / 25 万个网格单元）。请减少点数或缩小草坪。"
 
 # Source-Hash: 38235a44d8b30ac5
 # Review: required

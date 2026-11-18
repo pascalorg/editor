@@ -64,7 +64,6 @@ describe('saved core lawn', () => {
         [0, 50],
       ],
     },
-    { strokes: Array.from({ length: LAWN_LIMITS.maxStrokes + 1 }, () => stroke) },
   ])('refuses an unsupported or unbounded saved lawn: %j', (fields) => {
     expect(LawnNode.safeParse({ outline, ...fields }).success).toBe(false)
   })
@@ -73,13 +72,28 @@ describe('saved core lawn', () => {
     { points: [] },
     { points: [[Infinity, 0]] },
     { points: [[100001, 0]] },
-    { points: Array.from({ length: 129 }, () => [0, 0]) },
     { radiusM: 0.049 },
     { radiusM: 10.01 },
     { strength: 1.01 },
     { effect: 'paint' },
   ])('refuses unsafe brush data: %j', (fields) => {
     expect(LawnStroke.safeParse({ ...stroke, ...fields }).success).toBe(false)
+  })
+
+  test('budgets 20,000 points across all strokes, not the number of strokes', () => {
+    const dabs = Array.from({ length: LAWN_LIMITS.maxStrokePoints }, () => stroke)
+    expect(LawnNode.safeParse({ outline, strokes: dabs }).success).toBe(true)
+    const over = LawnNode.safeParse({ outline, strokes: [...dabs, stroke] })
+    expect(over.success).toBe(false)
+    if (!over.success) expect(over.error.message).toMatch(/20,000.*points/)
+
+    const points = Array.from({ length: LAWN_LIMITS.maxStrokePoints }, () => [1, 1])
+    const longStroke = { ...stroke, points }
+    const saved = LawnNode.parse({ outline, strokes: [longStroke] })
+    expect(saved.strokes).toEqual([longStroke])
+    expect(AnyNode.parse(JSON.parse(JSON.stringify(saved)))).toEqual(saved)
+    expect(LawnNode.safeParse({ outline, strokes: [longStroke, stroke] }).success).toBe(false)
+    expect(LawnStroke.safeParse({ ...longStroke, points: [...points, [2, 1]] }).success).toBe(false)
   })
 
   test('accepts all six effects and the three explicit flower species', () => {

@@ -68,9 +68,9 @@ and any thinning.
 Read an existing lawn with `get_node`, then `apply_patch` its parameters or
 complete ordered `strokes` list. The hand brush writes that same
 `{ points, radiusM, effect, strength }` form in Site metres: bare, grass, taller,
-shorter, more-flowers and fewer-flowers. Limits are 64 strokes, 128 points each,
-radius 0.05–10 m and strength 0–1; one point is a dab. Replace/remove older intent
-explicitly at the bound; no silent eviction. Refusals precede writes. Generic
+shorter, more-flowers and fewer-flowers. All strokes share a 20,000-point budget;
+radius is 0.05–10 m and strength 0–1; one point is a dab. Replace/remove older
+intent explicitly at the bound; no silent eviction. Refusals precede writes. Generic
 edits return `lawnFacts` with estimated touched area per effect, sampling
 resolution and union area; overlapping effects must not be added together.
 Preserve existing Environment lawns and flat lawn slabs unless replacement

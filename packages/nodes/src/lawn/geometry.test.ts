@@ -251,7 +251,7 @@ describe('lawn render adapter', () => {
     const bladeIndices = bakedMeshes
       .filter((mesh) => mesh.name.startsWith('lawn-blades'))
       .reduce((sum, mesh) => sum + (mesh.geometry.index?.count ?? 0), 0)
-    expect(bladeIndices).toBe(canonical.blades.count * 15)
+    expect(bladeIndices).toBe(canonical.blades.count * 36)
     for (const mesh of bakedMeshes) {
       expect(mesh.geometry.type).toBe('BufferGeometry')
       expect(mesh.geometry.index?.array.BYTES_PER_ELEMENT).toBe(2)
@@ -264,6 +264,7 @@ describe('lawn render adapter', () => {
     expect(JSON.stringify(nodes)).toBe(saved)
   })
 
+  // Keep the real 1,600 m² fixture; its bake now also rasterizes portable ground maps.
   test('portable flowers split at the 16-bit vertex limit without losing geometry', () => {
     const { lawn, context, nodes } = fixture(40)
     const flowering = LawnNode.parse({
@@ -284,7 +285,7 @@ describe('lawn render adapter', () => {
       expect(mesh.geometry.index?.array.BYTES_PER_ELEMENT).toBe(2)
     }
     disposeLawnGeometry(group)
-  })
+  }, 30_000)
 
   test('the plan uses retained holes and scene changes are Site scoped', () => {
     const { lawn, context, nodes, site } = fixture()

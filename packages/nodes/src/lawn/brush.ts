@@ -18,7 +18,7 @@ export type LawnBrushSettings = Pick<LawnStroke, 'radiusM' | 'effect' | 'strengt
 export type LawnBrushRefusal =
   | LawnBuildError['code']
   | 'invalid-stroke'
-  | 'stroke-limit'
+  | 'point-budget'
   | 'flowers-required'
   | 'changed'
   | 'no_site'
@@ -51,30 +51,42 @@ export const lawnBrushColor: Record<LawnStroke['effect'], string> = {
 const validPoint = (point: Point) =>
   point.every((value) => Number.isFinite(value) && Math.abs(value) <= LAWN_LIMITS.maxCoordinate)
 
-/** Resample only the in-flight path, never any previously authored stroke. */
-function boundedPath(points: Point[]): Point[] {
-  if (points.length <= LAWN_LIMITS.maxStrokePoints) return points
-  const lengths = [0]
-  for (let i = 1; i < points.length; i++) {
-    const a = points[i - 1],
-      b = points[i]
-    if (a && b) lengths.push((lengths.at(-1) ?? 0) + Math.hypot(b[0] - a[0], b[1] - a[1]))
+function segmentDistance(point: Point, a: Point, b: Point): number {
+  const dx = b[0] - a[0],
+    dz = b[1] - a[1]
+  const lengthSquared = dx * dx + dz * dz
+  const t = lengthSquared
+    ? Math.max(0, Math.min(1, ((point[0] - a[0]) * dx + (point[1] - a[1]) * dz) / lengthSquared))
+    : 0
+  return Math.hypot(point[0] - a[0] - t * dx, point[1] - a[1] - t * dz)
+}
+
+/** Bound error against the actual pointer samples, not an already simplified path. */
+function strokePath(first: Point, radius: number) {
+  let points: Point[] = [[...first]]
+  let pending: Point[] = [[...first]]
+  const tolerance = Math.min(0.01, radius * 0.02)
+  return (point: Point): Point[] => {
+    const anchor = points.at(-2)
+    if (
+      anchor &&
+      pending.length < 128 &&
+      pending.every((sample) => segmentDistance(sample, anchor, point) <= tolerance)
+    ) {
+      points = [...points.slice(0, -1), [...point]]
+    } else {
+      // Finalize the last valid segment before its raw-sample window can grow unbounded.
+      const last = points.at(-1)
+      pending = last ? [last] : []
+      points = [...points, [...point]]
+    }
+    // Exactly straight samples need no transient history either.
+    const a = pending.at(-2),
+      b = pending.at(-1)
+    if (a && b && segmentDistance(b, a, point) <= 1e-10) pending.pop()
+    pending.push([...point])
+    return points
   }
-  const total = lengths.at(-1) ?? 0
-  let segment = 1
-  return Array.from({ length: LAWN_LIMITS.maxStrokePoints }, (_, index): Point => {
-    if (index === 0) return [...(points[0] ?? [0, 0])]
-    if (index === LAWN_LIMITS.maxStrokePoints - 1) return [...(points.at(-1) ?? [0, 0])]
-    const distance = (total * index) / (LAWN_LIMITS.maxStrokePoints - 1)
-    while (segment < points.length - 1 && (lengths[segment] ?? 0) < distance) segment++
-    const a = points[segment - 1],
-      b = points[segment]
-    if (!a || !b) return [...(points[0] ?? [0, 0])]
-    const start = lengths[segment - 1] ?? 0
-    const length = (lengths[segment] ?? start) - start
-    const t = length > 0 ? (distance - start) / length : 0
-    return [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t]
-  })
 }
 
 function currentLawn(node: LawnNode): LawnNode | null {
@@ -111,8 +123,18 @@ function preflight(node: LawnNode, patch: Partial<LawnNode>, refuse: Refuse): La
   }
 }
 
-function strokeSession(node: LawnNode, stroke: LawnStroke, flowers: FlowerPatch, refuse: Refuse) {
+function strokeSession(
+  node: LawnNode,
+  stroke: LawnStroke,
+  flowers: FlowerPatch,
+  refuse: Refuse,
+  onPointCount?: (count: number) => void,
+) {
   let points = stroke.points
+  const first = points[0]
+  if (!first) return null
+  const append = strokePath(first, stroke.radiusM)
+  const savedPointCount = node.strokes.reduce((count, saved) => count + saved.points.length, 0)
   let active = true
   const clear = () => {
     useLiveNodeOverrides.getState().clear(node.id)
@@ -120,6 +142,10 @@ function strokeSession(node: LawnNode, stroke: LawnStroke, flowers: FlowerPatch,
   }
   const proposed = () => ({ ...flowers, strokes: [...node.strokes, { ...stroke, points }] })
   const validate = () => {
+    if (savedPointCount + points.length > LAWN_LIMITS.maxStrokePoints) {
+      refuse('point-budget')
+      return null
+    }
     const live = currentLawn(node)
     if (!live) {
       refuse('changed')
@@ -135,15 +161,20 @@ function strokeSession(node: LawnNode, stroke: LawnStroke, flowers: FlowerPatch,
     }
     useLiveNodeOverrides.getState().set(node.id, proposed())
     useScene.getState().markDirty(node.id)
+    onPointCount?.(savedPointCount + points.length)
     return true
   }
   if (!preview()) return null
   return {
     move(point: Point): boolean {
-      if (!active || !validPoint(point)) return false
+      if (!active) return false
+      if (!validPoint(point)) {
+        refuse('invalid-stroke')
+        return false
+      }
       const last = points.at(-1)
       if (last && last[0] === point[0] && last[1] === point[1]) return true
-      points = boundedPath([...points, [...point]])
+      points = append(point)
       return preview()
     },
     commit(): boolean {
@@ -171,6 +202,7 @@ export function createLawnBrushStroke(
   settings: LawnBrushSettings,
   first: Point,
   onRefusal?: Refuse,
+  onPointCount?: (count: number) => void,
 ) {
   const refuse: Refuse = (code) => onRefusal?.(code)
   const parsed = LawnStroke.safeParse({ ...settings, points: [first] })
@@ -178,8 +210,11 @@ export function createLawnBrushStroke(
     refuse('invalid-stroke')
     return null
   }
-  if (node.strokes.length >= LAWN_LIMITS.maxStrokes) {
-    refuse('stroke-limit')
+  if (
+    node.strokes.reduce((count, stroke) => count + stroke.points.length, 0) >=
+    LAWN_LIMITS.maxStrokePoints
+  ) {
+    refuse('point-budget')
     return null
   }
   const flowers: FlowerPatch =
@@ -203,5 +238,5 @@ export function createLawnBrushStroke(
     refuse('flowers-required')
     return null
   }
-  return strokeSession(node, parsed.data, flowers, refuse)
+  return strokeSession(node, parsed.data, flowers, refuse, onPointCount)
 }

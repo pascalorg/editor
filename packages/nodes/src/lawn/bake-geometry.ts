@@ -1,119 +1,95 @@
-import type { GeometryContext, LawnNode } from '@pascal-app/core'
-import {
-  BufferAttribute,
-  BufferGeometry,
-  DoubleSide,
-  Group,
-  Mesh,
-  MeshStandardMaterial,
-  Vector3,
-} from 'three'
+import type { GeometryContext, LawnBuild, LawnNode } from '@pascal-app/core'
+import { Group } from 'three'
 import { buildLawnBladeBakeColors } from './bake-blade-colors'
-import { LAWN_NEAR_INDICES, LAWN_NEAR_POSITIONS, lawnBladePoint } from './blade-shape'
-import { type LawnMeshArrays, lawnBufferGeometry } from './geometry'
+import { addLawnBakeFlowers } from './bake-flowers'
+import { addLawnBakeGround } from './bake-ground'
+import { addLawnBakeMesh } from './bake-mesh'
+import { lawnBladePoint } from './blade-shape'
 import { buildVisibleLawn } from './render-build'
+import { NEAR_ORDER, NEAR_TUFT } from './tuft-shape'
 
-const BLADES_PER_MESH = 8192
+const TUFTS_PER_MESH = 6000
 
-function portableChunks(data: LawnMeshArrays): LawnMeshArrays[] {
-  if (data.positions.length / 3 <= 65535) return [data]
-  const chunks: LawnMeshArrays[] = []
-  for (let start = 0; start < data.indices.length; start += 65535) {
-    const count = Math.min(65535, data.indices.length - start)
-    const positions = new Float32Array(count * 3)
-    const normals = new Float32Array(count * 3)
-    const colors = new Float32Array(count * 3)
-    const indices = new Uint32Array(count)
-    for (let index = 0; index < count; index++) {
-      const source = (data.indices[start + index] ?? 0) * 3
-      positions.set(data.positions.subarray(source, source + 3), index * 3)
-      normals.set(data.normals.subarray(source, source + 3), index * 3)
-      colors.set(data.colors.subarray(source, source + 3), index * 3)
-      indices[index] = index
-    }
-    chunks.push({ positions, normals, colors, indices })
-  }
-  return chunks
-}
-
-function expandBlades(roots: Float32Array, traits: Float32Array, start: number, count: number) {
-  const positions = new Float32Array(count * 7 * 3)
-  const normals = new Float32Array(positions.length)
-  const indices = new Uint16Array(count * 15)
-  for (let blade = 0; blade < count; blade++) {
-    const input = (start + blade) * 4
-    const [x = 0, y = 0, z = 0, height = 0] = roots.subarray(input, input + 4)
-    const [yaw = 0, lean = 0, , width = 0] = traits.subarray(input, input + 4)
-    for (let vertex = 0; vertex < 7; vertex++) {
-      const progress = LAWN_NEAR_POSITIONS[vertex * 3 + 1] ?? 0
-      const side = (LAWN_NEAR_POSITIONS[vertex * 3] ?? 0) * width
-      const point = lawnBladePoint(side, progress, height, yaw, lean, 0, 0, x, z)
-      const offset = (blade * 7 + vertex) * 3
-      positions.set([x + point[0], y + point[1], z + point[2]], offset)
-      const normal = new Vector3(
-        Math.sin(yaw),
-        -2 * progress * lean * 1.6,
-        Math.cos(yaw),
-      ).normalize()
-      normal.y += 1.25
-      normal.normalize()
-      normals.set([normal.x, normal.y, normal.z], offset)
-    }
-    for (let index = 0; index < 15; index++)
-      indices[blade * 15 + index] = blade * 7 + (LAWN_NEAR_INDICES[index] ?? 0)
-  }
-  return { positions, normals, indices }
-}
-
-function addBlades(
-  group: Group,
-  node: LawnNode,
-  roots: Float32Array,
-  traits: Float32Array,
-  start: number,
-  count: number,
+function expandTufts(
+  population: LawnBuild['blades'],
+  atlas: ReturnType<typeof buildLawnBladeBakeColors>,
+  tufts: number[],
 ) {
-  const data = expandBlades(roots, traits, start, count)
-  const { material, uv } = buildLawnBladeBakeColors(node, traits, start, count)
-  const geometry = new BufferGeometry()
-  geometry.setAttribute('position', new BufferAttribute(data.positions, 3))
-  geometry.setAttribute('normal', new BufferAttribute(data.normals, 3))
-  geometry.setAttribute('uv', new BufferAttribute(uv, 2))
-  geometry.setIndex(new BufferAttribute(data.indices, 1))
-  geometry.computeBoundingSphere()
-  const mesh = new Mesh(geometry, material)
-  mesh.name = `lawn-blades-static-${start}`
-  mesh.castShadow = mesh.receiveShadow = true
-  group.add(mesh)
+  const count = tufts.length
+  const vertices = NEAR_TUFT.length / 3
+  const positions = new Float32Array(count * vertices * 3),
+    normals = new Float32Array(positions.length),
+    uv = new Float32Array(count * vertices * 2),
+    indices = new Uint16Array(count * NEAR_ORDER.length * 2)
+  const normalLength = Math.hypot(0.26, 1)
+  for (let tuft = 0; tuft < count; tuft++) {
+    const blade = tufts[tuft] ?? 0,
+      input = blade * 4
+    const [x = 0, y = 0, z = 0, height = 0] = population.rootHeight.subarray(input, input + 4)
+    const [yaw = 0, lean = 0, , width = 0] = population.traits.subarray(input, input + 4)
+    for (let vertex = 0; vertex < vertices; vertex++) {
+      const side = NEAR_TUFT[vertex * 3] ?? 0,
+        progress = NEAR_TUFT[vertex * 3 + 1] ?? 0,
+        plane = NEAR_TUFT[vertex * 3 + 2] ?? 0
+      const angle = yaw + plane * 1.83
+      const point = lawnBladePoint(
+        side * width * population.tuftWidthScale,
+        progress,
+        height,
+        angle,
+        lean,
+        0,
+        0,
+        x,
+        z,
+      )
+      const output = tuft * vertices + vertex
+      positions.set([x + point[0], y + point[1] * (1 - plane * 0.11), z + point[2]], output * 3)
+      normals.set(
+        [
+          (Math.sin(angle) * 0.26) / normalLength,
+          1 / normalLength,
+          (Math.cos(angle) * 0.26) / normalLength,
+        ],
+        output * 3,
+      )
+      uv.set(atlas.uv(blade, plane, side, progress), output * 2)
+    }
+    // The live normalNode points up on either face. Ordinary DoubleSide export
+    // negates back-face normals, so author both windings with the SAME canopy normal.
+    for (let index = 0; index < NEAR_ORDER.length; index += 3) {
+      const a = tuft * vertices + (NEAR_ORDER[index] ?? 0),
+        b = tuft * vertices + (NEAR_ORDER[index + 1] ?? 0),
+        c = tuft * vertices + (NEAR_ORDER[index + 2] ?? 0)
+      indices.set([a, b, c, c, b, a], tuft * NEAR_ORDER.length * 2 + index * 2)
+    }
+  }
+  return { positions, normals, uv, indices }
 }
 
-/** The portable tree uses the canonical population, never a camera's runtime subset. */
+/** A camera-independent snapshot of the chosen tuft, sward and flower appearance. */
 export function buildLawnBakeGeometry(node: LawnNode, ctx?: Partial<GeometryContext>): Group {
   const group = new Group()
   group.name = 'lawn-geometry'
   const built = buildVisibleLawn(node, ctx)
   if (!built) return group
-  const material = new MeshStandardMaterial({
-    vertexColors: true,
-    roughness: 0.96,
-    side: DoubleSide,
-  })
-  const add = (data: LawnMeshArrays, name: string) => {
-    portableChunks(data).forEach((chunk, index) => {
-      const geometry = lawnBufferGeometry(chunk)
-      geometry.setIndex(new BufferAttribute(new Uint16Array(chunk.indices), 1))
-      const mesh = new Mesh(geometry, material)
-      mesh.name = index ? `${name}-${index}` : name
-      mesh.castShadow = mesh.receiveShadow = true
-      group.add(mesh)
-    })
+  addLawnBakeGround(group, node, built.base)
+  if (built.blades.count) {
+    const atlas = buildLawnBladeBakeColors(node, built.blades.traits)
+    for (const [page, material] of atlas.materials.entries()) {
+      const tufts: number[] = []
+      for (let blade = 0; blade < built.blades.count; blade++)
+        if (atlas.pageFor(blade) === page) tufts.push(blade)
+      for (let start = 0; start < tufts.length; start += TUFTS_PER_MESH)
+        addLawnBakeMesh(
+          group,
+          expandTufts(built.blades, atlas, tufts.slice(start, start + TUFTS_PER_MESH)),
+          material,
+          `lawn-blades-static-${page}-${start}`,
+        )
+    }
   }
-  add(built.base, 'lawn-ground')
-  for (let start = 0; start < built.blades.count; start += BLADES_PER_MESH) {
-    const count = Math.min(BLADES_PER_MESH, built.blades.count - start)
-    addBlades(group, node, built.blades.rootHeight, built.blades.traits, start, count)
-  }
-  if (built.flowers.count) add(built.flowers, 'lawn-flowers')
+  addLawnBakeFlowers(group, built.flowers)
   group.userData.lawn = built.facts
   return group
 }

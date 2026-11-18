@@ -145,7 +145,7 @@ function makeCorollas() {
   return new DataTexture(data, SIZE, SIZE, RGBAFormat)
 }
 
-const corollaMap = sharedTexture(makeCorollas)
+export const corollaMap = sharedTexture(makeCorollas)
 
 export function lawnFlowerMaterial() {
   const material = new MeshStandardNodeMaterial({

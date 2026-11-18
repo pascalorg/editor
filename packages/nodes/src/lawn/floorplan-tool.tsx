@@ -193,7 +193,7 @@ export default function FloorplanLawnTool(context: FloorplanToolContext) {
   })
   const points = draft.line.map((point) => siteToPlan(building, point))
   const cursorPlan = cursor ? siteToPlan(building, cursor) : null
-  const error = settings.mode === 'brush' ? brush.error : draft.error
+  const error = settings.mode === 'brush' ? brush.message : draft.error
   return (
     <g ref={groupRef}>
       <PlanLawnFeedback points={points} cursor={cursorPlan} settings={settings} error={error} />

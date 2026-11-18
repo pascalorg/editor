@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import { Client } from '@modelcontextprotocol/client'
 import { InMemoryTransport } from '@modelcontextprotocol/server'
-import { LawnNode, SiteNode } from '@pascal-app/core/schema'
+import { LAWN_LIMITS, LawnNode, SiteNode } from '@pascal-app/core/schema'
 import { SceneBridge } from '../bridge/scene-bridge'
 import { createPascalMcpServer } from '../server'
 
@@ -143,14 +143,39 @@ describe('lawn edits over real MCP', () => {
     })
   })
 
-  test('oversized stroke lists refuse atomically and never evict earlier strokes', async () => {
+  test('more than 64 small strokes fit the shared point budget and undo together', async () => {
     await withLawn(async (client, bridge) => {
+      const before = structuredClone(bridge.getNodes())
+      const strokes = Array.from({ length: 65 }, () => stroke)
+      const result = await patch(client, [{ op: 'update', id: 'lawn_patch', data: { strokes } }])
+      expect(result.isError).toBeFalsy()
+      expect(bridge.getNode('lawn_patch')).toMatchObject({ strokes })
+      expect(bridge.undo()).toBe(1)
+      expect(bridge.getNodes()).toEqual(before)
+    })
+  })
+
+  test('a combined point-budget overflow refuses atomically and preserves earlier strokes', async () => {
+    await withLawn(async (client, bridge) => {
+      const initial = await patch(client, [
+        { op: 'update', id: 'lawn_patch', data: { strokes: [stroke] } },
+      ])
+      expect(initial.isError).toBeFalsy()
+      bridge.clearHistory()
       const before = structuredClone(bridge.getNodes())
       const result = await patch(client, [
         {
           op: 'update',
           id: 'lawn_patch',
-          data: { strokes: Array.from({ length: 65 }, () => stroke) },
+          data: {
+            strokes: [
+              stroke,
+              {
+                ...stroke,
+                points: Array.from({ length: LAWN_LIMITS.maxStrokePoints }, () => [2, 2]),
+              },
+            ],
+          },
         },
       ])
       expect(result.isError).toBe(true)
