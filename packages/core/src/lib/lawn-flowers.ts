@@ -270,12 +270,14 @@ function flowerPlacements(
         if (!containsPoint(polygons, [x, z]) || distanceToBoundary(polygons, [x, z]) < 0.035)
           continue
         const strokes = sampleLawnStrokes(node.strokes, x, z)
-        const drift = 0.45 + (0.55 * (valueNoise3(node.seed + 103, x / 2.7, 0, z / 2.7) + 1)) / 2
+        const noise = valueNoise3(node.seed + 103, x / 2.7, 0, z / 2.7)
+        const abundance = Math.max(0, Math.min(1, (noise - 0.05) / 0.55))
+        const drift = 0.03 + 0.97 * abundance * abundance * (3 - 2 * abundance)
         const probability =
           (node.flowerDensity / 2) *
           drift *
           (0.7 + node.roughness * 0.3) *
-          strokes.flowers *
+          (strokes.flowers * 2) *
           strokes.coverage
         if (hash3(node.seed + 104, col, row, candidate) >= probability) continue
         const flower = selectFlower(
