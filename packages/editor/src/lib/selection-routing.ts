@@ -3,6 +3,7 @@ import {
   type AnyNodeId,
   type BuildingNode,
   emitter,
+  isRegistrySelectable,
   nodeRegistry,
   resolveSelectionProxyId,
   useScene,
@@ -11,6 +12,13 @@ import { useViewer } from '@pascal-app/viewer'
 import type { SelectionModifierKeys } from '@pascal-app/viewer/ui'
 import useEditor from '../store/use-editor'
 import { emitDeleteSFX } from './sfx-bus'
+
+export function isSelectableSiteNode(
+  node: AnyNode,
+  nodes: Readonly<Record<string, AnyNode | undefined>>,
+): boolean {
+  return isRegistrySelectable(node.type) && !!node.parentId && nodes[node.parentId]?.type === 'site'
+}
 
 export function resolveCanvasBuildingId(
   node: AnyNode,
