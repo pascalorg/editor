@@ -467,7 +467,34 @@ function hasDeformedGeometry(mesh: THREE.Mesh): boolean {
   )
 }
 
-function bakeVertexColors(root: THREE.Object3D, preserveDeformations = false): boolean {
+// glTF multiplies baseColorTexture by COLOR_0, including for MASK materials. Retain the
+// shared image, UVs and interpolation when every primitive consumes the same color attribute.
+function canKeepMappedGltfColors(mesh: THREE.Mesh, materials: THREE.Material[]): boolean {
+  if (
+    !materials.every((m) => m.vertexColors) ||
+    !materials.some((m) => (m as TexturedMaterial).map instanceof THREE.Texture)
+  )
+    return false
+  const color = mesh.geometry.getAttribute('color')
+  if (color.itemSize !== 3 && color.itemSize !== 4) return false
+  if (!(color.array instanceof Float32Array)) {
+    return (
+      color.normalized && (color.array instanceof Uint8Array || color.array instanceof Uint16Array)
+    )
+  }
+  for (let i = 0; i < color.count; i++)
+    for (let c = 0; c < color.itemSize; c++) {
+      const value = color.getComponent(i, c)
+      if (!(value >= 0 && value <= 1)) return false
+    }
+  return true
+}
+
+function bakeVertexColors(
+  root: THREE.Object3D,
+  options: PortableNormalizeOptions,
+  preserveDeformations = false,
+): boolean {
   const meshes: THREE.Mesh[] = []
   root.traverse((object) => {
     if ((object as THREE.Mesh).isMesh) meshes.push(object as THREE.Mesh)
@@ -486,6 +513,8 @@ function bakeVertexColors(root: THREE.Object3D, preserveDeformations = false): b
       rememberDiscarded(root, originalGeometry)
       continue
     }
+    if (options.format === 'glb' && canKeepMappedGltfColors(mesh, materials)) continue
+
     const occupiedUvChannels = new Set<number>()
     for (let channel = 1; channel <= 3; channel++) {
       if (mesh.geometry.getAttribute(uvAttributeName(channel))) occupiedUvChannels.add(channel)
@@ -739,6 +768,7 @@ function canonicalNormalTexture(source: THREE.Texture, scale: THREE.Vector2): TH
 }
 
 export type PortableNormalizeOptions = {
+  format?: 'glb' | 'usdz'
   /**
    * Leave this normal map and its material's `normalScale` untouched. By-reference
    * placeholders get their real bytes re-attached later, so baking the scale into
@@ -881,11 +911,18 @@ function expandPortableSidedGeometry(
   return output
 }
 
-function bakeDoubleSidedMeshes(root: THREE.Object3D): void {
+function bakeDoubleSidedMeshes(root: THREE.Object3D, options: PortableNormalizeOptions): void {
   root.traverse((object) => {
     const mesh = object as THREE.Mesh
     if (!mesh.isMesh) return
     const materials = materialsOf(mesh)
+    // The retained mapped COLOR_0 primitive can also use glTF's native doubleSided flag.
+    if (
+      options.format === 'glb' &&
+      mesh.geometry.hasAttribute('color') &&
+      materials.every((m) => m.side !== THREE.BackSide)
+    )
+      return
     const geometry = expandPortableSidedGeometry(mesh.geometry, materials)
     if (!geometry) return
     const original = mesh.geometry
@@ -942,11 +979,11 @@ export function normalizePortableScene(
   freezeDeformedMeshes(root)
   const clampedMaterialColors = clampPortableMaterialColors(root)
   materializeDataTextures(root)
-  const clampedVertexColors = bakeVertexColors(root)
+  const clampedVertexColors = bakeVertexColors(root, options)
   const clampedHdr = clampedMaterialColors || clampedVertexColors
   canonicalizeAlphaMaps(root)
   canonicalizeNormalMaps(root, options)
-  bakeDoubleSidedMeshes(root)
+  bakeDoubleSidedMeshes(root, options)
   root.updateMatrixWorld(true)
   return clampedHdr
     ? [
@@ -964,7 +1001,7 @@ export function normalizeViewerArtifactMaterials(
 ): string[] {
   const clampedMaterialColors = clampPortableMaterialColors(root)
   materializeDataTextures(root)
-  const clampedVertexColors = bakeVertexColors(root, true)
+  const clampedVertexColors = bakeVertexColors(root, options, true)
   canonicalizeAlphaMaps(root)
   canonicalizeNormalMaps(root, options)
   return clampedMaterialColors || clampedVertexColors
