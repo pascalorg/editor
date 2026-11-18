@@ -56,9 +56,16 @@ export type LawnFacts = {
 }
 export type LawnBuild = {
   polygons: MultiPolygon
-  base: LawnMesh
-  blades: { rootHeight: Float32Array; traits: Float32Array; count: number; chunks: LawnChunk[] }
+  base: LawnMesh & { cover?: Float32Array }
+  blades: {
+    rootHeight: Float32Array
+    traits: Float32Array
+    count: number
+    chunks: LawnChunk[]
+    tuftWidthScale: number
+  }
   flowers: LawnMesh & {
+    uv: Uint16Array
     count: number
     speciesCounts: Record<'daisy' | 'clover' | 'yarrow', number>
     headIndexEnds: Uint32Array

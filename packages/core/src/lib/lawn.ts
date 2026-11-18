@@ -1,8 +1,13 @@
 import type { AnyNode } from '../schema'
 import { LAWN_LIMITS, LawnNode } from '../schema/nodes/lawn'
 import { type LawnCoverage, lawnCoverage } from './lawn-coverage'
-import { lawnFlowers } from './lawn-flowers'
-import { type LawnGroundTriangle, lawnGroundMesh, lawnGroundTriangles } from './lawn-ground'
+import { lawnFlowerProbes, lawnFlowers } from './lawn-flowers'
+import {
+  type LawnGroundTriangle,
+  lawnGroundMesh,
+  lawnGroundTriangles,
+  lawnSwath,
+} from './lawn-ground'
 import { retainedLawn } from './lawn-scene'
 import { lawnStrokeAreas } from './lawn-stroke-area'
 import { sampleLawnStrokes } from './lawn-strokes'
@@ -33,6 +38,11 @@ export type LawnPlan = {
   groundHeight: (x: number, z: number) => number
   facts: LawnFacts
 }
+
+// The live tuft spans this many individual blade widths. Its edge clearance and
+// renderer must agree, including at the widest authored blade setting.
+const TUFT_WIDTH_SCALE = 20
+const EDGE_FAN_SHARE = 0.64
 
 type Nodes = Readonly<Record<string, AnyNode>>
 type Blade = {
@@ -73,8 +83,12 @@ export function planLawn(input: LawnNode, nodes: Nodes): LawnPlan {
   const coverage = lawnCoverage(retained.polygons)
   const topologyWork = { visits: candidates.count * strokePoints, points: strokePoints }
   const triangles = lawnGroundTriangles(retained.polygons, node, field, topologyWork)
-  const strokeWork =
-    topologyWork.visits + (triangles.length * 3 + candidates.count / 50) * strokePoints
+  const flowerProbes = lawnFlowerProbes(
+    node,
+    candidates.maxX - candidates.minX,
+    candidates.maxZ - candidates.minZ,
+  )
+  const strokeWork = topologyWork.visits + (triangles.length * 3 + flowerProbes) * strokePoints
   assertLawnStrokeWork(strokeWork)
   const sampledAreas = lawnStrokeAreas(node, coverage, candidates, strokeWork)
   const facts: LawnFacts = {
@@ -109,9 +123,23 @@ function bladeAt(
   interior: boolean,
 ): Blade | null {
   const { node, coverage, groundHeight } = plan
-  // Independent points in metre cells avoid the rows of a jittered ten-centimetre lattice.
-  const x = col + hash3(node.seed, col, row, candidate),
-    z = row + hash3(node.seed + 1, col, row, candidate)
+  // Rotate a low-discrepancy patch independently in each metre square. Small jitter
+  // breaks alignment while leaving room for adjacent tillers to overlap.
+  const wrap = (v: number) => v - Math.floor(v)
+  const x =
+    col +
+    wrap(
+      hash3(node.seed, col, row, 0) +
+        candidate * 0.754877666 +
+        hash3(node.seed + 11, col, row, candidate) * 0.048,
+    )
+  const z =
+    row +
+    wrap(
+      hash3(node.seed + 1, col, row, 0) +
+        candidate * 0.569840291 +
+        hash3(node.seed + 12, col, row, candidate) * 0.048,
+    )
   if (!interior && !coverage.contains(x, z)) return null
   const strokes = sampleLawnStrokes(node.strokes, x, z)
   const threshold = hash3(node.seed + 2, col, row, candidate)
@@ -123,27 +151,33 @@ function bladeAt(
     node.height *
     strokes.height *
     (1 + node.roughness * (broad * 0.3 + local * 0.2 + (random - 0.5) * 0.5))
-  const lean = 0.12 + node.roughness * (0.2 + random * 0.45)
-  const width = node.bladeWidth * (0.8 + hash3(node.seed + 7, col, row, candidate) * 0.4)
-  const sway = lean * 1.6 + node.wind * 0.48
+  const restLean = 0.17 + node.roughness * (0.17 + random * 0.34)
+  const bladeWidth = node.bladeWidth * (0.8 + hash3(node.seed + 7, col, row, candidate) * 0.4)
+  const tuftRadius = (bladeWidth * TUFT_WIDTH_SCALE) / 2
+  const sway = restLean * 1.6 + node.wind * 0.48
   const edgeDistance = coverage.distance(
     x,
     z,
-    Math.max(node.edgeFade, rawHeight * sway + width / 2),
+    Math.max(node.edgeFade, tuftRadius / EDGE_FAN_SHARE, rawHeight * 1.38 * sway + tuftRadius),
   )
-  if (edgeDistance <= width / 2) return null
-  const fade = node.edgeFade ? Math.min(1, edgeDistance / node.edgeFade) : 1
-  if (threshold >= (node.density / 100) * strokes.coverage * fade * fade * (3 - 2 * fade))
-    return null
-  // Bound the complete wind envelope, not only the root, at paths and bed rims.
+  if (edgeDistance <= bladeWidth * 0.5) return null
+  const rim = node.edgeFade ? Math.max(0, 1 - edgeDistance / node.edgeFade) : 0
+  // The uncut margin grows upright. Compress the whole fan first, then bound the
+  // remaining tip travel, including both gust components, at the actual clipped edge.
+  const width = Math.min(bladeWidth, (edgeDistance * EDGE_FAN_SHARE * 2) / TUFT_WIDTH_SCALE)
+  const lean = restLean * (1 - rim * 0.8)
   const height = Math.min(
-    rawHeight * (0.65 + fade * 0.35),
-    (edgeDistance - width / 2) / Math.max(0.001, sway),
+    rawHeight * (1 + rim * 0.38),
+    (edgeDistance - (width * TUFT_WIDTH_SCALE) / 2) / (lean * 1.6 + node.wind * 0.48),
   )
-  const tone = 0.95 + broad * 0.22 + local * 0.065 + (random - 0.5) * 0.06
+  const swath = lawnSwath(node, x, z, broad)
+  const yaw = hash3(node.seed + 6, col, row, candidate) * Math.PI * 2
+  const tone =
+    (0.94 + swath * 0.17 + broad * 0.16 + local * 0.13 + (random - 0.5) * 0.22) /
+    (0.52 + strokes.height * 0.48)
   return {
     root: [x, groundHeight(x, z), z, height],
-    traits: [hash3(node.seed + 6, col, row, candidate) * Math.PI * 2, lean, tone, width],
+    traits: [yaw + swath * 0.72 * Math.sin(0.24 - yaw), lean, tone, width],
     bucket: Math.floor(hash3(node.seed + 8, col, row, candidate) * 256),
   }
 }
@@ -201,13 +235,13 @@ function packedBlades(plan: LawnPlan): LawnBuild['blades'] {
       bounds: chunk.bounds,
     })
   }
-  return { rootHeight, traits, count: population.count, chunks }
+  return { rootHeight, traits, count: population.count, chunks, tuftWidthScale: TUFT_WIDTH_SCALE }
 }
 
 export function buildLawn(node: LawnNode, nodes: Nodes): LawnBuild {
   const plan = planLawn(node, nodes)
   const blades = packedBlades(plan)
-  const flowers = lawnFlowers(plan.node, plan.polygons, plan.groundHeight)
+  const flowers = lawnFlowers(plan.node, plan.polygons, plan.coverage, plan.groundHeight)
   const facts: LawnFacts = {
     ...plan.facts,
     bladeCount: blades.count,

@@ -2,7 +2,6 @@ import type { GeometryContext, LawnBuild, LawnChunk, LawnNode } from '@pascal-ap
 import {
   BufferAttribute,
   BufferGeometry,
-  DoubleSide,
   Group,
   InstancedBufferAttribute,
   InstancedBufferGeometry,
@@ -12,17 +11,23 @@ import {
   Sphere,
   Vector3,
 } from 'three'
-import { MeshStandardNodeMaterial } from 'three/webgpu'
+import type { MeshStandardNodeMaterial } from 'three/webgpu'
 import { disposeLawnBakeTexture } from './bake-blade-colors'
 import { lawnBladeMaterial, setLawnBladeDraw } from './blade-material'
-import {
-  LAWN_MID_INDICES,
-  LAWN_MID_POSITIONS,
-  LAWN_NEAR_INDICES,
-  LAWN_NEAR_POSITIONS,
-} from './blade-shape'
+import { lawnFlowerMaterial } from './flower-material'
 import { type LawnDetailChunk, registerLawnDetail, unregisterLawnDetail } from './lod'
 import { buildVisibleLawn } from './render-build'
+import { lawnGroundMaterial } from './turf-ground'
+
+// XY describes a tuft silhouette and Z chooses its plane. One bent and one crossing
+// silhouette at the root share the two packed instance streams; mid uses just the first.
+const MID_TUFT = new Float32Array([-0.5, 0, 0, 0.5, 0, 0, -0.5, 1, 0, 0.5, 1, 0])
+const MID_ORDER = new Uint16Array([0, 1, 2, 2, 1, 3])
+const NEAR_TUFT = new Float32Array([
+  -0.5, 0, 0, 0.5, 0, 0, -0.5, 0.5, 0, 0.5, 0.5, 0, -0.5, 1, 0, 0.5, 1, 0, -0.5, 0, 1, 0.5, 0, 1,
+  -0.5, 1, 1, 0.5, 1, 1,
+])
+const NEAR_ORDER = new Uint16Array([0, 1, 2, 2, 1, 3, 2, 3, 4, 4, 3, 5, 6, 7, 8, 8, 7, 9])
 
 export type LawnMeshArrays = {
   positions: Float32Array
@@ -41,6 +46,20 @@ export function lawnBufferGeometry(data: LawnMeshArrays): BufferGeometry {
   return geometry
 }
 
+function lawnFlowerGeometry(data: LawnBuild['flowers']) {
+  // Complete heads occupy contiguous triangle ranges. Their live draw can use the
+  // vertices directly and pack normals and linear colours without an identity index.
+  const geometry = new BufferGeometry()
+  const normals = Int8Array.from(data.normals, (channel) => Math.round(channel * 127))
+  const colors = Uint8Array.from(data.colors, (channel) => Math.round(channel * 255))
+  geometry.setAttribute('position', new BufferAttribute(data.positions, 3))
+  geometry.setAttribute('normal', new BufferAttribute(normals, 3, true))
+  geometry.setAttribute('color', new BufferAttribute(colors, 3, true))
+  geometry.setAttribute('uv', new BufferAttribute(data.uv, 2, true))
+  geometry.computeBoundingSphere()
+  return geometry
+}
+
 function bladeGeometry(
   near: boolean,
   roots: InstancedBufferAttribute,
@@ -48,14 +67,14 @@ function bladeGeometry(
   sphere: Sphere,
 ) {
   const geometry = new InstancedBufferGeometry()
-  const positions = near ? LAWN_NEAR_POSITIONS : LAWN_MID_POSITIONS
+  const positions = near ? NEAR_TUFT : MID_TUFT
   const normals = new Float32Array(positions.length)
   for (let index = 2; index < normals.length; index += 3) normals[index] = 1
   geometry.setAttribute('position', new BufferAttribute(positions, 3))
   geometry.setAttribute('normal', new BufferAttribute(normals, 3))
   geometry.setAttribute('lawnRootHeight', roots)
   geometry.setAttribute('lawnTraits', traits)
-  geometry.setIndex(new BufferAttribute(near ? LAWN_NEAR_INDICES : LAWN_MID_INDICES, 1))
+  geometry.setIndex(new BufferAttribute(near ? NEAR_ORDER : MID_ORDER, 1))
   geometry.boundingSphere = sphere
   return geometry
 }
@@ -67,20 +86,25 @@ function detailChunk(
   material: MeshStandardNodeMaterial,
 ): LawnDetailChunk {
   const [minX, minZ, maxX, maxZ] = chunk.bounds
+  let maxReach = node.height * 2
   let minY = Infinity
   let maxY = -Infinity
   for (let index = chunk.start; index < chunk.start + chunk.count; index++) {
-    minY = Math.min(minY, population.rootHeight[index * 4 + 1] ?? 0)
-    maxY = Math.max(
-      maxY,
-      (population.rootHeight[index * 4 + 1] ?? 0) +
-        (population.rootHeight[index * 4 + 3] ?? node.height),
+    const rootY = population.rootHeight[index * 4 + 1] ?? 0
+    const height = population.rootHeight[index * 4 + 3] ?? node.height
+    const lean = population.traits[index * 4 + 1] ?? 0
+    const width = population.traits[index * 4 + 3] ?? node.bladeWidth
+    maxReach = Math.max(
+      maxReach,
+      height * (lean * 1.6 + node.wind * 0.48) + (width * population.tuftWidthScale) / 2,
     )
+    minY = Math.min(minY, rootY)
+    maxY = Math.max(maxY, rootY + height)
   }
   if (!Number.isFinite(minY)) minY = maxY = 0
   const sphere = new Sphere(
     new Vector3((minX + maxX) / 2, (minY + maxY) / 2, (minZ + maxZ) / 2),
-    Math.hypot(maxX - minX, maxZ - minZ, maxY - minY) / 2 + node.height * 2,
+    Math.hypot(maxX - minX, maxZ - minZ, maxY - minY) / 2 + maxReach,
   )
   const roots = new InstancedBufferAttribute(
     population.rootHeight.subarray(chunk.start * 4, (chunk.start + chunk.count) * 4),
@@ -116,26 +140,24 @@ export function buildLawnGeometry(node: LawnNode, ctx?: Partial<GeometryContext>
   const group = new Group()
   group.name = 'lawn-detail'
   result.add(group)
-  const material = new MeshStandardNodeMaterial({
-    vertexColors: true,
-    roughness: 0.96,
-    side: DoubleSide,
-  })
-  material.name = 'lawn-ground-and-flowers'
-  const ground = new Mesh(lawnBufferGeometry(built.base), material)
+  const turf = lawnGroundMaterial(node, !!built.base.cover)
+  const base = lawnBufferGeometry(built.base)
+  if (built.base.cover) base.setAttribute('lawnCover', new BufferAttribute(built.base.cover, 1))
+  const ground = new Mesh(base, turf.material)
   ground.name = 'lawn-ground'
   ground.receiveShadow = true
   group.add(ground)
   let blades: MeshStandardNodeMaterial | undefined
   const chunks: LawnDetailChunk[] = built.blades.chunks.map((chunk) => {
-    blades ??= lawnBladeMaterial(node)
+    blades ??= lawnBladeMaterial(node, built.blades.tuftWidthScale)
     const detail = detailChunk(node, built.blades, chunk, blades)
     group.add(detail.near, detail.mid)
     return detail
   })
   let flowers: Mesh | undefined
   if (built.flowers.count > 0) {
-    flowers = new Mesh(lawnBufferGeometry(built.flowers), material)
+    const geometry = lawnFlowerGeometry(built.flowers)
+    flowers = new Mesh(geometry, lawnFlowerMaterial())
     flowers.name = 'lawn-flowers'
     flowers.castShadow = flowers.receiveShadow = true
     flowers.visible = false
@@ -143,6 +165,7 @@ export function buildLawnGeometry(node: LawnNode, ctx?: Partial<GeometryContext>
   }
   registerLawnDetail({
     group,
+    groundDetail: turf.detailed,
     height: node.height,
     chunks,
     flowers,

@@ -4,7 +4,7 @@ import { triangulatePlanPolygon } from './earcut'
 import { linearColor, type Rgb } from './foliage'
 import { lawnCoverage } from './lawn-coverage'
 import { sampleLawnStrokes } from './lawn-strokes'
-import { assertLawnStrokeWork, LawnBuildError, type LawnMesh } from './lawn-types'
+import { assertLawnStrokeWork, type LawnBuild, LawnBuildError } from './lawn-types'
 import { plantingBounds } from './planting-outline'
 import { area, intersection, type MultiPolygon, type Polygon, type Ring } from './polygon-boolean'
 import { valueNoise3 } from './seeded-noise'
@@ -141,7 +141,8 @@ function needsStrokeSubdivision(triangle: LawnGroundTriangle, node: LawnNode): b
   for (const stroke of node.strokes) {
     if (
       !stroke.strength ||
-      (stroke.effect !== 'bare' && stroke.effect !== 'grass') ||
+      stroke.effect === 'more-flowers' ||
+      stroke.effect === 'fewer-flowers' ||
       size <= Math.min(0.25, stroke.radiusM * 0.3)
     )
       continue
@@ -238,12 +239,20 @@ export function lawnGroundTriangles(
   return triangles
 }
 
-export function lawnGroundMesh(triangles: LawnGroundTriangle[], node: LawnNode): LawnMesh {
+export function lawnSwath(node: LawnNode, x: number, z: number, broad: number) {
+  return Math.sin(x * 1.45 + z * 0.38 + broad * 0.4 + (node.seed % 97)) * (1 - node.roughness) ** 2
+}
+
+export function lawnGroundMesh(triangles: LawnGroundTriangle[], node: LawnNode): LawnBuild['base'] {
   const positions = new Float32Array(triangles.length * 9)
   const normals = new Float32Array(positions.length)
   const colors = new Float32Array(positions.length)
   const indices = new Uint32Array(triangles.length * 3)
-  const grass = linearColor(node.color),
+  const cover = node.strokes.some((stroke) => stroke.effect === 'bare')
+    ? new Float32Array(indices.length)
+    : undefined
+  const [r, g, b] = linearColor(node.color)
+  const grass: Rgb = [r * 0.5, g * 0.63, b * 0.98],
     soil = linearColor('#66513a')
   for (let index = 0; index < triangles.length; index++) {
     const triangle = triangles[index]
@@ -259,10 +268,14 @@ export function lawnGroundMesh(triangles: LawnGroundTriangle[], node: LawnNode):
     const length = Math.hypot(...normal) || 1
     for (const [corner, point] of [a, b, c].entries()) {
       const offset = index * 9 + corner * 3
-      const coverage = sampleLawnStrokes(node.strokes, point[0], point[2]).coverage
+      const strokes = sampleLawnStrokes(node.strokes, point[0], point[2])
+      const coverage = strokes.coverage
+      if (cover) cover[index * 3 + corner] = coverage
       const broad = valueNoise3(node.seed + 53, point[0] / 4.5, 0, point[2] / 4.5)
       const detail = valueNoise3(node.seed + 57, point[0] / 0.9, 0, point[2] / 0.9)
-      const tone = 0.75 + broad * 0.27 + detail * 0.045
+      const swath = lawnSwath(node, point[0], point[2], broad)
+      const tone =
+        (0.83 + broad * 0.19 + detail * 0.08 + swath * 0.18) / (0.5 + strokes.height * 0.5)
       positions.set(point, offset)
       normals.set(
         normal.map((value) => value / length),
@@ -270,12 +283,13 @@ export function lawnGroundMesh(triangles: LawnGroundTriangle[], node: LawnNode):
       )
       colors.set(
         grass.map(
-          (value, channel) => ((soil[channel] ?? 0) * (1 - coverage) + value * coverage) * tone,
+          (value, channel) =>
+            (soil[channel] ?? 0) * (1 - coverage) * 0.84 + value * coverage * tone,
         ),
         offset,
       )
       indices[index * 3 + corner] = index * 3 + corner
     }
   }
-  return { positions, normals, colors, indices }
+  return { positions, normals, colors, indices, cover }
 }

@@ -22,6 +22,7 @@ export type LawnDetailChunk = {
 export type LawnDetail = {
   group: Group
   height: number
+  groundDetail: { value: number }
   chunks: LawnDetailChunk[]
   flowers?: Mesh
   headIndexEnds: Uint32Array
@@ -65,6 +66,7 @@ function visibleChunks(detail: LawnDetail, view: LawnView): VisibleChunk[] {
     chunk.tier = tierFor(pixels, chunk.tier)
     if (chunk.tier !== 'far') visible.push({ detail, chunk, distance })
   }
+  detail.groundDetail.value = visible.length ? 1 : 0
   if (detail.flowers) detail.flowers.visible = false
   return visible
 }

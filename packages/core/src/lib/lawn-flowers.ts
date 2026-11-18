@@ -1,10 +1,10 @@
 import { LAWN_LIMITS, type LawnFlower, type LawnNode } from '../schema/nodes/lawn'
 import { linearColor, type Rgb } from './foliage'
+import type { LawnCoverage } from './lawn-coverage'
 import { sampleLawnStrokes } from './lawn-strokes'
 import type { LawnBuild } from './lawn-types'
 import { plantingBounds } from './planting-outline'
 import type { MultiPolygon } from './polygon-boolean'
-import { containsPoint, distanceToBoundary } from './polygon-boolean'
 import { hash3, valueNoise3 } from './seeded-noise'
 
 type FlowerPlacement = {
@@ -15,23 +15,28 @@ type FlowerPlacement = {
   yaw: number
   flower: LawnFlower
 }
-type FlowerWriter = { positions: number[]; normals: number[]; colors: number[]; indices: number[] }
+type FlowerWriter = {
+  positions: number[]
+  normals: number[]
+  colors: number[]
+  uv: number[]
+}
 const GOLDEN_ANGLE = Math.PI * (3 - Math.sqrt(5))
 
-function triangle(out: FlowerWriter, a: Rgb, b: Rgb, c: Rgb, color: Rgb) {
+function triangle(out: FlowerWriter, a: Rgb, b: Rgb, c: Rgb, color: Rgb, atB = color, atC = color) {
   const normal: Rgb = [
     (b[1] - a[1]) * (c[2] - a[2]) - (b[2] - a[2]) * (c[1] - a[1]),
     (b[2] - a[2]) * (c[0] - a[0]) - (b[0] - a[0]) * (c[2] - a[2]),
     (b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0]),
   ]
   const length = Math.hypot(...normal) || 1
-  const start = out.positions.length / 3
-  for (const vertex of [a, b, c]) {
-    out.positions.push(...vertex)
-    out.normals.push(...normal.map((value) => value / length))
-    out.colors.push(...color)
-  }
-  out.indices.push(start, start + 1, start + 2)
+  out.positions.push(...a, ...b, ...c)
+  const nx = normal[0] / length,
+    ny = normal[1] / length,
+    nz = normal[2] / length
+  out.normals.push(nx, ny, nz, nx, ny, nz, nx, ny, nz)
+  out.colors.push(...color, ...atB, ...atC)
+  out.uv.push(65151, 65151, 65151, 65151, 65151, 65151)
 }
 
 function petal(
@@ -55,7 +60,6 @@ function petal(
 }
 
 function stem(out: FlowerWriter, root: Rgb, tip: Rgb, width = 0.0012) {
-  const green = linearColor('#59763a')
   for (const angle of [0, Math.PI / 2]) {
     const dx = Math.cos(angle) * width,
       dz = Math.sin(angle) * width
@@ -63,155 +67,253 @@ function stem(out: FlowerWriter, root: Rgb, tip: Rgb, width = 0.0012) {
     const b: Rgb = [root[0] + dx, root[1], root[2] + dz]
     const c: Rgb = [tip[0] + dx * 0.5, tip[1], tip[2] + dz * 0.5]
     const d: Rgb = [tip[0] - dx * 0.5, tip[1], tip[2] - dz * 0.5]
-    triangle(out, a, b, c, green)
-    triangle(out, a, c, d, green)
+    triangle(out, a, b, c, STEM)
+    triangle(out, a, c, d, STEM)
   }
 }
 
-function roundedPetal(
-  out: FlowerWriter,
-  center: Rgb,
-  angle: number,
-  length: number,
-  width: number,
-  color: Rgb,
-) {
+const STEM = linearColor('#4d6d3d')
+const LEAF = linearColor('#577949')
+const POLLEN = linearColor('#f4bd42')
+const CLOVER_LEAF = linearColor('#83a16b')
+const OCHRE = linearColor('#a96d20')
+
+function tint(color: Rgb, level: number): Rgb {
+  return [color[0] * level, color[1] * level, color[2] * level]
+}
+
+function radial(origin: Rgb, angle: number, along: number, lift: number, across = 0): Rgb {
   const dx = Math.cos(angle),
     dz = Math.sin(angle)
-  const point = (along: number, across: number, lift: number): Rgb => [
-    center[0] + dx * along * length - dz * across * width,
-    center[1] + lift,
-    center[2] + dz * along * length + dx * across * width,
+  return [
+    origin[0] + dx * along - dz * across,
+    origin[1] + lift,
+    origin[2] + dz * along + dx * across,
   ]
-  const root = point(0, 0, 0)
-  const rim = [
-    point(0.5, 0.5, -0.0007),
-    point(0.9, 0.32, -0.0006),
-    point(1, 0, -0.0005),
-    point(0.9, -0.32, -0.0006),
-    point(0.5, -0.5, -0.0007),
-  ]
-  for (let index = 0; index + 1 < rim.length; index++) {
-    const left = rim[index],
-      right = rim[index + 1]
-    if (left && right) triangle(out, root, left, right, color)
-  }
 }
 
-function flowerDisc(out: FlowerWriter, center: Rgb, radius: number, color: Rgb) {
-  const top: Rgb = [center[0], center[1] + radius * 0.05, center[2]]
-  for (let side = 0; side < 8; side++) {
-    const angle = (side * Math.PI) / 4,
-      next = angle + Math.PI / 4
+// The four atlas quadrants hold pollen, clover florets, yarrow and leaf/ray stamps.
+// Unmapped stem and leaf vertices sample a plain texel in the top right corner.
+function petalUV(out: FlowerWriter, vertex: number, tile: number, u: number, v: number) {
+  const inset = (n: number) => 0.008 + Math.min(1, Math.max(0, n)) * 0.984
+  out.uv[vertex * 2] = Math.round(((tile % 2) + inset(u)) * 32767.5)
+  out.uv[vertex * 2 + 1] = Math.round((Math.floor(tile / 2) + inset(v)) * 32767.5)
+}
+
+function discUV(out: FlowerWriter, start: number, tile: number, center: Rgb, radius: number) {
+  for (let i = start; i < out.positions.length; i += 3)
+    petalUV(
+      out,
+      i / 3,
+      tile,
+      0.5 + ((out.positions[i] ?? 0) - center[0]) / (radius * 2),
+      0.5 + ((out.positions[i + 2] ?? 0) - center[2]) / (radius * 2),
+    )
+}
+
+function daisyHead(out: FlowerWriter, tip: Rgb, yaw: number, color: Rgb) {
+  const base = tint(color, 0.73)
+  for (let ray = 0; ray < 16; ray++) {
+    const a = yaw + (ray * Math.PI) / 8
+    const length = 0.021 + 0.0025 * Math.sin(ray * 2.7 + yaw)
+    const lift = 0.0018 + Math.sin(ray * 1.9 + yaw) * 0.0017
+    const root = radial(tip, a, 0.002, -0.001)
+    const left = radial(tip, a, length * 0.58, lift, 0.003)
+    const right = radial(tip, a, length * 0.58, lift, -0.003)
+    const lobe = radial(tip, a, length, lift * 0.6, 0.0024)
+    const rightLobe = radial(tip, a, length, lift * 0.6, -0.0024)
+    const start = out.positions.length / 3
+    triangle(out, root, left, right, base, color, color)
+    triangle(out, left, lobe, rightLobe, color)
+    triangle(out, left, rightLobe, right, color)
+    const coords = [
+      [0.5, 0],
+      [0, 0.5],
+      [1, 0.5],
+      [0, 0.5],
+      [0, 1],
+      [1, 1],
+      [0, 0.5],
+      [1, 1],
+      [1, 0.5],
+    ]
+    for (let i = 0; i < coords.length; i++) {
+      const uv = coords[i]
+      if (uv) petalUV(out, start + i, 3, (uv[0] ?? 0) * 0.45, 0.02 + (uv[1] ?? 0) * 0.94)
+    }
+  }
+  const discStart = out.positions.length
+  for (let i = 0; i < 8; i++) {
+    const a = yaw + (i * Math.PI) / 4
+    const top: Rgb = [tip[0], tip[1] + 0.004, tip[2]]
     triangle(
       out,
-      [center[0] + Math.cos(angle) * radius, center[1], center[2] + Math.sin(angle) * radius],
+      radial(tip, a, 0.0063, 0.0008),
       top,
-      [center[0] + Math.cos(next) * radius, center[1], center[2] + Math.sin(next) * radius],
-      color,
+      radial(tip, a + Math.PI / 4, 0.0063, 0.0008),
+      tint(POLLEN, 0.76),
+      POLLEN,
+      i % 3 ? POLLEN : OCHRE,
     )
   }
+  for (let i = discStart; i < out.positions.length; i += 3) {
+    const nx = ((out.positions[i] ?? 0) - tip[0]) * 65,
+      nz = ((out.positions[i + 2] ?? 0) - tip[2]) * 65
+    const n = Math.hypot(nx, 1, nz)
+    out.normals[i] = nx / n
+    out.normals[i + 1] = 1 / n
+    out.normals[i + 2] = nz / n
+  }
+  discUV(out, discStart, 0, tip, 0.0063)
 }
 
-function cloverHead(out: FlowerWriter, center: Rgb, yaw: number, color: Rgb) {
-  const radius = 0.0105
-  const height = radius * 0.8
-  const start = out.positions.length
-  const rings = [0, Math.PI / 6, Math.PI / 3].map((latitude) =>
-    Array.from({ length: 8 }, (_, side): Rgb => {
-      const angle = yaw + (side * Math.PI) / 4
-      return [
-        center[0] + Math.cos(angle) * Math.cos(latitude) * radius,
-        center[1] + Math.sin(latitude) * height,
-        center[2] + Math.sin(angle) * Math.cos(latitude) * radius,
-      ]
-    }),
-  )
-  const top: Rgb = [center[0], center[1] + height, center[2]]
-  for (const [band, ring] of rings.entries()) {
-    const upper = rings[band + 1]
-    for (let side = 0; side < 8; side++) {
-      const next = (side + 1) % 8
-      const left = ring[side],
-        right = ring[next]
-      if (!left || !right) continue
-      const tone = 0.86 + band * 0.075 + ((side * 3 + band) % 5) * 0.015
-      const petalColor: Rgb = [color[0] * tone, color[1] * tone, color[2] * tone]
-      const upperLeft = upper?.[side],
-        upperRight = upper?.[next]
-      if (upperLeft && upperRight) {
-        triangle(out, left, upperLeft, upperRight, petalColor)
-        triangle(out, left, upperRight, right, petalColor)
-      } else {
-        triangle(out, left, top, right, petalColor)
-      }
+function cloverHead(out: FlowerWriter, tip: Rgb, yaw: number, color: Rgb) {
+  const sides = 9
+  const latitudes = [-Math.PI / 2, -0.58, 0.1, 0.77, Math.PI / 2]
+  const surface = (ring: number, k: number): Rgb => {
+    const lat = latitudes[ring] ?? 0,
+      theta = yaw + ((k + (ring % 2) * 0.23) * Math.PI * 2) / sides
+    return radial(
+      tip,
+      theta,
+      0.0162 * Math.cos(lat) * (1 + 0.027 * Math.sin(3 * theta + ring)),
+      0.003 + 0.017 * Math.sin(lat) + 0.00065 * Math.sin(theta * 4 + ring) * Math.cos(lat),
+    )
+  }
+  const face = (corners: [number, number][]) => {
+    const [a, b, c] = corners.map(([ring, k]) => surface(ring, k))
+    if (!a || !b || !c) return
+    const start = out.positions.length / 3
+    triangle(out, a, b, c, color)
+    for (const [index, [ring, k]] of corners.entries()) {
+      const offset = (start + index) * 3
+      const nx = (out.positions[offset] ?? 0) - tip[0],
+        nz = (out.positions[offset + 2] ?? 0) - tip[2]
+      const ny = (out.positions[offset + 1] ?? 0) - tip[1] - 0.003
+      const length = Math.hypot(nx, ny, nz) || 1
+      out.normals[offset] = nx / length
+      out.normals[offset + 1] = ny / length
+      out.normals[offset + 2] = nz / length
+      petalUV(out, start + index, 1, k / sides, (latitudes[ring] ?? 0) / Math.PI + 0.5)
     }
   }
-  for (let offset = start; offset < out.positions.length; offset += 3) {
-    const nx = ((out.positions[offset] ?? center[0]) - center[0]) / (radius * radius)
-    const ny = ((out.positions[offset + 1] ?? center[1]) - center[1]) / (height * height)
-    const nz = ((out.positions[offset + 2] ?? center[2]) - center[2]) / (radius * radius)
-    const length = Math.hypot(nx, ny, nz) || 1
-    out.normals[offset] = nx / length
-    out.normals[offset + 1] = ny / length
-    out.normals[offset + 2] = nz / length
+  for (let k = 0; k < sides; k++) {
+    face([
+      [0, k + 0.5],
+      [1, k],
+      [1, k + 1],
+    ])
+    for (let ring = 1; ring <= 2; ring++) {
+      face([
+        [ring, k],
+        [ring + 1, k],
+        [ring, k + 1],
+      ])
+      face([
+        [ring, k + 1],
+        [ring + 1, k],
+        [ring + 1, k + 1],
+      ])
+    }
+    face([
+      [3, k],
+      [4, k + 0.5],
+      [3, k + 1],
+    ])
   }
 }
 
-function flowerGeometry(out: FlowerWriter, placement: FlowerPlacement) {
+function cloverLeaves(out: FlowerWriter, origin: Rgb, yaw: number) {
+  for (let i = 0; i < 3; i++) {
+    const a = yaw + (i * Math.PI * 2) / 3
+    const l = radial(origin, a, 0.003, 0.001, 0.004),
+      r = radial(origin, a, 0.003, 0.001, -0.004)
+    const ll = radial(origin, a, 0.023, 0.005, 0.01),
+      rr = radial(origin, a, 0.023, 0.005, -0.01)
+    const start = out.positions.length / 3
+    triangle(out, l, ll, rr, CLOVER_LEAF)
+    triangle(out, l, rr, r, CLOVER_LEAF)
+    const coords = [
+      [0, 0],
+      [0, 1],
+      [1, 1],
+      [0, 0],
+      [1, 1],
+      [1, 0],
+    ]
+    for (let k = 0; k < coords.length; k++) {
+      const uv = coords[k]
+      if (uv) petalUV(out, start + k, 3, 0.5 + (uv[0] ?? 0) * 0.44, 0.02 + (uv[1] ?? 0) * 0.94)
+    }
+  }
+}
+
+function meadowHead(out: FlowerWriter, tip: Rgb, yaw: number, color: Rgb) {
+  for (let branch = 0; branch < 6; branch++) {
+    const a = yaw + branch * GOLDEN_ANGLE
+    const reach = Math.sqrt((branch + 0.2) / 6) * 0.035
+    const joint = radial(tip, a, reach, 0.015 - reach * 0.19)
+    const root = radial(tip, a, 0, -0.019)
+    triangle(out, radial(root, a, 0, 0, 0.0012), joint, radial(root, a, 0, 0, -0.0012), STEM)
+    const radius = 0.011 + 0.002 * Math.sin(a)
+    const end = radial(joint, a, 0, 0.0045)
+    const start = out.positions.length
+    for (let k = 0; k < 7; k++) {
+      const angle = a + (k * Math.PI * 2) / 7
+      triangle(
+        out,
+        radial(joint, angle, radius, 0),
+        end,
+        radial(joint, angle + (Math.PI * 2) / 7, radius, 0),
+        color,
+      )
+    }
+    discUV(out, start, 2, joint, radius)
+  }
+}
+
+function flowerStem(placement: FlowerPlacement) {
+  const out: FlowerWriter = { positions: [], normals: [], colors: [], uv: [] }
   const { x, y, z, height, yaw, flower } = placement
-  const tip: Rgb = [
-    x + Math.cos(yaw) * height * 0.08,
-    y + height,
-    z + Math.sin(yaw) * height * 0.08,
-  ]
+  const tip: Rgb = radial([x, y, z], yaw, height * 0.1, height)
   stem(out, [x, y, z], tip)
-  const leaf = linearColor('#57743b')
-  const color = linearColor(flower.color ?? (flower.species === 'clover' ? '#e5c4d0' : '#f1ead5'))
-  const leafCenter: Rgb = [x, y + height * 0.25, z]
-  if (flower.species === 'daisy') {
-    for (let index = 0; index < 10; index++)
-      roundedPetal(out, tip, yaw + (index * Math.PI) / 5, 0.013, 0.005, color)
-    const yellow = linearColor('#dcad35')
-    for (let index = 0; index < 8; index++) {
-      const angle = (index * Math.PI) / 4,
-        next = angle + Math.PI / 4
-      triangle(
-        out,
-        [tip[0], tip[1] + 0.0025, tip[2]],
-        [tip[0] + Math.cos(angle) * 0.004, tip[1] + 0.001, tip[2] + Math.sin(angle) * 0.004],
-        [tip[0] + Math.cos(next) * 0.004, tip[1] + 0.001, tip[2] + Math.sin(next) * 0.004],
-        yellow,
-      )
-    }
-    for (let index = 0; index < 2; index++)
-      petal(out, leafCenter, yaw + index * Math.PI, 0.022, 0.005, 0.003, leaf)
-  } else if (flower.species === 'clover') {
-    cloverHead(out, tip, yaw, color)
-    for (let index = 0; index < 3; index++)
-      roundedPetal(out, leafCenter, yaw + (index * Math.PI * 2) / 3, 0.016, 0.012, leaf)
+  const color = linearColor(
+    flower.color ??
+      (flower.species === 'clover'
+        ? '#f0bfd2'
+        : flower.species === 'yarrow'
+          ? '#ede9c9'
+          : '#fff6eb'),
+  )
+  const leafCenter: Rgb = radial([x, y, z], yaw, height * 0.044, height * 0.44)
+  if (flower.species === 'clover') {
+    cloverLeaves(out, radial([x, y, z], yaw, (height - 0.034) * 0.1, height - 0.034), yaw)
   } else {
-    for (let index = 0; index < 6; index++) {
-      const angle = yaw + index * GOLDEN_ANGLE,
-        radius = Math.sqrt((index + 1) / 6) * 0.022
-      const head: Rgb = [
-        tip[0] + Math.cos(angle) * radius,
-        tip[1] + 0.004 * Math.sin(angle),
-        tip[2] + Math.sin(angle) * radius,
-      ]
-      const branchRoot: Rgb = [tip[0], tip[1] - height * 0.15, tip[2]]
-      triangle(
-        out,
-        [branchRoot[0] - 0.0006, branchRoot[1], branchRoot[2]],
-        head,
-        [branchRoot[0] + 0.0006, branchRoot[1], branchRoot[2]],
-        leaf,
-      )
-      flowerDisc(out, head, 0.006, color)
+    const leaves = flower.species === 'yarrow' ? 4 : 2
+    for (let i = 0; i < leaves; i++) {
+      const origin = radial(leafCenter, yaw, i * 0.0007, i * 0.0035)
+      petal(out, origin, yaw + i * Math.PI * 0.92, 0.025 - i * 0.0025, 0.006, 0.005, LEAF)
     }
-    for (let index = 0; index < 2; index++)
-      petal(out, leafCenter, yaw + index * Math.PI, 0.025, 0.006, 0.003, leaf)
   }
+  const start = out.positions.length
+  if (flower.species === 'daisy') daisyHead(out, tip, yaw, color)
+  else if (flower.species === 'clover') cloverHead(out, tip, yaw, color)
+  else meadowHead(out, tip, yaw, color)
+  // Individual stems nod differently. Rotate the whole inflorescence about its junction.
+  const angle = (flower.species === 'daisy' ? 0.29 : 0.13) * Math.sin(yaw * 2.8)
+  const cos = Math.cos(angle),
+    sin = Math.sin(angle)
+  for (let i = start; i < out.positions.length; i += 3) {
+    const py = (out.positions[i + 1] ?? 0) - tip[1],
+      pz = (out.positions[i + 2] ?? 0) - tip[2]
+    out.positions[i + 1] = tip[1] + py * cos - pz * sin
+    out.positions[i + 2] = tip[2] + py * sin + pz * cos
+    const ny = out.normals[i + 1] ?? 0,
+      nz = out.normals[i + 2] ?? 0
+    out.normals[i + 1] = ny * cos - nz * sin
+    out.normals[i + 2] = ny * sin + nz * cos
+  }
+  return out
 }
 
 function inSeason(flower: LawnFlower, season: LawnNode['season']) {
@@ -236,7 +338,7 @@ function reserveFlowerRoot(
   x: number,
   z: number,
 ): boolean {
-  const radius = 0.06
+  const radius = 0.048
   const col = Math.floor(x / radius),
     row = Math.floor(z / radius)
   for (let dz = -1; dz <= 1; dz++)
@@ -252,9 +354,21 @@ function reserveFlowerRoot(
   return true
 }
 
+// Potential colonies have satellites up to 38 cm from their centre. Count the halo
+// because a colony just outside the bounding box can send heads back inside.
+const HEADS_PER_COLONY = 8
+const COLONIES_PER_CELL = 3
+const HEADS_PER_CELL = HEADS_PER_COLONY * COLONIES_PER_CELL
+export function lawnFlowerProbes(node: LawnNode, width: number, depth: number) {
+  return node.flowerDensity && node.flowers.some((flower) => inSeason(flower, node.season))
+    ? (width + 2) * (depth + 2) * HEADS_PER_CELL
+    : 0
+}
+
 function flowerPlacements(
   node: LawnNode,
   polygons: MultiPolygon,
+  coverage: LawnCoverage,
   heightAt: (x: number, z: number) => number,
 ): FlowerPlacement[] {
   const flowers = node.flowers.filter((flower) => inSeason(flower, node.season))
@@ -262,51 +376,56 @@ function flowerPlacements(
   const bounds = plantingBounds(polygons.flatMap((polygon) => polygon.outer))
   const placements: FlowerPlacement[] = []
   const occupied = new Map<string, [number, number][]>()
-  for (let row = Math.floor(bounds.minZ); row < Math.ceil(bounds.maxZ); row++)
-    for (let col = Math.floor(bounds.minX); col < Math.ceil(bounds.maxX); col++)
-      for (let candidate = 0; candidate < 2; candidate++) {
-        const x = col + hash3(node.seed + 100, col, row, candidate),
-          z = row + hash3(node.seed + 101, col, row, candidate)
-        if (!containsPoint(polygons, [x, z]) || distanceToBoundary(polygons, [x, z]) < 0.035)
-          continue
-        const strokes = sampleLawnStrokes(node.strokes, x, z)
-        const noise = valueNoise3(node.seed + 103, x / 2.7, 0, z / 2.7)
-        const abundance = Math.max(0, Math.min(1, (noise - 0.05) / 0.55))
-        const drift = 0.03 + 0.97 * abundance * abundance * (3 - 2 * abundance)
-        const probability =
-          (node.flowerDensity / 2) *
-          drift *
-          (0.7 + node.roughness * 0.3) *
-          (strokes.flowers * 2) *
-          strokes.coverage
-        if (hash3(node.seed + 104, col, row, candidate) >= probability) continue
-        const flower = selectFlower(
+  for (let row = Math.floor(bounds.minZ) - 1; row < Math.ceil(bounds.maxZ) + 1; row++)
+    for (let col = Math.floor(bounds.minX) - 1; col < Math.ceil(bounds.maxX) + 1; col++)
+      for (let colony = 0; colony < COLONIES_PER_CELL; colony++) {
+        const cx = col + hash3(node.seed + 100, col, row, colony),
+          cz = row + hash3(node.seed + 101, col, row, colony)
+        const drift = valueNoise3(node.seed + 103, cx / 1.8, 0, cz / 1.8)
+        // Near a contour of the moisture field, neighbouring colonies flower together.
+        const ribbon = Math.max(0, 1 - Math.abs(drift + 0.04) * 5.8)
+        const species = selectFlower(
           flowers,
           node.seed,
-          x,
-          z,
-          hash3(node.seed + 105, col, row, candidate),
+          cx,
+          cz,
+          hash3(node.seed + 105, col, row, colony),
         )
-        if (!flower) continue
-        if (!reserveFlowerRoot(occupied, x, z)) continue
-        const baseHeight =
-          flower.species === 'yarrow'
-            ? 0.16 + node.roughness * 0.15
-            : flower.species === 'clover'
-              ? 0.06 + node.roughness * 0.08
-              : 0.045 + node.roughness * 0.06
-        const height = Math.max(
-          node.height * strokes.height * (1.1 + node.roughness * 0.75),
-          baseHeight * (0.85 + hash3(node.seed + 106, col, row, candidate) * 0.3),
-        )
-        placements.push({
-          x,
-          y: heightAt(x, z),
-          z,
-          height,
-          yaw: hash3(node.seed + 107, col, row, candidate) * Math.PI * 2,
-          flower,
-        })
+        if (!species) continue
+        const spread = 0.15 + hash3(node.seed + 109, col, row, colony) * 0.23
+        const axis = drift * 2.1 + 0.87
+        for (let k = 0; k < HEADS_PER_COLONY; k++) {
+          const index = colony * HEADS_PER_COLONY + k
+          const yaw = hash3(node.seed + 107, col, row, index) * Math.PI * 2
+          const r = Math.sqrt(hash3(node.seed + 108, col, row, index)) * spread
+          const along = Math.cos(yaw) * r,
+            across = Math.sin(yaw) * r * 0.78
+          const x = cx + Math.cos(axis) * along - Math.sin(axis) * across
+          const z = cz + Math.sin(axis) * along + Math.cos(axis) * across
+          const strokes = sampleLawnStrokes(node.strokes, x, z)
+          // A painted colony can bloom even where the unpainted field has a gap.
+          const abundance =
+            (0.006 + ribbon * 0.75) * Math.min(1, strokes.flowers * 2) +
+            Math.max(0, strokes.flowers * 2 - 1) * 1.8
+          if (
+            hash3(node.seed + 110, col, row, index) >=
+            abundance * node.flowerDensity * 0.5 * strokes.coverage
+          )
+            continue
+          if (!coverage.contains(x, z)) continue
+          const baseHeight =
+            species.species === 'yarrow'
+              ? 0.22 + node.roughness * 0.11
+              : species.species === 'clover'
+                ? 0.09
+                : 0.085
+          const height =
+            Math.max(baseHeight, node.height * strokes.height * (1.02 + node.roughness * 0.48)) *
+            (0.84 + hash3(node.seed + 106, col, row, index) * 0.36)
+          const reach = height * 0.1 + (species.species === 'yarrow' ? 0.053 : 0.03)
+          if (coverage.distance(x, z, reach) < reach || !reserveFlowerRoot(occupied, x, z)) continue
+          placements.push({ x, y: heightAt(x, z), z, height, yaw, flower: species })
+        }
       }
   return placements
 }
@@ -314,9 +433,10 @@ function flowerPlacements(
 export function lawnFlowers(
   node: LawnNode,
   polygons: MultiPolygon,
+  coverage: LawnCoverage,
   heightAt: (x: number, z: number) => number,
 ): { mesh: LawnBuild['flowers']; requested: number } {
-  const placements = flowerPlacements(node, polygons, heightAt)
+  const placements = flowerPlacements(node, polygons, coverage, heightAt)
   // Hash buckets thin the whole area evenly without making the first corner own the cap.
   const buckets: FlowerPlacement[][] = Array.from({ length: 256 }, () => [])
   for (const [index, placement] of placements.entries())
@@ -331,20 +451,42 @@ export function lawnFlowers(
       )
     ]?.push(placement)
   const retained = buckets.flat().slice(0, LAWN_LIMITS.maxFlowers)
-  const out: FlowerWriter = { positions: [], normals: [], colors: [], indices: [] }
+  // Each species has a fixed topology. Measure one exemplar per species, so the
+  // meadow can be packed without keeping its geometry in growing JS arrays.
   const speciesCounts = { daisy: 0, clover: 0, yarrow: 0 }
+  const verticesPerStem = { daisy: 0, clover: 0, yarrow: 0 }
   const headIndexEnds = new Uint32Array(retained.length)
+  let vertexCount = 0
   for (const [index, placement] of retained.entries()) {
-    flowerGeometry(out, placement)
-    speciesCounts[placement.flower.species]++
-    headIndexEnds[index] = out.indices.length
+    const species = placement.flower.species
+    if (!verticesPerStem[species])
+      verticesPerStem[species] = flowerStem(placement).positions.length / 3
+    speciesCounts[species]++
+    vertexCount += verticesPerStem[species]
+    headIndexEnds[index] = vertexCount
   }
+  const positions = new Float32Array(vertexCount * 3)
+  const normals = new Float32Array(positions.length)
+  const colors = new Float32Array(positions.length)
+  const uv = new Uint16Array(vertexCount * 2)
+  const indices = new Uint32Array(vertexCount)
+  let vertex = 0
+  for (const placement of retained) {
+    const head = flowerStem(placement)
+    positions.set(head.positions, vertex * 3)
+    normals.set(head.normals, vertex * 3)
+    colors.set(head.colors, vertex * 3)
+    uv.set(head.uv, vertex * 2)
+    vertex += head.positions.length / 3
+  }
+  for (let i = 0; i < indices.length; i++) indices[i] = i
   return {
     mesh: {
-      positions: new Float32Array(out.positions),
-      normals: new Float32Array(out.normals),
-      colors: new Float32Array(out.colors),
-      indices: new Uint32Array(out.indices),
+      positions,
+      normals,
+      colors,
+      indices,
+      uv,
       count: retained.length,
       speciesCounts,
       headIndexEnds,

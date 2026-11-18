@@ -13,13 +13,17 @@ import {
   sin,
   smoothstep,
   step,
+  texture,
   time,
   transformNormalToView,
   uniform,
+  varying,
+  vec2,
   vec3,
   vec4,
 } from 'three/tsl'
 import { MeshStandardNodeMaterial, type Node } from 'three/webgpu'
+import { tuftTexture } from './turf-textures'
 
 type LawnBladeControls = {
   near: { value: number }
@@ -62,14 +66,27 @@ function detailWeight(root: Node<'vec4'>, material: Material) {
   return mix(midFade, nearFade, near)
 }
 
-export function lawnBladeMaterial(node: LawnNode): MeshStandardNodeMaterial {
+export function lawnBladeMaterial(
+  node: LawnNode,
+  tuftWidthScale: number,
+): MeshStandardNodeMaterial {
   const material = new MeshStandardNodeMaterial({ roughness: 0.9, metalness: 0, side: DoubleSide })
   material.name = 'lawn-curved-blades'
   const root = attribute('lawnRootHeight', 'vec4')
   const traits = attribute('lawnTraits', 'vec4')
   const detail = detailWeight(root, material)
   const progress = positionGeometry.y
-  const yaw = traits.x
+  const plane = positionGeometry.z
+  const yaw = traits.x.add(plane.mul(1.83))
+  const pick = traits.x.mul(2.37).add(plane.mul(0.47))
+  const column = step(0.5, pick.fract())
+  const row = step(pick.mul(1.71).fract(), float(node.roughness * node.roughness))
+  const uv = varying(vec2(positionGeometry.x.add(0.5).add(column), progress.add(row)).mul(0.5))
+  const leaf = texture(tuftTexture(material), uv)
+  material.opacityNode = leaf.g
+  material.maskShadowNode = leaf.g.greaterThan(0.32)
+  material.alphaTest = 0.32
+  material.alphaToCoverage = true
   const gust = sin(root.x.mul(0.19).add(root.z.mul(0.13)).add(time.mul(1.7)))
     .mul(0.65)
     .add(sin(root.x.mul(0.43).sub(root.z.mul(0.27)).add(time.mul(2.3))).mul(0.35))
@@ -77,28 +94,26 @@ export function lawnBladeMaterial(node: LawnNode): MeshStandardNodeMaterial {
   const bendX = sin(yaw).mul(traits.y).mul(1.6).add(gust.mul(wind).mul(0.42))
   const bendZ = cos(yaw).mul(traits.y).mul(1.6).add(gust.mul(wind).mul(0.22))
   const bend = progress.mul(progress).mul(root.w).mul(detail)
-  const width = positionGeometry.x.mul(traits.w).mul(detail)
+  const width = positionGeometry.x.mul(traits.w).mul(tuftWidthScale).mul(detail)
   material.positionNode = root.xyz.add(
     vec3(
       cos(yaw).mul(width).add(bendX.mul(bend)),
-      progress.mul(root.w).mul(detail),
+      progress
+        .mul(root.w)
+        .mul(detail)
+        .mul(float(1).sub(plane.mul(0.11))),
       sin(yaw).negate().mul(width).add(bendZ.mul(bend)),
     ),
   )
-  const slope = progress.mul(2)
-  const normal = vec3(
-    sin(yaw),
-    bendX
-      .mul(sin(yaw))
-      .add(bendZ.mul(cos(yaw)))
-      .mul(slope)
-      .negate(),
-    cos(yaw),
-  ).normalize()
-  // Thin leaves scatter sky light; the upward bias avoids black vertical cards in noon light.
-  material.normalNode = transformNormalToView(normal.add(vec3(0, 1.25, 0)).normalize())
+  // Each plane contains leaves facing both ways. A mostly upward canopy normal
+  // avoids lighting the whole silhouette as one vertical sheet.
+  material.normalNode = transformNormalToView(
+    vec3(sin(yaw).mul(0.26), 1, cos(yaw).mul(0.26)).normalize(),
+  )
+  const ripe = row.mul(smoothstep(0.36, 1, progress)).mul(smoothstep(0.88, 1.14, traits.z))
   material.colorNode = color(node.color)
+    .rgb.mul(mix(vec3(0.64, 0.81, 1.22), vec3(1.12, 0.98, 1.08), ripe))
     .mul(traits.z)
-    .mul(mix(0.86, 1.16, progress))
+    .mul(leaf.r.mul(1.48).add(0.22))
   return material
 }
