@@ -223,16 +223,35 @@ function paintBark(tile: Surface) {
     }
 }
 
+// Canvas PNG encoding uses premultiplied bytes. Keep a sub-cutoff fringe with RGB
+// that survives that conversion, so filtering a saved sprig picks up its leaf tone.
+function padCutoutEdges(bytes: Uint8Array) {
+  const radius = 5
+  const horizontal = new Uint8Array(SIZE * SIZE)
+  for (let y = 0; y < SIZE; y++)
+    for (let x = 0; x < SIZE; x++) {
+      const row = y * SIZE
+      if (bytes[(row + x) * 4 + 3])
+        horizontal.fill(1, row + Math.max(0, x - radius), row + Math.min(SIZE, x + radius + 1))
+    }
+  for (let y = 0; y < SIZE; y++)
+    for (let x = 0; x < SIZE; x++) {
+      const i = (y * SIZE + x) * 4
+      if (bytes[i + 3]) continue
+      for (let row = Math.max(0, y - radius); row <= Math.min(SIZE - 1, y + radius); row++) {
+        if (!horizontal[row * SIZE + x]) continue
+        // 213/255 at 6/255 alpha rounds to exactly five premultiplied byte units.
+        bytes.fill(213, i, i + 3)
+        bytes[i + 3] = 6
+        break
+      }
+    }
+}
+
 let atlas: DataTexture | undefined
 export function treeAtlas() {
   if (atlas) return atlas
   const bytes = new Uint8Array(SIZE * SIZE * 4)
-  // Transparent texels carry leaf RGB as well, avoiding a dark fringe in the mip chain.
-  for (let i = 0; i < bytes.length; i += 4) {
-    bytes[i] = 216
-    bytes[i + 1] = 215
-    bytes[i + 2] = 205
-  }
   for (const [row, style] of STYLES.entries())
     for (let col = 0; col < 4; col++) {
       const tile = { bytes, left: col * TILE, bottom: row * TILE }
@@ -267,6 +286,7 @@ export function treeAtlas() {
         }
       }
     }
+  padCutoutEdges(bytes)
   atlas = new DataTexture(bytes, SIZE, SIZE)
   atlas.name = 'Tree sprigs and bark'
   atlas.colorSpace = SRGBColorSpace

@@ -17,6 +17,17 @@ function chunk(type: string, bytes: Buffer) {
   return chunk
 }
 
+// Canvas stores premultiplied channels. A straight RGBA readback loses RGB at alpha zero.
+function canvasPixels(source: Uint8ClampedArray): Uint8ClampedArray<ArrayBuffer> {
+  const pixels = new Uint8ClampedArray(source)
+  for (let i = 0; i < pixels.length; i += 4) {
+    const alpha = pixels[i + 3]! / 255
+    for (let c = 0; c < 3; c++)
+      pixels[i + c] = alpha ? Math.round(pixels[i + c]! * alpha) / alpha : 0
+  }
+  return pixels
+}
+
 class PixelCanvas {
   width = 0
   height = 0
@@ -25,7 +36,7 @@ class PixelCanvas {
     return {
       createImageData: (w: number, h: number) => ({ data: new Uint8ClampedArray(w * h * 4) }),
       putImageData: (image: ImageData) => {
-        this.pixels = new Uint8ClampedArray(image.data)
+        this.pixels = canvasPixels(image.data)
       },
       drawImage: (source: PixelCanvas) => {
         this.pixels = source.pixels.slice()
@@ -87,7 +98,7 @@ for (const [purpose, textures] of [
       const expected = new PixelCanvas()
       expected.width = atlas.width
       expected.height = atlas.height
-      expected.pixels = new Uint8ClampedArray(atlas.data)
+      expected.pixels = canvasPixels(new Uint8ClampedArray(atlas.data))
       const glb = Buffer.from(
         await exportSceneToGlb(new Group().add(group), { [tree.id]: tree }, { purpose, textures }),
       )
@@ -137,3 +148,40 @@ for (const [purpose, textures] of [
     }
   })
 }
+
+test('minified leaves keep their tone after a canvas PNG round trip', () => {
+  const group = buildTreeGeometry(TreeNode.parse({}))
+  try {
+    const material = (group.children[0] as Mesh).material as MeshStandardMaterial
+    const { width, height, data } = material.map!.image
+    const saved = canvasPixels(new Uint8ClampedArray(data))
+    // A mip footprint mixes linear RGB from gaps as well as blades. Compare only
+    // footprints that pass the leaf mask at this distance.
+    const linear = Array.from({ length: 256 }, (_, byte) => {
+      const s = byte / 255
+      return 255 * (s <= 0.04045 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4)
+    })
+    const size = 8
+    let totalError = 0
+    let samples = 0
+    for (let y = 0; y < height; y += size)
+      for (let x = 0; x < width; x += size) {
+        let alpha = 0
+        const delta = [0, 0, 0]
+        for (let row = y; row < y + size; row++)
+          for (let col = x; col < x + size; col++) {
+            const at = 4 * (row * width + col)
+            alpha += data[at + 3]!
+            for (let c = 0; c < 3; c++)
+              delta[c]! += linear[saved[at + c]!]! - linear[data[at + c]!]!
+          }
+        if (alpha <= 255 * material.alphaTest * size * size) continue
+        samples++
+        totalError += delta.reduce((sum, error) => sum + Math.abs(error), 0)
+      }
+    expect(samples).toBeGreaterThan(0)
+    expect(totalError / (3 * samples * size * size)).toBeLessThan(2)
+  } finally {
+    disposeTreeResources(group)
+  }
+})
