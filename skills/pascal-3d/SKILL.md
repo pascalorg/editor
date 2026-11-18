@@ -56,7 +56,7 @@ Record the active project ID, scene ID or version, and graph hash when returned.
 ### Prefer semantic operations
 
 For new lawn areas use `add_site_surface({ kind: "lawn", ... })`, not a green slab,
-recipe, authored object or `place_plugin_nodes`. It creates an editable core lawn
+recipe, authored object or generic plugin placement. It creates an editable core lawn
 under the Site, follows ground and clears buildings, paving and beds without
 Environment. Give exactly one polygon or corners; `siteId` means Site metres and
 cannot accompany level/building targets, otherwise outline and strokes transform

@@ -84,7 +84,7 @@ refuse before writes. Lawn bounds are 0.25–2,500 m² and 200 outline points.
 
 Preserve existing flat lawn slabs and Environment ground cover unless the person
 requested replacement; plugin lawns still require Environment. Do not recreate
-lawn through `place_plugin_nodes` or deliberately overlap vegetation owners.
+lawn through generic plugin placement or deliberately overlap vegetation owners.
 Coexistence does not automatically hide, convert or clip other lawns.
 
 ## Build a scripted object (hosted)
