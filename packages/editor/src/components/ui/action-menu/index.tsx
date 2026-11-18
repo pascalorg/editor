@@ -3,6 +3,7 @@
 import { useScene } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { motion } from 'motion/react'
+import type { ReactNode } from 'react'
 import { TooltipProvider } from '@pascal-app/viewer/ui'
 import { useIsMobile } from '@pascal-app/viewer/ui'
 import { useReducedMotion } from './../../../hooks/use-reduced-motion'
@@ -24,11 +25,13 @@ export function ActionMenu({
   className,
   inline = false,
   placement = 'bottom',
+  pointAskIcon,
 }: {
   className?: string
   // Rendered in the flow of a layout slot instead of floating over the viewer.
   inline?: boolean
   placement?: ActionMenuPlacement
+  pointAskIcon?: ReactNode
 }) {
   const isMobile = useIsMobile()
   const readOnly = useScene((s) => s.readOnly)
@@ -88,7 +91,7 @@ export function ActionMenu({
             <div className="flex flex-col items-stretch gap-0.5 px-2 py-1.5">
               {/* Row 1: control modes only */}
               <div className="flex items-center justify-center gap-1">
-                <ControlModes />
+                <ControlModes pointAskIcon={pointAskIcon} />
               </div>
               {/* Row 2: secondary toggles (orbit + top view hidden) */}
               <div className="flex items-center justify-center gap-1 border-border/50 border-t pt-1">
@@ -97,7 +100,7 @@ export function ActionMenu({
             </div>
           ) : (
             <div className="flex items-center justify-center gap-1 px-2 py-1.5">
-              <ControlModes />
+              <ControlModes pointAskIcon={pointAskIcon} />
               <div className="mx-1 h-5 w-px bg-border" />
               <SecondaryToggles />
               <div className="mx-1 h-5 w-px bg-border" />

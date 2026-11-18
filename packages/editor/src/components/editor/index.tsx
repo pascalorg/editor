@@ -231,6 +231,8 @@ export interface EditorProps {
   layoutVersion?: 'v1' | 'v2'
   // Viewport edge the tool menu docks to (desktop only; mobile stays at the bottom)
   actionMenuPlacement?: ActionMenuPlacement
+  /** Host-owned glyph for Point and ask, matching the dock's other tool icons. */
+  pointAskIcon?: ReactNode
 
   // UI slots (v1)
   appMenuButton?: ReactNode
@@ -1559,6 +1561,7 @@ function EditorContent({
   pointAsk,
   layoutVersion = 'v1',
   actionMenuPlacement,
+  pointAskIcon,
   appMenuButton,
   sidebarTop,
   navbarSlot,
@@ -2079,12 +2082,12 @@ function EditorContent({
                         // No transform: the menu's fixed pill must anchor to the scene region.
                         <div className="pointer-events-none absolute inset-x-0 top-14 z-10 flex justify-center">
                           <div className="pointer-events-auto">
-                            <ActionMenu inline placement="top" />
+                            <ActionMenu inline placement="top" pointAskIcon={pointAskIcon} />
                           </div>
                         </div>
                       ) : (
                         <div className="pointer-events-auto">
-                          <ActionMenu placement={actionMenuPlacement} />
+                          <ActionMenu placement={actionMenuPlacement} pointAskIcon={pointAskIcon} />
                         </div>
                       ))}
                     {sceneOverlay}
@@ -2174,7 +2177,7 @@ function EditorContent({
           {/* Fixed UI overlays scoped to the viewer area */}
           <ViewerOverlays left={overlayLeft}>
             <div className="pointer-events-auto">
-              <ActionMenu placement={actionMenuPlacement} />
+              <ActionMenu placement={actionMenuPlacement} pointAskIcon={pointAskIcon} />
             </div>
             <RightStack
               helper={<HelperManager />}

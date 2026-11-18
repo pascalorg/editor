@@ -57,6 +57,13 @@ export const POINT_ASK_CSS = `
 .pa-err{margin:8px 2px 0;font-size:12px;color:var(--pa-warm);display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 .pa-pin{position:absolute;left:0;top:0;width:32px;height:32px;margin:-38px 0 0 -16px;pointer-events:auto;cursor:pointer;display:grid;place-items:center;will-change:transform}
 .pa-pin::after{content:"";position:absolute;left:50%;top:28px;width:2px;height:8px;margin-left:-1px;border-radius:1px;background:var(--pa-accent);opacity:.85}
+.pa-pin[role="button"]:hover .pa-pdisc,.pa-pin[role="button"]:focus-visible .pa-pdisc{box-shadow:inset 0 0 0 2px var(--pa-accent),0 0 0 3px rgba(169,155,255,.12)}
+.pa-pin[role="button"]:focus-visible{outline:2px solid var(--pa-accent);outline-offset:2px;border-radius:999px}
+.pa-pin-link{position:absolute;left:0;top:0;width:1px;height:1px;overflow:visible;pointer-events:none}
+.pa-pin-link line{stroke:var(--pa-accent);stroke-width:1;opacity:.5}
+.pa-pin-link circle{fill:var(--pa-accent);stroke:var(--pa-ink);stroke-width:1}
+.pa-footprint{position:absolute;inset:0;width:100%;height:100%;overflow:visible;pointer-events:none}
+.pa-footprint polygon{fill:rgba(169,155,255,.08);stroke:var(--pa-accent);stroke-width:1.5;stroke-dasharray:5 4;stroke-linejoin:round}
 .pa-pdisc{width:24px;height:24px;border-radius:50%;background:rgba(24,25,30,.92);box-shadow:inset 0 0 0 1.5px rgba(169,155,255,.9),0 6px 16px -6px rgba(0,0,0,.7);display:grid;place-items:center;transition:box-shadow 240ms ease}
 .pa-pdisc svg{width:20px;height:20px;overflow:visible}
 .pa-pq,.pa-pa{fill:none;stroke:#a99bff;stroke-width:1.8;opacity:0;transition:opacity 160ms ease}

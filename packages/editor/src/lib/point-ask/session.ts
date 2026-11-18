@@ -19,7 +19,7 @@ import {
 import { sceneViewBounds, sceneViewPose } from '@pascal-app/core/agent-operations'
 import { retractNodes, useViewer } from '@pascal-app/viewer'
 import { cameraPoseStore, useFollowPascal } from '@pascal-app/viewer/ui'
-import { type Object3D, Vector2, Vector3 } from 'three'
+import { Matrix3, type Object3D, Vector2, Vector3 } from 'three'
 import {
   resolveRoofSegmentSelectionTarget,
   roomForEvent,
@@ -64,6 +64,7 @@ import {
   nearestEdgePoint,
   rankInRegion,
   rectFromDrag,
+  regionFootprint,
   regionFractions,
   regionLabel,
   regionSizeMetres,
@@ -416,11 +417,14 @@ function pickAtPoint(x: number, y: number): PointHover | null {
     const node = id ? nodes[id] : undefined
     if (hidden || !node) continue
     const local = hit.object.worldToLocal(hit.point.clone())
+    const normal = hit.face?.normal
+      .clone()
+      .applyNormalMatrix(new Matrix3().getNormalMatrix(hit.object.matrixWorld))
     const event = {
       node,
       position: [hit.point.x, hit.point.y, hit.point.z],
       localPosition: [local.x, local.y, local.z],
-      normal: hit.face ? [hit.face.normal.x, hit.face.normal.y, hit.face.normal.z] : undefined,
+      normal: normal ? [normal.x, normal.y, normal.z] : undefined,
       faceIndex: hit.faceIndex,
       object: hit.object,
       stopPropagation: () => undefined,
@@ -436,6 +440,11 @@ function onPointerDown(event: PointerEvent) {
   if (!state.active || event.button !== 0) return
   const canvas = getEditorThreeContext()?.domElement
   if (!canvas || event.target !== canvas) return
+  // This capture listener may run before the pin layer's outside-dismiss listener.
+  if (state.cardFor && state.pins[state.cardFor]?.behavior === 'persistent') {
+    if (document.querySelector('[role="dialog"][aria-modal="true"]')) return
+    state.openCard(null)
+  }
   event.preventDefault()
   event.stopImmediatePropagation()
   // A touch has no hover: its press names what it lands on, and shows the outline at once.
@@ -564,6 +573,21 @@ const REGION_KINDS = new Set([
   'shelf',
 ])
 
+function regionCenterHit(rect: Rect): PointHit {
+  const center = { x: (rect.x0 + rect.x1) / 2, y: (rect.y0 + rect.y1) / 2 }
+  const surface = pickAtPoint(center.x, center.y)?.hit
+  if (surface) return surface
+  // Empty ground has no registered node: only then fall back to the level plane.
+  const planeY = levelFloorY()
+  const ray = cameraRay(center.x, center.y)
+  const t = ray && ray.direction[1] < -1e-6 ? (planeY - ray.origin[1]) / ray.direction[1] : null
+  const point: [number, number, number] =
+    ray && t !== null && t >= 0
+      ? [ray.origin[0] + ray.direction[0] * t, planeY, ray.origin[2] + ray.direction[2] * t]
+      : (cameraPoseStore.getState().pose?.target ?? [0, planeY, 0])
+  return { point, normal: [0, 1, 0] }
+}
+
 /** The press became a drag and was let go: the shutter fires and a bubble opens on the rectangle. */
 function finishRegion(press: Down, event: PointerEvent) {
   const state = usePointAsk.getState()
@@ -593,21 +617,10 @@ function finishRegion(press: Down, event: PointerEvent) {
   const { ids, more } = elementsInRegion(rect)
   const release = { x: event.clientX, y: event.clientY }
   const click = nearestEdgePoint(rect, release)
-  // The pin plants on the ground under where the finger let go (the level's floor when the ray misses).
-  const planeY = levelFloorY()
-  const ray = cameraRay(release.x, release.y)
-  const t = ray && ray.direction[1] < -1e-6 ? (planeY - ray.origin[1]) / ray.direction[1] : null
-  const point: [number, number, number] =
-    ray && t !== null && t > 0
-      ? [ray.origin[0] + ray.direction[0] * t, planeY, ray.origin[2] + ray.direction[2] * t]
-      : (cameraPoseStore.getState().pose?.target ?? [0, planeY, 0])
-  openBubble(
-    [],
-    { point, normal: [0, 1, 0] },
-    'region',
-    { ...press, crop },
-    { rect, click, ids, more },
-  )
+  const hit = regionCenterHit(rect)
+  const footprint = regionFootprint(rect, cameraRay, hit)
+  openBubble([], hit, 'region', { ...press, crop }, { rect, click, ids, more })
+  if (footprint) state.patchBubble({ footprint })
 }
 
 function onPointerMove(event: PointerEvent) {
@@ -640,6 +653,7 @@ function onPointerUp(event: PointerEvent) {
   event.preventDefault()
   event.stopImmediatePropagation()
   if (press.moved) {
+    updateRegionDrag(press, event)
     finishRegion(press, event)
     return
   }
@@ -746,6 +760,12 @@ function onKeyDown(event: KeyboardEvent) {
     return
   }
   if (event.key === 'Escape') {
+    if (
+      state.cardFor &&
+      state.pins[state.cardFor]?.behavior === 'persistent' &&
+      document.querySelector('[role="dialog"][aria-modal="true"]')
+    )
+      return
     if (state.cardFor) {
       state.openCard(null)
       event.stopImmediatePropagation()
@@ -887,6 +907,7 @@ export async function sendBubble(
   state.addPin({
     model,
     anchor: bubble.anchor,
+    ...(bubble.footprint ? { footprint: bubble.footprint } : {}),
     local,
     label,
     levelId: useViewer.getState().selection.levelId ?? null,

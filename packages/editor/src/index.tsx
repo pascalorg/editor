@@ -871,6 +871,7 @@ export {
   setPointAskBusy,
   setPointAskPlayful,
 } from './lib/point-ask/host-api'
+export type { WorldFootprint as PointFootprint } from './lib/point-ask/types'
 export { buildPrintableRoofSegmentSolids } from './lib/print-roof-solids'
 export { configureManifoldRuntime } from './lib/print-shell-compiler-manifold-worker'
 export type { ManifoldRuntimeOptions } from './lib/print-shell-compiler-protocol'
