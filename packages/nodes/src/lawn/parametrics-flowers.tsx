@@ -8,7 +8,8 @@ import {
   usePascalI18n,
   useScene,
 } from '@pascal-app/core'
-import { PanelSection } from '@pascal-app/editor'
+import { PanelSection, ToolOptionsPanel, useEditor } from '@pascal-app/editor'
+import { useViewer } from '@pascal-app/viewer'
 
 export function editLawnFlowers(id: LawnNode['id'], flowers: LawnFlower[]): boolean {
   const node = useScene.getState().nodes[id]
@@ -210,6 +211,16 @@ function LawnStrokesPanel({ lawn }: { lawn: LawnNode }) {
   const effects = useLawnEffectLabels()
   return (
     <PanelSection title={i18n._({ id: 'node.lawn.strokes.title', message: 'Brush strokes' })}>
+      <ToolOptionsPanel
+        className="mb-3"
+        kind="lawn"
+        onSelect={() => {
+          const selection = useViewer.getState().selection
+          useEditor.getState().setTool('lawn')
+          // Keep the lawn's inspector available while its existing tool is armed.
+          useViewer.getState().setSelection(selection)
+        }}
+      />
       <ol className="space-y-2">
         {lawn.strokes.map((stroke, index) => (
           <LawnStrokeRow
