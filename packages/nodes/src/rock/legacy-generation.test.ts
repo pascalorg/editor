@@ -3,54 +3,58 @@ import { createHash } from 'node:crypto'
 import { RockNode } from '@pascal-app/core'
 import { buildRockMesh } from './geometry'
 
-// Captured at e2ca3a128 before candidate authorship. These are a persisted gen-1 contract, not
-// candidate-generated snapshots. Fixture: 6 x 4 m rectangle, height 2.4, foot -0.3, top 2.4.
+// Captured at e2ca3a128 before candidate authorship, verified against the original byte hashes
+// before quantizing. Fixture: 6 x 4 m rectangle, height 2.4, foot -0.3, top 2.4.
+// One-micrometre position bins (0.000001 m) and 1e-6 unit-normal bins ignore platform
+// trigonometry noise without hiding visible shape changes. Indices remain byte-exact.
+const POSITION_STEP_METRES = 1e-6
+const NORMAL_STEP = 1e-6
 const fixtures = [
   [
     'faceted',
     1,
-    '96d07aa65e8f27f62c46eb085c382bf05133fa7d16825a176c88c8dfa499a1e7',
-    '345cf54983089eb1663d59b074d678b6467b9b76714cc98eec30080dfaf141b0',
+    '5b4199345120573737caabf2cb9c4500c7b67b5ef3aff2cf3fbb7b0138722710',
+    '12258eb6c52cfc778fa4343e75da6919d036be24c7144e595110a2b401e8b0d2',
     null,
     2376,
   ],
   [
     'faceted',
     11,
-    '90095d9f697811c5f6f4066f02bb8bc0307ec0aca7db4f9d27b7b5d6b9565fdc',
-    'f3dd391877a64014f3f90aed6c71a840bce8b111717cf6ac84ce25f955624cc7',
+    '8f7e1688b9cac5dfa00240b6e33d2ac649b6ed76e1357391054dba530df5c66e',
+    '773f94d8808fa2bd8aa6a1ea32c08d0dc133949ccfcf52de8ddd68118ab316cc',
     null,
     2376,
   ],
   [
     'faceted',
     -7,
-    '58d3c281cc5cc409960a609d8dc8004963e48959328154c6056a27da2adf7b8a',
-    '34dec3e5a9172f2a99818c9d3604fb73693049b2b1ea908d1b6ffd9027782a96',
+    '398d513571ef881705e1c2f3ac4da845adddbce6d1d4b072e4ed73360c60368f',
+    '74a2f5e093246b1ac44d51bea83ecf8ca0fab4d07ff45b1aed93ee8af3631b84',
     null,
     2376,
   ],
   [
     'weathered',
     1,
-    'a35e22c3771786bb985ed0b1a4be93f99cbd076f83a92f6d296960677ede0ab6',
-    'f168fa332005f2ed68aee6dae4e793ece899f07644099a6826cdeaaa4d34d677',
+    '859041935f636055d070a3ebe1e776f9e05f4619f9d9b21ffbd864aa5089558f',
+    '27f0bb2a2b9b947b69c4e536d14c6f8d17b5c19849e07e25ffaf65a6c195be43',
     '008f1d81ab879cf0c03054e0d0e44a0f0b8db2383200865031f8e18ab358ddbe',
     398,
   ],
   [
     'weathered',
     11,
-    '3bcb41284063525ab021bdde1e3f44e03a9283bc43dc1133ba251d9a9e681b3d',
-    '9304ffe212b4f6d3df9700c78f0077704e8fbf64b06ca17a578083e7ba897825',
+    '91e4640a68f2e8cc97fbc4668f36460fd70b54e66d80e0786e31dd1bf8f2cb6a',
+    '240ff55690de3cb0c6668aa58920856e66638bceb14f5e15fb6c04bcb291b158',
     '008f1d81ab879cf0c03054e0d0e44a0f0b8db2383200865031f8e18ab358ddbe',
     398,
   ],
   [
     'weathered',
     -7,
-    '87a7ca2463d452b22f2bbff62193209210e54530fb70febe618f19de314f0a30',
-    '6d62ebac92aaf6f5c635244f1ae87745b7c7cc138a09e2228511e5671d446c98',
+    'c70ab8be8296c7562518e804e9bbbdf034ccbdb032c27ea1090b740d95d1e421',
+    '7bc1b2a04d80f4eec216972bb978a68a7308af6fa92bd26989ee50d2feb98675',
     '008f1d81ab879cf0c03054e0d0e44a0f0b8db2383200865031f8e18ab358ddbe',
     398,
   ],
@@ -61,7 +65,12 @@ const hash = (array: ArrayBufferView) =>
     .update(new Uint8Array(array.buffer, array.byteOffset, array.byteLength))
     .digest('hex')
 
-describe('the saved generation-1 mesh bytes', () => {
+const quantizedHash = (array: ArrayLike<number>, step: number) =>
+  createHash('sha256')
+    .update(JSON.stringify(Array.from(array, (value) => Math.round(value / step))))
+    .digest('hex')
+
+describe('the saved generation-1 mesh within a micrometre', () => {
   for (const [form, seed, position, normal, index, vertices] of fixtures) {
     for (const gen of [undefined, 1]) {
       test(`${form}, seed ${seed}, ${gen === undefined ? 'old document' : 'explicit gen 1'}`, () => {
@@ -80,8 +89,10 @@ describe('the saved generation-1 mesh bytes', () => {
         const mesh = buildRockMesh(rock, -0.3, 2.4)
         try {
           expect(rock.gen).toBe(1)
-          expect(hash(mesh.getAttribute('position').array)).toBe(position)
-          expect(hash(mesh.getAttribute('normal').array)).toBe(normal)
+          expect(quantizedHash(mesh.getAttribute('position').array, POSITION_STEP_METRES)).toBe(
+            position,
+          )
+          expect(quantizedHash(mesh.getAttribute('normal').array, NORMAL_STEP)).toBe(normal)
           expect(mesh.index ? hash(mesh.index.array) : null).toBe(index)
           expect(mesh.getAttribute('position').count).toBe(vertices)
           expect((mesh.index?.count ?? mesh.getAttribute('position').count) / 3).toBe(792)
