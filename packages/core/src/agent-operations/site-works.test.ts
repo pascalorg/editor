@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test'
 import { z } from 'zod'
 import { addSiteSurfaceTool, addStepsTool } from '../agent-tools'
 import { isAgentRefusal } from '../agent-tools/refusal'
-import { BuildingNode, LevelNode, SiteNode, SlabNode } from '../schema'
+import { BuildingNode, type LawnNode, LevelNode, SiteNode, SlabNode } from '../schema'
 import { AGENT_OPERATIONS, applySceneChanges } from './index'
 import type { SceneNodes } from './types'
 
@@ -72,7 +72,7 @@ describe('add_site_surface', () => {
     })
   })
 
-  test('a lawn from two corners is the rectangle they span, green, 1 cm up, marked lawn', () => {
+  test('a lawn from two corners is an editable Site child with its retained area', () => {
     const nodes = lot()
     // Corners (-2, 5) and (6, 7): 8 m by 2 m, 16 m², corners given in either order.
     const { result, nodes: after } = run('add_site_surface', nodes, {
@@ -83,18 +83,25 @@ describe('add_site_surface', () => {
       ],
       levelId: 'level_g',
     })
-    expect(result).toMatchObject({ ok: true, kind: 'lawn', area: 16 })
-    const [lawn] = created(nodes, after, 'slab') as SlabNode[]
-    expect(lawn?.polygon).toEqual([
+    expect(result).toMatchObject({
+      ok: true,
+      kind: 'lawn',
+      requestedAreaM2: 16,
+      retainedAreaM2: 16,
+      siteId: 'site_a',
+    })
+    expect(result).not.toHaveProperty('slabId')
+    const [lawn] = created(nodes, after, 'lawn') as LawnNode[]
+    expect(lawn?.outline).toEqual([
       [-2, 5],
       [6, 5],
       [6, 7],
       [-2, 7],
     ])
     expect(lawn).toMatchObject({
-      materialPreset: 'library:preset-lawn',
-      elevation: 0.01,
-      metadata: { flatwork: 'lawn' },
+      parentId: 'site_a',
+      height: 0.06,
+      flowerDensity: 0,
     })
   })
 

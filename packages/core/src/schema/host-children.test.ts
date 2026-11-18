@@ -46,6 +46,7 @@ test('frozen pre-slice corpus covers every kind predating separators', () => {
         kind !== 'hedge' &&
         kind !== 'planting' &&
         kind !== 'tree' &&
+        kind !== 'lawn' &&
         kind !== 'rock',
     ).sort(),
   )

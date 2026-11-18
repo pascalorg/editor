@@ -81,6 +81,14 @@ const REQUIRED_FIELDS: Record<string, Record<string, unknown>> = {
       src: 'asset://chair.glb',
     },
   },
+  lawn: {
+    outline: [
+      [0, 0],
+      [4, 0],
+      [4, 4],
+      [0, 4],
+    ],
+  },
   lineset: {
     path: [
       [0, 0, 0],
@@ -521,6 +529,8 @@ describe('measure in world space', () => {
 
   test('every kind resolves on its real host, with renderer-derived poses flagged', async () => {
     const ref = seedRef()
+    const site = Object.values(bridge.getNodes()).find((node) => node.type === 'site')
+    if (!site) throw new Error('The default scene has no Site for its lawn.')
     const deck = SlabNode.parse({
       elevation: 1,
       polygon: [
@@ -535,8 +545,9 @@ describe('measure in world space', () => {
     const roof = RoofNode.parse({ position: [0, 3, 10], children: [segment.id] })
     const cabinet = CabinetNode.parse({ position: [5, 0, 5] })
     const stair = StairNode.parse({ position: [-5, 0, -5] })
-    const hosts: Record<string, AnyNode> = { wall, 'roof-segment': segment, cabinet, stair }
+    const hosts: Record<string, AnyNode> = { site, wall, 'roof-segment': segment, cabinet, stair }
     const hostOf: Record<string, string> = {
+      lawn: 'site',
       door: 'wall',
       window: 'wall',
       'cabinet-module': 'cabinet',

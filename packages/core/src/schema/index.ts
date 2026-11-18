@@ -275,6 +275,7 @@ export {
   isLowProfileItemSurface,
   LOW_PROFILE_ITEM_SURFACE_MAX_HEIGHT,
 } from './nodes/item'
+export { LAWN_LIMITS, LawnFlower, LawnNode, LawnStroke } from './nodes/lawn'
 export {
   LeanToCanopyForm,
   LeanToConnectionMode,

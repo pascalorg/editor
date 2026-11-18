@@ -29,6 +29,7 @@ import { hedgeEditContribution } from './hedge/definition.edit'
 import { hvacEquipmentEditContribution } from './hvac-equipment/definition.edit'
 import { importedMeshEditContribution } from './imported-mesh/definition.edit'
 import { itemEditContribution } from './item/definition.edit'
+import { lawnEditContribution } from './lawn/definition.edit'
 import { leanToExtensionEditContribution } from './lean-to-extension/definition.edit'
 import { levelEditContribution } from './level/definition.edit'
 import { linesetEditContribution } from './lineset/definition.edit'
@@ -95,6 +96,7 @@ export const builtinEditContributions = {
   hedge: hedgeEditContribution,
   planting: plantingEditContribution,
   tree: treeEditContribution,
+  lawn: lawnEditContribution,
   building: buildingEditContribution,
   level: levelEditContribution,
   guide: guideEditContribution,

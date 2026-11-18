@@ -30,6 +30,7 @@ import { hedgeRenderDefinition } from './hedge/definition.render'
 import { hvacEquipmentRenderDefinition } from './hvac-equipment/definition.render'
 import { importedMeshRenderDefinition } from './imported-mesh/definition.render'
 import { itemRenderDefinition } from './item/definition.render'
+import { lawnRenderDefinition } from './lawn/definition.render'
 import { leanToExtensionRenderDefinition } from './lean-to-extension/definition.render'
 import { levelRenderDefinition } from './level/definition.render'
 import { linesetRenderDefinition } from './lineset/definition.render'
@@ -96,6 +97,7 @@ export const builtinRenderDefinitions = [
   hedgeRenderDefinition,
   plantingRenderDefinition,
   treeRenderDefinition,
+  lawnRenderDefinition,
   buildingRenderDefinition,
   levelRenderDefinition,
   guideRenderDefinition,

@@ -27,6 +27,7 @@ import { HedgeNode } from './nodes/hedge'
 import { HvacEquipmentNode } from './nodes/hvac-equipment'
 import { ImportedMeshNode } from './nodes/imported-mesh'
 import { ItemNode } from './nodes/item'
+import { LawnNode } from './nodes/lawn'
 import { LeanToExtensionNode } from './nodes/lean-to-extension'
 import { LevelNode } from './nodes/level'
 import { LinesetNode } from './nodes/lineset'
@@ -118,6 +119,7 @@ export const AnyNode = nodeUnion([
   ZoneNode,
   SlabNode,
   HedgeNode,
+  LawnNode,
   PlantingNode,
   TreeNode,
   RockNode,

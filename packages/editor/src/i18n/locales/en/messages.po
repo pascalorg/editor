@@ -2235,6 +2235,10 @@ msgid "editor.inspector.field.beamWidth.1q1mzbe"
 msgstr "Beam width"
 
 #: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.bladeWidth.6rnj1x"
+msgstr "Blade width"
+
+#: packages/nodes/src/i18n/definition-messages.ts
 msgid "editor.inspector.field.bodyShape.arvkuw"
 msgstr "Body shape"
 
@@ -2301,6 +2305,10 @@ msgstr "Collar shape"
 #: packages/nodes/src/i18n/definition-messages.ts
 msgid "editor.inspector.field.collarWidth.qvc9ik"
 msgstr "Collar width"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.color.1rqg6wo"
+msgstr "Color"
 
 #: packages/nodes/src/i18n/definition-messages.ts
 msgid "editor.inspector.field.columns.1sy73ks"
@@ -2443,6 +2451,10 @@ msgid "editor.inspector.field.dwellMs.1lkk0o5"
 msgstr "Dwell ms"
 
 #: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.edgeFade.1fpwnci"
+msgstr "Edge fade"
+
+#: packages/nodes/src/i18n/definition-messages.ts
 msgid "editor.inspector.field.edgeInset.1obeimx"
 msgstr "Edge inset"
 
@@ -2497,6 +2509,10 @@ msgstr "Flashing height"
 #: packages/nodes/src/i18n/definition-messages.ts
 msgid "editor.inspector.field.flashingProjection.hhf0fk"
 msgstr "Flashing projection"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.flowerDensity.1k5s46u"
+msgstr "Flower density"
 
 #: packages/nodes/src/i18n/definition-messages.ts
 msgid "editor.inspector.field.flueCount.j3t2ci"
@@ -2991,6 +3007,10 @@ msgid "editor.inspector.field.rotation.ly2rj"
 msgstr "Rotation"
 
 #: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.roughness.1q2hm6t"
+msgstr "Roughness"
+
+#: packages/nodes/src/i18n/definition-messages.ts
 msgid "editor.inspector.field.rows.1ba1neg"
 msgstr "Rows"
 
@@ -3235,6 +3255,10 @@ msgid "editor.inspector.field.width2.1nqawvr"
 msgstr "Width2"
 
 #: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.wind.154vjmv"
+msgstr "Wind"
+
+#: packages/nodes/src/i18n/definition-messages.ts
 msgid "editor.inspector.field.withBack.1ay8nus"
 msgstr "With back"
 
@@ -3343,6 +3367,10 @@ msgid "editor.inspector.group.fitting.171z1r4"
 msgstr "Fitting"
 
 #: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.group.flowers.2cwnnz"
+msgstr "Flowers"
+
+#: packages/nodes/src/i18n/definition-messages.ts
 msgid "editor.inspector.group.flues.nq6pye"
 msgstr "Flues"
 
@@ -3361,6 +3389,10 @@ msgstr "Frame"
 #: packages/nodes/src/i18n/definition-messages.ts
 msgid "editor.inspector.group.geometry.a21os1"
 msgstr "Geometry"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.group.grass.ogou1p"
+msgstr "Grass"
 
 #: packages/nodes/src/i18n/definition-messages.ts
 msgid "editor.inspector.group.grid.d8gwxd"
@@ -6848,6 +6880,10 @@ msgid "editor.toolHint.finishSlab.xmnm8e"
 msgstr "Finish slab"
 
 #: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.toolHint.finishTheLawn.1dp3a41"
+msgstr "Finish the lawn"
+
+#: packages/nodes/src/i18n/definition-messages.ts
 msgid "editor.toolHint.flipSide.172xku9"
 msgstr "Flip side"
 
@@ -6994,6 +7030,10 @@ msgstr "No wall meets here"
 #: packages/nodes/src/i18n/definition-messages.ts
 msgid "editor.toolHint.numberOfCutsScrollOrClick.1kqe84b"
 msgstr "Number of cuts — scroll or click to change"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.toolHint.paintOneStroke.1si1g1"
+msgstr "Paint one stroke"
 
 #: packages/nodes/src/i18n/definition-messages.ts
 msgid "editor.toolHint.pickWitnessPoint.k3hgh1"
@@ -11539,6 +11579,280 @@ msgstr "Uniform Scale"
 #: packages/nodes/src/item/panel.tsx
 msgid "node.item.panel.xyz"
 msgstr "XYZ"
+
+#: packages/nodes/src/lawn/brush-controller.ts
+msgid "node.lawn.brush.changed"
+msgstr "The lawn changed during this stroke. Start a new stroke on the updated lawn."
+
+#: packages/nodes/src/lawn/brush-controller.ts
+msgid "node.lawn.brush.chooseFlowers"
+msgstr "Choose a flower species and a positive flower density before painting more flowers."
+
+#: packages/nodes/src/lawn/brush-controller.ts
+msgid "node.lawn.brush.empty"
+msgstr "No lawn ground remains here. Check the outline and ground owners before painting."
+
+#: packages/nodes/src/lawn/brush-controller.ts
+msgid "node.lawn.brush.full"
+msgstr "This lawn has 64 strokes. Remove an older stroke before painting again."
+
+#: packages/nodes/src/lawn/brush-controller.ts
+msgid "node.lawn.brush.invalid"
+msgstr "This stroke has invalid coordinates or settings. Check the brush settings and try again."
+
+#: packages/nodes/src/lawn/brush-controller.ts
+msgid "node.lawn.brush.noSite"
+msgstr "This lawn has no owning Site. Restore its Site before painting."
+
+#: packages/nodes/src/lawn/brush-controller.ts
+msgid "node.lawn.brush.target"
+msgstr "Start inside one lawn area. Overlapping lawns must be edited separately."
+
+#: packages/nodes/src/lawn/brush-controller.ts
+msgid "node.lawn.brush.terrainBudget"
+msgstr "This lawn exceeds the terrain detail budget. Reduce its outline or simplify the terrain before painting."
+
+#: packages/nodes/src/lawn/brush-controller.ts
+msgid "node.lawn.brush.workBudget"
+msgstr "This stroke exceeds the lawn’s combined work budget. Use a shorter stroke or remove older strokes."
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "node.lawn.description"
+msgstr "An editable lawn on Site ground, with mown or rough grass and optional flowers."
+
+#: packages/nodes/src/lawn/draft.ts
+msgid "node.lawn.draft.invalid"
+msgstr "This lawn cannot be placed here. Check the outline, area and available ground."
+
+#: packages/nodes/src/lawn/draft.ts
+msgid "node.lawn.draft.maxPoints"
+msgstr "The outline is full. Press Enter to finish, or Backspace to revise it."
+
+#: packages/nodes/src/lawn/draft.ts
+msgid "node.lawn.draft.minPoints"
+msgstr "Add at least three outline points."
+
+#: packages/nodes/src/lawn/definition.edit.ts
+#: packages/nodes/src/lawn/parametrics-flowers.tsx
+msgid "node.lawn.effect.bare"
+msgstr "Bare ground"
+
+#: packages/nodes/src/lawn/definition.edit.ts
+#: packages/nodes/src/lawn/parametrics-flowers.tsx
+msgid "node.lawn.effect.fewerFlowers"
+msgstr "Fewer flowers"
+
+#: packages/nodes/src/lawn/definition.edit.ts
+#: packages/nodes/src/lawn/parametrics-flowers.tsx
+msgid "node.lawn.effect.grass"
+msgstr "Restore grass"
+
+#: packages/nodes/src/lawn/definition.edit.ts
+#: packages/nodes/src/lawn/parametrics-flowers.tsx
+msgid "node.lawn.effect.moreFlowers"
+msgstr "More flowers"
+
+#: packages/nodes/src/lawn/definition.edit.ts
+#: packages/nodes/src/lawn/parametrics-flowers.tsx
+msgid "node.lawn.effect.shorter"
+msgstr "Shorter grass"
+
+#: packages/nodes/src/lawn/definition.edit.ts
+#: packages/nodes/src/lawn/parametrics-flowers.tsx
+msgid "node.lawn.effect.taller"
+msgstr "Taller grass"
+
+#: packages/nodes/src/lawn/definition.edit.ts
+#: packages/nodes/src/lawn/parametrics-flowers.tsx
+msgid "node.lawn.flower.clover"
+msgstr "Clover"
+
+#: packages/nodes/src/lawn/definition.edit.ts
+#: packages/nodes/src/lawn/parametrics-flowers.tsx
+msgid "node.lawn.flower.daisy"
+msgstr "Daisy"
+
+#: packages/nodes/src/lawn/definition.edit.ts
+#: packages/nodes/src/lawn/parametrics-flowers.tsx
+msgid "node.lawn.flower.yarrow"
+msgstr "Yarrow"
+
+#: packages/nodes/src/lawn/parametrics-flowers.tsx
+msgid "node.lawn.flowers.add"
+msgstr "Add flower species"
+
+#: packages/nodes/src/lawn/parametrics-flowers.tsx
+msgid "node.lawn.flowers.color"
+msgstr "Flower colour"
+
+#: packages/nodes/src/lawn/parametrics-flowers.tsx
+msgid "node.lawn.flowers.customColor"
+msgstr "Custom flower colour"
+
+#: packages/nodes/src/lawn/parametrics-flowers.tsx
+msgid "node.lawn.flowers.help"
+msgstr "Choose up to three species and a positive flower density. Flowers are off until you choose them; winter has no blooms."
+
+#: packages/nodes/src/lawn/parametrics-flowers.tsx
+msgid "node.lawn.flowers.mix"
+msgstr "Flower mix"
+
+#: packages/nodes/src/lawn/parametrics-flowers.tsx
+msgid "node.lawn.flowers.remove"
+msgstr "Remove species"
+
+#: packages/nodes/src/lawn/parametrics-flowers.tsx
+msgid "node.lawn.flowers.share"
+msgstr "Relative share"
+
+#: packages/nodes/src/lawn/parametrics-flowers.tsx
+msgid "node.lawn.flowers.species"
+msgstr "Species"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "node.lawn.label"
+msgstr "Lawn"
+
+#: packages/nodes/src/lawn/parametrics.ts
+msgid "node.lawn.parameters.bladeWidth"
+msgstr "Blade width"
+
+#: packages/nodes/src/lawn/parametrics.ts
+msgid "node.lawn.parameters.color"
+msgstr "Grass colour"
+
+#: packages/nodes/src/lawn/parametrics.ts
+msgid "node.lawn.parameters.density"
+msgstr "Blades per square metre"
+
+#: packages/nodes/src/lawn/parametrics.ts
+msgid "node.lawn.parameters.edgeFade"
+msgstr "Soft edge"
+
+#: packages/nodes/src/lawn/definition.edit.ts
+#: packages/nodes/src/lawn/parametrics.ts
+msgid "node.lawn.parameters.flowerDensity"
+msgstr "Flower heads per square metre"
+
+#: packages/nodes/src/lawn/parametrics.ts
+msgid "node.lawn.parameters.flowers"
+msgstr "Flowers"
+
+#: packages/nodes/src/lawn/parametrics.ts
+msgid "node.lawn.parameters.grass"
+msgstr "Grass"
+
+#: packages/nodes/src/lawn/parametrics.ts
+msgid "node.lawn.parameters.height"
+msgstr "Height"
+
+#: packages/nodes/src/lawn/parametrics.ts
+msgid "node.lawn.parameters.roughness"
+msgstr "Roughness"
+
+#: packages/nodes/src/lawn/parametrics-flowers.tsx
+msgid "node.lawn.parameters.season"
+msgstr "Season"
+
+#: packages/nodes/src/lawn/parametrics.ts
+msgid "node.lawn.parameters.seed"
+msgstr "Seed"
+
+#: packages/nodes/src/lawn/parametrics.ts
+msgid "node.lawn.parameters.wind"
+msgstr "Wind"
+
+#: packages/nodes/src/lawn/parametrics-flowers.tsx
+msgid "node.lawn.season.autumn"
+msgstr "Autumn"
+
+#: packages/nodes/src/lawn/parametrics-flowers.tsx
+msgid "node.lawn.season.spring"
+msgstr "Spring"
+
+#: packages/nodes/src/lawn/parametrics-flowers.tsx
+msgid "node.lawn.season.summer"
+msgstr "Summer"
+
+#: packages/nodes/src/lawn/parametrics-flowers.tsx
+msgid "node.lawn.season.winter"
+msgstr "Winter"
+
+#: packages/nodes/src/lawn/parametrics-flowers.tsx
+msgid "node.lawn.strokes.remove"
+msgstr "Remove stroke"
+
+#: packages/nodes/src/lawn/parametrics-flowers.tsx
+msgid "node.lawn.strokes.title"
+msgstr "Brush strokes"
+
+#: packages/nodes/src/lawn/definition.edit.ts
+msgid "node.lawn.tool.addPoint"
+msgstr "Add an outline point"
+
+#: packages/nodes/src/lawn/definition.edit.ts
+msgid "node.lawn.tool.area"
+msgstr "Draw area"
+
+#: packages/nodes/src/lawn/definition.edit.ts
+msgid "node.lawn.tool.back"
+msgstr "Take the last point back"
+
+#: packages/nodes/src/lawn/definition.edit.ts
+msgid "node.lawn.tool.brush"
+msgstr "Brush lawn"
+
+#: packages/nodes/src/lawn/definition.edit.ts
+msgid "node.lawn.tool.cancel"
+msgstr "Cancel"
+
+#: packages/nodes/src/lawn/definition.edit.ts
+msgid "node.lawn.tool.drag"
+msgstr "Drag"
+
+#: packages/nodes/src/lawn/definition.edit.ts
+msgid "node.lawn.tool.effect"
+msgstr "Brush effect"
+
+#: packages/nodes/src/lawn/definition.edit.ts
+msgid "node.lawn.tool.existingMix"
+msgstr "Keep lawn mix"
+
+#: packages/nodes/src/lawn/definition.edit.ts
+msgid "node.lawn.tool.existingMixHelp"
+msgstr "Uses this lawn’s species and density. Configure flowers in the inspector first."
+
+#: packages/nodes/src/lawn/definition.edit.ts
+msgid "node.lawn.tool.finish"
+msgstr "Finish the lawn"
+
+#: packages/nodes/src/lawn/definition.edit.ts
+msgid "node.lawn.tool.flowerSpecies"
+msgstr "Flower species"
+
+#: packages/nodes/src/lawn/definition.edit.ts
+msgid "node.lawn.tool.leftClick"
+msgstr "Left click"
+
+#: packages/nodes/src/lawn/definition.edit.ts
+msgid "node.lawn.tool.mode"
+msgstr "Lawn tool"
+
+#: packages/nodes/src/lawn/definition.edit.ts
+msgid "node.lawn.tool.paint"
+msgstr "Paint one stroke"
+
+#: packages/nodes/src/lawn/definition.edit.ts
+msgid "node.lawn.tool.radius"
+msgstr "Brush radius"
+
+#: packages/nodes/src/lawn/definition.edit.ts
+msgid "node.lawn.tool.replaceMix"
+msgstr "Replaces the lawn’s flower mix with this species when the stroke is committed."
+
+#: packages/nodes/src/lawn/definition.edit.ts
+msgid "node.lawn.tool.strength"
+msgstr "Brush strength"
 
 #: packages/nodes/src/i18n/definition-messages.ts
 msgid "node.leanToExtension.description"
