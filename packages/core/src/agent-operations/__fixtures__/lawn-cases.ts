@@ -60,19 +60,18 @@ export const LAWN_CASES: AgentToolCase[] = [
     expect: { result: { requestedAreaM2: 12, retainedAreaM2: 6, coverageFraction: 0.5, excludedUnionAreaM2: 6 } },
   },
   {
-    name: 'new core lawn does not reinterpret an existing flat lawn slab',
+    name: 'new core lawn preserves an existing flat lawn slab in its current saved form',
     tool: 'add_site_surface',
     scene: () => {
       const graph = lawnScene()
-      const slab = SlabNode.parse({ id: 'slab_legacy_lawn', parentId: 'level_lawn', polygon: [[20, 20], [22, 20], [22, 22], [20, 22]], elevation: 0.01, metadata: { flatwork: 'lawn' }, materialPreset: 'library:preset-lawn' })
+      const slab = SlabNode.parse({ id: 'slab_legacy_lawn', parentId: 'level_lawn', polygon: [[20, 20], [22, 20], [22, 22], [20, 22]], elevation: 0.01, metadata: { flatwork: 'lawn' }, slots: { surface: 'library:preset-lawn' } })
       graph.nodes[slab.id] = slab
-      const level = graph.nodes.level_lawn
-      if (level?.type !== 'level') throw new Error('Expected lawn level')
+      const level = LevelNode.parse(graph.nodes.level_lawn)
       graph.nodes[level.id] = { ...level, children: [...level.children, slab.id] }
       return graph
     },
     input: { kind: 'lawn', siteId: 'site_lawn', corners },
-    expect: { result: { kind: 'lawn' }, after: { slab_legacy_lawn: { type: 'slab', elevation: 0.01, metadata: { flatwork: 'lawn' }, materialPreset: 'library:preset-lawn' } } },
+    expect: { result: { kind: 'lawn' }, after: { slab_legacy_lawn: { type: 'slab', elevation: 0.01, metadata: { flatwork: 'lawn' }, slots: { surface: 'library:preset-lawn' } } } },
   },
   ...[
     { name: 'conflicting Site and level targets', fields: { siteId: 'site_lawn', levelId: 'level_lawn' }, code: 'lawn_target_conflict' },
