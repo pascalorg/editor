@@ -64,12 +64,47 @@ function limb(
   return { points, radius, tipRadius: radius * tip, sides }
 }
 
-function trunkAtHeight(trunk: TreeBranch, y: number): Rgb {
+export function branchRadius(branch: TreeBranch, t: number): number {
+  return branch.tipRadius + (branch.radius - branch.tipRadius) * (1 - t) * (1 - 0.16 * t)
+}
+
+// Ease the new axis away from its parent. The first ring starts inside the parent
+// and the collar follows the grain before turning out toward the crown.
+function joinLimb(branch: TreeBranch, parent: TreeBranch, at: number) {
+  const before = onBranch(parent, Math.max(0, at - 0.04))
+  const after = onBranch(parent, Math.min(1, at + 0.04))
+  const axis = treeUnit(after[0] - before[0], after[1] - before[1], after[2] - before[2])
+  const base = branch.points[0]!
+  const next = branch.points[1]!
+  const length = Math.sqrt(
+    (next[0] - base[0]) ** 2 + (next[1] - base[1]) ** 2 + (next[2] - base[2]) ** 2,
+  )
+  // A quadratic joins the two tangents without a sharp elbow at the collar.
+  const handle = Math.min(length * 0.47, branch.radius * 2.6)
+  const control: Rgb = [
+    base[0] + axis[0] * handle,
+    base[1] + axis[1] * handle,
+    base[2] + axis[2] * handle,
+  ]
+  const curve = (t: number) => along(along(base, control, t), along(control, next, t), t)
+  const bottom = parent.points[0]![1]
+  const t =
+    parent.sides === 9
+      ? (base[1] - bottom) / (parent.points[parent.points.length - 1]![1] - bottom)
+      : at
+  branch.collar = {
+    axis,
+    rings: [curve(0.32), curve(0.66)],
+    parentRadius: branchRadius(parent, t),
+  }
+}
+
+function trunkFraction(trunk: TreeBranch, y: number): number {
   const i = trunk.points.findIndex((p) => p[1] >= y)
-  if (i < 1) return trunk.points[i === 0 ? 0 : trunk.points.length - 1] as Rgb
-  const a = trunk.points[i - 1] as Rgb,
-    b = trunk.points[i] as Rgb
-  return along(a, b, (y - a[1]) / (b[1] - a[1]))
+  if (i < 1) return i === 0 ? 0 : 1
+  const a = trunk.points[i - 1]!,
+    b = trunk.points[i]!
+  return (i - 1 + (y - a[1]) / (b[1] - a[1])) / (trunk.points.length - 1)
 }
 
 function growBough(
@@ -88,7 +123,8 @@ function growBough(
   const droop = TREE_HABITS[input.form].pendulous
   const count = pine ? 6 : depth === 1 ? 4 : 3
   for (let i = 0; i < count; i++) {
-    const t = 0.24 + (0.75 * (i + random() * 0.6)) / count
+    const base = pine ? 0.06 : 0.34
+    const t = base + ((1 - base) * (i + random() * 0.7)) / count
     const side = i % 2 === 0 ? -1 : 1
     const turn = heading + side * (0.07 + random() * 0.17) * (1.15 - t * 0.45)
     const [dx, dz] = treeCircle(turn)
@@ -110,7 +146,8 @@ function growBough(
     )
     tree.branches.push(branch)
     const childSeed = hashSeed(seed, i, depth, 33)
-    if (depth === 2 || pine) tree.shoots.push({ start, end, seed: childSeed })
+    if (depth === 2 || pine)
+      tree.shoots.push({ start: onBranch(branch, pine ? 0.08 : 0.47), end, seed: childSeed })
     else {
       tree.shoots.push({ start: onBranch(branch, 0.67), end, seed: hashSeed(childSeed, 9, 1, 3) })
       growBough(
@@ -147,23 +184,36 @@ function growStem(tree: TreeSkeleton, input: TreeParameters, stem: number, stems
   const trunk = limb(root, top, [-lz * lean * 0.53, 0, lx * lean * 0.53], baseRadius, 0.025, 9, 8)
   tree.trunks.push(trunk)
   const forks: { branch: TreeBranch; dx: number; dz: number }[] = []
+  // Each pair of growth seasons produces ten boughs, distributed unevenly.
+  // The shared annual height keeps real whorls while varying the gaps between them.
+  let tier = -1
+  let whorlStart = 0
+  let whorlEnd = 0
+  let whorlHeight = 0
   for (let i = 0; i < habit.scaffolds; i++) {
     const seed = hashSeed(input.seed, stem, i, 11)
     if (pine) {
-      const tier = Math.floor(i / 5)
-      const t = (tier + random() * 0.68) / 8
-      const turn = rotation + tier * 0.381966 + (i % 5) / 5 + random() * 0.055
+      if (i === whorlEnd) {
+        tier++
+        whorlStart = i
+        whorlEnd = tier % 2 === 0 ? i + 3 + Math.floor(random() * 5) : (tier + 1) * 5
+        whorlHeight = (tier + 0.12 + random() * 0.68) / 8
+      }
+      const t = whorlHeight + (random() - 0.5) * 0.045
+      const turn =
+        rotation + tier * 0.381966 + (i - whorlStart + random() * 0.56) / (whorlEnd - whorlStart)
       const [dx, dz] = treeCircle(turn)
       const y = habit.clear + (0.98 - habit.clear) * t
-      const start = trunkAtHeight(trunk, h * y)
-      const run = r * (1 - t) * (0.72 + 0.25 * random())
-      const drop = h * (1 - t) * (0.025 + 0.054 * random())
-      const end: Rgb = [start[0] + dx * run, start[1] - drop, start[2] + dz * run]
+      const start = onBranch(trunk, trunkFraction(trunk, h * y))
+      const run = r * (1 - t) * (0.51 + 0.65 * random())
+      const drop = run * (0.15 + 0.38 * random())
+      const lift = run * t * t * (0.5 + 0.57 * random())
+      const end: Rgb = [start[0] + dx * run, start[1] + lift - drop, start[2] + dz * run]
       const radius = baseRadius * 0.34 * (1 - 0.86 * t)
       const branch = limb(
         start,
         end,
-        [dz * run * 0.055, drop * 0.8, -dx * run * 0.055],
+        [dz * run * 0.055, drop * 0.24, -dx * run * 0.055],
         radius,
         0.12,
         4,
@@ -176,12 +226,12 @@ function growStem(tree: TreeSkeleton, input: TreeParameters, stem: number, stems
         branch,
         turn,
         run * 0.39,
-        -h * (0.015 + 0.04 * random()) * (1 - t),
+        lift * 0.55 - h * (0.008 + 0.035 * random()) * (1 - t),
         radius * 0.42,
         seed,
         1,
       )
-      tree.shoots.push({ start: onBranch(branch, 0.68), end, seed })
+      tree.shoots.push({ start: onBranch(branch, 0.08), end, seed })
       continue
     }
     // Each scaffold grows toward a pocket in the crown. The first three can
@@ -201,24 +251,28 @@ function growStem(tree: TreeSkeleton, input: TreeParameters, stem: number, stems
       (0.42 + 0.58 * width) *
       (stems > 1 ? 0.78 : 1) *
       (1 - 0.48 * Math.max(0, (t - 0.67) / 0.33))
-    const radial = reach * (0.42 + 0.2 * random())
+    const radial = reach * (0.55 + 0.33 * random())
     const end: Rgb = [dx * radial + top[0] * 0.66, targetY, dz * radial + top[2] * 0.66]
     const startY = major
       ? h * (habit.clear + i * 0.065 + random() * 0.035)
       : Math.max((habit.clear + 0.052 * random()) * h, targetY - h * (0.16 + 0.21 * random()))
-    let start = trunkAtHeight(trunk, Math.min(startY, height * 0.85))
+    let parentBranch = trunk
+    let attachment = trunkFraction(trunk, Math.min(startY, height * 0.85))
     let radius = baseRadius * (major ? 0.64 : 0.52) * (1 - (0.86 * startY) / h)
     if (!major && targetY > h * 0.54) {
       const parent = forks.find((fork) => dx * fork.dx + dz * fork.dz > 0.54)
       if (parent) {
         const at = 0.36 + 0.38 * random()
-        start = onBranch(parent.branch, at)
+        parentBranch = parent.branch
+        attachment = at
         radius = parent.branch.radius * (1 - at * 0.84) * 0.71
       }
     }
-    const arc = reach * (random() - 0.5) * 0.22
+    const start = onBranch(parentBranch, attachment)
+    const arc = reach * (random() - 0.5) * 0.29
     const bend: Rgb = [-dz * arc, (end[1] - start[1]) * (weeping ? 0.15 : -0.09), dx * arc]
-    const branch = limb(start, end, bend, radius, 0.15, 6, 4)
+    const branch = limb(start, end, bend, radius, 0.13, 6, 4)
+    joinLimb(branch, parentBranch, attachment)
     tree.scaffolds.push(branch)
     if (major) forks.push({ branch, dx, dz })
     const lift = h * habit.rise * (0.24 + 0.3 * random()) * (1 - 0.73 * t)
@@ -236,12 +290,15 @@ function growStem(tree: TreeSkeleton, input: TreeParameters, stem: number, stems
     tree.shoots.push({ start: onBranch(branch, 0.75), end, seed })
   }
   // The youngest shoots clothe the leader too, including the tip between the last whorl and the apex.
-  const leaders = pine ? 7 : 6
+  const leaders = pine ? 13 : 6
   for (let i = 0; i < leaders; i++) {
     const t = (i + 1) / leaders
-    const start = trunkAtHeight(trunk, height * (0.67 + t * 0.3))
+    const start = onBranch(
+      trunk,
+      trunkFraction(trunk, height * (pine ? 0.51 + t * 0.46 : 0.67 + t * 0.3)),
+    )
     const [dx, dz] = treeCircle(rotation + i * 0.381966)
-    const run = r * (pine ? 0.065 : 0.28) * (1 - 0.82 * t)
+    const run = r * (pine ? 0.31 * (0.55 + 0.7 * random()) : 0.28) * (1 - 0.82 * t)
     const end: Rgb = [
       start[0] + dx * run,
       start[1] + height * (pine ? 0.03 : 0.07),

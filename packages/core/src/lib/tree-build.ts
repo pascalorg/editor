@@ -21,14 +21,14 @@ export function estimateTree(input: TreeInput): TreeEstimate {
   const boughs = stems * TREE_HABITS[input.form].scaffolds
   const pine = input.form === 'conifer'
   const woodTriangles =
-    stems * (144 + (pine ? 7 : 6) * 12) + boughs * (pine ? 24 + 6 * 12 : 48 + 4 * (24 + 3 * 12))
-  const farWood = stems * 16 + (pine ? boughs / 2 : boughs) * 6
-  const wanted = Math.round((3510 + input.heightM * 108) * input.density)
+    stems * (144 + (pine ? 13 : 6) * 12) + boughs * (pine ? 24 + 6 * 12 : 72 + 4 * (24 + 3 * 12))
+  const farWood = stems * 36 + (pine ? boughs / 2 : boughs) * 6
+  const wanted = Math.round((2740 + input.heightM * 85) * input.density)
   const leaves = Math.min(wanted, Math.floor((TREE_MAX_TRIANGLES - woodTriangles) / 2))
-  const farCards = Math.round((input.density * (TREE_FAR_MAX_TRIANGLES - farWood)) / 2)
+  const farCards = Math.round(input.density * (TREE_FAR_MAX_TRIANGLES - farWood))
   return {
     triangles: woodTriangles + leaves * 2,
-    farTriangles: farWood + farCards * 2,
+    farTriangles: farWood + farCards,
     woodTriangles,
     leaves,
   }
@@ -93,10 +93,10 @@ export function buildTree(rawInput: TreeInput) {
   const estimate = estimateTree(input)
   const skeleton = treeSkeleton(input)
   const pine = input.form === 'conifer'
-  const farWood = skeleton.trunks.length * 16 + skeleton.scaffolds.length * (pine ? 3 : 6)
-  const farCards = (estimate.farTriangles - farWood) / 2
-  const near = treeWriter(estimate.triangles, estimate.leaves)
-  const far = treeWriter(estimate.farTriangles, farCards)
+  const farWood = skeleton.trunks.length * 36 + skeleton.scaffolds.length * (pine ? 3 : 6)
+  const farCards = estimate.farTriangles - farWood
+  const near = treeWriter(estimate.triangles, estimate.leaves, 4)
+  const far = treeWriter(estimate.farTriangles, farCards, 3)
   for (const trunk of skeleton.trunks) {
     writeTreeBranch(near, trunk)
     writeTreeBranch(far, trunk, true)
@@ -109,15 +109,18 @@ export function buildTree(rawInput: TreeInput) {
   const palette = foliagePalette(input.foliage)
   // Vigorous terminal shoots carry more growth. The same weights preserve gaps
   // at the far level, and cumulative integer quotas spend exactly the estimate.
-  const buds = skeleton.shoots.map((shoot) => 1 + Math.floor(5 * hash3(shoot.seed, 7, 3, 1)))
+  const buds = skeleton.shoots.map((shoot) => {
+    const vigor = hash3(shoot.seed, 7, 3, 1)
+    return pine ? 8 + Math.floor(21 * vigor) : 1 + Math.floor(60 * vigor ** 3)
+  })
   const total = buds.reduce((sum, count) => sum + count, 0)
   let cumulative = 0
   for (const [i, shoot] of skeleton.shoots.entries()) {
     cumulative += buds[i] as number
     const nearCount = Math.floor((cumulative * estimate.leaves) / total) - near.cards
     const farCount = Math.floor((cumulative * farCards) / total) - far.cards
-    writeTreeSprigs(near, shoot, input, palette, nearCount, false)
-    writeTreeSprigs(far, shoot, input, palette, farCount, true)
+    writeTreeSprigs(near, shoot, input, palette, nearCount)
+    writeTreeSprigs(far, shoot, input, palette, farCount)
   }
   const { horizontal, vertical } = crownScale(skeleton, input, requested.spreadM)
   return {

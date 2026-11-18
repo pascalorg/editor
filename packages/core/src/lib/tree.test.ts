@@ -72,7 +72,9 @@ describe('procedural tree geometry', () => {
         expect(radius).toBeGreaterThan(spreadM * 0.4)
         expect(top).toBeGreaterThan(input.heightM * 0.9)
         expect(top).toBeLessThanOrEqual(input.heightM + 0.01)
-        expect(mesh.barkUV.length / 2 + mesh.sprigs.length * 4).toBe(mesh.position.length / 3)
+        expect(mesh.barkUV.length / 2 + mesh.sprigs.length * mesh.sprigCorners).toBe(
+          mesh.position.length / 3,
+        )
       }
     }
   })

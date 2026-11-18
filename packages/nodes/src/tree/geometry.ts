@@ -43,7 +43,10 @@ function treeBufferGeometry(mesh: TreeMesh, form: TreeParameters['form']): Buffe
         : form === 'multistem' || form === 'upright'
           ? 'small'
           : 'broad'
-  geometry.setAttribute('uv', new BufferAttribute(treeAtlasUV(mesh.barkUV, mesh.sprigs, style), 2))
+  geometry.setAttribute(
+    'uv',
+    new BufferAttribute(treeAtlasUV(mesh.barkUV, mesh.sprigs, mesh.sprigCorners, style), 2),
+  )
   geometry.setIndex(new BufferAttribute(mesh.index, 1))
   geometry.computeBoundingBox()
   geometry.computeBoundingSphere()
@@ -92,8 +95,8 @@ function buildTreeLevel(
   const material = new MeshStandardMaterial({
     vertexColors: true,
     map: treeAtlas(),
+    // Keep surviving fragments opaque when the browser composites the canvas over the page.
     alphaTest: 0.29,
-    alphaToCoverage: true,
     roughness: 0.88,
     metalness: 0,
     side: DoubleSide,

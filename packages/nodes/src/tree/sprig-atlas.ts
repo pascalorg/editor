@@ -251,16 +251,17 @@ export function treeAtlas() {
           random,
         )
       else {
-        // Coarse cards show a compound bough. Individual blades stay small at the far level.
-        for (let j = 0; j < 7; j++) {
-          const side = j % 2 === 0 ? -1 : 1
-          const t = j / 7
+        // The outer silhouette narrows to a point, so one triangle can carry a whole bough.
+        const stem: Point = [TILE * 0.5, TILE * 0.04]
+        stroke(tile, stem, [stem[0], TILE * 0.83], TILE * 0.014, 169)
+        for (let j = 0; j < 5; j++) {
+          const t = j / 5
           sprig(
             tile,
             style,
-            [TILE * (0.5 + side * t * 0.045), TILE * (0.05 + t * 0.64)],
-            TILE * (0.49 - 0.18 * t),
-            side * (0.74 - 0.4 * t),
+            [stem[0], TILE * (0.06 + t * 0.62)],
+            TILE * (0.43 - t * 0.12),
+            j === 4 ? 0.05 : (j % 2 === 0 ? -1 : 1) * (0.83 - 0.38 * t),
             random,
           )
         }
@@ -281,8 +282,8 @@ export function disposeTreeAtlas() {
   atlas?.dispose()
 }
 
-export function treeAtlasUV(bark: Float32Array, sprigs: Uint8Array, style: Style) {
-  const uv = new Float32Array(bark.length + sprigs.length * 8)
+export function treeAtlasUV(bark: Float32Array, sprigs: Uint8Array, corners: 3 | 4, style: Style) {
+  const uv = new Float32Array(bark.length + sprigs.length * 2 * corners)
   for (let i = 0; i < bark.length; i += 2) {
     uv[i] = (2 + (2 + 124 * (bark[i] ?? 0)) / TILE) / 4
     uv[i + 1] = (3 + (2 + 124 * (bark[i + 1] ?? 0)) / TILE) / 4
@@ -290,9 +291,10 @@ export function treeAtlasUV(bark: Float32Array, sprigs: Uint8Array, style: Style
   const row = STYLES.indexOf(style)
   for (const [i, id] of sprigs.entries()) {
     const col = row === 3 && id === 2 ? 0 : id
-    const at = bark.length + i * 8
-    for (let k = 0; k < 4; k++) {
-      uv[at + k * 2] = (col + (k === 1 || k === 2 ? 1 : 0)) / 4
+    const at = bark.length + i * 2 * corners
+    for (let k = 0; k < corners; k++) {
+      const u = corners === 3 && k === 2 ? 0.5 : k === 1 || k === 2 ? 1 : 0
+      uv[at + k * 2] = (col + u) / 4
       uv[at + k * 2 + 1] = (row + (k > 1 ? 1 : 0)) / 4
     }
   }

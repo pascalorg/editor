@@ -70,7 +70,7 @@ describe('tree render and plan adapters', () => {
       ])
       const material = mesh.material as MeshStandardMaterial
       expect(material.alphaTest).toBeGreaterThan(0)
-      expect(material.alphaToCoverage).toBe(true)
+      expect(material.transparent || material.alphaToCoverage).toBe(false)
       expect(material.map?.generateMipmaps).toBe(true)
       const texels = material.map?.image.data as Uint8Array
       let gaps = 0,

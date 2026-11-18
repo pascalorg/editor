@@ -105,7 +105,8 @@ export type TreeMesh = {
   position: Float32Array
   normal: Float32Array
   color: Float32Array
-  /** One style ID per four-vertex sprig, following the wood vertices. */
+  /** Near sprigs are quads. A coarse bough fits a triangle. Both follow the wood vertices. */
+  sprigCorners: 3 | 4
   sprigs: Uint8Array
   /** Local bark coordinates precede the sprigs. The renderer places them in its atlas. */
   barkUV: Float32Array
@@ -125,6 +126,7 @@ export type TreeBranch = {
   radius: number
   tipRadius: number
   sides: number
+  collar?: { axis: Rgb; parentRadius: number; rings: [Rgb, Rgb] }
 }
 
 export type TreeShoot = { start: Rgb; end: Rgb; seed: number }
