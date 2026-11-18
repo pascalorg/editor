@@ -5,6 +5,7 @@ import {
   cameraPosition,
   color,
   cos,
+  float,
   instanceIndex,
   mix,
   modelWorldMatrix,
@@ -56,7 +57,7 @@ function detailWeight(root: Node<'vec4'>, material: Material) {
   const distance = worldRoot.sub(cameraPosition).length().max(0.1)
   const pixels = root.w.mul(projectionScale).div(mix(1, distance, perspective))
   const midFade = smoothstep(0.25, 0.8, pixels)
-  const prefix = step(instanceIndex, midCount.sub(0.5))
+  const prefix = step(float(instanceIndex), midCount.sub(0.5))
   const nearFade = mix(smoothstep(1.6, 3.5, pixels), 1, prefix)
   return mix(midFade, nearFade, near)
 }
