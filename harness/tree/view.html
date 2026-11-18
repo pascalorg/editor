@@ -1,0 +1,163 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Procedural trees — standalone study</title>
+  <link rel="icon" href="data:,">
+  <style>
+    html,body { margin:0; overflow:hidden; font:500 16px/1.4 system-ui,sans-serif; background:#dce5e8 }
+    canvas { display:block }
+    #label { position:fixed; top:16px; left:18px; background:#ffffffdf; padding:10px 15px; border-radius:8px; pointer-events:none }
+    small { display:block; font-size:13px }
+  </style>
+  <script type="importmap">{"imports":{"three":"/three/build/three.webgpu.js","three/webgpu":"/three/build/three.webgpu.js","three/tsl":"/three/build/three.tsl.js"}}</script>
+</head>
+<body>
+<div id="label"></div>
+<script type="module">
+import * as THREE from 'three/webgpu'
+import { buildTree, defaultTreeSpread, buildPlanting, PlantingNode, buildHedge, HedgeNode, FLAT_GROUND } from './tree-bundle.js'
+
+const query = new URLSearchParams(location.search)
+const mode = query.get('scene') ?? 'single'
+const form = query.get('form') ?? 'round'
+const heightM = Number(query.get('height') ?? 8)
+const seed = Number(query.get('seed') ?? 19)
+const scene = new THREE.Scene()
+scene.background = new THREE.Color('#dce5e8')
+const renderer = new THREE.WebGPURenderer({ antialias:true, forceWebGL:query.get('gl') === '1' })
+renderer.setPixelRatio(1)
+renderer.setSize(innerWidth, innerHeight)
+renderer.toneMapping = THREE.NeutralToneMapping
+renderer.shadowMap.enabled = true
+renderer.shadowMap.type = THREE.PCFShadowMap
+await renderer.init()
+document.body.appendChild(renderer.domElement)
+scene.add(new THREE.HemisphereLight('#e4f1ff','#606d45',2.4))
+const sun = new THREE.DirectionalLight('#fff0da',3.2)
+sun.position.set(-18,30,18)
+sun.castShadow = true
+sun.shadow.mapSize.set(2048,2048)
+Object.assign(sun.shadow.camera,{left:-35,right:35,top:35,bottom:-35,near:0.5,far:100})
+sun.shadow.bias = -0.0003
+sun.shadow.normalBias = 0.04
+scene.add(sun)
+const material = new THREE.MeshStandardNodeMaterial({vertexColors:true,roughness:0.9,side:THREE.DoubleSide})
+const metrics = []
+
+function meshOf(attributes, position = [0,0,0]) {
+  const geometry = new THREE.BufferGeometry()
+  for (const key of ['position','normal','color'])
+    geometry.setAttribute(key,new THREE.BufferAttribute(attributes[key],3))
+  geometry.setIndex(new THREE.BufferAttribute(attributes.index,1))
+  const mesh = new THREE.Mesh(geometry,material)
+  mesh.position.set(...position)
+  mesh.castShadow = true
+  mesh.receiveShadow = true
+  scene.add(mesh)
+  return mesh
+}
+
+function treeAt(form, heightM, seed, at, extra = {}) {
+  const input = {form,heightM,spreadM:defaultTreeSpread(form,heightM),seed,foliage:'#609343',density:0.85,gen:1,...extra}
+  const start = performance.now()
+  const built = buildTree(input)
+  const buildMs = performance.now() - start
+  meshOf(built[extra.level ?? 'near'],at)
+  metrics.push({input,at,buildMs,...built.estimate})
+}
+
+function box(size, at, color) {
+  const mesh = new THREE.Mesh(new THREE.BoxGeometry(...size),new THREE.MeshStandardNodeMaterial({color,roughness:1}))
+  mesh.position.set(...at)
+  mesh.castShadow = true
+  mesh.receiveShadow = true
+  scene.add(mesh)
+  return mesh
+}
+
+function ground(width = 100, slope = 0) {
+  const geometry = new THREE.PlaneGeometry(width,width).rotateX(-Math.PI/2)
+  const position = geometry.getAttribute('position')
+  for (let index=0;index<position.count;index++) position.setY(index,position.getX(index)*slope)
+  geometry.computeVertexNormals()
+  const lawn = new THREE.Mesh(geometry,new THREE.MeshStandardNodeMaterial({color:'#7c9b5c',roughness:1}))
+  lawn.receiveShadow = true
+  scene.add(lawn)
+}
+
+function labelAt(text, at) {
+  const canvas = document.createElement('canvas')
+  canvas.width = 512; canvas.height = 64
+  const context = canvas.getContext('2d')
+  context.fillStyle = '#f5f4ed'; context.fillRect(0,0,512,64)
+  context.fillStyle = '#273329'; context.font = '500 30px system-ui'; context.textAlign = 'center'
+  context.fillText(text,256,44)
+  const map = new THREE.CanvasTexture(canvas)
+  const sprite = new THREE.Sprite(new THREE.SpriteNodeMaterial({map,depthTest:false}))
+  sprite.position.set(...at); sprite.scale.set(8,1,1)
+  scene.add(sprite)
+}
+
+let cameraPosition = [13,8,18], target = [0,4,0], fov = 38
+ground(180,mode === 'slope' ? 0.12 : 0)
+if (mode === 'trio') {
+  const spread = defaultTreeSpread(form,heightM)
+  for(let variant=0;variant<3;variant++)
+    treeAt(form,heightM,[19,41,83][variant],[(variant-1)*spread*1.35,0,0])
+  const distance = Math.max(heightM*2.2,spread*4.5)
+  cameraPosition = [distance*0.12,heightM*0.68,distance]
+  target = [0,heightM*0.44,0]
+  fov = 40
+} else if (mode === 'sheet') {
+  for (let column=0;column<3;column++) {
+    const height = [4,8,14][column]
+    for (let variant=0;variant<3;variant++)
+      treeAt(form,height,[19,41,83][variant],[(column-1)*23+(variant-1)*7,0,0])
+    labelAt(`${height} m · seeds 19 / 41 / 83`,[(column-1)*23,0.1,4])
+  }
+  cameraPosition = [25,15,62]; target = [0,5,0]; fov = 47
+} else if (mode === 'garden') {
+  box([11,4.2,7],[0,2.1,-5],'#e5dfd2')
+  box([0.95,2.5,0.05],[0,1.25,-1.46],'#645242')
+  for (const x of [-3.3,3.3]) box([2.2,1.6,0.07],[x,2.3,-1.44],'#7d999e')
+  box([2,0.03,18],[0,0.01,5],'#c7bfa6')
+  for (const x of [-4.6,4.6]) {
+    const bed = PlantingNode.parse({outline:[[x-2.5,0.6],[x+2.5,0.6],[x+2.5,2.8],[x-2.5,2.8]],seed:19})
+    for (const mesh of buildPlanting(bed,FLAT_GROUND).meshes) meshOf(mesh)
+  }
+  const hedge = HedgeNode.parse({path:[[-13,-10],[-13,11]],clip:0.3,gen:2,height:1.25,width:0.8,seed:21})
+  for (const mesh of buildHedge(hedge,FLAT_GROUND).meshes) meshOf(mesh)
+  for (const [form,height,seed,x,z] of [
+    ['round',8,19,-9,5],['round',7.5,41,8,6],['spreading',7,17,-7,11],
+    ['upright',10,24,10,-5],['upright',9,59,-9,-7],['round',8.5,83,7,13],['spreading',6,52,-8,-1],
+  ]) treeAt(form,height,seed,[x,0,z])
+  cameraPosition = [28,17,34]; target = [0,3,2]; fov = 44
+} else if (mode === 'levels') {
+  treeAt(form,heightM,seed,[-5,0,0])
+  treeAt(form,heightM,seed,[5,0,0],{level:'far'})
+  labelAt('Near',[-5,0.3,4]); labelAt('Far · no runtime switch',[5,0.3,4])
+  cameraPosition = [12,10,33]; target = [0,4,0]
+} else if (mode === 'winter') {
+  treeAt(form,heightM,seed,[-5,0,0],{density:0})
+  treeAt(form,heightM,seed,[5,0,0],{foliage:'#c17c28'})
+  cameraPosition = [14,9,25]; target = [0,3.5,0]
+} else if (mode === 'alley') {
+  for(let side=-1;side<=1;side+=2)
+    for(let index=0;index<4;index++) treeAt('round',8,19+index*31+(side+1)*7,[side*4,0,index*8])
+  box([3,0.02,40],[0,0.01,12],'#c6bea7')
+  cameraPosition = [1,3,-12]; target = [0,4,15]; fov = 57
+} else {
+  treeAt(form,heightM,seed,[0,0,0])
+  if(mode === 'close') { cameraPosition = [1.5,1.7,4]; target = [0,5.2,0]; fov = 62 }
+}
+const camera = new THREE.PerspectiveCamera(fov,innerWidth/innerHeight,0.1,250)
+camera.position.set(...cameraPosition); camera.lookAt(...target)
+for(let frame=0;frame<4;frame++){renderer.render(scene,camera);await new Promise(requestAnimationFrame)}
+const backend = renderer.backend.isWebGPUBackend ? 'WebGPU' : 'WebGL2'
+document.getElementById('label').innerHTML = `Procedural tree · ${mode === 'sheet' || mode === 'trio' ? `${form} · ${heightM} m · seeds 19 / 41 / 83` : mode}<small>${metrics.length} trees · ${metrics.reduce((sum,item)=>sum+item.triangles,0).toLocaleString('en-US')} near triangles · ${backend}</small>`
+window.__stats = {mode,form,metrics,backend,camera:{position:cameraPosition,target,fov},trianglesDrawn:renderer.info.render.triangles}
+window.__done = true
+</script>
+</body>
+</html>
