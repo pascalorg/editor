@@ -39,6 +39,7 @@ export const NODE_REQUIRED_FIELDS: Record<string, Record<string, unknown>> = {
       src: 'asset://chair.glb',
     },
   },
+  lawn: { outline: [[0, 0], [4, 0], [4, 3], [0, 3]] },
   lineset: {
     path: [
       [0, 0, 0],

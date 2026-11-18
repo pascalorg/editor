@@ -473,6 +473,18 @@ export {
 } from './lib/hedge-line'
 export { hierarchyCycleErrors, wouldCreateHierarchyCycle } from './lib/hierarchy'
 export {
+  buildLawn,
+  type LawnBuild,
+  LawnBuildError,
+  type LawnChunk,
+  type LawnFacts,
+  type LawnMesh,
+  type LawnPlan,
+  lawnFacts,
+  planLawn,
+  sampleLawnStrokes,
+} from './lib/lawn'
+export {
   type ExposedInterval,
   exposedIntervals,
   plateFootprint,
