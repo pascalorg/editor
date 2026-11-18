@@ -13,12 +13,10 @@ import {
   HedgeNode,
   hedgeBands,
   hedgeCentreline,
-  hedgeFormFor,
+  hedgeCurrentGen,
   hedgeLateral,
   hedgeLine,
   hedgeNormal,
-  planHedge,
-  registerHedgeForm,
   standHedgeLine,
 } from '../index'
 
@@ -48,6 +46,12 @@ const trianglesOf = (meshes: HedgeMesh[]) =>
   meshes.reduce((sum, mesh) => sum + mesh.index.length / 3, 0)
 const verticesOf = (meshes: HedgeMesh[]) =>
   meshes.reduce((sum, mesh) => sum + mesh.position.length / 3, 0)
+
+let hedgeRegistryInstance = 0
+// Relative queries isolate custom generations; Bun shares the registry for file-URL imports.
+async function isolatedHedgeRegistry(): Promise<typeof import('./hedge-build')> {
+  return import(`./hedge-build.ts?test=${++hedgeRegistryInstance}`)
+}
 
 describe('the stored hedge', () => {
   test('is its line and a few numbers, and survives a save and a load unchanged', () => {
@@ -379,7 +383,9 @@ describe('the bounds of a hedge, whatever the node holds', () => {
     expect(plan.line.runs.at(-1)?.to).toBeCloseTo(plan.line.length, 3)
   })
 
-  test('a generator whose own count is over the cap is not run', () => {
+  test('a generator whose own count is over the cap is not run', async () => {
+    const { buildHedge, hedgeFormFor, registerHedgeForm } = await isolatedHedgeRegistry()
+    const currentGen = hedgeCurrentGen()
     let built = false
     registerHedgeForm({
       gen: 998,
@@ -401,10 +407,16 @@ describe('the bounds of a hedge, whatever the node holds', () => {
     expect(meshes).toEqual([])
     expect(built).toBe(false)
     expect(() => registerHedgeForm(hedgeFormFor(998))).toThrow('already registered')
+    expect(hedgeCurrentGen()).toBe(currentGen)
   })
 
-  test('a hedge that names a generator this build does not know is drawn by the newest known', () => {
+  test('a hedge that names a generator this build does not know is drawn by the newest known', async () => {
+    const { hedgeFormFor, planHedge, registerHedgeForm } = await isolatedHedgeRegistry()
+    const currentGen = hedgeCurrentGen()
+    registerHedgeForm({ ...hedgeFormFor(1), gen: 998 })
+
     expect(planHedge(hedge({ gen: 500 }), FLAT_GROUND).form.gen).toBe(998)
+    expect(hedgeCurrentGen()).toBe(currentGen)
   })
 })
 
