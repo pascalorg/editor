@@ -66,8 +66,8 @@ describe('builtinPlugin', () => {
     expect(plugin.apiVersion).toBe(1)
     await loadPlugin(plugin)
     const kinds = plugin.nodes!.map((definition) => definition.kind)
-    expect(kinds).toHaveLength(59)
-    expect(new Set(kinds).size).toBe(59)
+    expect(kinds).toHaveLength(60)
+    expect(new Set(kinds).size).toBe(60)
     expect([...nodeRegistry.entries()].map(([kind]) => kind).sort()).toEqual(
       AnyNode.options.map(nodeKindOf).sort(),
     )

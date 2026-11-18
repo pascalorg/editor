@@ -5511,6 +5511,16 @@ msgstr "梁せい"
 msgid "editor.inspector.field.beamWidth.1q1mzbe"
 msgstr "梁幅"
 
+# Source-Hash: 3b0dccf3580199eb
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "Blade width"
+#: packages/nodes/src/i18n/definition-messages.ts
+#, fuzzy
+msgid "editor.inspector.field.bladeWidth.6rnj1x"
+msgstr "葉幅"
+
 # Source-Hash: b98c0d0189526335
 # Review: required
 # AI-Provider: claude-code
@@ -5683,6 +5693,16 @@ msgstr "カラーの形状"
 msgid "editor.inspector.field.collarWidth.qvc9ik"
 msgstr "カラー幅"
 
+# Source-Hash: fe18958cedd627d2
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "Color"
+#: packages/nodes/src/i18n/definition-messages.ts
+#, fuzzy
+msgid "editor.inspector.field.color.1rqg6wo"
+msgstr "色"
+
 # Source-Hash: 30edd1c180aac9b4
 # Review: required
 # AI-Provider: claude-code
@@ -5854,6 +5874,16 @@ msgstr "デッキの厚さ"
 msgid "editor.inspector.field.defaultLevelId.xmrjzp"
 msgstr "既定の階層 ID"
 
+# Source-Hash: f4a09d26c1ec5258
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "Density"
+#: packages/nodes/src/i18n/definition-messages.ts
+#, fuzzy
+msgid "editor.inspector.field.density.1q5zigr"
+msgstr "密度"
+
 # Source-Hash: 99ac4d03c3061f3a
 # Review: required
 # AI-Provider: claude-code
@@ -6024,6 +6054,16 @@ msgstr "入母屋の腰の長さ比"
 msgid "editor.inspector.field.dwellMs.1lkk0o5"
 msgstr "停止時間 ms"
 
+# Source-Hash: e06f5a5ca317560b
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "Edge fade"
+#: packages/nodes/src/i18n/definition-messages.ts
+#, fuzzy
+msgid "editor.inspector.field.edgeFade.1fpwnci"
+msgstr "境界のフェード"
+
 # Source-Hash: 9cf550eb019bca1b
 # Review: required
 # AI-Provider: claude-code
@@ -6165,6 +6205,16 @@ msgstr "水切りの高さ"
 #, fuzzy
 msgid "editor.inspector.field.flashingProjection.hhf0fk"
 msgstr "水切りの出"
+
+# Source-Hash: c83fd122205ab970
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "Flower density"
+#: packages/nodes/src/i18n/definition-messages.ts
+#, fuzzy
+msgid "editor.inspector.field.flowerDensity.1k5s46u"
+msgstr "花の密度"
 
 # Source-Hash: 9473e2ab53370b40
 # Review: required
@@ -7384,6 +7434,16 @@ msgstr "屋根の種類"
 msgid "editor.inspector.field.rotation.ly2rj"
 msgstr "回転"
 
+# Source-Hash: a6a7a36d982b4911
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "Roughness"
+#: packages/nodes/src/i18n/definition-messages.ts
+#, fuzzy
+msgid "editor.inspector.field.roughness.1q2hm6t"
+msgstr "粗さ"
+
 # Source-Hash: c913b494c3901a17
 # Review: required
 # AI-Provider: claude-code
@@ -7997,6 +8057,16 @@ msgstr "幅"
 msgid "editor.inspector.field.width2.1nqawvr"
 msgstr "幅2"
 
+# Source-Hash: a16ef3e7a48e3bbf
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "Wind"
+#: packages/nodes/src/i18n/definition-messages.ts
+#, fuzzy
+msgid "editor.inspector.field.wind.154vjmv"
+msgstr "風"
+
 # Source-Hash: 6199b641888a83fa
 # Review: required
 # AI-Provider: claude-code
@@ -8267,6 +8337,16 @@ msgstr "面"
 msgid "editor.inspector.group.fitting.171z1r4"
 msgstr "継手"
 
+# Source-Hash: df1490f97b2a8ed3
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "Flowers"
+#: packages/nodes/src/i18n/definition-messages.ts
+#, fuzzy
+msgid "editor.inspector.group.flowers.2cwnnz"
+msgstr "花"
+
 # Source-Hash: f817c09ef0bb6d69
 # Review: required
 # AI-Provider: claude-code
@@ -8317,6 +8397,16 @@ msgstr "枠"
 #, fuzzy
 msgid "editor.inspector.group.geometry.a21os1"
 msgstr "ジオメトリ"
+
+# Source-Hash: 7b805e20b754329f
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "Grass"
+#: packages/nodes/src/i18n/definition-messages.ts
+#, fuzzy
+msgid "editor.inspector.group.grass.ogou1p"
+msgstr "芝草"
 
 # Source-Hash: 7e4a0a38f694be6b
 # Review: required
@@ -16967,6 +17057,16 @@ msgstr "複数点の参照を完了"
 msgid "editor.toolHint.finishSlab.xmnm8e"
 msgstr "スラブを完了"
 
+# Source-Hash: 42e47b2f0d97aa75
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "Finish the lawn"
+#: packages/nodes/src/i18n/definition-messages.ts
+#, fuzzy
+msgid "editor.toolHint.finishTheLawn.1dp3a41"
+msgstr "芝生を確定"
+
 # Source-Hash: 66ed7c7598d3aa29
 # Review: required
 # AI-Provider: claude-code
@@ -17336,6 +17436,16 @@ msgstr "ここで交わる壁はありません"
 #, fuzzy
 msgid "editor.toolHint.numberOfCutsScrollOrClick.1kqe84b"
 msgstr "分割数 — スクロールまたはクリックで変更"
+
+# Source-Hash: 3814dbe813c23ece
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "Paint one stroke"
+#: packages/nodes/src/i18n/definition-messages.ts
+#, fuzzy
+msgid "editor.toolHint.paintOneStroke.1si1g1"
+msgstr "ひと筆塗る"
 
 # Source-Hash: af01bde3ae4b7e59
 # Review: required
@@ -28681,6 +28791,676 @@ msgstr "均等スケール"
 #, fuzzy
 msgid "node.item.panel.xyz"
 msgstr "XYZ"
+
+# Source-Hash: 797ef27cad809a5f
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "The lawn changed during this stroke. Start a new stroke on the updated lawn."
+#: packages/nodes/src/lawn/brush-controller.ts
+#, fuzzy
+msgid "node.lawn.brush.changed"
+msgstr "このストロークの途中で芝生が変更されました。更新された芝生に新しいストロークを描いてください。"
+
+# Source-Hash: 26325f7340e0ca39
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "Choose a flower species and a positive flower density before painting more flowers."
+#: packages/nodes/src/lawn/brush-controller.ts
+#, fuzzy
+msgid "node.lawn.brush.chooseFlowers"
+msgstr "花を追加で塗る前に、花の種類を選び、花の密度をゼロより大きく設定してください。"
+
+# Source-Hash: 4cce5a1d5e845da1
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "No lawn ground remains here. Check the outline and ground owners before painting."
+#: packages/nodes/src/lawn/brush-controller.ts
+#, fuzzy
+msgid "node.lawn.brush.empty"
+msgstr "ここには芝生を配置できる地面が残っていません。塗る前に輪郭と地面の所有元を確認してください。"
+
+# Source-Hash: fe0519db738ca3e9
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "This lawn has 64 strokes. Remove an older stroke before painting again."
+#: packages/nodes/src/lawn/brush-controller.ts
+#, fuzzy
+msgid "node.lawn.brush.full"
+msgstr "この芝生には64本のストロークがあります。再び塗る前に古いストロークを削除してください。"
+
+# Source-Hash: 52b4f4e833a09451
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "This stroke has invalid coordinates or settings. Check the brush settings and try again."
+#: packages/nodes/src/lawn/brush-controller.ts
+#, fuzzy
+msgid "node.lawn.brush.invalid"
+msgstr "このストロークの座標または設定が無効です。ブラシ設定を確認して、もう一度お試しください。"
+
+# Source-Hash: c63c0e423c01c95d
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "This lawn has no owning Site. Restore its Site before painting."
+#: packages/nodes/src/lawn/brush-controller.ts
+#, fuzzy
+msgid "node.lawn.brush.noSite"
+msgstr "この芝生には所属する敷地がありません。塗る前に敷地を復元してください。"
+
+# Source-Hash: 91e881b9f3a853e5
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "Start inside one lawn area. Overlapping lawns must be edited separately."
+#: packages/nodes/src/lawn/brush-controller.ts
+#, fuzzy
+msgid "node.lawn.brush.target"
+msgstr "1つの芝生エリアの内側から始めてください。重なった芝生は個別に編集する必要があります。"
+
+# Source-Hash: edf490b8154ebcb1
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "This lawn exceeds the terrain detail budget. Reduce its outline or simplify the terrain before painting."
+#: packages/nodes/src/lawn/brush-controller.ts
+#, fuzzy
+msgid "node.lawn.brush.terrainBudget"
+msgstr "この芝生は地形の詳細度の上限を超えています。塗る前に輪郭を小さくするか、地形を簡略化してください。"
+
+# Source-Hash: 40900fc51c16829e
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "This stroke exceeds the lawn’s combined work budget. Use a shorter stroke or remove older strokes."
+#: packages/nodes/src/lawn/brush-controller.ts
+#, fuzzy
+msgid "node.lawn.brush.workBudget"
+msgstr "このストロークは芝生全体の処理量の上限を超えています。ストロークを短くするか、古いストロークを削除してください。"
+
+# Source-Hash: 38235a44d8b30ac5
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "An editable lawn on Site ground, with mown or rough grass and optional flowers."
+#: packages/nodes/src/i18n/definition-messages.ts
+#, fuzzy
+msgid "node.lawn.description"
+msgstr "敷地の地面に配置する編集可能な芝生です。刈り込んだ芝や粗い草地に、花を追加できます。"
+
+# Source-Hash: 5d2a812946009ea6
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "This lawn cannot be placed here. Check the outline, area and available ground."
+#: packages/nodes/src/lawn/draft.ts
+#, fuzzy
+msgid "node.lawn.draft.invalid"
+msgstr "ここには芝生を配置できません。輪郭、面積、利用可能な地面を確認してください。"
+
+# Source-Hash: 0ead3ce536fea415
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "The outline is full. Press Enter to finish, or Backspace to revise it."
+#: packages/nodes/src/lawn/draft.ts
+#, fuzzy
+msgid "node.lawn.draft.maxPoints"
+msgstr "輪郭の点数が上限に達しました。Enterで確定するか、Backspaceで修正してください。"
+
+# Source-Hash: 8222eb8305d57db5
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "Add at least three outline points."
+#: packages/nodes/src/lawn/draft.ts
+#, fuzzy
+msgid "node.lawn.draft.minPoints"
+msgstr "輪郭に3点以上追加してください。"
+
+# Source-Hash: 8f724518123dd698
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "Bare ground"
+#: packages/nodes/src/lawn/definition.edit.ts
+#: packages/nodes/src/lawn/parametrics-flowers.tsx
+#, fuzzy
+msgid "node.lawn.effect.bare"
+msgstr "地面を露出"
+
+# Source-Hash: dfdfbe610c921616
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "Fewer flowers"
+#: packages/nodes/src/lawn/definition.edit.ts
+#: packages/nodes/src/lawn/parametrics-flowers.tsx
+#, fuzzy
+msgid "node.lawn.effect.fewerFlowers"
+msgstr "花を減らす"
+
+# Source-Hash: e1081f8abaca4bd5
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "Restore grass"
+#: packages/nodes/src/lawn/definition.edit.ts
+#: packages/nodes/src/lawn/parametrics-flowers.tsx
+#, fuzzy
+msgid "node.lawn.effect.grass"
+msgstr "芝草を復元"
+
+# Source-Hash: edc73f47f9a3cdf5
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "More flowers"
+#: packages/nodes/src/lawn/definition.edit.ts
+#: packages/nodes/src/lawn/parametrics-flowers.tsx
+#, fuzzy
+msgid "node.lawn.effect.moreFlowers"
+msgstr "花を増やす"
+
+# Source-Hash: 0ee46558a6b3a8e2
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "Shorter grass"
+#: packages/nodes/src/lawn/definition.edit.ts
+#: packages/nodes/src/lawn/parametrics-flowers.tsx
+#, fuzzy
+msgid "node.lawn.effect.shorter"
+msgstr "草を低くする"
+
+# Source-Hash: 9b4e00fd6d84a18a
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "Taller grass"
+#: packages/nodes/src/lawn/definition.edit.ts
+#: packages/nodes/src/lawn/parametrics-flowers.tsx
+#, fuzzy
+msgid "node.lawn.effect.taller"
+msgstr "草を高くする"
+
+# Source-Hash: 4838fa70c9dc96f2
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "Clover"
+#: packages/nodes/src/lawn/definition.edit.ts
+#: packages/nodes/src/lawn/parametrics-flowers.tsx
+#, fuzzy
+msgid "node.lawn.flower.clover"
+msgstr "クローバー"
+
+# Source-Hash: d75c15627eeeffbc
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "Daisy"
+#: packages/nodes/src/lawn/definition.edit.ts
+#: packages/nodes/src/lawn/parametrics-flowers.tsx
+#, fuzzy
+msgid "node.lawn.flower.daisy"
+msgstr "デイジー"
+
+# Source-Hash: dcfaba29a5b5fed9
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "Yarrow"
+#: packages/nodes/src/lawn/definition.edit.ts
+#: packages/nodes/src/lawn/parametrics-flowers.tsx
+#, fuzzy
+msgid "node.lawn.flower.yarrow"
+msgstr "セイヨウノコギリソウ"
+
+# Source-Hash: 7e1339c4b845d886
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "Add flower species"
+#: packages/nodes/src/lawn/parametrics-flowers.tsx
+#, fuzzy
+msgid "node.lawn.flowers.add"
+msgstr "花の種類を追加"
+
+# Source-Hash: 89ee78a6996a1560
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "Flower colour"
+#: packages/nodes/src/lawn/parametrics-flowers.tsx
+#, fuzzy
+msgid "node.lawn.flowers.color"
+msgstr "花の色"
+
+# Source-Hash: ef1b6ce9a40cde7a
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "Custom flower colour"
+#: packages/nodes/src/lawn/parametrics-flowers.tsx
+#, fuzzy
+msgid "node.lawn.flowers.customColor"
+msgstr "花の色をカスタマイズ"
+
+# Source-Hash: f1d7f1165c117232
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "Choose up to three species and a positive flower density. Flowers are off until you choose them; winter has no blooms."
+#: packages/nodes/src/lawn/parametrics-flowers.tsx
+#, fuzzy
+msgid "node.lawn.flowers.help"
+msgstr "最大3種類の花を選び、花の密度をゼロより大きく設定してください。花は選択するまで表示されず、冬には咲きません。"
+
+# Source-Hash: 9b66e76a5d117c67
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "Flower mix"
+#: packages/nodes/src/lawn/parametrics-flowers.tsx
+#, fuzzy
+msgid "node.lawn.flowers.mix"
+msgstr "花の組み合わせ"
+
+# Source-Hash: 95267ae7a8f281d5
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "Remove species"
+#: packages/nodes/src/lawn/parametrics-flowers.tsx
+#, fuzzy
+msgid "node.lawn.flowers.remove"
+msgstr "種類を削除"
+
+# Source-Hash: e3f4676ea89ca3a3
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "Relative share"
+#: packages/nodes/src/lawn/parametrics-flowers.tsx
+#, fuzzy
+msgid "node.lawn.flowers.share"
+msgstr "相対的な割合"
+
+# Source-Hash: 155c313d644b5d3f
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "Species"
+#: packages/nodes/src/lawn/parametrics-flowers.tsx
+#, fuzzy
+msgid "node.lawn.flowers.species"
+msgstr "種類"
+
+# Source-Hash: 6f3d67fb06a78225
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "Lawn"
+#: packages/nodes/src/i18n/definition-messages.ts
+#, fuzzy
+msgid "node.lawn.label"
+msgstr "芝生"
+
+# Source-Hash: 3b0dccf3580199eb
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "Blade width"
+#: packages/nodes/src/lawn/parametrics.ts
+#, fuzzy
+msgid "node.lawn.parameters.bladeWidth"
+msgstr "葉幅"
+
+# Source-Hash: 8f08d58eee35ee67
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "Grass colour"
+#: packages/nodes/src/lawn/parametrics.ts
+#, fuzzy
+msgid "node.lawn.parameters.color"
+msgstr "芝草の色"
+
+# Source-Hash: a16b5bb3c84b687f
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "Blades per square metre"
+#: packages/nodes/src/lawn/parametrics.ts
+#, fuzzy
+msgid "node.lawn.parameters.density"
+msgstr "1平方メートルあたりの葉数"
+
+# Source-Hash: f4c1dd0896ea50b2
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "Soft edge"
+#: packages/nodes/src/lawn/parametrics.ts
+#, fuzzy
+msgid "node.lawn.parameters.edgeFade"
+msgstr "境界のぼかし"
+
+# Source-Hash: 3100c12a41895738
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "Flower heads per square metre"
+#: packages/nodes/src/lawn/definition.edit.ts
+#: packages/nodes/src/lawn/parametrics.ts
+#, fuzzy
+msgid "node.lawn.parameters.flowerDensity"
+msgstr "1平方メートルあたりの花頭数"
+
+# Source-Hash: df1490f97b2a8ed3
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "Flowers"
+#: packages/nodes/src/lawn/parametrics.ts
+#, fuzzy
+msgid "node.lawn.parameters.flowers"
+msgstr "花"
+
+# Source-Hash: 7b805e20b754329f
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "Grass"
+#: packages/nodes/src/lawn/parametrics.ts
+#, fuzzy
+msgid "node.lawn.parameters.grass"
+msgstr "芝草"
+
+# Source-Hash: 646ef0fbcbc58edf
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "Height"
+#: packages/nodes/src/lawn/parametrics.ts
+#, fuzzy
+msgid "node.lawn.parameters.height"
+msgstr "高さ"
+
+# Source-Hash: a6a7a36d982b4911
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "Roughness"
+#: packages/nodes/src/lawn/parametrics.ts
+#, fuzzy
+msgid "node.lawn.parameters.roughness"
+msgstr "粗さ"
+
+# Source-Hash: ff74f2c8fc64aa3a
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "Season"
+#: packages/nodes/src/lawn/parametrics-flowers.tsx
+#, fuzzy
+msgid "node.lawn.parameters.season"
+msgstr "季節"
+
+# Source-Hash: c5defa463b46241a
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "Seed"
+#: packages/nodes/src/lawn/parametrics.ts
+#, fuzzy
+msgid "node.lawn.parameters.seed"
+msgstr "乱数シード"
+
+# Source-Hash: a16ef3e7a48e3bbf
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "Wind"
+#: packages/nodes/src/lawn/parametrics.ts
+#, fuzzy
+msgid "node.lawn.parameters.wind"
+msgstr "風"
+
+# Source-Hash: d181c54ad41c5858
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "Autumn"
+#: packages/nodes/src/lawn/parametrics-flowers.tsx
+#, fuzzy
+msgid "node.lawn.season.autumn"
+msgstr "秋"
+
+# Source-Hash: 36a83e12c87eb96a
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "Spring"
+#: packages/nodes/src/lawn/parametrics-flowers.tsx
+#, fuzzy
+msgid "node.lawn.season.spring"
+msgstr "春"
+
+# Source-Hash: 0ccbd59008f8e62c
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "Summer"
+#: packages/nodes/src/lawn/parametrics-flowers.tsx
+#, fuzzy
+msgid "node.lawn.season.summer"
+msgstr "夏"
+
+# Source-Hash: 9da21b5019bd861a
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "Winter"
+#: packages/nodes/src/lawn/parametrics-flowers.tsx
+#, fuzzy
+msgid "node.lawn.season.winter"
+msgstr "冬"
+
+# Source-Hash: b8cb8406230fb19a
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "Remove stroke"
+#: packages/nodes/src/lawn/parametrics-flowers.tsx
+#, fuzzy
+msgid "node.lawn.strokes.remove"
+msgstr "ストロークを削除"
+
+# Source-Hash: ef04d2ea78c1dfe4
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "Brush strokes"
+#: packages/nodes/src/lawn/parametrics-flowers.tsx
+#, fuzzy
+msgid "node.lawn.strokes.title"
+msgstr "ブラシストローク"
+
+# Source-Hash: aedcabbf1af8324a
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "Add an outline point"
+#: packages/nodes/src/lawn/definition.edit.ts
+#, fuzzy
+msgid "node.lawn.tool.addPoint"
+msgstr "輪郭点を追加"
+
+# Source-Hash: 9659377b49ba0d79
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "Draw area"
+#: packages/nodes/src/lawn/definition.edit.ts
+#, fuzzy
+msgid "node.lawn.tool.area"
+msgstr "エリアを描く"
+
+# Source-Hash: c701017a3c204f10
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "Take the last point back"
+#: packages/nodes/src/lawn/definition.edit.ts
+#, fuzzy
+msgid "node.lawn.tool.back"
+msgstr "最後の点を取り消す"
+
+# Source-Hash: 1a38e9b342b83677
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "Brush lawn"
+#: packages/nodes/src/lawn/definition.edit.ts
+#, fuzzy
+msgid "node.lawn.tool.brush"
+msgstr "芝生を塗る"
+
+# Source-Hash: c0774c185060fc13
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "Cancel"
+#: packages/nodes/src/lawn/definition.edit.ts
+#, fuzzy
+msgid "node.lawn.tool.cancel"
+msgstr "キャンセル"
+
+# Source-Hash: dfb85b2addb7b9fa
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "Drag"
+#: packages/nodes/src/lawn/definition.edit.ts
+#, fuzzy
+msgid "node.lawn.tool.drag"
+msgstr "ドラッグ"
+
+# Source-Hash: be07125731528d14
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "Brush effect"
+#: packages/nodes/src/lawn/definition.edit.ts
+#, fuzzy
+msgid "node.lawn.tool.effect"
+msgstr "ブラシ効果"
+
+# Source-Hash: fd620884179c3891
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "Keep lawn mix"
+#: packages/nodes/src/lawn/definition.edit.ts
+#, fuzzy
+msgid "node.lawn.tool.existingMix"
+msgstr "芝生の組み合わせを維持"
+
+# Source-Hash: 37913b64ebb2d275
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "Uses this lawn’s species and density. Configure flowers in the inspector first."
+#: packages/nodes/src/lawn/definition.edit.ts
+#, fuzzy
+msgid "node.lawn.tool.existingMixHelp"
+msgstr "この芝生の花の種類と密度を使用します。先にインスペクターで花を設定してください。"
+
+# Source-Hash: 42e47b2f0d97aa75
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "Finish the lawn"
+#: packages/nodes/src/lawn/definition.edit.ts
+#, fuzzy
+msgid "node.lawn.tool.finish"
+msgstr "芝生を確定"
+
+# Source-Hash: f0eeadd3db22cad3
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "Flower species"
+#: packages/nodes/src/lawn/definition.edit.ts
+#, fuzzy
+msgid "node.lawn.tool.flowerSpecies"
+msgstr "花の種類"
+
+# Source-Hash: a58533594411e088
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "Left click"
+#: packages/nodes/src/lawn/definition.edit.ts
+#, fuzzy
+msgid "node.lawn.tool.leftClick"
+msgstr "左クリック"
+
+# Source-Hash: 4aca8a0d9a69fcbb
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "Lawn tool"
+#: packages/nodes/src/lawn/definition.edit.ts
+#, fuzzy
+msgid "node.lawn.tool.mode"
+msgstr "芝生ツール"
+
+# Source-Hash: 3814dbe813c23ece
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "Paint one stroke"
+#: packages/nodes/src/lawn/definition.edit.ts
+#, fuzzy
+msgid "node.lawn.tool.paint"
+msgstr "ひと筆塗る"
+
+# Source-Hash: 6aacbdce0ae7d3c0
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "Brush radius"
+#: packages/nodes/src/lawn/definition.edit.ts
+#, fuzzy
+msgid "node.lawn.tool.radius"
+msgstr "ブラシ半径"
+
+# Source-Hash: e4bd32c922e7d5df
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "Replaces the lawn’s flower mix with this species when the stroke is committed."
+#: packages/nodes/src/lawn/definition.edit.ts
+#, fuzzy
+msgid "node.lawn.tool.replaceMix"
+msgstr "ストロークの確定時に、芝生の花の組み合わせをこの種類に置き換えます。"
+
+# Source-Hash: 09f612f006a9af29
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "Brush strength"
+#: packages/nodes/src/lawn/definition.edit.ts
+#, fuzzy
+msgid "node.lawn.tool.strength"
+msgstr "ブラシの強度"
 
 # Source-Hash: a9e2d7b215696e2a
 # Review: required

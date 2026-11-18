@@ -10,15 +10,14 @@ beforeEach(() => {
 })
 afterEach(() => restore())
 
-// Additive behavior only: the pre-existing exact inventory gate remains untouched.
 test.each([
   ['editor', builtinPlugin],
   ['render', renderPlugin],
 ] as const)(
-  '%s registers both Site garden kinds with loadable defaults and read-only geometry',
+  '%s registers Site garden kinds with loadable defaults and read-only geometry',
   async (_name, plugin) => {
     await loadPlugin(plugin)
-    for (const kind of ['hedge', 'planting'] as const) {
+    for (const kind of ['hedge', 'planting', 'lawn'] as const) {
       expect(plugin.nodes!.filter((definition) => definition.kind === kind)).toHaveLength(1)
       const definition = nodeRegistry.get(kind)!
       expect(definition.capabilities.hostable?.parents).toEqual(['site'])
@@ -33,6 +32,11 @@ test.each([
       })
       expect(node.type).toBe(kind)
       if (node.type === 'hedge') expect(node.gen).toBe(2)
+      if (node.type === 'lawn') {
+        expect(node.gen).toBe(1)
+        expect(node.height).toBe(0.06)
+        expect(node.flowerDensity).toBe(0)
+      }
       if (node.type === 'planting') {
         expect(node.gen).toBe(1)
         expect(new Set(node.plants.map((plant) => plant.layer))).toEqual(

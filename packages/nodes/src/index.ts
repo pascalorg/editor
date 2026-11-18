@@ -90,6 +90,7 @@ export {
   registerWallObjectSceneCheck,
   wallObjectRenderedObservations,
 } from './item/wall-object-observations'
+export { lawnDefinition } from './lawn'
 export { leanToExtensionDefinition } from './lean-to-extension'
 export { levelDefinition } from './level'
 export { linesetDefinition } from './lineset'

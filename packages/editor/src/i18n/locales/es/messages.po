@@ -5511,6 +5511,16 @@ msgstr "Canto de viga"
 msgid "editor.inspector.field.beamWidth.1q1mzbe"
 msgstr "Ancho de viga"
 
+# Source-Hash: 3b0dccf3580199eb
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "Blade width"
+#: packages/nodes/src/i18n/definition-messages.ts
+#, fuzzy
+msgid "editor.inspector.field.bladeWidth.6rnj1x"
+msgstr "Anchura de las briznas"
+
 # Source-Hash: b98c0d0189526335
 # Review: required
 # AI-Provider: claude-code
@@ -5683,6 +5693,16 @@ msgstr "Forma del collarín"
 msgid "editor.inspector.field.collarWidth.qvc9ik"
 msgstr "Ancho del collarín"
 
+# Source-Hash: fe18958cedd627d2
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "Color"
+#: packages/nodes/src/i18n/definition-messages.ts
+#, fuzzy
+msgid "editor.inspector.field.color.1rqg6wo"
+msgstr "Color"
+
 # Source-Hash: 30edd1c180aac9b4
 # Review: required
 # AI-Provider: claude-code
@@ -5854,6 +5874,16 @@ msgstr "Espesor de la tarima"
 msgid "editor.inspector.field.defaultLevelId.xmrjzp"
 msgstr "ID de planta predeterminada"
 
+# Source-Hash: f4a09d26c1ec5258
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "Density"
+#: packages/nodes/src/i18n/definition-messages.ts
+#, fuzzy
+msgid "editor.inspector.field.density.1q5zigr"
+msgstr "Densidad"
+
 # Source-Hash: 99ac4d03c3061f3a
 # Review: required
 # AI-Provider: claude-code
@@ -6024,6 +6054,16 @@ msgstr "Proporción de longitud de cintura"
 msgid "editor.inspector.field.dwellMs.1lkk0o5"
 msgstr "Espera ms"
 
+# Source-Hash: e06f5a5ca317560b
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "Edge fade"
+#: packages/nodes/src/i18n/definition-messages.ts
+#, fuzzy
+msgid "editor.inspector.field.edgeFade.1fpwnci"
+msgstr "Difuminado de bordes"
+
 # Source-Hash: 9cf550eb019bca1b
 # Review: required
 # AI-Provider: claude-code
@@ -6165,6 +6205,16 @@ msgstr "Altura del tapajuntas"
 #, fuzzy
 msgid "editor.inspector.field.flashingProjection.hhf0fk"
 msgstr "Vuelo del tapajuntas"
+
+# Source-Hash: c83fd122205ab970
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "Flower density"
+#: packages/nodes/src/i18n/definition-messages.ts
+#, fuzzy
+msgid "editor.inspector.field.flowerDensity.1k5s46u"
+msgstr "Densidad de flores"
 
 # Source-Hash: 9473e2ab53370b40
 # Review: required
@@ -7384,6 +7434,16 @@ msgstr "Tipo de cubierta"
 msgid "editor.inspector.field.rotation.ly2rj"
 msgstr "Rotación"
 
+# Source-Hash: a6a7a36d982b4911
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "Roughness"
+#: packages/nodes/src/i18n/definition-messages.ts
+#, fuzzy
+msgid "editor.inspector.field.roughness.1q2hm6t"
+msgstr "Rugosidad"
+
 # Source-Hash: c913b494c3901a17
 # Review: required
 # AI-Provider: claude-code
@@ -7997,6 +8057,16 @@ msgstr "Ancho"
 msgid "editor.inspector.field.width2.1nqawvr"
 msgstr "Ancho 2"
 
+# Source-Hash: a16ef3e7a48e3bbf
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "Wind"
+#: packages/nodes/src/i18n/definition-messages.ts
+#, fuzzy
+msgid "editor.inspector.field.wind.154vjmv"
+msgstr "Viento"
+
 # Source-Hash: 6199b641888a83fa
 # Review: required
 # AI-Provider: claude-code
@@ -8267,6 +8337,16 @@ msgstr "Cara"
 msgid "editor.inspector.group.fitting.171z1r4"
 msgstr "Accesorio"
 
+# Source-Hash: df1490f97b2a8ed3
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "Flowers"
+#: packages/nodes/src/i18n/definition-messages.ts
+#, fuzzy
+msgid "editor.inspector.group.flowers.2cwnnz"
+msgstr "Flores"
+
 # Source-Hash: f817c09ef0bb6d69
 # Review: required
 # AI-Provider: claude-code
@@ -8317,6 +8397,16 @@ msgstr "Marco"
 #, fuzzy
 msgid "editor.inspector.group.geometry.a21os1"
 msgstr "Geometría"
+
+# Source-Hash: 7b805e20b754329f
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "Grass"
+#: packages/nodes/src/i18n/definition-messages.ts
+#, fuzzy
+msgid "editor.inspector.group.grass.ogou1p"
+msgstr "Hierba"
 
 # Source-Hash: 7e4a0a38f694be6b
 # Review: required
@@ -16967,6 +17057,16 @@ msgstr "Terminar los testigos de varios puntos"
 msgid "editor.toolHint.finishSlab.xmnm8e"
 msgstr "Terminar el forjado"
 
+# Source-Hash: 42e47b2f0d97aa75
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "Finish the lawn"
+#: packages/nodes/src/i18n/definition-messages.ts
+#, fuzzy
+msgid "editor.toolHint.finishTheLawn.1dp3a41"
+msgstr "Terminar el césped"
+
 # Source-Hash: 66ed7c7598d3aa29
 # Review: required
 # AI-Provider: claude-code
@@ -17336,6 +17436,16 @@ msgstr "Aquí no se une ningún muro"
 #, fuzzy
 msgid "editor.toolHint.numberOfCutsScrollOrClick.1kqe84b"
 msgstr "Número de cortes: desplaza o haz clic para cambiar"
+
+# Source-Hash: 3814dbe813c23ece
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "Paint one stroke"
+#: packages/nodes/src/i18n/definition-messages.ts
+#, fuzzy
+msgid "editor.toolHint.paintOneStroke.1si1g1"
+msgstr "Pintar un trazo"
 
 # Source-Hash: af01bde3ae4b7e59
 # Review: required
@@ -28681,6 +28791,676 @@ msgstr "Escala uniforme"
 #, fuzzy
 msgid "node.item.panel.xyz"
 msgstr "XYZ"
+
+# Source-Hash: 797ef27cad809a5f
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "The lawn changed during this stroke. Start a new stroke on the updated lawn."
+#: packages/nodes/src/lawn/brush-controller.ts
+#, fuzzy
+msgid "node.lawn.brush.changed"
+msgstr "El césped ha cambiado durante este trazo. Inicie un nuevo trazo sobre el césped actualizado."
+
+# Source-Hash: 26325f7340e0ca39
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "Choose a flower species and a positive flower density before painting more flowers."
+#: packages/nodes/src/lawn/brush-controller.ts
+#, fuzzy
+msgid "node.lawn.brush.chooseFlowers"
+msgstr "Elija una especie de flor y una densidad de flores mayor que cero antes de pintar más flores."
+
+# Source-Hash: 4cce5a1d5e845da1
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "No lawn ground remains here. Check the outline and ground owners before painting."
+#: packages/nodes/src/lawn/brush-controller.ts
+#, fuzzy
+msgid "node.lawn.brush.empty"
+msgstr "Aquí no queda terreno para el césped. Revise el contorno y los elementos propietarios del terreno antes de pintar."
+
+# Source-Hash: fe0519db738ca3e9
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "This lawn has 64 strokes. Remove an older stroke before painting again."
+#: packages/nodes/src/lawn/brush-controller.ts
+#, fuzzy
+msgid "node.lawn.brush.full"
+msgstr "Este césped tiene 64 trazos. Elimine un trazo anterior antes de volver a pintar."
+
+# Source-Hash: 52b4f4e833a09451
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "This stroke has invalid coordinates or settings. Check the brush settings and try again."
+#: packages/nodes/src/lawn/brush-controller.ts
+#, fuzzy
+msgid "node.lawn.brush.invalid"
+msgstr "Este trazo tiene coordenadas o ajustes no válidos. Revise los ajustes del pincel e inténtelo de nuevo."
+
+# Source-Hash: c63c0e423c01c95d
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "This lawn has no owning Site. Restore its Site before painting."
+#: packages/nodes/src/lawn/brush-controller.ts
+#, fuzzy
+msgid "node.lawn.brush.noSite"
+msgstr "Este césped no pertenece a ningún emplazamiento. Restaure su emplazamiento antes de pintar."
+
+# Source-Hash: 91e881b9f3a853e5
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "Start inside one lawn area. Overlapping lawns must be edited separately."
+#: packages/nodes/src/lawn/brush-controller.ts
+#, fuzzy
+msgid "node.lawn.brush.target"
+msgstr "Empiece dentro de una sola zona de césped. Las zonas de césped superpuestas deben editarse por separado."
+
+# Source-Hash: edf490b8154ebcb1
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "This lawn exceeds the terrain detail budget. Reduce its outline or simplify the terrain before painting."
+#: packages/nodes/src/lawn/brush-controller.ts
+#, fuzzy
+msgid "node.lawn.brush.terrainBudget"
+msgstr "Este césped supera el presupuesto de detalle del terreno. Reduzca su contorno o simplifique el terreno antes de pintar."
+
+# Source-Hash: 40900fc51c16829e
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "This stroke exceeds the lawn’s combined work budget. Use a shorter stroke or remove older strokes."
+#: packages/nodes/src/lawn/brush-controller.ts
+#, fuzzy
+msgid "node.lawn.brush.workBudget"
+msgstr "Este trazo supera el presupuesto de procesamiento acumulado del césped. Use un trazo más corto o elimine trazos anteriores."
+
+# Source-Hash: 38235a44d8b30ac5
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "An editable lawn on Site ground, with mown or rough grass and optional flowers."
+#: packages/nodes/src/i18n/definition-messages.ts
+#, fuzzy
+msgid "node.lawn.description"
+msgstr "Un césped editable sobre el terreno del emplazamiento, con hierba cortada o sin cortar y flores opcionales."
+
+# Source-Hash: 5d2a812946009ea6
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "This lawn cannot be placed here. Check the outline, area and available ground."
+#: packages/nodes/src/lawn/draft.ts
+#, fuzzy
+msgid "node.lawn.draft.invalid"
+msgstr "No se puede colocar este césped aquí. Revise el contorno, la superficie y el terreno disponible."
+
+# Source-Hash: 0ead3ce536fea415
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "The outline is full. Press Enter to finish, or Backspace to revise it."
+#: packages/nodes/src/lawn/draft.ts
+#, fuzzy
+msgid "node.lawn.draft.maxPoints"
+msgstr "El contorno ha alcanzado su límite de puntos. Pulse Intro para terminar o Retroceso para modificarlo."
+
+# Source-Hash: 8222eb8305d57db5
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "Add at least three outline points."
+#: packages/nodes/src/lawn/draft.ts
+#, fuzzy
+msgid "node.lawn.draft.minPoints"
+msgstr "Añada al menos tres puntos al contorno."
+
+# Source-Hash: 8f724518123dd698
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "Bare ground"
+#: packages/nodes/src/lawn/definition.edit.ts
+#: packages/nodes/src/lawn/parametrics-flowers.tsx
+#, fuzzy
+msgid "node.lawn.effect.bare"
+msgstr "Suelo desnudo"
+
+# Source-Hash: dfdfbe610c921616
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "Fewer flowers"
+#: packages/nodes/src/lawn/definition.edit.ts
+#: packages/nodes/src/lawn/parametrics-flowers.tsx
+#, fuzzy
+msgid "node.lawn.effect.fewerFlowers"
+msgstr "Menos flores"
+
+# Source-Hash: e1081f8abaca4bd5
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "Restore grass"
+#: packages/nodes/src/lawn/definition.edit.ts
+#: packages/nodes/src/lawn/parametrics-flowers.tsx
+#, fuzzy
+msgid "node.lawn.effect.grass"
+msgstr "Restaurar hierba"
+
+# Source-Hash: edc73f47f9a3cdf5
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "More flowers"
+#: packages/nodes/src/lawn/definition.edit.ts
+#: packages/nodes/src/lawn/parametrics-flowers.tsx
+#, fuzzy
+msgid "node.lawn.effect.moreFlowers"
+msgstr "Más flores"
+
+# Source-Hash: 0ee46558a6b3a8e2
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "Shorter grass"
+#: packages/nodes/src/lawn/definition.edit.ts
+#: packages/nodes/src/lawn/parametrics-flowers.tsx
+#, fuzzy
+msgid "node.lawn.effect.shorter"
+msgstr "Hierba más corta"
+
+# Source-Hash: 9b4e00fd6d84a18a
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "Taller grass"
+#: packages/nodes/src/lawn/definition.edit.ts
+#: packages/nodes/src/lawn/parametrics-flowers.tsx
+#, fuzzy
+msgid "node.lawn.effect.taller"
+msgstr "Hierba más alta"
+
+# Source-Hash: 4838fa70c9dc96f2
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "Clover"
+#: packages/nodes/src/lawn/definition.edit.ts
+#: packages/nodes/src/lawn/parametrics-flowers.tsx
+#, fuzzy
+msgid "node.lawn.flower.clover"
+msgstr "Trébol"
+
+# Source-Hash: d75c15627eeeffbc
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "Daisy"
+#: packages/nodes/src/lawn/definition.edit.ts
+#: packages/nodes/src/lawn/parametrics-flowers.tsx
+#, fuzzy
+msgid "node.lawn.flower.daisy"
+msgstr "Margarita"
+
+# Source-Hash: dcfaba29a5b5fed9
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "Yarrow"
+#: packages/nodes/src/lawn/definition.edit.ts
+#: packages/nodes/src/lawn/parametrics-flowers.tsx
+#, fuzzy
+msgid "node.lawn.flower.yarrow"
+msgstr "Milenrama"
+
+# Source-Hash: 7e1339c4b845d886
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "Add flower species"
+#: packages/nodes/src/lawn/parametrics-flowers.tsx
+#, fuzzy
+msgid "node.lawn.flowers.add"
+msgstr "Añadir especie de flor"
+
+# Source-Hash: 89ee78a6996a1560
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "Flower colour"
+#: packages/nodes/src/lawn/parametrics-flowers.tsx
+#, fuzzy
+msgid "node.lawn.flowers.color"
+msgstr "Color de las flores"
+
+# Source-Hash: ef1b6ce9a40cde7a
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "Custom flower colour"
+#: packages/nodes/src/lawn/parametrics-flowers.tsx
+#, fuzzy
+msgid "node.lawn.flowers.customColor"
+msgstr "Color de flores personalizado"
+
+# Source-Hash: f1d7f1165c117232
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "Choose up to three species and a positive flower density. Flowers are off until you choose them; winter has no blooms."
+#: packages/nodes/src/lawn/parametrics-flowers.tsx
+#, fuzzy
+msgid "node.lawn.flowers.help"
+msgstr "Elija hasta tres especies y una densidad de flores mayor que cero. Las flores permanecen desactivadas hasta que las elija; en invierno no hay floración."
+
+# Source-Hash: 9b66e76a5d117c67
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "Flower mix"
+#: packages/nodes/src/lawn/parametrics-flowers.tsx
+#, fuzzy
+msgid "node.lawn.flowers.mix"
+msgstr "Mezcla de flores"
+
+# Source-Hash: 95267ae7a8f281d5
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "Remove species"
+#: packages/nodes/src/lawn/parametrics-flowers.tsx
+#, fuzzy
+msgid "node.lawn.flowers.remove"
+msgstr "Eliminar especie"
+
+# Source-Hash: e3f4676ea89ca3a3
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "Relative share"
+#: packages/nodes/src/lawn/parametrics-flowers.tsx
+#, fuzzy
+msgid "node.lawn.flowers.share"
+msgstr "Proporción relativa"
+
+# Source-Hash: 155c313d644b5d3f
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "Species"
+#: packages/nodes/src/lawn/parametrics-flowers.tsx
+#, fuzzy
+msgid "node.lawn.flowers.species"
+msgstr "Especie"
+
+# Source-Hash: 6f3d67fb06a78225
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "Lawn"
+#: packages/nodes/src/i18n/definition-messages.ts
+#, fuzzy
+msgid "node.lawn.label"
+msgstr "Césped"
+
+# Source-Hash: 3b0dccf3580199eb
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "Blade width"
+#: packages/nodes/src/lawn/parametrics.ts
+#, fuzzy
+msgid "node.lawn.parameters.bladeWidth"
+msgstr "Anchura de las briznas"
+
+# Source-Hash: 8f08d58eee35ee67
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "Grass colour"
+#: packages/nodes/src/lawn/parametrics.ts
+#, fuzzy
+msgid "node.lawn.parameters.color"
+msgstr "Color de la hierba"
+
+# Source-Hash: a16b5bb3c84b687f
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "Blades per square metre"
+#: packages/nodes/src/lawn/parametrics.ts
+#, fuzzy
+msgid "node.lawn.parameters.density"
+msgstr "Briznas por metro cuadrado"
+
+# Source-Hash: f4c1dd0896ea50b2
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "Soft edge"
+#: packages/nodes/src/lawn/parametrics.ts
+#, fuzzy
+msgid "node.lawn.parameters.edgeFade"
+msgstr "Borde suave"
+
+# Source-Hash: 3100c12a41895738
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "Flower heads per square metre"
+#: packages/nodes/src/lawn/definition.edit.ts
+#: packages/nodes/src/lawn/parametrics.ts
+#, fuzzy
+msgid "node.lawn.parameters.flowerDensity"
+msgstr "Cabezas florales por metro cuadrado"
+
+# Source-Hash: df1490f97b2a8ed3
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "Flowers"
+#: packages/nodes/src/lawn/parametrics.ts
+#, fuzzy
+msgid "node.lawn.parameters.flowers"
+msgstr "Flores"
+
+# Source-Hash: 7b805e20b754329f
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "Grass"
+#: packages/nodes/src/lawn/parametrics.ts
+#, fuzzy
+msgid "node.lawn.parameters.grass"
+msgstr "Hierba"
+
+# Source-Hash: 646ef0fbcbc58edf
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "Height"
+#: packages/nodes/src/lawn/parametrics.ts
+#, fuzzy
+msgid "node.lawn.parameters.height"
+msgstr "Altura"
+
+# Source-Hash: a6a7a36d982b4911
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "Roughness"
+#: packages/nodes/src/lawn/parametrics.ts
+#, fuzzy
+msgid "node.lawn.parameters.roughness"
+msgstr "Rugosidad"
+
+# Source-Hash: ff74f2c8fc64aa3a
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "Season"
+#: packages/nodes/src/lawn/parametrics-flowers.tsx
+#, fuzzy
+msgid "node.lawn.parameters.season"
+msgstr "Estación"
+
+# Source-Hash: c5defa463b46241a
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "Seed"
+#: packages/nodes/src/lawn/parametrics.ts
+#, fuzzy
+msgid "node.lawn.parameters.seed"
+msgstr "Semilla aleatoria"
+
+# Source-Hash: a16ef3e7a48e3bbf
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "Wind"
+#: packages/nodes/src/lawn/parametrics.ts
+#, fuzzy
+msgid "node.lawn.parameters.wind"
+msgstr "Viento"
+
+# Source-Hash: d181c54ad41c5858
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "Autumn"
+#: packages/nodes/src/lawn/parametrics-flowers.tsx
+#, fuzzy
+msgid "node.lawn.season.autumn"
+msgstr "Otoño"
+
+# Source-Hash: 36a83e12c87eb96a
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "Spring"
+#: packages/nodes/src/lawn/parametrics-flowers.tsx
+#, fuzzy
+msgid "node.lawn.season.spring"
+msgstr "Primavera"
+
+# Source-Hash: 0ccbd59008f8e62c
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "Summer"
+#: packages/nodes/src/lawn/parametrics-flowers.tsx
+#, fuzzy
+msgid "node.lawn.season.summer"
+msgstr "Verano"
+
+# Source-Hash: 9da21b5019bd861a
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "Winter"
+#: packages/nodes/src/lawn/parametrics-flowers.tsx
+#, fuzzy
+msgid "node.lawn.season.winter"
+msgstr "Invierno"
+
+# Source-Hash: b8cb8406230fb19a
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "Remove stroke"
+#: packages/nodes/src/lawn/parametrics-flowers.tsx
+#, fuzzy
+msgid "node.lawn.strokes.remove"
+msgstr "Eliminar trazo"
+
+# Source-Hash: ef04d2ea78c1dfe4
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "Brush strokes"
+#: packages/nodes/src/lawn/parametrics-flowers.tsx
+#, fuzzy
+msgid "node.lawn.strokes.title"
+msgstr "Trazos de pincel"
+
+# Source-Hash: aedcabbf1af8324a
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "Add an outline point"
+#: packages/nodes/src/lawn/definition.edit.ts
+#, fuzzy
+msgid "node.lawn.tool.addPoint"
+msgstr "Añadir un punto al contorno"
+
+# Source-Hash: 9659377b49ba0d79
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "Draw area"
+#: packages/nodes/src/lawn/definition.edit.ts
+#, fuzzy
+msgid "node.lawn.tool.area"
+msgstr "Dibujar área"
+
+# Source-Hash: c701017a3c204f10
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "Take the last point back"
+#: packages/nodes/src/lawn/definition.edit.ts
+#, fuzzy
+msgid "node.lawn.tool.back"
+msgstr "Retirar el último punto"
+
+# Source-Hash: 1a38e9b342b83677
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "Brush lawn"
+#: packages/nodes/src/lawn/definition.edit.ts
+#, fuzzy
+msgid "node.lawn.tool.brush"
+msgstr "Pintar césped"
+
+# Source-Hash: c0774c185060fc13
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "Cancel"
+#: packages/nodes/src/lawn/definition.edit.ts
+#, fuzzy
+msgid "node.lawn.tool.cancel"
+msgstr "Cancelar"
+
+# Source-Hash: dfb85b2addb7b9fa
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "Drag"
+#: packages/nodes/src/lawn/definition.edit.ts
+#, fuzzy
+msgid "node.lawn.tool.drag"
+msgstr "Arrastrar"
+
+# Source-Hash: be07125731528d14
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "Brush effect"
+#: packages/nodes/src/lawn/definition.edit.ts
+#, fuzzy
+msgid "node.lawn.tool.effect"
+msgstr "Efecto del pincel"
+
+# Source-Hash: fd620884179c3891
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "Keep lawn mix"
+#: packages/nodes/src/lawn/definition.edit.ts
+#, fuzzy
+msgid "node.lawn.tool.existingMix"
+msgstr "Mantener la mezcla del césped"
+
+# Source-Hash: 37913b64ebb2d275
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "Uses this lawn’s species and density. Configure flowers in the inspector first."
+#: packages/nodes/src/lawn/definition.edit.ts
+#, fuzzy
+msgid "node.lawn.tool.existingMixHelp"
+msgstr "Usa las especies y la densidad de este césped. Configure primero las flores en el inspector."
+
+# Source-Hash: 42e47b2f0d97aa75
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "Finish the lawn"
+#: packages/nodes/src/lawn/definition.edit.ts
+#, fuzzy
+msgid "node.lawn.tool.finish"
+msgstr "Terminar el césped"
+
+# Source-Hash: f0eeadd3db22cad3
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "Flower species"
+#: packages/nodes/src/lawn/definition.edit.ts
+#, fuzzy
+msgid "node.lawn.tool.flowerSpecies"
+msgstr "Especie de flor"
+
+# Source-Hash: a58533594411e088
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "Left click"
+#: packages/nodes/src/lawn/definition.edit.ts
+#, fuzzy
+msgid "node.lawn.tool.leftClick"
+msgstr "Clic izquierdo"
+
+# Source-Hash: 4aca8a0d9a69fcbb
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "Lawn tool"
+#: packages/nodes/src/lawn/definition.edit.ts
+#, fuzzy
+msgid "node.lawn.tool.mode"
+msgstr "Herramienta de césped"
+
+# Source-Hash: 3814dbe813c23ece
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "Paint one stroke"
+#: packages/nodes/src/lawn/definition.edit.ts
+#, fuzzy
+msgid "node.lawn.tool.paint"
+msgstr "Pintar un trazo"
+
+# Source-Hash: 6aacbdce0ae7d3c0
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "Brush radius"
+#: packages/nodes/src/lawn/definition.edit.ts
+#, fuzzy
+msgid "node.lawn.tool.radius"
+msgstr "Radio del pincel"
+
+# Source-Hash: e4bd32c922e7d5df
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "Replaces the lawn’s flower mix with this species when the stroke is committed."
+#: packages/nodes/src/lawn/definition.edit.ts
+#, fuzzy
+msgid "node.lawn.tool.replaceMix"
+msgstr "Sustituye la mezcla de flores del césped por esta especie al confirmar el trazo."
+
+# Source-Hash: 09f612f006a9af29
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "Brush strength"
+#: packages/nodes/src/lawn/definition.edit.ts
+#, fuzzy
+msgid "node.lawn.tool.strength"
+msgstr "Intensidad del pincel"
 
 # Source-Hash: a9e2d7b215696e2a
 # Review: required

@@ -3,6 +3,7 @@ import {
   buildFloorplanContext,
   type FloorplanGeometry,
   HedgeNode,
+  LawnNode,
   loadPlugin,
   nodeRegistry,
   PlantingNode,
@@ -101,16 +102,27 @@ test.each([
       area: 12,
       seed: 19,
     })
+    const lawn = LawnNode.parse({
+      id: 'lawn_contributions',
+      parentId: site.id,
+      outline: [
+        [-10, -10],
+        [10, -10],
+        [10, 10],
+        [-10, 10],
+      ],
+    })
     const scene: SceneSnapshot = {
       ...snapshot,
       nodes: {
         ...snapshot.nodes,
-        [site.id]: { ...site, children: [hedge.id, planting.id] },
+        [site.id]: { ...site, children: [hedge.id, planting.id, lawn.id] },
         [planting.id]: planting,
+        [lawn.id]: lawn,
       },
     }
     const drawing = buildSitePlanDrawing(scene)
-    for (const node of [hedge, planting]) {
+    for (const node of [hedge, planting, lawn]) {
       const definition = nodeRegistry.get(node.type)!
       expect(definition.sitePlan).toBe(true)
       const expected = definition.floorplan!(
