@@ -1,11 +1,12 @@
 'use client'
 
 import { type AnyNode, resolveSiteGround, type SceneApi } from '@pascal-app/core'
-import { EDITOR_LAYER, useEditor, useRegistryToolContext, visibleScene } from '@pascal-app/editor'
-import { Html, Line } from '@react-three/drei'
+import { useEditor, useRegistryToolContext, visibleScene } from '@pascal-app/editor'
+import { Html } from '@react-three/drei'
 import { createPortal, useThree } from '@react-three/fiber'
 import { useCallback, useEffect, useState } from 'react'
 import type { Camera } from 'three'
+import { GardenPreviewLine } from '../shared/garden-preview-line'
 import { siteFrame } from '../shared/site-frame'
 import { lawnBrushColor, useLawnAuthoring } from './brush'
 import { useLawnBrushController, useLawnNavigationGuard } from './brush-controller'
@@ -229,7 +230,7 @@ function LawnBrushCursor({
   return (
     <>
       {[0.25, 0.5, 0.75, 1].map((fraction) => (
-        <Line
+        <GardenPreviewLine
           key={fraction}
           points={Array.from({ length: 65 }, (_, i) =>
             elevate([
@@ -239,11 +240,7 @@ function LawnBrushCursor({
           )}
           color={lawnBrushColor[settings.effect]}
           opacity={(1 - fraction * 0.7) * 0.6}
-          transparent
-          layers={EDITOR_LAYER}
           lineWidth={2}
-          depthTest={false}
-          raycast={() => {}}
         />
       ))}
     </>
@@ -274,13 +271,10 @@ function LawnFeedback({
   return createPortal(
     <group userData={{ pascalExport: 'strip' }}>
       {settings.mode === 'area' && line.length > 1 && (
-        <Line
+        <GardenPreviewLine
           points={line.map(elevate)}
           color={error ? '#b45309' : '#617c36'}
-          layers={EDITOR_LAYER}
           lineWidth={3}
-          depthTest={false}
-          raycast={() => {}}
         />
       )}
       {settings.mode === 'brush' && cursor && (

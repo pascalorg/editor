@@ -1,14 +1,15 @@
 'use client'
 
 import { emitter, type GridEvent, resolveSiteGround } from '@pascal-app/core'
-import { EDITOR_LAYER, useEditor, useRegistryToolContext, visibleScene } from '@pascal-app/editor'
-import { Html, Line } from '@react-three/drei'
+import { useEditor, useRegistryToolContext, visibleScene } from '@pascal-app/editor'
+import { Html } from '@react-three/drei'
 import { createPortal, useThree } from '@react-three/fiber'
 import { useCallback, useEffect } from 'react'
 import {
   stopPlacementCommitPropagation,
   subscribeFloorPlacementClicks,
 } from '../shared/floor-placement'
+import { GardenPreviewLine } from '../shared/garden-preview-line'
 import { siteFrame } from '../shared/site-frame'
 import { snapHedgeDraftPoint, useHedgeDraft, useHedgeDraftController } from './draft'
 
@@ -64,15 +65,7 @@ export default function HedgeTool() {
   // ToolManager mounts under the building; a Site-space guide must not inherit its transform.
   return createPortal(
     <group userData={{ pascalExport: 'strip' }}>
-      <Line
-        color={error ? '#b45309' : '#3f8f3a'}
-        depthTest={false}
-        layers={EDITOR_LAYER}
-        lineWidth={3}
-        points={points}
-        raycast={() => {}}
-        userData={{ pascalExport: 'strip' }}
-      />
+      <GardenPreviewLine color={error ? '#b45309' : '#3f8f3a'} lineWidth={3} points={points} />
       {error && (
         <Html position={points[0]} style={{ pointerEvents: 'none', width: 260 }}>
           <p className="rounded-lg bg-background p-2 text-xs text-foreground" role="status">
