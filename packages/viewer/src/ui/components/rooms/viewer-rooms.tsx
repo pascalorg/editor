@@ -3,7 +3,7 @@
 import {
   type AnyNode,
   buildUnitReport,
-  polygonInteriorPoint,
+  DEFAULT_LEVEL_HEIGHT,
   roomFloorElevation,
   sceneRegistry,
   useLocale,
@@ -12,9 +12,9 @@ import {
   type ZoneNode,
 } from '@pascal-app/core'
 import { useCallback, useEffect, useMemo } from 'react'
-import { Vector3 } from 'three'
 import { useShallow } from 'zustand/react/shallow'
 import { SelectionCallout } from '../../../components/viewer/selection-callout'
+import { sectionActive } from '../../../lib/section'
 import useViewer from '../../../store/use-viewer'
 import { formatRoomArea } from '../../lib/room-area'
 import { resolveRoomAssemblyHeights } from '../../lib/room-assembly-overlay'
@@ -29,12 +29,14 @@ import { RoomAssemblyMesh } from './room-highlight'
 import {
   RoomLabelAnchor3D,
   type RoomLabelEntry,
+  RoomLabelSection,
   RoomPillChip,
   RoomPillDetail,
   RoomPillsLayer3D,
   roomLabelEntries,
   roomLabelsVisible,
   useFadePresence,
+  useSectionRoomLabel,
 } from './room-labels'
 
 /**
@@ -88,6 +90,30 @@ export function ViewerRooms({ source }: { source: ViewerSource }) {
     )
   }, [levelId, nodes, rooms])
 
+  const section = useViewer(sectionActive)
+  const tops = useMemo(
+    () =>
+      new Map(
+        (section ? entries : []).map((entry) => {
+          const room = rooms.find((room) => room.zoneId === entry.zoneId)
+          const heights = room
+            ? resolveRoomAssemblyHeights(room, nodes as Record<string, AnyNode>)
+            : null
+          const level = levelId ? nodes[levelId] : undefined
+          return [
+            entry.zoneId,
+            heights?.ceiling?.y ??
+              (heights?.wallTops.size
+                ? Math.max(...heights.wallTops.values())
+                : level?.type === 'level'
+                  ? level.height
+                  : undefined),
+          ]
+        }),
+      ),
+    [entries, rooms, nodes, levelId, section],
+  )
+
   const highlighted = useMemo(() => {
     if (walkthrough) return []
     const ids = new Set<string>()
@@ -107,7 +133,7 @@ export function ViewerRooms({ source }: { source: ViewerSource }) {
   }, [focusedUnitId, hoveredId, levelId, nodes, walkthrough, zoneId])
 
   return (
-    <>
+    <RoomLabelSection levelObject={() => (levelId ? source.objectFor(levelId) : undefined)}>
       {pillsPresent && levelId ? (
         <RoomPillsLayer3D
           entries={entries}
@@ -135,6 +161,7 @@ export function ViewerRooms({ source }: { source: ViewerSource }) {
                 anchors={anchors}
                 entry={entry}
                 floorY={roomFloorElevation(nodes as Record<string, AnyNode>, entry.zoneId)}
+                topY={tops.get(entry.zoneId)}
               >
                 <RoomPillChip
                   areaM2={entry.area}
@@ -169,13 +196,14 @@ export function ViewerRooms({ source }: { source: ViewerSource }) {
                 entry={entry}
                 floorY={roomFloorElevation(nodes as Record<string, AnyNode>, zoneId)}
                 key={zoneId}
+                topY={tops.get(entry.zoneId)}
                 level={level}
                 name={zoneLabel(zone, i18n)}
               />
             ) : null
           })()
         : null}
-    </>
+    </RoomLabelSection>
   )
 }
 
@@ -183,28 +211,33 @@ export function ViewerRooms({ source }: { source: ViewerSource }) {
 function ViewerRoomCallout({
   entry,
   floorY,
+  topY,
   level,
   name,
 }: {
   entry: RoomLabelEntry
   floorY: number
+  topY?: number
   level: NonNullable<ReturnType<ViewerSource['objectFor']>>
   name: string
 }) {
   const unit = useViewer((s) => s.unit)
   const locale = useLocale()
-  const anchor = useMemo(() => {
-    const [x, z] = polygonInteriorPoint({ polygon: entry.polygon, holes: entry.holes })
-    return new Vector3(x, floorY + 0.05, z)
-  }, [entry.polygon, entry.holes, floorY])
+  const label = useSectionRoomLabel(
+    entry,
+    floorY,
+    topY ?? floorY + DEFAULT_LEVEL_HEIGHT,
+    floorY + 0.05,
+  )
   const dismiss = useCallback(() => {
     const { selection, setSelection } = useViewer.getState()
     if (selection.zoneId === entry.zoneId) setSelection({ zoneId: null })
   }, [entry.zoneId])
+  if (!label) return null
   return (
     <SelectionCallout
       actions={[]}
-      anchor={anchor}
+      anchor={label.position}
       object={level}
       onDismiss={dismiss}
       subtitle={formatRoomArea(entry.area, unit, locale)}

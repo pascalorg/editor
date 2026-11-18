@@ -9,6 +9,7 @@ export const ductFittingRenderDefinition: NodeRenderDefinition<typeof DuctFittin
   kind: 'duct-fitting'
 } = {
   kind: 'duct-fitting',
+  extensions: { 'pascal:viewer': { family: 'hvac' } },
   schemaVersion: 3,
   schema: DuctFittingNode,
   category: 'utility',

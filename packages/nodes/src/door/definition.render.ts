@@ -14,6 +14,7 @@ import { DoorNode } from './schema'
 
 export const doorRenderDefinition: NodeRenderDefinition<typeof DoorNode> & { kind: 'door' } = {
   kind: 'door',
+  extensions: { 'pascal:viewer': { family: 'openings' } },
   schemaVersion: 2,
   schema: DoorNode,
   category: 'structure',

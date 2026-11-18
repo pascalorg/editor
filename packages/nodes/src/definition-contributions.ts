@@ -3,7 +3,6 @@ import type { AnyNodeDefinition, NodeDefinition } from '@pascal-app/core'
 type NodeSchema = AnyNodeDefinition['schema']
 
 type EditField =
-  | 'extensions'
   | 'facingIndicator'
   | 'drafting'
   | 'connectedMove'
@@ -38,10 +37,10 @@ export type NodeRenderDefinition<S extends NodeSchema> = Omit<
 
 // The only render adapters are editor-state renderer wrappers and preview ceiling cuts.
 export type NodeEditContribution<S extends NodeSchema> = Partial<
-  Pick<NodeDefinition<S>, EditField | 'renderer'>
+  Pick<NodeDefinition<S>, EditField | 'extensions' | 'renderer'>
 > & { capabilities?: Pick<Capabilities<S>, 'paint' | 'ceilingCut'> }
 
-/** Top-level replacement; capabilities merge once. Arrays and functions are replaced. */
+/** Contributions merge by capability and extension key; arrays and functions are replaced. */
 export function composeNodeDefinition<S extends NodeSchema>(
   render: NodeRenderDefinition<S>,
   edit: NodeEditContribution<S>,
@@ -49,6 +48,7 @@ export function composeNodeDefinition<S extends NodeSchema>(
   return {
     ...render,
     ...edit,
+    extensions: { ...render.extensions, ...edit.extensions },
     capabilities: { ...render.capabilities, ...edit.capabilities },
   }
 }

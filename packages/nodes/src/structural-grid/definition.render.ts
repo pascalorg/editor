@@ -6,6 +6,7 @@ export const structuralGridRenderDefinition: NodeRenderDefinition<typeof Structu
   kind: 'structural-grid'
 } = {
   kind: 'structural-grid',
+  extensions: { 'pascal:viewer': { family: null } },
   bake: 'strip',
   schemaVersion: 1,
   schema: StructuralGridNode,

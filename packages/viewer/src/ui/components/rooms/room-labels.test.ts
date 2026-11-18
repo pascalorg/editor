@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test'
-import type { Polygon } from '@pascal-app/core'
+import { DEFAULT_LEVEL_HEIGHT, LevelNode, type Polygon, roomCounts } from '@pascal-app/core'
 import { ZoneNode } from '@pascal-app/core/schema'
-import { Object3D, PerspectiveCamera, Vector3 } from 'three'
+import { Matrix4, Object3D, PerspectiveCamera, Vector3 } from 'three'
 import type { RoomSelectionRecord } from '../../lib/room-selection'
 import {
   candidates3D,
@@ -26,6 +26,7 @@ import {
   roomAt,
   roomLabelEntries,
   roomLabelsVisible,
+  sectionRoomLabel,
   suppressedBy,
 } from './room-labels'
 
@@ -826,3 +827,139 @@ describe("a room's detail", () => {
     expect(suppressedBy(chip, rects)).toEqual(new Set(['under', 'touching']))
   })
 })
+
+test('the room list and count agree on legacy, explicit, outdoor, hidden and invalid zones', () => {
+  const level = LevelNode.parse({})
+  const zones = [
+    ZoneNode.parse({ name: 'Bedroom', polygon: square(0, 0, 4).outer }),
+    ZoneNode.parse({ name: 'Office', spaceRole: 'room', polygon: square(6, 0, 4).outer }),
+    ZoneNode.parse({ name: 'Patio', roomType: 'patio', polygon: square(12, 0, 4).outer }),
+    ZoneNode.parse({ name: 'Hidden', visible: false, polygon: square(18, 0, 4).outer }),
+    ZoneNode.parse({ name: 'Empty', polygon: [] }),
+  ].map((zone) => ({ ...zone, parentId: level.id }))
+  level.children = zones.map((zone) => zone.id)
+  const nodes = Object.fromEntries([level, ...zones].map((node) => [node.id, node]))
+  const listed = roomLabelEntries([], zones)
+  expect(listed).toHaveLength(3)
+  expect(roomCounts({ nodes, rootNodeIds: [level.id] })).toEqual({
+    rooms: listed.length,
+    bedrooms: 1,
+    modelledAreaM2: 32,
+    unclassifiedZones: 1,
+  })
+})
+
+test('room label anchors follow the kept volume on every axis and stay unchanged without a section', () => {
+  const entry: RoomLabelEntry = {
+    zoneId: 'zone_cut',
+    polygon: square(0, 0, 4).outer,
+    holes: [],
+    area: 16,
+  }
+  const world = new Matrix4().makeTranslation(0, 4, 0)
+  const off = {
+    sectionEnabled: false,
+    sectionAxis: 'y' as const,
+    sectionPosition: 5.2,
+    sectionFlipped: false,
+  }
+  const original = sectionRoomLabel(entry, 0, 3, world, off)!
+  const cut = sectionRoomLabel(entry, 0, 3, world, { ...off, sectionEnabled: true })!
+  expect(cut.position.y).toBeCloseTo(1.2)
+  expect(sectionRoomLabel(entry, 2, 5, world, { ...off, sectionEnabled: true })).toBeNull()
+  for (const axis of ['x', 'z'] as const) {
+    const half = sectionRoomLabel(entry, 0, 3, world, {
+      ...off,
+      sectionEnabled: true,
+      sectionAxis: axis,
+      sectionPosition: -1,
+    })!
+    expect(half.position[axis]).toBeLessThanOrEqual(-1)
+    expect(half.polygon.every(([x, z]) => (axis === 'x' ? x : z) <= -1)).toBe(true)
+    expect(
+      sectionRoomLabel(entry, 0, 3, world, {
+        ...off,
+        sectionEnabled: true,
+        sectionAxis: axis,
+        sectionPosition: -3,
+      }),
+    ).toBeNull()
+  }
+  expect(
+    sectionRoomLabel(entry, 0, 3, world, { ...off, sectionEnabled: true, walkthroughMode: true }),
+  ).toEqual(original)
+  expect(original.position.toArray()).toEqual([0, DEFAULT_LEVEL_HEIGHT / 2, 0])
+  const flipped = sectionRoomLabel(entry, 0, 3, world, {
+    ...off,
+    sectionEnabled: true,
+    sectionFlipped: true,
+    sectionPosition: 6,
+  })!
+  expect(flipped.position.y).toBeCloseTo(2)
+  expect(
+    sectionRoomLabel(entry, 0, 3, world, {
+      ...off,
+      sectionEnabled: true,
+      sectionFlipped: true,
+      sectionPosition: 8,
+    }),
+  ).toBeNull()
+})
+
+// Pins detected room entries and counts before this change.
+test.each([
+  [0, 0],
+  [2, 0],
+  [4, 16],
+])(
+  'detected room with %s stored vertices keeps the original list entry and core count',
+  async (vertices, labelArea) => {
+    const { WallNode } = await import('@pascal-app/core')
+    const { RoomSelectionIndex } = await import('../../lib/room-selection')
+    const polygon: [number, number][] = [
+      [0, 0],
+      [4, 0],
+      [4, 4],
+      [0, 4],
+    ]
+    const level = LevelNode.parse({ id: 'level_detected' })
+    const walls = polygon.map((start, i) =>
+      WallNode.parse({
+        id: `wall_detected_${i}`,
+        parentId: level.id,
+        start,
+        end: polygon[(i + 1) % 4],
+      }),
+    )
+    const zone = ZoneNode.parse({
+      id: 'zone_bedroom',
+      name: 'Bedroom',
+      parentId: level.id,
+      spaceRole: 'room',
+      polygon: polygon.slice(0, vertices),
+      boundaryWallIds: walls.map((w) => w.id),
+    })
+    level.children = [...walls.map((w) => w.id), zone.id]
+    const nodes = Object.fromEntries([level, ...walls, zone].map((n) => [n.id, n]))
+    const rooms = new RoomSelectionIndex(level.id).update(nodes)
+    expect(rooms).toHaveLength(1)
+    expect(roomLabelEntries(rooms, [zone])).toEqual([
+      {
+        zoneId: 'zone_bedroom',
+        polygon: [
+          [0, 0],
+          [4, 0],
+          [4, 4],
+          [0, 4],
+        ],
+        holes: [],
+        area: labelArea,
+      },
+    ])
+    expect(roomCounts({ nodes, rootNodeIds: [level.id] })).toMatchObject({
+      rooms: 1,
+      bedrooms: 1,
+      unclassifiedZones: 0,
+    })
+  },
+)

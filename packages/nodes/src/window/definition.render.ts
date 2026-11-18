@@ -36,6 +36,7 @@ export function resolveWindowHandlePortalTarget(
 export const windowRenderDefinition: NodeRenderDefinition<typeof WindowNode> & { kind: 'window' } =
   {
     kind: 'window',
+    extensions: { 'pascal:viewer': { family: 'openings' } },
     schemaVersion: 4,
     schema: WindowNode,
     category: 'structure',

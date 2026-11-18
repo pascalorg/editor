@@ -12,6 +12,7 @@ import { StairNode } from './schema'
 
 export const stairRenderDefinition: NodeRenderDefinition<typeof StairNode> & { kind: 'stair' } = {
   kind: 'stair',
+  extensions: { 'pascal:viewer': { family: 'circulation' } },
   schemaVersion: 2,
   schema: StairNode,
   category: 'structure',

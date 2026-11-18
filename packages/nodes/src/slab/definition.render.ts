@@ -14,6 +14,7 @@ import { SlabNode } from './schema'
 
 export const slabRenderDefinition: NodeRenderDefinition<typeof SlabNode> & { kind: 'slab' } = {
   kind: 'slab',
+  extensions: { 'pascal:viewer': { family: 'floors' } },
   schemaVersion: 1,
   schema: SlabNode,
   category: 'structure',

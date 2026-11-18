@@ -8,6 +8,7 @@ export const pipeTrapRenderDefinition: NodeRenderDefinition<typeof PipeTrapNode>
   kind: 'pipe-trap'
 } = {
   kind: 'pipe-trap',
+  extensions: { 'pascal:viewer': { family: 'plumbing' } },
   schemaVersion: 1,
   schema: PipeTrapNode,
   category: 'utility',

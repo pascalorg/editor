@@ -1427,3 +1427,36 @@ describe('R3F 9.8.2 pointer-event differential', () => {
     )
   })
 })
+
+test('a section removes near hits before object deduplication so the far face receives pointer events', async () => {
+  const { ClippingGroup } = await import('three/webgpu')
+  const { SectionGroup } = await import('../components/viewer/section-group')
+  const f = await fixture(createPascalPointerEvents)
+  const previous = useViewer.getState()
+  cleanups.push(() => useViewer.setState(previous, true))
+  useViewer.setState({
+    sectionEnabled: true,
+    sectionAxis: 'z',
+    sectionPosition: 0,
+    sectionFlipped: false,
+    walkthroughMode: false,
+  })
+  const picked: number[] = []
+  const mesh = f.mesh('two-surfaces', [1, 2], ['onPointerMove'], (_, event) =>
+    picked.push(event.point.z),
+  )
+  // Mount the production scope (it records which objects belong to the model).
+  await act(async () => f.root.render(createElement(SectionGroup, { name: 'cut' })))
+  try {
+    const group = f.state.scene.getObjectByName('cut') as InstanceType<typeof ClippingGroup>
+    group.add(mesh)
+    mesh.raycast = markPureRaycast((_ray, hits) => {
+      for (const z of [1, -1])
+        hits.push({ object: mesh, distance: 10 - z, point: new THREE.Vector3(0, 0, z) })
+    })
+    f.send('onPointerMove')
+    expect(picked).toEqual([-1])
+  } finally {
+    await act(async () => f.root.render(null))
+  }
+})

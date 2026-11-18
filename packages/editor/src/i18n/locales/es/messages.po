@@ -593,12 +593,12 @@ msgstr "Ascensor"
 msgid "app.lib.buildPalette.fence"
 msgstr "Valla"
 
-# English: "Hedge"
 # Source-Hash: 71b0dcd154aa1922
 # Review: required
 # AI-Provider: anthropic
 # AI-Model: claude-opus-5-5
 # Review-Notes: Offline coding-assistant draft in architectural/editor context; no translation-provider call; fluent human review required.
+# English: "Hedge"
 #: apps/editor/lib/build-palette.ts
 #, fuzzy
 msgid "app.lib.buildPalette.hedge"
@@ -654,12 +654,12 @@ msgstr "Línea de líquido"
 msgid "app.lib.buildPalette.mep"
 msgstr "Instalaciones"
 
-# English: "Planting bed"
 # Source-Hash: 985dadd009185cae
 # Review: required
 # AI-Provider: anthropic
 # AI-Model: claude-opus-5-5
 # Review-Notes: Offline coding-assistant draft in architectural/editor context; no translation-provider call; fluent human review required.
+# English: "Planting bed"
 #: apps/editor/lib/build-palette.ts
 #, fuzzy
 msgid "app.lib.buildPalette.planting"
@@ -685,12 +685,12 @@ msgstr "Poste"
 msgid "app.lib.buildPalette.register"
 msgstr "Rejilla"
 
-# English: "Rock"
 # Source-Hash: d2a6d9070a13dcc5
 # Review: required
 # AI-Provider: anthropic
 # AI-Model: claude-opus-5-5
 # Review-Notes: Offline coding-assistant draft in architectural/editor context; no translation-provider call; fluent human review required.
+# English: "Rock"
 #: apps/editor/lib/build-palette.ts
 #, fuzzy
 msgid "app.lib.buildPalette.rock"
@@ -5379,23 +5379,23 @@ msgstr "Girar"
 msgid "editor.helpers.registeredToolHelper.guidedConstraintsBypassed"
 msgstr "Restricciones guiadas omitidas"
 
-# English: "Randomise"
 # Source-Hash: 487ffdc11bd86645
 # Review: required
 # AI-Provider: anthropic
 # AI-Model: claude-opus-5-5
 # Review-Notes: Offline coding-assistant draft in architectural/editor context; no translation-provider call; fluent human review required.
+# English: "Randomise"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
 msgid "editor.inspector.action.randomise.xcy1a1"
 msgstr "Aleatorizar"
 
-# English: "Upgrade to gen 2"
 # Source-Hash: 9530b62bcb182c7c
 # Review: required
 # AI-Provider: anthropic
 # AI-Model: claude-opus-5-5
 # Review-Notes: Offline coding-assistant draft in architectural/editor context; no translation-provider call; fluent human review required.
+# English: "Upgrade to gen 2"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
 msgid "editor.inspector.action.upgradeToGen2.1idvvc0"
@@ -5621,23 +5621,23 @@ msgstr "Altura del casco"
 msgid "editor.inspector.field.cleanoutStyle.127zz6z"
 msgstr "Estilo de registro"
 
-# English: "Clip"
 # Source-Hash: b4b747470daf0cfa
 # Review: required
 # AI-Provider: anthropic
 # AI-Model: claude-opus-5-5
 # Review-Notes: Offline coding-assistant draft in architectural/editor context; no translation-provider call; fluent human review required.
+# English: "Clip"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
 msgid "editor.inspector.field.clip.1mm17ob"
 msgstr "Poda"
 
-# English: "Closed"
 # Source-Hash: f2966b9efcc05104
 # Review: required
 # AI-Provider: anthropic
 # AI-Model: claude-opus-5-5
 # Review-Notes: Offline coding-assistant draft in architectural/editor context; no translation-provider call; fluent human review required.
+# English: "Closed"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
 msgid "editor.inspector.field.closed.dvi7s5"
@@ -5803,12 +5803,12 @@ msgstr "Bordillo"
 msgid "editor.inspector.field.curbHeight.1yn97sg"
 msgstr "Altura del bordillo"
 
-# English: "Curve"
 # Source-Hash: f08fbb462e9afc0e
 # Review: required
 # AI-Provider: anthropic
 # AI-Model: claude-opus-5-5
 # Review-Notes: Offline coding-assistant draft in architectural/editor context; no translation-provider call; fluent human review required.
+# English: "Curve"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
 msgid "editor.inspector.field.curve.ag5fhw"
@@ -6034,12 +6034,12 @@ msgstr "Espera ms"
 msgid "editor.inspector.field.edgeInset.1obeimx"
 msgstr "Retranqueo del borde"
 
-# English: "Edging"
 # Source-Hash: 50d824d68d4d35f6
 # Review: required
 # AI-Provider: anthropic
 # AI-Model: claude-opus-5-5
 # Review-Notes: Offline coding-assistant draft in architectural/editor context; no translation-provider call; fluent human review required.
+# English: "Edging"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
 msgid "editor.inspector.field.edging.azwyfj"
@@ -6135,12 +6135,12 @@ msgstr "Remate"
 msgid "editor.inspector.field.fittingType.18mz17s"
 msgstr "Tipo de accesorio"
 
-# English: "Flashing"
 # Source-Hash: 30677371ae61ba12
 # Review: required
 # AI-Provider: anthropic
 # AI-Model: claude-opus-5-5
 # Review-Notes: Offline coding-assistant draft in architectural/editor context; no translation-provider call; fluent human review required.
+# English: "Flashing"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
 msgid "editor.inspector.field.flashing.1y1nk7r"
@@ -6226,12 +6226,12 @@ msgstr "Separación de conductos"
 msgid "editor.inspector.field.footingStyle.e3btg6"
 msgstr "Estilo de zapata"
 
-# English: "Form"
 # Source-Hash: f5bc6cf3a4df6927
 # Review: required
 # AI-Provider: anthropic
 # AI-Model: claude-opus-5-5
 # Review-Notes: Offline coding-assistant draft in architectural/editor context; no translation-provider call; fluent human review required.
+# English: "Form"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
 msgid "editor.inspector.field.form.1hf0yuf"
@@ -6337,12 +6337,12 @@ msgstr "Separación y"
 msgid "editor.inspector.field.glassThickness.s97b0x"
 msgstr "Espesor del vidrio"
 
-# English: "Ground"
 # Source-Hash: 94cc8e9f1ee16edb
 # Review: required
 # AI-Provider: anthropic
 # AI-Model: claude-opus-5-5
 # Review-Notes: Offline coding-assistant draft in architectural/editor context; no translation-provider call; fluent human review required.
+# English: "Ground"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
 msgid "editor.inspector.field.ground.1qwiu8u"
@@ -6568,23 +6568,23 @@ msgstr "Altura de la linterna"
 msgid "editor.inspector.field.lanternTopScale.hkmpp2"
 msgstr "Escala superior de la linterna"
 
-# English: "Leaf color"
 # Source-Hash: 7464eb69b02c406f
 # Review: required
 # AI-Provider: anthropic
 # AI-Model: claude-opus-5-5
 # Review-Notes: Offline coding-assistant draft in architectural/editor context; no translation-provider call; fluent human review required.
+# English: "Leaf color"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
 msgid "editor.inspector.field.leafColor.103kjmm"
 msgstr "Color de las hojas"
 
-# English: "Leaf size"
 # Source-Hash: 5a8eef541e013b50
 # Review: required
 # AI-Provider: anthropic
 # AI-Model: claude-opus-5-5
 # Review-Notes: Offline coding-assistant draft in architectural/editor context; no translation-provider call; fluent human review required.
+# English: "Leaf size"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
 msgid "editor.inspector.field.leafSize.nq3bxi"
@@ -6650,12 +6650,12 @@ msgstr "Vuelo izquierdo"
 msgid "editor.inspector.field.length.1kpdcfp"
 msgstr "Longitud"
 
-# English: "Lichen"
 # Source-Hash: 8c123ab0fa2a8ec8
 # Review: required
 # AI-Provider: anthropic
 # AI-Model: claude-opus-5-5
 # Review-Notes: Offline coding-assistant draft in architectural/editor context; no translation-provider call; fluent human review required.
+# English: "Lichen"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
 msgid "editor.inspector.field.lichen.1upfxqy"
@@ -6751,12 +6751,12 @@ msgstr "Igualar el material de la cubierta base"
 msgid "editor.inspector.field.matchHostRoofStructure.bojht3"
 msgstr "Igualar la estructura de la cubierta base"
 
-# English: "Moss"
 # Source-Hash: a4803efb5f7bc352
 # Review: required
 # AI-Provider: anthropic
 # AI-Model: claude-opus-5-5
 # Review-Notes: Offline coding-assistant draft in architectural/editor context; no translation-provider call; fluent human review required.
+# English: "Moss"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
 msgid "editor.inspector.field.moss.puxfub"
@@ -6882,12 +6882,12 @@ msgstr "Altura del panel"
 msgid "editor.inspector.field.panelWidth.946581"
 msgstr "Ancho del panel"
 
-# English: "Pattern"
 # Source-Hash: b403a5a26744f5ec
 # Review: required
 # AI-Provider: anthropic
 # AI-Model: claude-opus-5-5
 # Review-Notes: Offline coding-assistant draft in architectural/editor context; no translation-provider call; fluent human review required.
+# English: "Pattern"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
 msgid "editor.inspector.field.pattern.1vuws7d"
@@ -7323,12 +7323,12 @@ msgstr "Condición del extremo derecho"
 msgid "editor.inspector.field.rightOverhang.yqbeft"
 msgstr "Vuelo derecho"
 
-# English: "Rock type"
 # Source-Hash: a846ba4090dfffe5
 # Review: required
 # AI-Provider: anthropic
 # AI-Model: claude-opus-5-5
 # Review-Notes: Offline coding-assistant draft in architectural/editor context; no translation-provider call; fluent human review required.
+# English: "Rock type"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
 msgid "editor.inspector.field.rockType.f2wywk"
@@ -7414,12 +7414,12 @@ msgstr "Escala"
 msgid "editor.inspector.field.seamDetail.197za48"
 msgstr "Detalle de junta"
 
-# English: "Seed"
 # Source-Hash: c5defa463b46241a
 # Review: required
 # AI-Provider: anthropic
 # AI-Model: claude-opus-5-5
 # Review-Notes: Offline coding-assistant draft in architectural/editor context; no translation-provider call; fluent human review required.
+# English: "Seed"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
 msgid "editor.inspector.field.seed.1lu3q30"
@@ -7715,12 +7715,12 @@ msgstr "Separación de flejes"
 msgid "editor.inspector.field.strapStyle.fh1oy4"
 msgstr "Estilo de fleje"
 
-# English: "Strata"
 # Source-Hash: 239649a4e86e91b8
 # Review: required
 # AI-Provider: anthropic
 # AI-Model: claude-opus-5-5
 # Review-Notes: Offline coding-assistant draft in architectural/editor context; no translation-provider call; fluent human review required.
+# English: "Strata"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
 msgid "editor.inspector.field.strata.35dly4"
@@ -7966,12 +7966,12 @@ msgstr "Altura del zócalo"
 msgid "editor.inspector.field.wallThickness.17wn4iv"
 msgstr "Espesor del muro"
 
-# English: "Weathering"
 # Source-Hash: ba6dea89d42791a8
 # Review: required
 # AI-Provider: anthropic
 # AI-Model: claude-opus-5-5
 # Review-Notes: Offline coding-assistant draft in architectural/editor context; no translation-provider call; fluent human review required.
+# English: "Weathering"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
 msgid "editor.inspector.field.weathering.xdn5ut"
@@ -8277,12 +8277,12 @@ msgstr "Accesorio"
 msgid "editor.inspector.group.flues.nq6pye"
 msgstr "Conductos"
 
-# English: "Foliage"
 # Source-Hash: d04366bc15791583
 # Review: required
 # AI-Provider: anthropic
 # AI-Model: claude-opus-5-5
 # Review-Notes: Offline coding-assistant draft in architectural/editor context; no translation-provider call; fluent human review required.
+# English: "Foliage"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
 msgid "editor.inspector.group.foliage.166kiw8"
@@ -8328,12 +8328,12 @@ msgstr "Geometría"
 msgid "editor.inspector.group.grid.d8gwxd"
 msgstr "Cuadrícula"
 
-# English: "Ground"
 # Source-Hash: 94cc8e9f1ee16edb
 # Review: required
 # AI-Provider: anthropic
 # AI-Model: claude-opus-5-5
 # Review-Notes: Offline coding-assistant draft in architectural/editor context; no translation-provider call; fluent human review required.
+# English: "Ground"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
 msgid "editor.inspector.group.ground.1qwiu8u"
@@ -8389,12 +8389,12 @@ msgstr "Aislamiento"
 msgid "editor.inspector.group.lantern.1h7o2xb"
 msgstr "Linterna"
 
-# English: "Layout"
 # Source-Hash: 54800340a0eeab23
 # Review: required
 # AI-Provider: anthropic
 # AI-Model: claude-opus-5-5
 # Review-Notes: Offline coding-assistant draft in architectural/editor context; no translation-provider call; fluent human review required.
+# English: "Layout"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
 msgid "editor.inspector.group.layout.1woj3tr"
@@ -8580,12 +8580,12 @@ msgstr "Hombro"
 msgid "editor.inspector.group.size.1a4x3zw"
 msgstr "Tamaño"
 
-# English: "Stone"
 # Source-Hash: 44c6466e6907a0b4
 # Review: required
 # AI-Provider: anthropic
 # AI-Model: claude-opus-5-5
 # Review-Notes: Offline coding-assistant draft in architectural/editor context; no translation-provider call; fluent human review required.
+# English: "Stone"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
 msgid "editor.inspector.group.stone.uh2n4q"
@@ -8831,12 +8831,12 @@ msgstr "Ambos"
 msgid "editor.inspector.option.bottom.9mpruy"
 msgstr "Inferior"
 
-# English: "Boulder"
 # Source-Hash: 15c385e6ebeecb00
 # Review: required
 # AI-Provider: anthropic
 # AI-Model: claude-opus-5-5
 # Review-Notes: Offline coding-assistant draft in architectural/editor context; no translation-provider call; fluent human review required.
+# English: "Boulder"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
 msgid "editor.inspector.option.boulder.lm7olu"
@@ -9100,12 +9100,12 @@ msgstr "Cúpula"
 msgid "editor.inspector.option.double.13h5354"
 msgstr "Doble"
 
-# English: "Drifts"
 # Source-Hash: 7bdd81d8d5a2c769
 # Review: required
 # AI-Provider: anthropic
 # AI-Model: claude-opus-5-5
 # Review-Notes: Offline coding-assistant draft in architectural/editor context; no translation-provider call; fluent human review required.
+# English: "Drifts"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
 msgid "editor.inspector.option.drifts.17eavp"
@@ -9171,12 +9171,12 @@ msgstr "Tapa final"
 msgid "editor.inspector.option.equalFit.11vw52c"
 msgstr "Ajuste igual"
 
-# English: "Faceted"
 # Source-Hash: c63bf1154bb7909f
 # Review: required
 # AI-Provider: anthropic
 # AI-Model: claude-opus-5-5
 # Review-Notes: Offline coding-assistant draft in architectural/editor context; no translation-provider call; fluent human review required.
+# English: "Faceted"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
 msgid "editor.inspector.option.faceted.1r5ovix"
@@ -9202,12 +9202,12 @@ msgstr "Cantidad fija"
 msgid "editor.inspector.option.fixedSpacing.hl4dr4"
 msgstr "Separación fija"
 
-# English: "Fjord"
 # Source-Hash: fdc5a4f6a14e8005
 # Review: required
 # AI-Provider: anthropic
 # AI-Model: claude-opus-5-5
 # Review-Notes: Offline coding-assistant draft in architectural/editor context; no translation-provider call; fluent human review required.
+# English: "Fjord"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
 msgid "editor.inspector.option.fjord.6kqv8s"
@@ -9343,12 +9343,12 @@ msgstr "Marco de vidrio"
 msgid "editor.inspector.option.globe.1avkqoy"
 msgstr "Globo"
 
-# English: "Granite"
 # Source-Hash: d0fca28cc77d1c8d
 # Review: required
 # AI-Provider: anthropic
 # AI-Model: claude-opus-5-5
 # Review-Notes: Offline coding-assistant draft in architectural/editor context; no translation-provider call; fluent human review required.
+# English: "Granite"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
 msgid "editor.inspector.option.granite.18t7615"
@@ -9624,12 +9624,12 @@ msgstr "Panel metálico"
 msgid "editor.inspector.option.minimal.fwmiwg"
 msgstr "Mínimo"
 
-# English: "Mixed"
 # Source-Hash: 37d9f63758abdb67
 # Review: required
 # AI-Provider: anthropic
 # AI-Model: claude-opus-5-5
 # Review-Notes: Offline coding-assistant draft in architectural/editor context; no translation-provider call; fluent human review required.
+# English: "Mixed"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
 msgid "editor.inspector.option.mixed.1fii6jc"
@@ -9645,12 +9645,12 @@ msgstr "Mixto"
 msgid "editor.inspector.option.mono.oszvd6"
 msgstr "Una vertiente"
 
-# English: "Mulch"
 # Source-Hash: 613a92669ddd77da
 # Review: required
 # AI-Provider: anthropic
 # AI-Model: claude-opus-5-5
 # Review-Notes: Offline coding-assistant draft in architectural/editor context; no translation-provider call; fluent human review required.
+# English: "Mulch"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
 msgid "editor.inspector.option.mulch.1xqhdoq"
@@ -9896,12 +9896,12 @@ msgstr "Rejilla de retorno"
 msgid "editor.inspector.option.right.8humpx"
 msgstr "Derecha"
 
-# English: "River"
 # Source-Hash: 9b114eb978f015f3
 # Review: required
 # AI-Provider: anthropic
 # AI-Model: claude-opus-5-5
 # Review-Notes: Offline coding-assistant draft in architectural/editor context; no translation-provider call; fluent human review required.
+# English: "River"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
 msgid "editor.inspector.option.river.1u771dd"
@@ -9927,12 +9927,12 @@ msgstr "Redondo"
 msgid "editor.inspector.option.rounded.199nwpm"
 msgstr "Redondeado"
 
-# English: "Rows"
 # Source-Hash: c913b494c3901a17
 # Review: required
 # AI-Provider: anthropic
 # AI-Model: claude-opus-5-5
 # Review-Notes: Offline coding-assistant draft in architectural/editor context; no translation-provider call; fluent human review required.
+# English: "Rows"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
 msgid "editor.inspector.option.rows.1ba1neg"
@@ -10108,12 +10108,12 @@ msgstr "Pendiente"
 msgid "editor.inspector.option.sloped.lo4sh0"
 msgstr "Inclinado"
 
-# English: "Soil"
 # Source-Hash: fa3774de133240ba
 # Review: required
 # AI-Provider: anthropic
 # AI-Model: claude-opus-5-5
 # Review-Notes: Offline coding-assistant draft in architectural/editor context; no translation-provider call; fluent human review required.
+# English: "Soil"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
 msgid "editor.inspector.option.soil.12gbeoy"
@@ -10179,12 +10179,12 @@ msgstr "Separación"
 msgid "editor.inspector.option.square.1xl1lk6"
 msgstr "Cuadrado"
 
-# English: "Stacked"
 # Source-Hash: c203c84eee18c0f6
 # Review: required
 # AI-Provider: anthropic
 # AI-Model: claude-opus-5-5
 # Review-Notes: Offline coding-assistant draft in architectural/editor context; no translation-provider call; fluent human review required.
+# English: "Stacked"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
 msgid "editor.inspector.option.stacked.13qbfby"
@@ -10220,12 +10220,12 @@ msgstr "Estándar"
 msgid "editor.inspector.option.start.30xvgf"
 msgstr "Inicio"
 
-# English: "Steel"
 # Source-Hash: 5ff84f36f12a9a30
 # Review: required
 # AI-Provider: anthropic
 # AI-Model: claude-opus-5-5
 # Review-Notes: Offline coding-assistant draft in architectural/editor context; no translation-provider call; fluent human review required.
+# English: "Steel"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
 msgid "editor.inspector.option.steel.1ea4gpw"
@@ -10251,23 +10251,23 @@ msgstr "Escalonado"
 msgid "editor.inspector.option.stepped.naxzh0"
 msgstr "Escalonado"
 
-# English: "Stepping"
 # Source-Hash: be7f62fe8db75b55
 # Review: required
 # AI-Provider: anthropic
 # AI-Model: claude-opus-5-5
 # Review-Notes: Offline coding-assistant draft in architectural/editor context; no translation-provider call; fluent human review required.
+# English: "Stepping"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
 msgid "editor.inspector.option.stepping.606bwz"
 msgstr "Pasaderas"
 
-# English: "Stone"
 # Source-Hash: 44c6466e6907a0b4
 # Review: required
 # AI-Provider: anthropic
 # AI-Model: claude-opus-5-5
 # Review-Notes: Offline coding-assistant draft in architectural/editor context; no translation-provider call; fluent human review required.
+# English: "Stone"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
 msgid "editor.inspector.option.stone.uh2n4q"
@@ -10383,12 +10383,12 @@ msgstr "Transición"
 msgid "editor.inspector.option.vent.xda5j2"
 msgstr "Ventilación"
 
-# English: "Volcanic"
 # Source-Hash: 85f03965690cbb06
 # Review: required
 # AI-Provider: anthropic
 # AI-Model: claude-opus-5-5
 # Review-Notes: Offline coding-assistant draft in architectural/editor context; no translation-provider call; fluent human review required.
+# English: "Volcanic"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
 msgid "editor.inspector.option.volcanic.yuogew"
@@ -10454,12 +10454,12 @@ msgstr "Estante de pared"
 msgid "editor.inspector.option.waste.3xrp79"
 msgstr "Desagüe"
 
-# English: "Weathered"
 # Source-Hash: dde80d93c36805ce
 # Review: required
 # AI-Provider: anthropic
 # AI-Model: claude-opus-5-5
 # Review-Notes: Offline coding-assistant draft in architectural/editor context; no translation-provider call; fluent human review required.
+# English: "Weathered"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
 msgid "editor.inspector.option.weathered.1rrqhyq"
@@ -16645,23 +16645,23 @@ msgstr "Un muro curvo no admite ventana de esquina"
 msgid "editor.toolHint.addACornerClickTheFirst.o4r67t"
 msgstr "Añadir esquina · haz clic en la primera para cerrar"
 
-# English: "Add an outline point"
 # Source-Hash: aedcabbf1af8324a
 # Review: required
 # AI-Provider: anthropic
 # AI-Model: claude-opus-5-5
 # Review-Notes: Offline coding-assistant draft in architectural/editor context; no translation-provider call; fluent human review required.
+# English: "Add an outline point"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
 msgid "editor.toolHint.addAnOutlinePoint.18dq97f"
 msgstr "Añadir un punto del contorno"
 
-# English: "Add a point of the hedge"
 # Source-Hash: dce8675337efc35e
 # Review: required
 # AI-Provider: anthropic
 # AI-Model: claude-opus-5-5
 # Review-Notes: Offline coding-assistant draft in architectural/editor context; no translation-provider call; fluent human review required.
+# English: "Add a point of the hedge"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
 msgid "editor.toolHint.addAPointOfTheHedge.xrlpu0"
@@ -17367,12 +17367,12 @@ msgstr "Diámetro de tubería menos / más"
 msgid "editor.toolHint.placeAndContinue.qfwkrq"
 msgstr "Colocar y continuar"
 
-# English: "Place a rock"
 # Source-Hash: c0a68121e629d5ad
 # Review: required
 # AI-Provider: anthropic
 # AI-Model: claude-opus-5-5
 # Review-Notes: Offline coding-assistant draft in architectural/editor context; no translation-provider call; fluent human review required.
+# English: "Place a rock"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
 msgid "editor.toolHint.placeARock.ip784s"
@@ -17748,23 +17748,23 @@ msgstr "Colocar ventana en el muro"
 msgid "editor.toolHint.placeWithoutTheCornerSnap.1nifqew"
 msgstr "Colocar sin el ajuste a la esquina"
 
-# English: "Plant it"
 # Source-Hash: 57f8f1538625f81c
 # Review: required
 # AI-Provider: anthropic
 # AI-Model: claude-opus-5-5
 # Review-Notes: Offline coding-assistant draft in architectural/editor context; no translation-provider call; fluent human review required.
+# English: "Plant it"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
 msgid "editor.toolHint.plantIt.cwzva3"
 msgstr "Plantarlo"
 
-# English: "Plant the bed"
 # Source-Hash: dccce8abb5f13451
 # Review: required
 # AI-Provider: anthropic
 # AI-Model: claude-opus-5-5
 # Review-Notes: Offline coding-assistant draft in architectural/editor context; no translation-provider call; fluent human review required.
+# English: "Plant the bed"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
 msgid "editor.toolHint.plantTheBed.r4x8fy"
@@ -18270,12 +18270,12 @@ msgstr "Estilo: cuadrícula ancha"
 msgid "editor.toolHint.switchRotationAxisYXZ.15lohm6"
 msgstr "Cambiar el eje de giro (Y → X → Z)"
 
-# English: "Take the last point back"
 # Source-Hash: c701017a3c204f10
 # Review: required
 # AI-Provider: anthropic
 # AI-Model: claude-opus-5-5
 # Review-Notes: Offline coding-assistant draft in architectural/editor context; no translation-provider call; fluent human review required.
+# English: "Take the last point back"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
 msgid "editor.toolHint.takeTheLastPointBack.1bfgd5k"
@@ -28336,23 +28336,23 @@ msgstr "Quitar bajante"
 msgid "node.gutter.label"
 msgstr "Canalón"
 
-# English: "A planted hedge along a line, freshly clipped or left to grow."
 # Source-Hash: 46367a7a5f34ea3f
 # Review: required
 # AI-Provider: anthropic
 # AI-Model: claude-opus-5-5
 # Review-Notes: Offline coding-assistant draft in architectural/editor context; no translation-provider call; fluent human review required.
+# English: "A planted hedge along a line, freshly clipped or left to grow."
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
 msgid "node.hedge.description"
 msgstr "Un seto plantado a lo largo de una línea, recién podado o dejado crecer."
 
-# English: "Hedge"
 # Source-Hash: 71b0dcd154aa1922
 # Review: required
 # AI-Provider: anthropic
 # AI-Model: claude-opus-5-5
 # Review-Notes: Offline coding-assistant draft in architectural/editor context; no translation-provider call; fluent human review required.
+# English: "Hedge"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
 msgid "node.hedge.label"
@@ -29445,287 +29445,287 @@ msgstr "Sifón de {diameter}\""
 msgid "node.pipeTrap.tool.rTRotate"
 msgstr "R/T girar"
 
-# English: "Area"
 # Source-Hash: 8332ab41e22958f1
 # Review: required
 # AI-Provider: anthropic
 # AI-Model: claude-opus-5-5
 # Review-Notes: Offline coding-assistant draft in architectural/editor context; no translation-provider call; fluent human review required.
+# English: "Area"
 #: packages/nodes/src/planting/area-control.tsx
 #, fuzzy
 msgid "node.planting.area.label"
 msgstr "Superficie"
 
-# English: "This area would put the outline outside the supported Site bounds."
 # Source-Hash: 2eb202d82486a2ea
 # Review: required
 # AI-Provider: anthropic
 # AI-Model: claude-opus-5-5
 # Review-Notes: Offline coding-assistant draft in architectural/editor context; no translation-provider call; fluent human review required.
+# English: "This area would put the outline outside the supported Site bounds."
 #: packages/nodes/src/planting/area-control.tsx
 #, fuzzy
 msgid "node.planting.area.outsideSite"
 msgstr "Esta superficie situaría el contorno fuera de los límites admitidos del terreno."
 
-# English: "An organic bed of layered plants, with soil or mulch and optional edging."
 # Source-Hash: 3ffcba4a89842257
 # Review: required
 # AI-Provider: anthropic
 # AI-Model: claude-opus-5-5
 # Review-Notes: Offline coding-assistant draft in architectural/editor context; no translation-provider call; fluent human review required.
+# English: "An organic bed of layered plants, with soil or mulch and optional edging."
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
 msgid "node.planting.description"
 msgstr "Un parterre orgánico de plantas escalonadas, con tierra o acolchado y borde opcional."
 
-# English: "Planting bed"
 # Source-Hash: 985dadd009185cae
 # Review: required
 # AI-Provider: anthropic
 # AI-Model: claude-opus-5-5
 # Review-Notes: Offline coding-assistant draft in architectural/editor context; no translation-provider call; fluent human review required.
+# English: "Planting bed"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
 msgid "node.planting.label"
 msgstr "Parterre"
 
-# English: "Add plant"
 # Source-Hash: 4d58f6ce90b44de9
 # Review: required
 # AI-Provider: anthropic
 # AI-Model: claude-opus-5-5
 # Review-Notes: Offline coding-assistant draft in architectural/editor context; no translation-provider call; fluent human review required.
+# English: "Add plant"
 #: packages/nodes/src/planting/plants-panel.tsx
 #, fuzzy
 msgid "node.planting.plants.add"
 msgstr "Añadir planta"
 
-# English: "Flower colour"
 # Source-Hash: 89ee78a6996a1560
 # Review: required
 # AI-Provider: anthropic
 # AI-Model: claude-opus-5-5
 # Review-Notes: Offline coding-assistant draft in architectural/editor context; no translation-provider call; fluent human review required.
+# English: "Flower colour"
 #: packages/nodes/src/planting/plants-panel.tsx
 #, fuzzy
 msgid "node.planting.plants.flowerColour"
 msgstr "Color de las flores"
 
-# English: "Flowers"
 # Source-Hash: df1490f97b2a8ed3
 # Review: required
 # AI-Provider: anthropic
 # AI-Model: claude-opus-5-5
 # Review-Notes: Offline coding-assistant draft in architectural/editor context; no translation-provider call; fluent human review required.
+# English: "Flowers"
 #: packages/nodes/src/planting/plants-panel.tsx
 #, fuzzy
 msgid "node.planting.plants.flowers"
 msgstr "Flores"
 
-# English: "Habit"
 # Source-Hash: a812fbea83a50111
 # Review: required
 # AI-Provider: anthropic
 # AI-Model: claude-opus-5-5
 # Review-Notes: Offline coding-assistant draft in architectural/editor context; no translation-provider call; fluent human review required.
+# English: "Habit"
 #: packages/nodes/src/planting/plants-panel.tsx
 #, fuzzy
 msgid "node.planting.plants.habit"
 msgstr "Porte"
 
-# English: "Ball"
 # Source-Hash: 5a0034bbb698f3cf
 # Review: required
 # AI-Provider: anthropic
 # AI-Model: claude-opus-5-5
 # Review-Notes: Offline coding-assistant draft in architectural/editor context; no translation-provider call; fluent human review required.
+# English: "Ball"
 #: packages/nodes/src/planting/plants-panel.tsx
 #, fuzzy
 msgid "node.planting.plants.habit.ball"
 msgstr "Bola"
 
-# English: "Carpet"
 # Source-Hash: e653669adc447902
 # Review: required
 # AI-Provider: anthropic
 # AI-Model: claude-opus-5-5
 # Review-Notes: Offline coding-assistant draft in architectural/editor context; no translation-provider call; fluent human review required.
+# English: "Carpet"
 #: packages/nodes/src/planting/plants-panel.tsx
 #, fuzzy
 msgid "node.planting.plants.habit.carpet"
 msgstr "Tapiz"
 
-# English: "Mound"
 # Source-Hash: 7f6812f905ca4912
 # Review: required
 # AI-Provider: anthropic
 # AI-Model: claude-opus-5-5
 # Review-Notes: Offline coding-assistant draft in architectural/editor context; no translation-provider call; fluent human review required.
+# English: "Mound"
 #: packages/nodes/src/planting/plants-panel.tsx
 #, fuzzy
 msgid "node.planting.plants.habit.mound"
 msgstr "Montículo"
 
-# English: "Spike"
 # Source-Hash: da5fad5e1ca95cc0
 # Review: required
 # AI-Provider: anthropic
 # AI-Model: claude-opus-5-5
 # Review-Notes: Offline coding-assistant draft in architectural/editor context; no translation-provider call; fluent human review required.
+# English: "Spike"
 #: packages/nodes/src/planting/plants-panel.tsx
 #, fuzzy
 msgid "node.planting.plants.habit.spike"
 msgstr "Espiga"
 
-# English: "Tuft"
 # Source-Hash: f1513585eb49da6c
 # Review: required
 # AI-Provider: anthropic
 # AI-Model: claude-opus-5-5
 # Review-Notes: Offline coding-assistant draft in architectural/editor context; no translation-provider call; fluent human review required.
+# English: "Tuft"
 #: packages/nodes/src/planting/plants-panel.tsx
 #, fuzzy
 msgid "node.planting.plants.habit.tuft"
 msgstr "Mata"
 
-# English: "Height"
 # Source-Hash: 646ef0fbcbc58edf
 # Review: required
 # AI-Provider: anthropic
 # AI-Model: claude-opus-5-5
 # Review-Notes: Offline coding-assistant draft in architectural/editor context; no translation-provider call; fluent human review required.
+# English: "Height"
 #: packages/nodes/src/planting/plants-panel.tsx
 #, fuzzy
 msgid "node.planting.plants.height"
 msgstr "Altura"
 
-# English: "One to eight plant types. Back is away from the seen side (+Z); edge is nearest it. Spread is the mature width; spacing and relative share control the mix."
 # Source-Hash: 3a1d9a5d3f1a9f45
 # Review: required
 # AI-Provider: anthropic
 # AI-Model: claude-opus-5-5
 # Review-Notes: Offline coding-assistant draft in architectural/editor context; no translation-provider call; fluent human review required.
+# English: "One to eight plant types. Back is away from the seen side (+Z); edge is nearest it. Spread is the mature width; spacing and relative share control the mix."
 #: packages/nodes/src/planting/plants-panel.tsx
 #, fuzzy
 msgid "node.planting.plants.help"
 msgstr "De uno a ocho tipos de plantas. El fondo está en el lado opuesto al visto (+Z); el borde es el más cercano. La extensión es el ancho adulto; el espaciado y la proporción relativa controlan la mezcla."
 
-# English: "Layer"
 # Source-Hash: d7ee1cefa20d0e32
 # Review: required
 # AI-Provider: anthropic
 # AI-Model: claude-opus-5-5
 # Review-Notes: Offline coding-assistant draft in architectural/editor context; no translation-provider call; fluent human review required.
+# English: "Layer"
 #: packages/nodes/src/planting/plants-panel.tsx
 #, fuzzy
 msgid "node.planting.plants.layer"
 msgstr "Estrato"
 
-# English: "Back"
 # Source-Hash: 7ceade8f25b58fe9
 # Review: required
 # AI-Provider: anthropic
 # AI-Model: claude-opus-5-5
 # Review-Notes: Offline coding-assistant draft in architectural/editor context; no translation-provider call; fluent human review required.
+# English: "Back"
 #: packages/nodes/src/planting/plants-panel.tsx
 #, fuzzy
 msgid "node.planting.plants.layer.back"
 msgstr "Fondo"
 
-# English: "Edge"
 # Source-Hash: fd827b3002a47b84
 # Review: required
 # AI-Provider: anthropic
 # AI-Model: claude-opus-5-5
 # Review-Notes: Offline coding-assistant draft in architectural/editor context; no translation-provider call; fluent human review required.
+# English: "Edge"
 #: packages/nodes/src/planting/plants-panel.tsx
 #, fuzzy
 msgid "node.planting.plants.layer.edge"
 msgstr "Borde"
 
-# English: "Middle"
 # Source-Hash: 23f876845c5fdc93
 # Review: required
 # AI-Provider: anthropic
 # AI-Model: claude-opus-5-5
 # Review-Notes: Offline coding-assistant draft in architectural/editor context; no translation-provider call; fluent human review required.
+# English: "Middle"
 #: packages/nodes/src/planting/plants-panel.tsx
 #, fuzzy
 msgid "node.planting.plants.layer.mid"
 msgstr "Medio"
 
-# English: "Leaf colour"
 # Source-Hash: b516cb2c57c17a82
 # Review: required
 # AI-Provider: anthropic
 # AI-Model: claude-opus-5-5
 # Review-Notes: Offline coding-assistant draft in architectural/editor context; no translation-provider call; fluent human review required.
+# English: "Leaf colour"
 #: packages/nodes/src/planting/plants-panel.tsx
 #, fuzzy
 msgid "node.planting.plants.leafColour"
 msgstr "Color de las hojas"
 
-# English: "Plant {number}"
 # Source-Hash: e29c1c7319695de8
 # Review: required
 # AI-Provider: anthropic
 # AI-Model: claude-opus-5-5
 # Review-Notes: Offline coding-assistant draft in architectural/editor context; no translation-provider call; fluent human review required.
+# English: "Plant {number}"
 #: packages/nodes/src/planting/plants-panel.tsx
 #, fuzzy
 msgid "node.planting.plants.plant"
 msgstr "Planta {number}"
 
-# English: "Remove plant"
 # Source-Hash: cba96f4ea5bb84e6
 # Review: required
 # AI-Provider: anthropic
 # AI-Model: claude-opus-5-5
 # Review-Notes: Offline coding-assistant draft in architectural/editor context; no translation-provider call; fluent human review required.
+# English: "Remove plant"
 #: packages/nodes/src/planting/plants-panel.tsx
 #, fuzzy
 msgid "node.planting.plants.remove"
 msgstr "Quitar planta"
 
-# English: "Relative share"
 # Source-Hash: e3f4676ea89ca3a3
 # Review: required
 # AI-Provider: anthropic
 # AI-Model: claude-opus-5-5
 # Review-Notes: Offline coding-assistant draft in architectural/editor context; no translation-provider call; fluent human review required.
+# English: "Relative share"
 #: packages/nodes/src/planting/plants-panel.tsx
 #, fuzzy
 msgid "node.planting.plants.share"
 msgstr "Proporción relativa"
 
-# English: "Spacing"
 # Source-Hash: e4698e83d02beb6c
 # Review: required
 # AI-Provider: anthropic
 # AI-Model: claude-opus-5-5
 # Review-Notes: Offline coding-assistant draft in architectural/editor context; no translation-provider call; fluent human review required.
+# English: "Spacing"
 #: packages/nodes/src/planting/plants-panel.tsx
 #, fuzzy
 msgid "node.planting.plants.spacing"
 msgstr "Espaciado"
 
-# English: "Spread"
 # Source-Hash: 324677a79ab15e22
 # Review: required
 # AI-Provider: anthropic
 # AI-Model: claude-opus-5-5
 # Review-Notes: Offline coding-assistant draft in architectural/editor context; no translation-provider call; fluent human review required.
+# English: "Spread"
 #: packages/nodes/src/planting/plants-panel.tsx
 #, fuzzy
 msgid "node.planting.plants.spread"
 msgstr "Extensión"
 
-# English: "Plants"
 # Source-Hash: 687b54aac7170f4b
 # Review: required
 # AI-Provider: anthropic
 # AI-Model: claude-opus-5-5
 # Review-Notes: Offline coding-assistant draft in architectural/editor context; no translation-provider call; fluent human review required.
+# English: "Plants"
 #: packages/nodes/src/planting/plants-panel.tsx
 #, fuzzy
 msgid "node.planting.plants.title"
@@ -29941,67 +29941,67 @@ msgstr "Estilo"
 msgid "node.ridgeVent.panel.width"
 msgstr "Ancho"
 
-# English: "A boulder or outcrop on the ground that can rise through floors."
 # Source-Hash: 0df24275817d421b
 # Review: required
 # AI-Provider: anthropic
 # AI-Model: claude-opus-5-5
 # Review-Notes: Offline coding-assistant draft in architectural/editor context; no translation-provider call; fluent human review required.
+# English: "A boulder or outcrop on the ground that can rise through floors."
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
 msgid "node.rock.description"
 msgstr "Un canto rodado o afloramiento sobre el suelo que puede atravesar los forjados."
 
-# English: "Generator 2 · Rock type, weathering and moss are available."
 # Source-Hash: 75d900d1de222798
 # Review: required
 # AI-Provider: anthropic
 # AI-Model: claude-opus-5-5
 # Review-Notes: Offline coding-assistant draft in architectural/editor context; no translation-provider call; fluent human review required.
+# English: "Generator 2 · Rock type, weathering and moss are available."
 #: packages/nodes/src/rock/generation-field.tsx
 #, fuzzy
 msgid "node.rock.generation.current"
 msgstr "Generación 2 · Tipo de roca, erosión y musgo disponibles."
 
-# English: "Generator 1 · Legacy look. Upgrade to generator 2 to choose a rock type, weathering and moss. Upgrading changes the shape and stone finish, including any slab holes."
 # Source-Hash: 1dbee84a0ce15a99
 # Review: required
 # AI-Provider: anthropic
 # AI-Model: claude-opus-5-5
 # Review-Notes: Offline coding-assistant draft in architectural/editor context; no translation-provider call; fluent human review required.
+# English: "Generator 1 · Legacy look. Upgrade to generator 2 to choose a rock type, weathering and moss. Upgrading changes the shape and stone finish, including any slab holes."
 #: packages/nodes/src/rock/generation-field.tsx
 #, fuzzy
 msgid "node.rock.generation.legacy"
 msgstr "Generación 1 · Aspecto heredado. Actualiza a la generación 2 para elegir tipo de roca, erosión y musgo. La actualización cambia la forma y el acabado de la piedra, incluidos los huecos en las losas."
 
-# English: "Randomise changes only the seed, keeping the type and looks."
 # Source-Hash: 8357f83b94425cfc
 # Review: required
 # AI-Provider: anthropic
 # AI-Model: claude-opus-5-5
 # Review-Notes: Offline coding-assistant draft in architectural/editor context; no translation-provider call; fluent human review required.
+# English: "Randomise changes only the seed, keeping the type and looks."
 #: packages/nodes/src/rock/generation-field.tsx
 #, fuzzy
 msgid "node.rock.generation.randomise"
 msgstr "Aleatorizar solo cambia la semilla y conserva el tipo y el aspecto."
 
-# English: "Upgrade unavailable: {problem}"
 # Source-Hash: 7bb1fd2a39453c2b
 # Review: required
 # AI-Provider: anthropic
 # AI-Model: claude-opus-5-5
 # Review-Notes: Offline coding-assistant draft in architectural/editor context; no translation-provider call; fluent human review required.
+# English: "Upgrade unavailable: {problem}"
 #: packages/nodes/src/rock/generation-field.tsx
 #, fuzzy
 msgid "node.rock.generation.upgradeUnavailable"
 msgstr "Actualización no disponible: {problem}"
 
-# English: "Rock"
 # Source-Hash: d2a6d9070a13dcc5
 # Review: required
 # AI-Provider: anthropic
 # AI-Model: claude-opus-5-5
 # Review-Notes: Offline coding-assistant draft in architectural/editor context; no translation-provider call; fluent human review required.
+# English: "Rock"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
 msgid "node.rock.label"
@@ -40302,6 +40302,15 @@ msgstr "Cielo"
 msgid "viewer.daylight.time.blue"
 msgstr "Hora azul"
 
+# Source-Hash: bbe32d215ec26c48
+# Review: required
+# English: "Dawn"
+#: packages/viewer/src/ui/components/render-settings-menu.tsx
+#: packages/viewer/src/ui/components/sky-control.tsx
+#, fuzzy
+msgid "viewer.daylight.time.dawn"
+msgstr "Amanecer"
+
 # Source-Hash: cbeb868b31e2efcb
 # Review: required
 # AI-Provider: claude-code
@@ -40730,9 +40739,50 @@ msgstr "Recorrido: {state}"
 # English: "Shutters"
 #: packages/viewer/src/components/viewer/glb-scene.tsx
 #: packages/viewer/src/systems/interactive/callout-actions.ts
+#: packages/viewer/src/ui/components/walkthrough-touch-controls.tsx
 #, fuzzy
 msgid "viewer.walkthrough.shutters"
 msgstr "Contraventanas"
+
+# Source-Hash: d7cf5045c01b2eb9
+# Review: required
+# English: "Close"
+#: packages/viewer/src/ui/components/walkthrough-touch-controls.tsx
+#, fuzzy
+msgid "viewer.walkthroughTouch.close"
+msgstr "Cerrar"
+
+# Source-Hash: f6bb8786828d83ab
+# Review: required
+# English: "Crouch"
+#: packages/viewer/src/ui/components/walkthrough-touch-controls.tsx
+#, fuzzy
+msgid "viewer.walkthroughTouch.crouch"
+msgstr "Agacharse"
+
+# Source-Hash: 938aacb119b29dc1
+# Review: required
+# English: "Exit"
+#: packages/viewer/src/ui/components/walkthrough-touch-controls.tsx
+#, fuzzy
+msgid "viewer.walkthroughTouch.exit"
+msgstr "Salir"
+
+# Source-Hash: 8f7bdd564c509359
+# Review: required
+# English: "Interact"
+#: packages/viewer/src/ui/components/walkthrough-touch-controls.tsx
+#, fuzzy
+msgid "viewer.walkthroughTouch.interact"
+msgstr "Interactuar"
+
+# Source-Hash: d2be4c4b179a0f21
+# Review: required
+# English: "Jump"
+#: packages/viewer/src/ui/components/walkthrough-touch-controls.tsx
+#, fuzzy
+msgid "viewer.walkthroughTouch.jump"
+msgstr "Saltar"
 
 # Source-Hash: 4da8b3678ed77b45
 # Review: human

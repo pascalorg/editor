@@ -76,6 +76,7 @@ export class NodeBatchStore implements NodeBatchStoreApi {
     Array<{ record: BatchRecord; instanceId: number }>
   >()
   private readonly pending = new Map<BatchRecord, Set<number>>()
+  private visibility: ((nodeId: string) => boolean) | null = null
   private instanceCount = 0
   private readonly counters = {
     releases: 0,
@@ -222,6 +223,7 @@ export class NodeBatchStore implements NodeBatchStoreApi {
     }
     const instanceId = record.batched.addInstance(packed.id)
     record.batched.setMatrixAt(instanceId, entry.matrixInLevel)
+    if (this.visibility) record.batched.setVisibleAt(instanceId, this.visibility(entry.nodeId))
     record.instances.push({ entry, instanceId })
     let keys = this.keysByNode.get(entry.nodeId)
     if (!keys) {
@@ -235,6 +237,16 @@ export class NodeBatchStore implements NodeBatchStoreApi {
       this.instancesByNode.set(entry.nodeId, instances)
     }
     instances.push({ record, instanceId })
+  }
+
+  /** Filter packed draws without changing materials, geometry or membership. */
+  setVisibility(visible: ((nodeId: string) => boolean) | null): void {
+    if (visible === null && this.visibility === null) return
+    this.visibility = visible
+    for (const [nodeId, instances] of this.instancesByNode) {
+      const shown = visible?.(nodeId) ?? true
+      for (const { record, instanceId } of instances) record.batched.setVisibleAt(instanceId, shown)
+    }
   }
 
   release(nodeId: string): boolean {

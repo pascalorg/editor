@@ -1,6 +1,6 @@
 'use client'
 
-import { useInteractive, useScene } from '@pascal-app/core'
+import { useInteractive } from '@pascal-app/core'
 import { useFrame, useThree } from '@react-three/fiber'
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { BackSide, Color, MathUtils, Mesh, Scene, SphereGeometry, Vector3 } from 'three'
@@ -11,7 +11,6 @@ import {
   type RenderTarget,
   type WebGPURenderer,
 } from 'three/webgpu'
-import { resolveLocation } from '../../lib/daylight/location'
 import type { DaylightAtmosphereSource } from '../../lib/daylight/look'
 import { installDaylightMaterialHooks } from '../../lib/daylight/material-hooks'
 import { restoreLampEmitters } from '../../lib/daylight/room-scene'
@@ -24,6 +23,7 @@ import {
   solarClockInstant,
   solarLight,
 } from '../../lib/daylight/solar'
+import { useDaylightSite } from '../../lib/daylight/use-daylight-site'
 import useViewer, { type RenderQuality } from '../../store/use-viewer'
 import { SceneAtmosphere } from './scene-atmosphere'
 import { useDaylightRooms } from './use-daylight-rooms'
@@ -56,12 +56,6 @@ const SHADOW_MAP: Record<RenderQuality, number> = { high: 4096, medium: 2048, lo
 const EON: Record<RenderQuality, number> = { high: 0.6, medium: 0.6, low: 0 }
 const luminance = (c: Color) => 0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b
 
-type SiteFacts = {
-  parcel?: { originLngLat?: readonly [number, number] | null } | null
-  dossier?: { point?: { lat?: number; lng?: number } | null } | null
-  northRotation?: number
-}
-
 /** Cosine-weighted hemisphere probes for the sky irradiance colour. */
 const HEMISPHERE = [
   new Vector3(0, 1, 0),
@@ -91,16 +85,9 @@ export function DaylightAtmosphere() {
   const timeOfDayMinutes = useViewer((s) => s.timeOfDayMinutes)
   const skyLive = useViewer((s) => s.skyLive)
   const weather = useViewer((s) => s.weather)
-  const deviceLocation = useViewer((s) => s.deviceLocation)
   const transparent = useViewer((s) => s.transparentBackground)
   const quality = useViewer((s) => s.renderQuality)
-  const site = useScene((state) => {
-    for (const id of state.rootNodeIds) {
-      const node = state.nodes[id]
-      if (node?.type === 'site') return node as unknown as SiteFacts
-    }
-    return undefined
-  })
+  const { location, northRotation } = useDaylightSite()
 
   const sky = useMemo(() => createDaylightSky(), [])
   // The environment: a PMREM of the visible sky (clouds and aureole, no sun disc — the key light
@@ -205,7 +192,6 @@ export function DaylightAtmosphere() {
   // biome-ignore lint/correctness/useExhaustiveDependencies: clockTick re-runs the live sky.
   useEffect(() => {
     const cover = transparent ? WEATHER_COVER.fair : WEATHER_COVER[weather]
-    const { location } = resolveLocation(site, deviceLocation)
     const today = new Date()
     const when = transparent
       ? presetInstant(today, location.lat, location.lng, 'midday')
@@ -218,7 +204,7 @@ export function DaylightAtmosphere() {
       when,
       location.lat,
       location.lng,
-      site?.northRotation ?? 0,
+      northRotation,
       solar.current ?? undefined,
     )
     solar.current = sun
@@ -278,9 +264,9 @@ export function DaylightAtmosphere() {
     environment.capture()
   }, [
     clockTick,
-    deviceLocation,
+    location,
+    northRotation,
     environment,
-    site,
     skyLive,
     sky,
     source,

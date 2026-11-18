@@ -1,5 +1,15 @@
 import { type AnyNodeId, useInteractive } from '@pascal-app/core'
-import { type AnimationAction, LoopOnce, type Object3D } from 'three'
+import {
+  type AnimationAction,
+  Box3,
+  LoopOnce,
+  Matrix4,
+  type Mesh,
+  type Object3D,
+  Ray,
+  type Raycaster,
+  Vector3,
+} from 'three'
 import type { ScriptedClipActions } from '../../systems/interactive/scripted-clips'
 
 export function isGlbShutterHit(hit: Object3D, identity: Object3D): boolean {
@@ -62,4 +72,67 @@ export function toggleGlbShutters(node: Object3D): boolean {
   const state = useInteractive.getState()
   state.setMechanismPart(pascalId, 'shutters', !state.mechanismParts[`${pascalId}:shutters`])
   return true
+}
+
+type OpeningHit = { object: Object3D; distance: number }
+
+/** Keep the baked opening target stationary when its animated leaf leaves the reticle ray. */
+export function createGlbOpeningRaycast(identity: ReadonlyMap<string, Object3D>) {
+  const openings: { node: Object3D; bounds: Box3; rest: Matrix4 }[] = []
+  const inverse = new Matrix4()
+  const transform = new Matrix4()
+  const box = new Box3()
+  for (const node of identity.values()) {
+    if (
+      !node.userData.openable ||
+      !node.userData.clips?.some((name: string) => name.endsWith(': open'))
+    )
+      continue
+    node.updateWorldMatrix(true, true)
+    inverse.copy(node.matrixWorld).invert()
+    const bounds = new Box3()
+    const visit = (object: Object3D) => {
+      // Hosted identities have their own targets and must not enlarge this opening.
+      if (object !== node && object.userData.pascalId) return
+      const mesh = object as Mesh
+      if (mesh.geometry) {
+        mesh.geometry.computeBoundingBox()
+        if (mesh.geometry.boundingBox) {
+          transform.multiplyMatrices(inverse, object.matrixWorld)
+          bounds.union(box.copy(mesh.geometry.boundingBox).applyMatrix4(transform))
+        }
+      }
+      for (const child of object.children) visit(child)
+    }
+    visit(node)
+    if (!bounds.isEmpty()) openings.push({ node, bounds, rest: node.matrix.clone() })
+  }
+  const ray = new Ray()
+  const point = new Vector3()
+  return (raycaster: Raycaster, hit?: OpeningHit): OpeningHit | undefined => {
+    for (const { node, bounds, rest } of openings) {
+      let visible = true
+      let ownsHit = false
+      for (let at: Object3D | null = node; at; at = at.parent) if (!at.visible) visible = false
+      for (let at = hit?.object; at; at = at.parent ?? undefined) if (at === node) ownsHit = true
+      if (!visible || ownsHit) continue
+      // The identity itself may be animated; follow only its parent's current placement.
+      if (node.parent) {
+        node.parent.updateWorldMatrix(true, false)
+        transform.multiplyMatrices(node.parent.matrixWorld, rest)
+      } else transform.copy(rest)
+      inverse.copy(transform).invert()
+      ray.copy(raycaster.ray).applyMatrix4(inverse)
+      if (!ray.intersectBox(bounds, point)) continue
+      point.applyMatrix4(transform)
+      const distance = point.distanceTo(raycaster.ray.origin)
+      if (
+        distance >= raycaster.near &&
+        distance <= raycaster.far &&
+        (!hit || distance < hit.distance)
+      )
+        hit = { object: node, distance }
+    }
+    return hit
+  }
 }

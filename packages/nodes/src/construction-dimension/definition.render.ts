@@ -6,6 +6,7 @@ export const constructionDimensionRenderDefinition: NodeRenderDefinition<
   typeof ConstructionDimensionNode
 > & { kind: 'construction-dimension' } = {
   kind: 'construction-dimension',
+  extensions: { 'pascal:viewer': { family: null } },
   bake: 'strip',
   schemaVersion: 7,
   schema: ConstructionDimensionNode,

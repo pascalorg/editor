@@ -7,6 +7,7 @@ export const floorOpeningRenderDefinition: NodeRenderDefinition<typeof FloorOpen
   kind: 'floor-opening'
 } = {
   kind: 'floor-opening',
+  extensions: { 'pascal:viewer': { family: null } },
   bake: 'strip',
   schemaVersion: 1,
   schema: FloorOpeningNode,

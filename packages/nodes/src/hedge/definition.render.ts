@@ -9,6 +9,7 @@ import { buildHedgeGeometry } from './geometry'
  */
 export const hedgeRenderDefinition: NodeRenderDefinition<typeof HedgeNode> & { kind: 'hedge' } = {
   kind: 'hedge',
+  extensions: { 'pascal:viewer': { family: 'site' } },
   schemaVersion: 1,
   schema: HedgeNode,
   category: 'site',

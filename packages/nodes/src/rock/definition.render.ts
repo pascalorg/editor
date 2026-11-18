@@ -16,6 +16,7 @@ const DEFAULT_OUTLINE: [number, number][] = [
 /** Ground-relative rock mass; floors derive their holes without changing the rock's support. */
 export const rockRenderDefinition: NodeRenderDefinition<typeof RockNode> & { kind: 'rock' } = {
   kind: 'rock',
+  extensions: { 'pascal:viewer': { family: 'site' } },
   schemaVersion: 2,
   schema: RockNode,
   category: 'site',

@@ -7,6 +7,7 @@ export const plantingRenderDefinition: NodeRenderDefinition<typeof PlantingNode>
   kind: 'planting'
 } = {
   kind: 'planting',
+  extensions: { 'pascal:viewer': { family: 'site' } },
   schemaVersion: 1,
   schema: PlantingNode,
   category: 'site',

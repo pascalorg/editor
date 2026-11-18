@@ -4,6 +4,7 @@ import { UnitNode } from './schema'
 
 export const unitRenderDefinition: NodeRenderDefinition<typeof UnitNode> & { kind: 'unit' } = {
   kind: 'unit',
+  extensions: { 'pascal:viewer': { family: null } },
   schemaVersion: 1,
   schema: UnitNode,
   category: 'site',

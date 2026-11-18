@@ -4,6 +4,7 @@ import { SpawnNode } from './schema'
 
 export const spawnRenderDefinition: NodeRenderDefinition<typeof SpawnNode> & { kind: 'spawn' } = {
   kind: 'spawn',
+  extensions: { 'pascal:viewer': { family: null } },
   schemaVersion: 1,
   schema: SpawnNode,
   category: 'site',

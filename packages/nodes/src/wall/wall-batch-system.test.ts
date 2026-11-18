@@ -2,6 +2,8 @@ import { afterAll, afterEach, describe, expect, spyOn, test } from 'bun:test'
 import { sceneRegistry, useScene } from '@pascal-app/core'
 import * as viewerExports from '@pascal-app/viewer'
 import { SCENE_LAYER, useViewer } from '@pascal-app/viewer'
+import { act, create } from '@react-three/test-renderer'
+import { createElement } from 'react'
 import {
   BufferGeometry,
   Float32BufferAttribute,
@@ -17,6 +19,7 @@ import {
   holdBatchedWallsAfterCapture,
   revealBatchedWallsForCapture,
   runBatchFrame,
+  WallBatchSystem,
 } from './wall-batch-system'
 
 let nowMs = 0
@@ -362,5 +365,31 @@ test('batched walls whose reverse play begins draw themselves again, and the lev
     expect(walls[1]!.layers.isEnabled(SCENE_LAYER)).toBe(true)
   } finally {
     revealing.mockRestore()
+  }
+})
+
+test('family activation hands walls back before the next viewport draw', async () => {
+  const previousWindow = Object.getOwnPropertyDescriptor(globalThis, 'window')
+  Object.defineProperty(globalThis, 'window', {
+    configurable: true,
+    value: { location: { search: '' } },
+  })
+  useViewer.setState({ xrayFamily: null, walkthroughMode: false })
+  const { root, batch, walls } = setupBatchedLevel()
+  const renderer = await create(createElement(WallBatchSystem))
+  try {
+    expect(batch.parent).toBe(root)
+    await act(async () => useViewer.getState().setXrayFamily('items'))
+    expect(batch.parent).toBeNull()
+    expect(walls.every((wall) => wall.layers.isEnabled(SCENE_LAYER))).toBe(true)
+    await act(async () => useViewer.getState().setXrayFamily(null))
+    runFrame()
+    nowMs += 181
+    runFrame()
+    expect(root.children.some((object) => object.name === 'wall-batch')).toBe(true)
+  } finally {
+    await renderer.unmount()
+    if (previousWindow) Object.defineProperty(globalThis, 'window', previousWindow)
+    else Reflect.deleteProperty(globalThis, 'window')
   }
 })

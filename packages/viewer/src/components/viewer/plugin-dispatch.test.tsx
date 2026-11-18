@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, expect, test } from 'bun:test'
+import { afterEach, beforeEach, expect, spyOn, test } from 'bun:test'
 import {
   type AnyNode,
   type AnyNodeDefinition,
@@ -14,12 +14,14 @@ import {
   type Plugin,
   type SceneGraph,
   sceneRegistry,
+  useRegistry,
   useScene,
 } from '@pascal-app/core'
 import { useFrame } from '@react-three/fiber'
 import { act, create } from '@react-three/test-renderer'
-import { Suspense } from 'react'
-import { Group, Mesh } from 'three'
+import { Suspense, useRef } from 'react'
+import { BoxGeometry, Group, Mesh } from 'three'
+import useViewer from '../../store/use-viewer'
 import { GeometrySystem } from '../../systems/geometry/geometry-system'
 import { NodeRenderer } from '../renderers/node-renderer'
 import {
@@ -170,7 +172,7 @@ type Renderer = Awaited<ReturnType<typeof create>>
 
 async function settle(renderer: Renderer, frames = 3) {
   await act(async () => {
-    await new Promise((resolve) => setTimeout(resolve, 20))
+    await new Promise<void>((resolve) => setImmediate(resolve))
   })
   if (frames > 0) await renderer.advanceFrames(frames, 1 / 60)
 }
@@ -365,9 +367,8 @@ test('GlbScene resolves replace renderers through its sceneNodes', async () => {
   }
   const url = `data:model/gltf+json;base64,${Buffer.from(JSON.stringify(gltf)).toString('base64')}`
   // GlbScene resets the page cursor on unmount; bun has no DOM.
-  const hadDocument = 'document' in globalThis
-  if (!hadDocument)
-    Object.assign(globalThis, { document: { body: { style: {} }, querySelector: () => null } })
+  const previousDocument = globalThis.document
+  Object.assign(globalThis, { document: { body: { style: {} }, querySelector: () => null } })
   const renderer = await create(
     <Suspense fallback={null}>
       <GlbScene replaceNodes={replaceNodes} sceneNodes={graph.nodes} url={url} />
@@ -382,6 +383,66 @@ test('GlbScene resolves replace renderers through its sceneNodes', async () => {
     expect(root.getObjectByName('meadow-parent:level')).toBeDefined()
   } finally {
     await renderer.unmount()
-    if (!hadDocument) Reflect.deleteProperty(globalThis, 'document')
+    if (previousDocument) Object.assign(globalThis, { document: previousDocument })
+    else Reflect.deleteProperty(globalThis, 'document')
+  }
+})
+
+test('GlbScene filters registered stripped plugin geometry against supplied nodes without a live graph', async () => {
+  const previousViewer = useViewer.getState()
+  const { level, overlay, graph } = scene([PLUGIN_ID])
+  nodeRegistry._register(
+    asPluginNode({
+      ...overlayDef,
+      renderer: {
+        kind: 'parametric',
+        module: async () => ({
+          default: ({ node }: { node: AnyNode }) => {
+            const ref = useRef<Group>(null!)
+            useRegistry(node.id, node.type, ref)
+            return (
+              <group ref={ref} name="stripped-plugin">
+                <mesh name="stripped-body" geometry={new BoxGeometry()} />
+              </group>
+            )
+          },
+        }),
+      },
+    }),
+  )
+  useScene.getState().unloadScene()
+  useViewer.setState({ xrayFamily: 'walls', walkthroughMode: false })
+  const gltf = {
+    asset: { version: '2.0' },
+    scene: 0,
+    scenes: [{ nodes: [0] }],
+    nodes: [{ name: 'strip-level', extras: { pascalId: level.id, kind: 'level' } }],
+  }
+  const url = `data:model/gltf+json;base64,${Buffer.from(JSON.stringify(gltf)).toString('base64')}`
+  const previousDocument = globalThis.document
+  Object.assign(globalThis, { document: { body: { style: {} }, querySelector: () => null } })
+  const renderer = await create(
+    <Suspense fallback={null}>
+      <GlbScene referenceNodes={[graph.nodes[overlay.id]!]} sceneNodes={graph.nodes} url={url} />
+    </Suspense>,
+  )
+  try {
+    await settle(renderer, 0)
+    await renderer.advanceFrames(1, 1 / 60)
+    const body = renderer.scene.instance.getObjectByName('stripped-body')!
+    expect(body).toBeDefined()
+    expect(body.layers.isEnabled(0)).toBe(false)
+    // The next unchanged frame must not traverse the baked geometry either.
+    const classify = spyOn(nodeRegistry, 'get')
+    await renderer.advanceFrames(1, 1 / 60)
+    expect(classify.mock.calls.filter(([kind]) => kind === 'fixture:overlay')).toHaveLength(0)
+    classify.mockRestore()
+    await act(async () => useViewer.setState({ xrayFamily: 'other' }))
+    expect(body.layers.isEnabled(0)).toBe(true)
+  } finally {
+    await renderer.unmount()
+    useViewer.setState(previousViewer, true)
+    if (previousDocument) Object.assign(globalThis, { document: previousDocument })
+    else Reflect.deleteProperty(globalThis, 'document')
   }
 })

@@ -4,6 +4,7 @@ import { LevelNode } from './schema'
 
 export const levelRenderDefinition: NodeRenderDefinition<typeof LevelNode> & { kind: 'level' } = {
   kind: 'level',
+  extensions: { 'pascal:viewer': { family: null } },
   schemaVersion: 2,
   schema: LevelNode,
   category: 'site',

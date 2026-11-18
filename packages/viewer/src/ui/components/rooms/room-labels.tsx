@@ -4,6 +4,8 @@ import {
   area,
   containsPoint,
   DEFAULT_LEVEL_HEIGHT,
+  intersection,
+  isRoomZone,
   type Polygon,
   polygonInteriorPoint,
   type Ring,
@@ -32,12 +34,19 @@ import {
   type Group,
   Matrix4,
   type Object3D,
+  Plane,
   Ray,
   Raycaster,
   Vector2,
   Vector3,
 } from 'three'
 import { timeSpan } from '../../../lib/perf-tracks'
+import {
+  type SectionState,
+  sectionActive,
+  sectionSignature,
+  updateSectionPlane,
+} from '../../../lib/section'
 import useViewer from '../../../store/use-viewer'
 import { formatRoomArea } from '../../lib/room-area'
 import type { RoomSelectionRecord } from '../../lib/room-selection'
@@ -404,6 +413,15 @@ export class PillElements extends Map<string, HTMLElement> {
 
 /** Where each room's pill floats, level-local; moving one has the pills placed again. */
 export class RoomAnchors extends Map<string, Vector3> {
+  readonly outlines = new Map<string, Pick<RoomLabelEntry, 'polygon' | 'holes'>>()
+  readonly floors = new Map<string, number>()
+  override delete(id: string) {
+    this.outlines.delete(id)
+    this.floors.delete(id)
+    const removed = super.delete(id)
+    if (removed) this.onMove?.()
+    return removed
+  }
   onMove: (() => void) | null = null
 
   override set(id: string, position: Vector3) {
@@ -967,13 +985,11 @@ export function roomLabelEntries(
   rooms: readonly RoomSelectionRecord[],
   zones: readonly ZoneNode[],
 ): RoomLabelEntry[] {
-  const hiddenIds = new Set<string>(
-    zones.filter((zone) => zone.visible === false).map((zone) => zone.id),
-  )
+  const zonesById = new Map<string, ZoneNode>(zones.map((zone) => [zone.id, zone]))
   const roomIds = new Set(rooms.map((room) => room.zoneId))
   const entries: RoomLabelEntry[] = [
     ...rooms
-      .filter((room) => !hiddenIds.has(room.zoneId))
+      .filter((room) => isRoomZone(zonesById.get(room.zoneId) ?? room, room))
       .map((room) => ({
         zoneId: room.zoneId,
         polygon: room.polygon,
@@ -981,7 +997,7 @@ export function roomLabelEntries(
         area: room.area,
       })),
     ...zones
-      .filter((zone) => zone.visible !== false && !roomIds.has(zone.id) && zone.polygon.length >= 3)
+      .filter((zone) => isRoomZone(zone) && !roomIds.has(zone.id))
       .map((zone) => ({
         zoneId: zone.id,
         polygon: zone.polygon,
@@ -1286,10 +1302,12 @@ export function candidates3D(
     // Behind the camera or past its far plane: not on screen to collide.
     if (!at || Math.abs(at[2]) > 1) continue
     // The room's outline at its pill's height, where the pill has to fit.
-    const outer = screenRing(entry.polygon, anchor.y, size)
+    const outline =
+      anchors instanceof RoomAnchors ? (anchors.outlines.get(entry.zoneId) ?? entry) : entry
+    const outer = screenRing(outline.polygon, anchor.y, size)
     if (!outer) continue
     const holes: Ring[] = []
-    for (const hole of entry.holes) {
+    for (const hole of outline.holes) {
       const ring = screenRing(hole, anchor.y, size)
       if (ring) holes.push(ring)
     }
@@ -1326,10 +1344,18 @@ function pick3D(
   pickRaycaster.setFromCamera(pickPointer, camera)
   levelRay.copy(pickRaycaster.ray).applyMatrix4(levelInverse.copy(level.matrixWorld).invert())
   const { origin, direction } = levelRay
-  return roomAt(entries, (entry) => {
+  const kept =
+    anchors instanceof RoomAnchors
+      ? entries.map((entry) => ({ ...entry, ...anchors.outlines.get(entry.zoneId) }))
+      : entries
+  return roomAt(kept, (entry) => {
     const anchor = anchors.get(entry.zoneId)
     if (!anchor) return null
-    const t = (anchor.y - LABEL_HEIGHT - origin.y) / direction.y
+    const floorY =
+      anchors instanceof RoomAnchors
+        ? (anchors.floors.get(entry.zoneId) ?? anchor.y - LABEL_HEIGHT)
+        : anchor.y - LABEL_HEIGHT
+    const t = (floorY - origin.y) / direction.y
     return t > 0 && Number.isFinite(t)
       ? [origin.x + t * direction.x, origin.z + t * direction.z, t]
       : null
@@ -1418,7 +1444,10 @@ export function RoomPillsLayer3D({
     ref.current.visible = !!level
     if (!level) return
     level.updateWorldMatrix(true, false)
-    ref.current.matrix.copy(level.matrixWorld)
+    if (!ref.current.matrix.equals(level.matrixWorld)) {
+      ref.current.matrix.copy(level.matrixWorld)
+      ref.current.matrixWorldNeedsUpdate = true
+    }
     if (!shown) return
 
     const flat = view.current
@@ -1438,59 +1467,229 @@ export function RoomPillsLayer3D({
 
   if (entries.length === 0 || !portals) return null
   return (
-    <PillPortalContext.Provider value={portals.pills}>
-      <HiddenPillsContext.Provider value={gone}>
-        <group matrixAutoUpdate={false} ref={ref}>
-          {entries.map((entry) => (
-            <Fragment key={entry.zoneId}>{renderLabel(entry, anchors, layer.elements)}</Fragment>
-          ))}
-          <LocalizedHtml
-            calculatePosition={atLayerOrigin}
-            onOcclude={keepShown}
-            portal={portals.detail}
-            style={{ pointerEvents: 'none' }}
-          >
-            <OpenRoomLabelDetail entries={entries} layer={layer} renderDetail={renderDetail} />
-          </LocalizedHtml>
-        </group>
-      </HiddenPillsContext.Provider>
-    </PillPortalContext.Provider>
+    <RoomLabelSection levelObject={levelObject}>
+      <PillPortalContext.Provider value={portals.pills}>
+        <HiddenPillsContext.Provider value={gone}>
+          <group matrixAutoUpdate={false} ref={ref}>
+            {entries.map((entry) => (
+              <Fragment key={entry.zoneId}>{renderLabel(entry, anchors, layer.elements)}</Fragment>
+            ))}
+            <LocalizedHtml
+              calculatePosition={atLayerOrigin}
+              onOcclude={keepShown}
+              portal={portals.detail}
+              style={{ pointerEvents: 'none' }}
+            >
+              <OpenRoomLabelDetail entries={entries} layer={layer} renderDetail={renderDetail} />
+            </LocalizedHtml>
+          </group>
+        </HiddenPillsContext.Provider>
+      </PillPortalContext.Provider>
+    </RoomLabelSection>
   )
 }
 
 const PillPortalContext = createContext<{ current: HTMLElement } | null>(null)
 const HiddenPillsContext = createContext<ReadonlySet<string>>(new Set())
 
+/** The label and its outline inside the kept room prism, expressed in its level's frame. */
+export function sectionRoomLabel(
+  entry: Pick<RoomLabelEntry, 'polygon' | 'holes'>,
+  floorY: number,
+  topY: number,
+  world: Matrix4,
+  section: SectionState,
+  restY = floorY + LABEL_HEIGHT,
+): { position: Vector3; polygon: Ring; holes: Ring[] } | null {
+  const [x, z] = polygonInteriorPoint({ polygon: entry.polygon, holes: entry.holes })
+  const position = new Vector3(x, restY, z)
+  if (!sectionActive(section)) return { position, polygon: entry.polygon, holes: entry.holes }
+  const plane = updateSectionPlane(new Plane(), section).applyMatrix4(world.clone().invert())
+  const { normal, constant } = plane
+  const distances = entry.polygon.flatMap(([px, pz]) => [
+    normal.x * px + normal.y * floorY + normal.z * pz + constant,
+    normal.x * px + normal.y * topY + normal.z * pz + constant,
+  ])
+  if (Math.max(...distances) < 0) return null
+  if (Math.min(...distances) >= 0) return { position, polygon: entry.polygon, holes: entry.holes }
+  if (Math.abs(normal.y) > 1e-8) {
+    const cutY = -(normal.x * x + normal.z * z + constant) / normal.y
+    position.y = Math.max(floorY, Math.min(topY, normal.y < 0 ? cutY : Math.max(position.y, cutY)))
+  }
+  // Intersect with a clipped bounding rectangle so concave rooms can split into valid polygons.
+  const xs = entry.polygon.map(([px]) => px)
+  const zs = entry.polygon.map(([, pz]) => pz)
+  const left = Math.min(...xs) - 1
+  const right = Math.max(...xs) + 1
+  const near = Math.min(...zs) - 1
+  const far = Math.max(...zs) + 1
+  const box: Ring = [
+    [left, near],
+    [right, near],
+    [right, far],
+    [left, far],
+  ]
+  const clip: Ring = []
+  const distance = ([px, pz]: readonly [number, number]) =>
+    normal.x * px + normal.y * position.y + normal.z * pz + constant
+  for (let i = 0; i < box.length; i++) {
+    const a = box[i]!
+    const b = box[(i + 1) % box.length]!
+    const da = distance(a)
+    const db = distance(b)
+    if (da >= -1e-9) clip.push(a)
+    if (da < -1e-9 !== db < -1e-9) {
+      const t = da / (da - db)
+      clip.push([a[0] + t * (b[0] - a[0]), a[1] + t * (b[1] - a[1])])
+    }
+  }
+  if (clip.length < 3) return null
+  const kept = intersection(
+    [{ outer: entry.polygon, holes: entry.holes }],
+    [{ outer: clip, holes: [] }],
+  ).sort((a, b) => area([b]) - area([a]))[0]
+  if (!kept || area([kept]) <= 1e-9) return null
+  const [px, pz] = polygonInteriorPoint({ polygon: kept.outer, holes: kept.holes })
+  position.x = px
+  position.z = pz
+  return { position, polygon: kept.outer, holes: kept.holes }
+}
+
+const REST_SECTION: SectionState = {
+  sectionEnabled: false,
+  sectionAxis: 'y',
+  sectionPosition: 0,
+  sectionFlipped: false,
+}
+const LABEL_WORLD = new Matrix4()
+type LabelSection = { world: Matrix4 | null; state: SectionState } | null
+const RoomLabelSectionContext = createContext<LabelSection | undefined>(undefined)
+
+/** One section subscription per labels layer; the inactive path mounts no frame callback. */
+export function RoomLabelSection({
+  levelObject,
+  children,
+}: {
+  levelObject: () => Object3D | undefined | null
+  children: ReactNode
+}) {
+  const inherited = useContext(RoomLabelSectionContext)
+  return inherited !== undefined ? (
+    children
+  ) : (
+    <RoomLabelSectionRoot levelObject={levelObject}>{children}</RoomLabelSectionRoot>
+  )
+}
+
+function RoomLabelSectionRoot({
+  levelObject,
+  children,
+}: {
+  levelObject: () => Object3D | undefined | null
+  children: ReactNode
+}) {
+  const active = useViewer(sectionActive)
+  return active ? (
+    <ActiveRoomLabelSection levelObject={levelObject}>{children}</ActiveRoomLabelSection>
+  ) : (
+    <RoomLabelSectionContext.Provider value={null}>{children}</RoomLabelSectionContext.Provider>
+  )
+}
+
+function ActiveRoomLabelSection({
+  levelObject,
+  children,
+}: {
+  levelObject: () => Object3D | undefined | null
+  children: ReactNode
+}) {
+  const read = () => {
+    const level = levelObject()
+    level?.updateWorldMatrix(true, false)
+    return { world: level?.matrixWorld.clone() ?? null, state: useViewer.getState() }
+  }
+  const [section, setSection] = useState(read)
+  const last = useRef(section)
+  useFrame(() => {
+    const level = levelObject()
+    level?.updateWorldMatrix(true, false)
+    const state = useViewer.getState()
+    const previous = last.current
+    if (
+      sectionSignature(state) === sectionSignature(previous.state) &&
+      (level ? previous.world?.equals(level.matrixWorld) : previous.world === null)
+    )
+      return
+    const next = { world: level?.matrixWorld.clone() ?? null, state }
+    last.current = next
+    setSection(next)
+  }, -1)
+  return (
+    <RoomLabelSectionContext.Provider value={section}>{children}</RoomLabelSectionContext.Provider>
+  )
+}
+
+export function useSectionRoomLabel(
+  entry: RoomLabelEntry,
+  floorY: number,
+  topY: number,
+  restY = floorY + LABEL_HEIGHT,
+) {
+  const section = useContext(RoomLabelSectionContext)
+  const { polygon, holes } = entry
+  return useMemo(() => {
+    if (section && !section.world) return null
+    return sectionRoomLabel(
+      { polygon, holes },
+      floorY,
+      topY,
+      section?.world ?? LABEL_WORLD,
+      section?.state ?? REST_SECTION,
+      restY,
+    )
+  }, [polygon, holes, floorY, topY, restY, section])
+}
+
 /** Where a room's pill floats: over its interior, at mid-storey above its floor. */
 export function RoomLabelAnchor3D({
   entry,
   floorY,
+  topY = floorY + DEFAULT_LEVEL_HEIGHT,
   anchors,
   children,
 }: {
   entry: LabelEntry
   floorY: number
+  topY?: number
   anchors: Map<string, Vector3>
   children: ReactNode
 }) {
   const portal = useContext(PillPortalContext)
   const gone = useContext(HiddenPillsContext)
-  const position = useMemo(() => {
-    const [x, z] = polygonInteriorPoint({ polygon: entry.polygon, holes: entry.holes })
-    return new Vector3(x, floorY + LABEL_HEIGHT, z)
-  }, [entry.polygon, entry.holes, floorY])
-  // Hidden HTML still needs a live anchor so moving a room can give its pill
-  // room again. The layer drops anchors of rooms that left.
-  useEffect(() => {
-    anchors.set(entry.zoneId, position)
-  }, [anchors, entry.zoneId, position])
-  if (gone.has(entry.zoneId)) return null
+  const label = useSectionRoomLabel(entry, floorY, topY)
+  // Hidden HTML still needs a live anchor so a new view can give its pill room again.
+  useLayoutEffect(() => {
+    if (label) {
+      if (anchors instanceof RoomAnchors) {
+        anchors.outlines.set(entry.zoneId, label)
+        anchors.floors.set(entry.zoneId, floorY)
+        anchors.onMove?.()
+      }
+      anchors.set(entry.zoneId, label.position)
+    } else anchors.delete(entry.zoneId)
+  }, [anchors, entry.zoneId, floorY, label])
+  useEffect(
+    () => () => {
+      anchors.delete(entry.zoneId)
+    },
+    [anchors, entry.zoneId],
+  )
+  if (!label || gone.has(entry.zoneId)) return null
   return (
     <LocalizedHtml
       center
       portal={portal ?? undefined}
-      position={position}
-      // The wrapper lets the canvas keep everything but the pill itself.
+      position={label.position}
       style={{ pointerEvents: 'none' }}
       zIndexRange={[20, 0]}
     >

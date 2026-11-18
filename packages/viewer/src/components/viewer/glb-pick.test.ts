@@ -1,6 +1,7 @@
 import { expect, test } from 'bun:test'
 import * as THREE from 'three'
-import { resolveGlbPick } from './glb-scene'
+import { resolveGlbPick } from '../../index'
+import { filterSectionHits, SECTION_DEFAULTS } from '../../lib/section'
 
 /** A baked level (raised and shifted, as level stacking moves it) holding a wall, a ceiling and a sofa. */
 function bakedLevel() {
@@ -49,5 +50,44 @@ test('a hidden floor and empty space are no pick', () => {
   level.visible = false
   expect(
     resolveGlbPick([{ object: meshes.sofa, point: new THREE.Vector3(12, 3.4, -3) }], identity),
+  ).toBeNull()
+})
+
+test('a cut exposes the next semantic hit in the same level frame', () => {
+  const { identity, meshes } = bakedLevel()
+  const hits = [
+    { object: meshes.wall, point: new THREE.Vector3(13.85, 4, -3) },
+    { object: meshes.sofa, point: new THREE.Vector3(12, 3.4, -3) },
+  ]
+  const pick = resolveGlbPick(
+    filterSectionHits(hits, { ...SECTION_DEFAULTS, sectionEnabled: true, sectionPosition: 3.5 }),
+    identity,
+  )
+  expect(pick?.nodeId).toBe('item_sofa')
+  expect(pick?.hitObject).toBe(meshes.sofa)
+  expect(pick?.point).toEqual([2, 2])
+  expect(resolveGlbPick(filterSectionHits(hits, SECTION_DEFAULTS), identity)?.nodeId).toBe('wall_1')
+})
+
+test('accepted baked hit metadata uses world coordinates and transformed normals', () => {
+  const { identity, meshes } = bakedLevel()
+  meshes.wall.rotation.y = Math.PI / 2
+  meshes.wall.updateWorldMatrix(true, false)
+  const pick = resolveGlbPick(
+    [
+      { object: meshes.ceiling, point: new THREE.Vector3(0, 10, 0) },
+      {
+        object: meshes.wall,
+        point: new THREE.Vector3(12, 4, -3),
+        face: { normal: new THREE.Vector3(0, 0, 1) },
+      },
+    ],
+    identity,
+  )!
+  expect(pick.worldPosition).toEqual([12, 4, -3])
+  expect(pick.normal?.[0]).toBeCloseTo(1)
+  expect(pick.normal?.[2]).toBeCloseTo(0)
+  expect(
+    resolveGlbPick([{ object: meshes.wall, point: new THREE.Vector3() }], identity)?.normal,
   ).toBeNull()
 })
