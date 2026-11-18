@@ -17,18 +17,25 @@
 <script type="module">
 import * as THREE from 'three/webgpu'
 import {
-  buildTree, defaultTreeSpread, buildPlanting, PlantingNode, buildHedge, HedgeNode, FLAT_GROUND,
+  TREE_FORMS, defaultTreeSpread, buildPlanting, PlantingNode, buildHedge, HedgeNode, FLAT_GROUND,
   addTree, SiteNode, TreeNode, resolveTreeParameters, createTerrainField, encodeTerrainField,
-  buildTreeFloorplan, buildTreeGeometry, buildTreeFarGeometry, estimateTree,
+  buildTreeFloorplan, buildTreeGeometry, buildTreeFarGeometry, estimateTree, disposeTreeResources,
 } from './tree-bundle.js'
 
+import { loadReference, referenceTree, measureTree } from './comparison.js'
+
 const query = new URLSearchParams(location.search)
+if (query.has('embedded')) document.getElementById('label').hidden = true
 const mode = query.get('scene') ?? 'single'
 const form = query.get('form') ?? 'round'
 const heightM = Number(query.get('height') ?? 8)
 const seed = Number(query.get('seed') ?? 19)
+const library = query.get('library') ?? 'pascal'
+if (library === 'ez') await loadReference()
 const scene = new THREE.Scene()
-scene.background = new THREE.Color('#dce5e8')
+const studio = ['forms', 'trio', 'sheet', 'levels', 'winter', 'single'].includes(mode)
+scene.background = new THREE.Color(studio ? '#e6e8df' : '#dce5e8')
+if (mode === 'garden' || mode === 'alley') scene.fog = new THREE.Fog('#dce5e8', 48, 150)
 const renderer = new THREE.WebGPURenderer({ antialias:true, forceWebGL:query.get('gl') === '1' })
 renderer.setPixelRatio(1)
 renderer.setSize(innerWidth, innerHeight)
@@ -49,6 +56,27 @@ scene.add(sun)
 const material = new THREE.MeshStandardNodeMaterial({vertexColors:true,roughness:0.9,side:THREE.DoubleSide})
 const metrics = []
 let operationResult
+const benchmark = query.get('bench') === '1'
+// Hold one unrelated tree so repeated cold geometry builds share a warm atlas.
+const sentinel = benchmark && library === 'pascal'
+  ? buildTreeGeometry(TreeNode.parse({ seed: -2147483648, heightM: 2 }))
+  : null
+
+function timedBuild(build, release) {
+  const times = []
+  const runs = benchmark ? 8 : 1
+  for (let i = 0; i < runs; i++) {
+    const start = performance.now()
+    const value = build()
+    const elapsed = performance.now() - start
+    if (i > 0 || runs === 1) times.push(elapsed)
+    if (i === runs - 1) {
+      const sorted = [...times].sort((a, b) => a - b)
+      return { value, buildMs: sorted[Math.floor(sorted.length / 2)], buildSamplesMs: times }
+    }
+    release(value)
+  }
+}
 
 function meshOf(attributes, position = [0,0,0]) {
   const geometry = new THREE.BufferGeometry()
@@ -64,22 +92,43 @@ function meshOf(attributes, position = [0,0,0]) {
 }
 
 function treeAt(form, heightM, seed, at, extra = {}) {
-  const input = {form,heightM,spreadM:defaultTreeSpread(form,heightM),seed,foliage:'#609343',density:0.85,gen:1,...extra}
-  const start = performance.now()
-  const built = buildTree(input)
-  const buildMs = performance.now() - start
-  meshOf(built[extra.level ?? 'near'],at)
-  metrics.push({input,at,buildMs,...built.estimate})
+  const input = {
+    form, heightM, spreadM: defaultTreeSpread(form, heightM), seed,
+    foliage: '#609343', density: 0.85, gen: 1, ...extra,
+  }
+  if (library === 'ez') {
+    const { value, buildMs, buildSamplesMs } = timedBuild(
+      () => referenceTree(form, heightM, mode === 'garden' ? seed : undefined),
+      ({ tree }) => tree.traverse(mesh => {
+        if (mesh.isMesh) {
+          mesh.geometry.dispose()
+          mesh.material.dispose()
+        }
+      }),
+    )
+    const { tree, preset, referenceSeed } = value
+    tree.position.x = at[0]
+    tree.position.y += at[1]
+    tree.position.z = at[2]
+    scene.add(tree)
+    metrics.push({ input, at, preset, referenceSeed, buildMs, buildSamplesMs, ...measureTree(tree) })
+  } else {
+    const node = TreeNode.parse({ ...input, position: at })
+    sceneTreeAt(node, {}, extra.level ?? 'near')
+  }
 }
 
 function sceneTreeAt(node, nodes, level = 'near') {
   const input = resolveTreeParameters(node)
-  const start = performance.now()
-  const context = {sceneNodes:nodes,parent:nodes[node.parentId],resolve:id=>nodes[id]}
-  const group = level === 'far' ? buildTreeFarGeometry(node,context) : buildTreeGeometry(node,context)
-  group.position.set(node.position[0],0,node.position[2])
+  const context = { sceneNodes: nodes, parent: nodes[node.parentId], resolve: id => nodes[id] }
+  const build = level === 'far' ? buildTreeFarGeometry : buildTreeGeometry
+  const { value: group, buildMs, buildSamplesMs } = timedBuild(() => build(node, context), disposeTreeResources)
+  group.position.set(node.position[0], 0, node.position[2])
   scene.add(group)
-  metrics.push({input,at:node.position,buildMs:performance.now()-start,...estimateTree(input)})
+  metrics.push({
+    input, at: node.position, level, buildMs, buildSamplesMs,
+    ...estimateTree(input), ...measureTree(group),
+  })
 }
 
 function treePlan(node, nodes) {
@@ -110,7 +159,8 @@ function ground(width = 100, slope = 0) {
   const position = geometry.getAttribute('position')
   for (let index=0;index<position.count;index++) position.setY(index,position.getX(index)*slope)
   geometry.computeVertexNormals()
-  const lawn = new THREE.Mesh(geometry,new THREE.MeshStandardNodeMaterial({color:'#7c9b5c',roughness:1}))
+  const surface = studio ? new THREE.ShadowMaterial({color:'#4e574c',opacity:0.20}) : new THREE.MeshStandardNodeMaterial({color:'#86976b',roughness:1})
+  const lawn = new THREE.Mesh(geometry,surface)
   lawn.receiveShadow = true
   scene.add(lawn)
 }
@@ -129,15 +179,29 @@ function labelAt(text, at) {
 }
 
 let cameraPosition = [13,8,18], target = [0,4,0], fov = 38
-ground(180,mode === 'slope' ? 0.12 : 0)
-if (mode === 'trio') {
+ground(440,mode === 'slope' ? 0.12 : 0)
+if (mode === 'forms') {
+  const positions=[-22.5,-13.5,-4.5,4.5,13.5,22.5]
+  TREE_FORMS.forEach((form,i)=>treeAt(form,8,19,[positions[i],0,0]))
+  // A 1.8 m standing figure on the same ground plane as the trunks.
+  const cloth=new THREE.MeshStandardMaterial({color:'#54616a',roughness:1})
+  const part=(geometry,x,y,z,material=cloth)=>{
+    const mesh=new THREE.Mesh(geometry,material)
+    mesh.position.set(x,y,z);mesh.castShadow=true;scene.add(mesh)
+  }
+  const fx=-27.2
+  for(const d of [-0.1,0.1]) part(new THREE.CapsuleGeometry(0.082,0.69,4,8),fx+d,0.435,0)
+  part(new THREE.CapsuleGeometry(0.19,0.37,4,8),fx,1.13,0)
+  for(const side of [-1,1]) part(new THREE.CapsuleGeometry(0.064,0.47,4,8),fx+side*0.218,1.10,0)
+  part(new THREE.SphereGeometry(0.137,12,8),fx,1.663,0,new THREE.MeshStandardMaterial({color:'#a58a72'}))
+  cameraPosition = [-1,12,80]; target = [-1,4.0,0]; fov = 25
+} else if (mode === 'trio') {
   const spread = defaultTreeSpread(form,heightM)
   for(let variant=0;variant<3;variant++)
     treeAt(form,heightM,[19,41,83][variant],[(variant-1)*spread*1.35,0,0])
-  const distance = Math.max(heightM*2.2,spread*4.5)
-  cameraPosition = [distance*0.12,heightM*0.68,distance]
-  target = [0,heightM*0.44,0]
-  fov = 40
+  // Identical pixels per metre at each height. Wider panels accommodate larger crowns.
+  cameraPosition = [0,15,80]
+  target = [0,7.55,0]
 } else if (mode === 'sheet') {
   for (let column=0;column<3;column++) {
     const height = [4,8,14][column]
@@ -158,15 +222,15 @@ if (mode === 'trio') {
   const hedge = HedgeNode.parse({path:[[-13,-10],[-13,11]],clip:0.3,gen:2,height:1.25,width:0.8,seed:21})
   for (const mesh of buildHedge(hedge,FLAT_GROUND).meshes) meshOf(mesh)
   for (const [form,height,seed,x,z] of [
-    ['round',8,19,-9,5],['round',7.5,41,8,6],['spreading',7,17,-7,11],
-    ['upright',10,24,10,-5],['upright',9,59,-9,-7],['round',8.5,83,7,13],['spreading',6,52,-8,-1],
+    ['round',8,19,-11.5,-0.75],['multistem',4,41,-2.8,8.6],['spreading',7,17,-11,9.8],
+    ['conifer',12,24,-3.1,-12.8],['upright',9,59,-8.8,-11.6],['weeping',8.5,83,10.8,6.3],['spreading',6,52,14.5,-9.6],
   ]) treeAt(form,height,seed,[x,0,z])
-  cameraPosition = [28,17,34]; target = [0,3,2]; fov = 44
+  cameraPosition = [14,12,36]; target = [0,3.7,2]; fov = 43
 } else if (mode === 'levels') {
   treeAt(form,heightM,seed,[-5,0,0])
   treeAt(form,heightM,seed,[5,0,0],{level:'far'})
   labelAt('Near',[-5,0.3,4]); labelAt('Far · no runtime switch',[5,0.3,4])
-  cameraPosition = [12,10,33]; target = [0,4,0]
+  cameraPosition = [0,7,34]; target = [0,4,0]
 } else if (mode === 'winter') {
   treeAt(form,heightM,seed,[-5,0,0],{density:0})
   treeAt(form,heightM,seed,[5,0,0],{foliage:'#c17c28'})
@@ -203,15 +267,30 @@ if (mode === 'trio') {
   document.getElementById('label').style.zIndex = 1
 } else {
   treeAt(form,heightM,seed,[0,0,0])
-  if(mode === 'close') { cameraPosition = [1.5,1.7,4]; target = [0,5.2,0]; fov = 62 }
+  if(mode === 'close') { cameraPosition = [1.45,1.7,1.20]; target = [-0.3,6.0,0.2]; fov = 68 }
 }
-const camera = new THREE.PerspectiveCamera(fov,innerWidth/innerHeight,0.1,250)
+if(sentinel) disposeTreeResources(sentinel)
+const aspect=innerWidth/innerHeight
+const halfWidth = mode === 'forms' ? 29 : mode === 'trio' ? 8.2 * aspect : null
+const camera = halfWidth === null
+  ? new THREE.PerspectiveCamera(fov, aspect, 0.1, 250)
+  : new THREE.OrthographicCamera(-halfWidth, halfWidth, halfWidth/aspect, -halfWidth/aspect, 0.1, 250)
 camera.position.set(...cameraPosition); camera.lookAt(...target)
-for(let frame=0;frame<4;frame++){renderer.render(scene,camera);await new Promise(requestAnimationFrame)}
+for(let frame=0;frame<2;frame++){renderer.render(scene,camera);await new Promise(requestAnimationFrame)}
 const backend = renderer.backend.isWebGPUBackend ? 'WebGPU' : 'WebGL2'
-document.getElementById('label').innerHTML = `Procedural tree · ${mode === 'sheet' || mode === 'trio' ? `${form} · ${heightM} m · seeds 19 / 41 / 83` : mode}<small>${metrics.length} trees · ${metrics.reduce((sum,item)=>sum+item.triangles,0).toLocaleString('en-US')} near triangles · ${backend}</small>`
-window.__stats = {mode,form,metrics,operationResult,backend,camera:{position:cameraPosition,target,fov},trianglesDrawn:renderer.info.render.triangles}
+document.getElementById('label').innerHTML = `${library==='ez' ? 'ez-tree 1.1.0' : 'Pascal'} · ${mode === 'sheet' || mode === 'trio' ? `${form} · ${heightM} m · seeds 19 / 41 / 83` : mode}<small>${metrics.length} trees · ${metrics.reduce((sum,item)=>sum+item.triangles,0).toLocaleString('en-US')} triangles · ${backend}</small>`
+window.__stats = {
+  mode, form, library, metrics, operationResult, backend,
+  camera: {
+    position: cameraPosition, target, aspect, projection: camera.type,
+    ...(camera.isOrthographicCamera
+      ? { left: camera.left, right: camera.right, top: camera.top, bottom: camera.bottom }
+      : { fov }),
+  },
+  trianglesDrawn: renderer.info.render.triangles,
+}
 window.__done = true
+
 </script>
 </body>
 </html>

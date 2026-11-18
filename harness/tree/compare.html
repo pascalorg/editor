@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Tree comparison</title>
+  <style>
+    * { box-sizing: border-box }
+    body { margin: 0; height: 100vh; background: #f5f5ee; color: #25332b; font: 16px/1.3 system-ui,sans-serif; display: flex; gap: 2px }
+    body.forms { flex-direction: column }
+    article { flex: 1; min-height: 0; min-width: 0; display: flex; flex-direction: column }
+    h2 { margin: 0; padding: 10px 22px 8px; font-size: 18px; font-weight: 650 }
+    iframe { border: 0; width: 100%; min-height: 0; flex: 1 }
+    footer { height: 32px; position: relative; padding: 5px 22px; font-size: 14px }
+    footer span { position: absolute; white-space: nowrap; transform: translateX(-50%) }
+  </style>
+</head>
+<body>
+<script type="module">
+  const query = new URLSearchParams(location.search)
+  const mode = query.get('scene') ?? 'forms'
+  document.body.className = mode
+
+  function addLabel(footer, text, left) {
+    const label = document.createElement('span')
+    label.textContent = text
+    label.style.left = left + '%'
+    footer.appendChild(label)
+  }
+
+  async function show(library) {
+    const card = document.createElement('article')
+    const title = document.createElement('h2')
+    title.textContent = library === 'ez' ? 'ez-tree 1.1.0' : 'Pascal'
+    const iframe = document.createElement('iframe')
+    const params = new URLSearchParams(query)
+    params.set('library', library)
+    params.set('embedded', '1')
+    iframe.src = './view.html?' + params
+    iframe.title = title.textContent + ' ' + mode
+    const footer = document.createElement('footer')
+    card.append(title, iframe, footer)
+    document.body.appendChild(card)
+
+    const deadline = performance.now() + 40000
+    while (!iframe.contentWindow.__done) {
+      if (performance.now() > deadline) throw new Error('Timed out rendering ' + library)
+      await new Promise(requestAnimationFrame)
+    }
+    const stats = iframe.contentWindow.__stats
+    if (mode === 'forms') {
+      // Project ground-plane x into the shared orthographic viewport.
+      const { left, right, position } = stats.camera
+      const xPercent = (x) => (100 * (x - position[0] - left)) / (right - left)
+      addLabel(footer, '1.8 m figure', xPercent(-27.2))
+      for (const tree of stats.metrics)
+        addLabel(footer, tree.preset ?? tree.input.form, xPercent(tree.at[0]))
+    } else if (mode === 'garden') footer.textContent = 'Seven trees, 4–12 m'
+    else footer.textContent = (stats.metrics[0].preset ?? stats.metrics[0].input.form) + ', 8 m'
+    return stats
+  }
+
+  const rows = await Promise.all(['pascal', 'ez'].map(show))
+  if (rows[0].backend !== rows[1].backend || JSON.stringify(rows[0].camera) !== JSON.stringify(rows[1].camera))
+    throw new Error('Comparison camera or backend mismatch')
+  window.__stats = { mode, backend: rows[0].backend, rows, metrics: rows.flatMap(row => row.metrics) }
+  window.__done = true
+</script>
+</body>
+</html>
