@@ -1,5 +1,6 @@
 import { LawnNode } from '@pascal-app/core'
 import type { NodeRenderDefinition } from '../definition-contributions'
+import { buildLawnBakeGeometry } from './bake-geometry'
 import { buildLawnFloorplan } from './floorplan'
 import { buildLawnGeometry } from './geometry'
 
@@ -51,6 +52,9 @@ export const lawnRenderDefinition: NodeRenderDefinition<typeof LawnNode> & { kin
     surfaces: { hosting: false },
   },
   geometry: buildLawnGeometry,
+  bake: 'replace',
+  bakeGeometry: buildLawnBakeGeometry,
+  bakeReplaceRenderer: { module: () => import('./static-renderer') },
   geometryChildTypes: [],
   floorplan: buildLawnFloorplan,
   floorplanScope: 'site',

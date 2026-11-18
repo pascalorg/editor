@@ -13,6 +13,7 @@ import {
   Vector3,
 } from 'three'
 import { MeshStandardNodeMaterial } from 'three/webgpu'
+import { disposeLawnBakeTexture } from './bake-blade-colors'
 import { lawnBladeMaterial, setLawnBladeDraw } from './blade-material'
 import {
   LAWN_MID_INDICES,
@@ -165,7 +166,10 @@ export function disposeLawnGeometry(group: Object3D): void {
       materials.add(material)
   })
   for (const geometry of geometries) geometry.dispose()
-  for (const material of materials) material.dispose()
+  for (const material of materials) {
+    disposeLawnBakeTexture(material)
+    material.dispose()
+  }
 }
 
 export { updateLawnLOD } from './lod'
