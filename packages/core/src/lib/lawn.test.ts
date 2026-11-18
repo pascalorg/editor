@@ -245,7 +245,7 @@ describe('bounded deterministic lawn detail', () => {
 
   test('caps complete flower geometry and obeys the explicitly saved season', () => {
     const owner = site()
-    const trianglesPerSpecies: number[] = []
+    const geometryPerSpecies: string[] = []
     for (const species of ['daisy', 'clover', 'yarrow'] as const) {
       const input = lawn({
         outline: square(40),
@@ -257,7 +257,11 @@ describe('bounded deterministic lawn detail', () => {
       expect(built.flowers.count).toBeGreaterThan(0)
       expect(built.flowers.count).toBeLessThanOrEqual(1024)
       expect(built.flowers.indices.length / 3).toBeLessThanOrEqual(built.flowers.count * 64)
-      trianglesPerSpecies.push((built.flowers.headIndexEnds[0] ?? 0) / 3)
+      geometryPerSpecies.push(
+        JSON.stringify([
+          ...built.flowers.positions.subarray(0, (built.flowers.headIndexEnds[0] ?? 0) * 3),
+        ]),
+      )
       for (let head = 0; head < built.flowers.headIndexEnds.length; head++) {
         expect(
           ((built.flowers.headIndexEnds[head] ?? 0) -
@@ -270,7 +274,7 @@ describe('bounded deterministic lawn detail', () => {
       )
       expect(buildLawn({ ...input, season: 'winter' }, { [owner.id]: owner }).flowers.count).toBe(0)
     }
-    expect(new Set(trianglesPerSpecies).size).toBe(3)
+    expect(new Set(geometryPerSpecies).size).toBe(3)
   })
 
   test('keeps roots out of actual bed and path exclusions, including merged flower roots', () => {

@@ -113,18 +113,48 @@ function flowerDisc(out: FlowerWriter, center: Rgb, radius: number, color: Rgb) 
   }
 }
 
-function floret(out: FlowerWriter, center: Rgb, radius: number, color: Rgb) {
-  const top: Rgb = [center[0], center[1] + radius * 0.2, center[2]]
-  for (let side = 0; side < 4; side++) {
-    const angle = (side * Math.PI) / 2,
-      next = angle + Math.PI / 2
-    triangle(
-      out,
-      [center[0] + Math.cos(angle) * radius, center[1], center[2] + Math.sin(angle) * radius],
-      top,
-      [center[0] + Math.cos(next) * radius, center[1], center[2] + Math.sin(next) * radius],
-      color,
-    )
+function cloverHead(out: FlowerWriter, center: Rgb, yaw: number, color: Rgb) {
+  const radius = 0.0105
+  const height = radius * 0.8
+  const start = out.positions.length
+  const rings = [0, Math.PI / 6, Math.PI / 3].map((latitude) =>
+    Array.from({ length: 8 }, (_, side): Rgb => {
+      const angle = yaw + (side * Math.PI) / 4
+      return [
+        center[0] + Math.cos(angle) * Math.cos(latitude) * radius,
+        center[1] + Math.sin(latitude) * height,
+        center[2] + Math.sin(angle) * Math.cos(latitude) * radius,
+      ]
+    }),
+  )
+  const top: Rgb = [center[0], center[1] + height, center[2]]
+  for (const [band, ring] of rings.entries()) {
+    const upper = rings[band + 1]
+    for (let side = 0; side < 8; side++) {
+      const next = (side + 1) % 8
+      const left = ring[side],
+        right = ring[next]
+      if (!left || !right) continue
+      const tone = 0.86 + band * 0.075 + ((side * 3 + band) % 5) * 0.015
+      const petalColor: Rgb = [color[0] * tone, color[1] * tone, color[2] * tone]
+      const upperLeft = upper?.[side],
+        upperRight = upper?.[next]
+      if (upperLeft && upperRight) {
+        triangle(out, left, upperLeft, upperRight, petalColor)
+        triangle(out, left, upperRight, right, petalColor)
+      } else {
+        triangle(out, left, top, right, petalColor)
+      }
+    }
+  }
+  for (let offset = start; offset < out.positions.length; offset += 3) {
+    const nx = ((out.positions[offset] ?? center[0]) - center[0]) / (radius * radius)
+    const ny = ((out.positions[offset + 1] ?? center[1]) - center[1]) / (height * height)
+    const nz = ((out.positions[offset + 2] ?? center[2]) - center[2]) / (radius * radius)
+    const length = Math.hypot(nx, ny, nz) || 1
+    out.normals[offset] = nx / length
+    out.normals[offset + 1] = ny / length
+    out.normals[offset + 2] = nz / length
   }
 }
 
@@ -157,23 +187,9 @@ function flowerGeometry(out: FlowerWriter, placement: FlowerPlacement) {
     for (let index = 0; index < 2; index++)
       petal(out, leafCenter, yaw + index * Math.PI, 0.022, 0.005, 0.003, leaf)
   } else if (flower.species === 'clover') {
-    for (let index = 0; index < 12; index++) {
-      const fraction = (index + 0.5) / 12,
-        angle = index * GOLDEN_ANGLE + yaw
-      const radius = Math.sqrt(fraction) * 0.008
-      floret(
-        out,
-        [
-          tip[0] + Math.cos(angle) * radius,
-          tip[1] + Math.sqrt(1 - fraction) * 0.006,
-          tip[2] + Math.sin(angle) * radius,
-        ],
-        0.003,
-        color,
-      )
-    }
+    cloverHead(out, tip, yaw, color)
     for (let index = 0; index < 3; index++)
-      petal(out, leafCenter, yaw + (index * Math.PI * 2) / 3, 0.016, 0.012, 0.001, leaf)
+      roundedPetal(out, leafCenter, yaw + (index * Math.PI * 2) / 3, 0.016, 0.012, leaf)
   } else {
     for (let index = 0; index < 6; index++) {
       const angle = yaw + index * GOLDEN_ANGLE,
