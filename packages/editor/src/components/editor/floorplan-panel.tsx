@@ -10129,7 +10129,7 @@ export function FloorplanPanel({
       // have corner-snapped or split-adjusted): the wall we just made in
       // 2D-only, otherwise the 3D tool's published chain start. Both views
       // then draft from the same start.
-      const publishedNextStart = useSegmentDraftChain.getState().wall
+      const { wall: publishedNextStart, wallOutcome } = useSegmentDraftChain.getState()
       const nextStart: WallPlanPoint = createdWall
         ? (createdWall.end as WallPlanPoint)
         : (publishedNextStart ?? point)
@@ -10173,6 +10173,10 @@ export function FloorplanPanel({
         // loop close). Mirror that here instead of chaining from a dead point.
         clearWallPlacementDraft()
         setCursorPoint(null)
+        return
+      } else if (wallOutcome === 'refused') {
+        // Split view: 3D refused this click without stopping the chain, so keep
+        // the current 2D draft, run reference, and typed fields intact.
         return
       }
 

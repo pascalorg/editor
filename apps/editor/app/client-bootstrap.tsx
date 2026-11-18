@@ -13,6 +13,8 @@ import { loadDevLocale } from '@/lib/dev-locales'
 
 registerEnglishLocale()
 
+const registeredInitialLocales = new Set<string>()
+
 export function ClientBootstrap({
   children,
   enableDevDiagnostics,
@@ -24,12 +26,12 @@ export function ClientBootstrap({
   initialLocaleCatalog?: { locale: string; messages: CompiledTranslationMessages }
   locale: string
 }) {
-  const i18n = useMemo(() => {
-    if (initialLocaleCatalog) {
-      registerCompiledMessages(initialLocaleCatalog.locale, '', initialLocaleCatalog.messages)
-    }
-    return createI18n({ locale })
-  }, [initialLocaleCatalog, locale])
+  if (initialLocaleCatalog && !registeredInitialLocales.has(initialLocaleCatalog.locale)) {
+    registeredInitialLocales.add(initialLocaleCatalog.locale)
+    registerCompiledMessages(initialLocaleCatalog.locale, '', initialLocaleCatalog.messages)
+  }
+
+  const i18n = useMemo(() => createI18n({ locale }), [locale])
 
   useEffect(() => {
     if (!enableDevDiagnostics) return
@@ -45,11 +47,23 @@ export function ClientBootstrap({
   }, [i18n])
 
   useEffect(() => {
-    return defaultI18n.subscribeLocale((nextLocale) => {
-      void Promise.all([loadDevLocale(nextLocale), loadBundledLocale(nextLocale)]).finally(() => {
-        i18n.setLocale(nextLocale)
-      })
+    let cancelled = false
+    let latestRequestId = 0
+    const unsubscribe = defaultI18n.subscribeLocale((nextLocale) => {
+      const requestId = ++latestRequestId
+      Promise.all([loadDevLocale(nextLocale), loadBundledLocale(nextLocale)])
+        .then(() => {
+          if (cancelled || requestId !== latestRequestId) return
+          i18n.setLocale(nextLocale)
+        })
+        .catch(() => {
+          // Keep the active locale when catalog loading fails.
+        })
     })
+    return () => {
+      cancelled = true
+      unsubscribe()
+    }
   }, [i18n])
 
   return <PascalI18nProvider i18n={i18n}>{children}</PascalI18nProvider>

@@ -259,17 +259,21 @@ test('first click publishes chain start so a refused first commit keeps split-vi
   try {
     await act(async () => emitter.emit('grid:click', grid(0, 0)))
     expect(useSegmentDraftChain.getState().wall).toEqual([0, 0])
+    expect(useSegmentDraftChain.getState().wallOutcome).toBe('active')
 
     // Attempt a crossing that planWallInsertion refuses (not collinear transit)
     await act(async () => emitter.emit('grid:click', grid(3, 0)))
     expect(levelWalls()).toHaveLength(2)
-    // Chain start remains published while 3D stays drafting so split-view 2D does not tear down
+    // Chain start remains published with outcome 'refused' so split-view 2D neither
+    // tears down nor clears typed fields / run reference
     expect(useSegmentDraftChain.getState().wall).toEqual([0, 0])
+    expect(useSegmentDraftChain.getState().wallOutcome).toBe('refused')
     expect(useFloorplanDraftPreview.getState().wallDraftStart).toEqual([0, 0])
 
-    // Canceling clears the published chain start
+    // Canceling clears the published chain start and resets outcome
     await act(async () => emitter.emit('tool:cancel'))
     expect(useSegmentDraftChain.getState().wall).toBeNull()
+    expect(useSegmentDraftChain.getState().wallOutcome).toBe('idle')
   } finally {
     await renderer.unmount()
   }

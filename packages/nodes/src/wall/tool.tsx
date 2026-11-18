@@ -1001,7 +1001,10 @@ const LineWallTool: React.FC = () => {
               ))
         const dx = snappedEnd[0] - startingPoint.current.x
         const dz = snappedEnd[1] - startingPoint.current.z
-        if (dx * dx + dz * dz < 0.01 * 0.01) return
+        if (dx * dx + dz * dz < 0.01 * 0.01) {
+          useSegmentDraftChain.getState().markRefused('wall')
+          return
+        }
         // A ground(terrain)-hosted chain keeps its frozen construction plane;
         // any other chain re-resolves the aimed surface per commit so a later
         // segment can still elect the slab it visibly crosses instead of
@@ -1056,7 +1059,10 @@ const LineWallTool: React.FC = () => {
             const isCollinearTransit =
               getWallLineKind() !== 'invisible' &&
               wallSegmentsCoverSegment(startPt, snappedEnd, levelWalls)
-            if (!isCollinearTransit) return
+            if (!isCollinearTransit) {
+              useSegmentDraftChain.getState().markRefused('wall')
+              return
+            }
             // Tracking along an existing wall centerline advances the draft origin
             // without duplicating the wall, so a subsequent branch T-joins cleanly.
             nextStart = snappedEnd
