@@ -39,6 +39,7 @@ const openAiInterfaceFields = new Set([
   'category',
   'capabilities',
   'websiteURL',
+  'supportURL',
   'privacyPolicyURL',
   'termsOfServiceURL',
   'defaultPrompt',
@@ -835,13 +836,14 @@ const codexPlugin = parseJson(join(root, '.codex-plugin', 'plugin.json'))
 const codexMarketplace = parseJson(join(root, '.agents', 'plugins', 'marketplace.json'))
 const geminiExtension = parseJson(join(root, 'gemini-extension.json'))
 const cursorPlugin = parseJson(join(root, '.cursor-plugin', 'plugin.json'))
+const kimiPlugin = parseJson(join(root, 'kimi.plugin.json'))
 
 function firstMarketplaceEntry(marketplace: Record<string, unknown>): Record<string, unknown> {
   const entry = Array.isArray(marketplace.plugins) ? marketplace.plugins[0] : undefined
   return typeof entry === 'object' && entry !== null ? (entry as Record<string, unknown>) : {}
 }
 
-function cursorAuthorSubset(value: unknown): string {
+function hostAuthorSubset(value: unknown): string {
   if (typeof value !== 'object' || value === null) return 'missing'
   const { name, email } = value as Record<string, unknown>
   return normalizedAuthor({ name, email })
@@ -866,6 +868,7 @@ const pluginDescriptors = [
   ['Codex plugin manifest', codexPlugin],
   ['Codex marketplace entry', codexMarketplaceEntry],
   ['Cursor plugin manifest', cursorPlugin],
+  ['Kimi plugin manifest', kimiPlugin],
 ] as const
 
 for (const [label, descriptor] of pluginDescriptors) {
@@ -876,15 +879,34 @@ for (const [label, descriptor] of pluginDescriptors) {
   if (descriptor.description !== portablePlugin.description) {
     fail(`${label}: description must match the root plugin.json description`)
   }
-  // Cursor's plugin schema allows only `name` and `email` under `author`
-  // (additionalProperties: false), so its manifest is compared on those two.
-  const expectedAuthor =
-    label === 'Cursor plugin manifest'
-      ? cursorAuthorSubset(portablePlugin.author)
-      : normalizedAuthor(portablePlugin.author)
+  // Cursor and Kimi allow only `name` and `email` under `author`.
+  const expectedAuthor = ['Cursor plugin manifest', 'Kimi plugin manifest'].includes(label)
+    ? hostAuthorSubset(portablePlugin.author)
+    : normalizedAuthor(portablePlugin.author)
   if (normalizedAuthor(descriptor.author) !== expectedAuthor) {
     fail(`${label}: author must match the root plugin.json author`)
   }
+}
+
+if (
+  canonicalJson(kimiPlugin.skills) !==
+  canonicalJson(['./skills/pascal-3d', './skills/furniture-fit'])
+) {
+  fail(
+    'Kimi plugin must include only pascal-3d and furniture-fit until Architect access is reviewed',
+  )
+}
+const kimiServers = kimiPlugin.mcpServers as Record<string, unknown> | undefined
+const kimiServer = kimiServers?.pascal as Record<string, unknown> | undefined
+if (
+  !kimiServers ||
+  Object.keys(kimiServers).join(',') !== 'pascal' ||
+  kimiServer?.url !== 'https://editor.pascal.app/api/mcp' ||
+  kimiServer?.auth !== 'oauth' ||
+  kimiServer?.clientMetadataUrl !==
+    'https://moonshotai.github.io/kimi-code/oauth/client-metadata.json'
+) {
+  fail('Kimi plugin must use hosted Pascal OAuth with the reviewed Kimi client metadata URL')
 }
 
 if (cursorPlugin.displayName !== claudePlugin.displayName) {
@@ -926,11 +948,31 @@ if (Object.keys(portableMcpConfig).sort().join(',') !== '$schema,mcpServers') {
 }
 const claudeMcpServers = (claudeMcpConfig.mcpServers ?? {}) as Record<string, unknown>
 const portableMcpServers = (portableMcpConfig.mcpServers ?? {}) as Record<string, unknown>
-if (Object.keys(portableMcpServers).sort().join(',') !== 'pascal') {
-  fail('Portable mcp.json must declare only the local pascal server')
+const codexMcpConfig = parseJson(join(root, '.mcp.json'))
+const expectedOpenAiServer = {
+  type: 'streamable-http',
+  url: 'https://editor.pascal.app/api/mcp',
+  extensions: {
+    'com.openai': {
+      auth: {
+        type: 'oauth',
+        client: { mode: 'cimd' },
+        baseScopes: ['offline_access', 'scene:read', 'scene:write'],
+      },
+    },
+  },
 }
-if (canonicalJson(portableMcpServers.pascal) !== canonicalJson(claudeMcpServers.pascal)) {
-  fail('Portable mcp.json and skills/.mcp.json must declare an identical pascal server')
+if (
+  Object.keys(portableMcpServers).sort().join(',') !== 'pascal' ||
+  canonicalJson(portableMcpServers.pascal) !== canonicalJson(expectedOpenAiServer)
+) {
+  fail('Portable mcp.json must declare only hosted Pascal OAuth with CIMD')
+}
+if (
+  Object.keys(codexMcpConfig).join(',') !== 'mcpServers' ||
+  canonicalJson(codexMcpConfig.mcpServers) !== canonicalJson(portableMcpConfig.mcpServers)
+) {
+  fail('Codex .mcp.json must match the portable hosted Pascal configuration')
 }
 // The hosted server reads its key through ${user_config.*}, which only Claude Code substitutes, so
 // it stays in the Claude plugin root instead of the portable Agent Plugins manifest.
@@ -959,7 +1001,7 @@ if (claudeHostedKeyOption?.required !== false) {
   fail('Claude plugin userConfig.pascal_api_key must set required to false for local-only installs')
 }
 
-const portablePascalServer = portableMcpServers.pascal as Record<string, unknown> | undefined
+const localPascalServer = claudeMcpServers.pascal as Record<string, unknown> | undefined
 if (geminiExtension.name !== 'pascal') fail('Gemini CLI extension name must be pascal')
 if (geminiExtension.version !== pluginVersion) {
   fail(`Gemini CLI extension version must match the root plugin.json version ${pluginVersion}`)
@@ -985,11 +1027,11 @@ if (!geminiServers || Object.keys(geminiServers).join(',') !== 'pascal') {
 } else if (
   // Gemini CLI's MCP server type field accepts only sse or http; stdio is inferred from command.
   'type' in (geminiPascalServer ?? {}) ||
-  geminiPascalServer?.command !== portablePascalServer?.command ||
-  canonicalJson(geminiPascalServer?.args) !== canonicalJson(portablePascalServer?.args)
+  geminiPascalServer?.command !== localPascalServer?.command ||
+  canonicalJson(geminiPascalServer?.args) !== canonicalJson(localPascalServer?.args)
 ) {
   fail(
-    'Gemini CLI extension pascal server must run the mcp.json command and args without a transport type',
+    'Gemini CLI extension pascal server must keep the local command and args without a transport type',
   )
 }
 if (
@@ -1091,7 +1133,7 @@ if (
 ) {
   fail('OpenAI category must use a supported final-directory value')
 }
-for (const field of ['websiteURL', 'privacyPolicyURL', 'termsOfServiceURL']) {
+for (const field of ['websiteURL', 'supportURL', 'privacyPolicyURL', 'termsOfServiceURL']) {
   validateHttpsUrl(portableInterface?.[field], `OpenAI ${field}`, openAiListingUrlLimit)
 }
 for (const field of Object.keys(portableInterface ?? {})) {
@@ -1117,6 +1159,7 @@ if ('screenshots' in (portableInterface ?? {})) {
 }
 
 if (codexPlugin.skills !== './skills/') fail('Codex plugin must point to canonical ./skills/')
+if (codexPlugin.mcpServers !== './.mcp.json') fail('Codex plugin must point to hosted ./.mcp.json')
 if (codexMarketplace.name !== 'pascal') fail('Codex marketplace name must be pascal')
 const codexEntries = codexMarketplace.plugins
 if (!Array.isArray(codexEntries) || codexEntries.length !== 1) {

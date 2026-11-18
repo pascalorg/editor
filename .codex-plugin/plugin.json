@@ -12,6 +12,7 @@
   "license": "MIT",
   "keywords": ["pascal", "3d", "architecture", "mcp", "furniture", "spatial"],
   "skills": "./skills/",
+  "mcpServers": "./.mcp.json",
   "interface": {
     "displayName": "Pascal",
     "shortDescription": "Build 3D scenes and check fit",
@@ -24,6 +25,7 @@
       "Assess furniture footprints"
     ],
     "websiteURL": "https://editor.pascal.app/docs/developers/mcp",
+    "supportURL": "https://editor.pascal.app/capture/support",
     "privacyPolicyURL": "https://editor.pascal.app/privacy",
     "termsOfServiceURL": "https://editor.pascal.app/terms",
     "defaultPrompt": [

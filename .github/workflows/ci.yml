@@ -59,7 +59,7 @@ jobs:
             # the validator itself. `every` ANDs the lines, so the positive
             # patterns are one brace glob.
             skills:
-              - '{skills/**,.agents/**,plugin-evals/**,.claude-plugin/**,.codex-plugin/**,.cursor-plugin/**,plugin.json,mcp.json,gemini-extension.json,assets/pascal-mark*.svg,README.md,package.json,scripts/validate-skills.ts,scripts/path-containment*.ts,scripts/*-policy*.ts,.github/workflows/ci.yml}'
+              - '{skills/**,.agents/**,plugin-evals/**,.claude-plugin/**,.codex-plugin/**,.cursor-plugin/**,plugin.json,kimi.plugin.json,locales/kimi/**,mcp.json,.mcp.json,gemini-extension.json,assets/pascal-mark*.svg,README.md,package.json,scripts/validate-skills.ts,scripts/path-containment*.ts,scripts/*-policy*.ts,.github/workflows/ci.yml}'
 
   # Lint, localization, skills and types. The three jobs below ran back to
   # back in one job (7 to 8 min); side by side the gate takes the slowest one.

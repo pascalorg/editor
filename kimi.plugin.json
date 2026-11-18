@@ -1,0 +1,64 @@
+{
+  "$schema": "https://catalog.msh.team/misc/kimi.plugin.schema.json",
+  "name": "pascal-agent-skills",
+  "version": "0.1.11",
+  "description": "Create, inspect, validate, and assess furniture layouts with bounded next actions in Pascal through MCP.",
+  "keywords": [
+    "pascal",
+    "3d",
+    "architecture",
+    "bim",
+    "interior-design",
+    "mcp",
+    "spatial"
+  ],
+  "author": {
+    "name": "Pascal",
+    "email": "support@pascal.app"
+  },
+  "homepage": "https://editor.pascal.app/docs/developers/mcp",
+  "license": "MIT",
+  "interface": {
+    "displayName": "Pascal",
+    "shortDescription": "Build 3D scenes and check fit",
+    "longDescription": "Use Pascal's MCP tools to work with editable building scenes, validate and save results, and produce bounded furniture footprint reports with explicit evidence, limitations, and blocker-aware next actions.",
+    "developerName": "Pascal",
+    "websiteURL": "https://editor.pascal.app/docs/developers/mcp",
+    "iconUrl": "https://editor.pascal.app/icons/icon-512.png",
+    "category": "DEVELOPER",
+    "defaultLocale": "en-US",
+    "locales": "./locales/kimi/",
+    "tryPrompts": [
+      "Create a small one-bedroom apartment in Pascal, validate it, save a draft, and return the editor link.",
+      "Inspect my Pascal project and add a covered porch without changing unrelated rooms.",
+      "Check whether my furniture fits in the measured Pascal room, including collisions and door access."
+    ],
+    "skillOverrides": {
+      "pascal-3d": {
+        "displayName": "Pascal 3D",
+        "description": "Create, edit, validate, and save 3D building scenes"
+      },
+      "furniture-fit": {
+        "displayName": "Furniture Fit",
+        "description": "Check furniture footprints, collisions, and clearances"
+      }
+    },
+    "mcpOverrides": {
+      "pascal": {
+        "displayName": "Pascal",
+        "description": "Hosted 3D building tools with Pascal OAuth"
+      }
+    }
+  },
+  "skills": [
+    "./skills/pascal-3d",
+    "./skills/furniture-fit"
+  ],
+  "mcpServers": {
+    "pascal": {
+      "url": "https://editor.pascal.app/api/mcp",
+      "auth": "oauth",
+      "clientMetadataUrl": "https://moonshotai.github.io/kimi-code/oauth/client-metadata.json"
+    }
+  }
+}

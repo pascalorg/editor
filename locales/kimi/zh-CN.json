@@ -1,0 +1,27 @@
+{
+  "displayName": "Pascal",
+  "shortDescription": "使用 Pascal 创建 3D 场景并检查家具适配",
+  "longDescription": "使用 Pascal MCP 工具处理可编辑建筑场景、验证并保存结果，生成有明确证据、限制和后续步骤的家具占地报告。",
+  "developerName": "Pascal",
+  "tryPrompts": [
+    "在 Pascal 中创建一个一居室公寓，验证场景，保存草稿，并返回编辑器链接。",
+    "检查我的 Pascal 项目，添加一个有顶门廊，不要改动无关房间。",
+    "检查我的家具是否适合已测量的 Pascal 房间，包括碰撞和门通行空间。"
+  ],
+  "mcpOverrides": {
+    "pascal": {
+      "displayName": "Pascal",
+      "description": "通过 Pascal OAuth 使用托管 3D 建筑工具"
+    }
+  },
+  "skillOverrides": {
+    "pascal-3d": {
+      "displayName": "Pascal 3D",
+      "description": "创建、编辑、验证并保存 3D 建筑场景"
+    },
+    "furniture-fit": {
+      "displayName": "家具适配检查",
+      "description": "检查家具占地、碰撞和净距"
+    }
+  }
+}
