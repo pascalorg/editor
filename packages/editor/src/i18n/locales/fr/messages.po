@@ -9000,6 +9000,14 @@ msgstr "Condenseur"
 msgid "editor.inspector.option.conical.1d9dreq"
 msgstr "Conique"
 
+# English: "Conifer"
+# Source-Hash: 81318a19591adf07
+# Review: required
+#: packages/nodes/src/i18n/definition-messages.ts
+#, fuzzy
+msgid "editor.inspector.option.conifer.12sy81j"
+msgstr "Conifère"
+
 # Source-Hash: 6786ac75cbe9af57
 # Review: required
 # AI-Provider: claude-code

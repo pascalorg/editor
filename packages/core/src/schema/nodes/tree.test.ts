@@ -44,7 +44,7 @@ describe('tree bounds', () => {
     { seed: -2147483649 },
     { seed: 1.5 },
     { gen: 2 },
-    { form: 'conifer' },
+    { form: 'unknown' },
     { foliage: 'green' },
     { position: [0, 1, 0] },
     { position: [10_001, 0, 0] },

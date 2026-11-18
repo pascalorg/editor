@@ -1,4 +1,11 @@
-export const TREE_FORMS = ['round', 'spreading', 'upright', 'weeping', 'multistem'] as const
+export const TREE_FORMS = [
+  'round',
+  'spreading',
+  'upright',
+  'conifer',
+  'weeping',
+  'multistem',
+] as const
 
 export const TREE_LIMITS = {
   minHeight: 2,

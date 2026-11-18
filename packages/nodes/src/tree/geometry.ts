@@ -18,6 +18,8 @@ import {
 } from 'three'
 import { siteContextNodes } from '../shared/site-context'
 
+import { disposeTreeAtlas, treeAtlas, treeAtlasUV } from './sprig-atlas'
+
 type TreeLevel = 'near' | 'far'
 type CachedTree = { near: BufferGeometry; far: BufferGeometry; users: number }
 const geometries = new Map<string, CachedTree>()
@@ -28,11 +30,20 @@ function treeGeometryKey(parameters: TreeParameters): string {
   return JSON.stringify([form, heightM, spreadM, foliage, density, seed, gen])
 }
 
-function treeBufferGeometry(mesh: TreeMesh): BufferGeometry {
+function treeBufferGeometry(mesh: TreeMesh, form: TreeParameters['form']): BufferGeometry {
   const geometry = new BufferGeometry()
   geometry.setAttribute('position', new BufferAttribute(mesh.position, 3))
   geometry.setAttribute('normal', new BufferAttribute(mesh.normal, 3))
   geometry.setAttribute('color', new BufferAttribute(mesh.color, 3))
+  const style =
+    form === 'conifer'
+      ? 'pine'
+      : form === 'weeping'
+        ? 'willow'
+        : form === 'multistem' || form === 'upright'
+          ? 'small'
+          : 'broad'
+  geometry.setAttribute('uv', new BufferAttribute(treeAtlasUV(mesh.barkUV, mesh.sprigs, style), 2))
   geometry.setIndex(new BufferAttribute(mesh.index, 1))
   geometry.computeBoundingBox()
   geometry.computeBoundingSphere()
@@ -46,8 +57,8 @@ function acquireTree(parameters: TreeParameters) {
   if (!cached) {
     const built = buildTree(parameters)
     cached = {
-      near: treeBufferGeometry(built.near),
-      far: treeBufferGeometry(built.far),
+      near: treeBufferGeometry(built.near, parameters.form),
+      far: treeBufferGeometry(built.far, parameters.form),
       users: 0,
     }
     geometries.set(key, cached)
@@ -64,6 +75,7 @@ function acquireTree(parameters: TreeParameters) {
       geometries.delete(key)
       entry.near.dispose()
       entry.far.dispose()
+      if (geometries.size === 0) disposeTreeAtlas()
     },
   }
 }
@@ -79,6 +91,9 @@ function buildTreeLevel(
   // Each subtree owns its ordinary material; its disposal releases one shared geometry lease.
   const material = new MeshStandardMaterial({
     vertexColors: true,
+    map: treeAtlas(),
+    alphaTest: 0.29,
+    alphaToCoverage: true,
     roughness: 0.88,
     metalness: 0,
     side: DoubleSide,

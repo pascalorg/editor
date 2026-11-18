@@ -23,7 +23,7 @@ describe('procedural tree geometry', () => {
     const first = buildTree(tree())
     const second = buildTree(tree())
     for (const level of ['near', 'far'] as const)
-      for (const attribute of ['position', 'normal', 'color', 'index'] as const)
+      for (const attribute of ['position', 'normal', 'color', 'index', 'barkUV', 'sprigs'] as const)
         expect(new Uint8Array(first[level][attribute].buffer)).toEqual(
           new Uint8Array(second[level][attribute].buffer),
         )
@@ -55,6 +55,38 @@ describe('procedural tree geometry', () => {
     expect(bare.triangles).toBe(bare.woodTriangles)
     expect(bare.triangles).toBeGreaterThan(1000)
     expect(bare.triangles).toBeLessThan(estimateTree(tree()).triangles)
+  })
+
+  test.each(TREE_FORMS)('%s keeps both crowns inside the reported ground-plan disc', (form) => {
+    for (const spreadM of [0.5, 6.4, 30]) {
+      const input = tree({ form, spreadM })
+      const { near, far } = buildTree(input)
+      for (const mesh of [near, far]) {
+        let radius = 0
+        let top = 0
+        for (let i = 0; i < mesh.position.length; i += 3) {
+          radius = Math.max(radius, Math.hypot(mesh.position[i]!, mesh.position[i + 2]!))
+          top = Math.max(top, mesh.position[i + 1]!)
+        }
+        expect(radius).toBeLessThanOrEqual(spreadM * 0.5 + 0.001)
+        expect(radius).toBeGreaterThan(spreadM * 0.4)
+        expect(top).toBeGreaterThan(input.heightM * 0.9)
+        expect(top).toBeLessThanOrEqual(input.heightM + 0.01)
+        expect(mesh.barkUV.length / 2 + mesh.sprigs.length * 4).toBe(mesh.position.length / 3)
+      }
+    }
+  })
+
+  test('changing the leaf density preserves winter wood at both levels', () => {
+    const winter = buildTree(tree({ density: 0 }))
+    const summer = buildTree(tree({ density: 1 }))
+    for (const level of ['near', 'far'] as const) {
+      expect(winter[level].sprigs.length).toBe(0)
+      expect(summer[level].position.subarray(0, winter[level].position.length)).toEqual(
+        winter[level].position,
+      )
+      expect(summer[level].sprigs.length).toBeGreaterThan(0)
+    }
   })
 
   test('an eight metre broadleaf uses the requested near-detail range', () => {

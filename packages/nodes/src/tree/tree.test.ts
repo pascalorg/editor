@@ -62,7 +62,26 @@ describe('tree render and plan adapters', () => {
       expect(mesh.name).toBe('tree-near')
       expect(mesh.material).toBeInstanceOf(MeshStandardMaterial)
       expect((mesh.material as MeshStandardMaterial).vertexColors).toBe(true)
-      expect(Object.keys(mesh.geometry.attributes).sort()).toEqual(['color', 'normal', 'position'])
+      expect(Object.keys(mesh.geometry.attributes).sort()).toEqual([
+        'color',
+        'normal',
+        'position',
+        'uv',
+      ])
+      const material = mesh.material as MeshStandardMaterial
+      expect(material.alphaTest).toBeGreaterThan(0)
+      expect(material.alphaToCoverage).toBe(true)
+      expect(material.map?.generateMipmaps).toBe(true)
+      const texels = material.map?.image.data as Uint8Array
+      let gaps = 0,
+        solid = 0
+      for (let i = 3; i < texels.length; i += 4) {
+        if (texels[i] === 0) gaps++
+        if (texels[i] === 255) solid++
+      }
+      expect(gaps).toBeGreaterThan(texels.length / 40)
+      expect(solid).toBeGreaterThan(texels.length / 40)
+      expect(mesh.geometry.attributes.uv?.count).toEqual(mesh.geometry.attributes.position?.count)
       expect(mesh.geometry.index?.count).toBeGreaterThan(0)
       expect(mesh.geometry.index?.count ?? Infinity).toBeLessThanOrEqual(12_000 * 3)
       expect(mesh.castShadow && mesh.receiveShadow).toBe(true)

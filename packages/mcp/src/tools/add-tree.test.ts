@@ -291,7 +291,7 @@ const refusalCases: { name: string; nodes?: Nodes; args: Record<string, unknown>
     },
     {
       name: 'an unsupported form',
-      args: { trees: validTrees, form: 'conifer' },
+      args: { trees: validTrees, form: 'unknown' },
       code: 'invalid_input',
     },
     { name: 'no Site', nodes: {}, args: { trees: validTrees }, code: 'no_site' },

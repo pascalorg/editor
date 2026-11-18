@@ -3623,6 +3623,10 @@ msgid "editor.inspector.option.conical.1d9dreq"
 msgstr "Conical"
 
 #: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.option.conifer.12sy81j"
+msgstr "Conifer"
+
+#: packages/nodes/src/i18n/definition-messages.ts
 msgid "editor.inspector.option.corbeled.bovs4v"
 msgstr "Corbeled"
 

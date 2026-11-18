@@ -147,7 +147,7 @@ describe('tree refusals are atomic', () => {
     { trees: [{ at: [0, 0], spreadM: 0.4 }] },
     { trees: [{ at: [0, 0], foliage: '#bad' }] },
     { trees: [{ at: [0, 0], density: -1 }] },
-    { trees: [{ at: [0, 0], form: 'conifer' }] },
+    { trees: [{ at: [0, 0], form: 'unknown' }] },
     { trees: [{ at: [Number.NaN, 0] }] },
     { gen: 2, trees: [{ at: [0, 0] }] },
   ])('invalid input produces no writes: %j', (input) => {
