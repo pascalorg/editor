@@ -7,14 +7,19 @@ import {
   type TreeNode,
   type TreeParameters,
 } from '@pascal-app/core'
+import { markPureRaycast } from '@pascal-app/viewer'
 import {
   BufferAttribute,
   BufferGeometry,
+  type DataTexture,
   DoubleSide,
   Group,
+  type Intersection,
   Mesh,
   MeshStandardMaterial,
   type Object3D,
+  type Raycaster,
+  type Vector2,
 } from 'three'
 import { siteContextNodes } from '../shared/site-context'
 
@@ -83,6 +88,37 @@ function acquireTree(parameters: TreeParameters) {
   }
 }
 
+function atlasAlpha(atlas: DataTexture, uv: Vector2): number {
+  const { data, width, height } = atlas.image
+  if (!data) return 0
+  const x = uv.x * width - 0.5
+  const y = uv.y * height - 0.5
+  const column = Math.floor(x)
+  const row = Math.floor(y)
+  const alpha = (col: number, line: number) => {
+    const texel =
+      Math.min(height - 1, Math.max(0, line)) * width + Math.min(width - 1, Math.max(0, col))
+    return (data[texel * 4 + 3] ?? 0) / 255
+  }
+  const lower = alpha(column, row) * (1 - x + column) + alpha(column + 1, row) * (x - column)
+  const upper =
+    alpha(column, row + 1) * (1 - x + column) + alpha(column + 1, row + 1) * (x - column)
+  return lower * (1 - y + row) + upper * (y - row)
+}
+
+function treeSilhouetteRaycast(atlas: DataTexture, cutoff: number) {
+  return markPureRaycast(function raycast(
+    this: Mesh,
+    raycaster: Raycaster,
+    intersections: Intersection[],
+  ) {
+    const hits: Intersection[] = []
+    Mesh.prototype.raycast.call(this, raycaster, hits)
+    for (const hit of hits)
+      if (hit.uv && atlasAlpha(atlas, hit.uv) >= cutoff) intersections.push(hit)
+  })
+}
+
 function buildTreeLevel(
   node: TreeNode,
   ctx: Partial<GeometryContext> | undefined,
@@ -104,6 +140,8 @@ function buildTreeLevel(
   material.name = 'tree-foliage-and-wood'
   material.addEventListener('dispose', lease.release)
   const mesh = new Mesh(lease.entry[level], material)
+  // Selection highlights may replace the material, but not the tree's leaf silhouette.
+  mesh.raycast = treeSilhouetteRaycast(treeAtlas(), material.alphaTest)
   ownedMaterials.set(mesh, material)
   mesh.name = `tree-${level}`
   mesh.position.y = resolveTreeGround(node, siteContextNodes(node, ctx)).heightAt(
