@@ -216,7 +216,7 @@ access and public embeds.
 
 To have the container hosted and managed for you, deploy it on Elestio:
 
-<a href="https://dash.elest.io/deploy?soft=Pascal&id=595"><img src="https://elest.io/images/logos/deploy-to-elestio-btn.png" alt="Deploy on Elestio" height="20"></a>
+<a href="https://dash.elest.io/deploy?soft=Pascal&id=595"><img src="https://elest.io/images/logos/deploy-to-elestio-btn.svg" alt="Deploy on Elestio" height="32"></a>
 
 ## Use the published packages
 
