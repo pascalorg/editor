@@ -5146,14 +5146,17 @@ export function FloorplanPanel({
   // subscription stays dormant there.
   useEffect(() => {
     if (!(mode === 'build' && tool === 'wall')) return
-    return useSegmentDraftChain.subscribe((state, previousState) => {
-      const next = state.wall
-      if (next === previousState.wall) return
+    const adopt = (next: WallPlanPoint | null) => {
       if (!next) return
       setDraftStart((current) =>
         current && current[0] === next[0] && current[1] === next[1] ? current : next,
       )
       setWallChainFirstVertex((current) => current ?? next)
+    }
+    adopt(useSegmentDraftChain.getState().wall)
+    return useSegmentDraftChain.subscribe((state, previousState) => {
+      if (state.wall === previousState.wall) return
+      adopt(state.wall)
     })
   }, [mode, tool])
   // Direction of the run's last wall (a pulled run's source first): the next

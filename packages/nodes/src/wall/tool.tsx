@@ -743,6 +743,7 @@ const LineWallTool: React.FC = () => {
       const draftPreview = useFloorplanDraftPreview.getState()
       draftPreview.setWallDraftStart(run.start)
       draftPreview.setWallDraftEnd(run.start)
+      useSegmentDraftChain.getState().setChainStart('wall', [run.start[0], run.start[1]])
       cursorRef.current?.position.copy(startingPoint.current)
       if (wallPreviewRef.current) wallPreviewRef.current.visible = false
       setDraftMeasurement(null)
@@ -950,6 +951,7 @@ const LineWallTool: React.FC = () => {
         const draftPreview = useFloorplanDraftPreview.getState()
         draftPreview.setWallDraftStart(snappedStart)
         draftPreview.setWallDraftEnd(snappedStart)
+        useSegmentDraftChain.getState().setChainStart('wall', [snappedStart[0], snappedStart[1]])
         setAxisGuide({
           origin: snappedStart,
           endOrigin: null,

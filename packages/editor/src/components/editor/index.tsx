@@ -131,6 +131,7 @@ import { DeleteConfirmationDialog } from './delete-confirmation-dialog'
 import { EditorLayoutV2 } from './editor-layout-v2'
 import { ExportManager } from './export-manager'
 import { FenceTangentLines3D } from './fence-tangent-lines-3d'
+import { FirstPersonControls, FirstPersonOverlay } from './first-person-controls'
 import { FloatingActionMenu } from './floating-action-menu'
 import { FloatingBuildingActionMenu } from './floating-building-action-menu'
 import { FloorplanModeCoordinator } from './floorplan-mode-coordinator'
@@ -160,16 +161,6 @@ import { WallRegionHandles } from './wall-region-handles'
 const LazyFloorplanPanel = lazy(async () => {
   const mod = await import('./floorplan-panel')
   return { default: mod.FloorplanPanel }
-})
-
-const LazyFirstPersonControls = lazy(async () => {
-  const mod = await import('./first-person-controls')
-  return { default: mod.FirstPersonControls }
-})
-
-const LazyFirstPersonOverlay = lazy(async () => {
-  const mod = await import('./first-person-controls')
-  return { default: mod.FirstPersonOverlay }
 })
 
 const LazyRiserDiagramPanel = lazy(async () => {
@@ -1026,11 +1017,7 @@ const ViewerSceneContent = memo(function ViewerSceneContent({
       <StairEditSystem />
       {!(isLoading || isFirstPersonMode) && <SnapAwareGrid />}
       {!(isLoading || noEditing) && <ToolManager />}
-      {isFirstPersonMode && (
-        <Suspense fallback={null}>
-          <LazyFirstPersonControls />
-        </Suspense>
-      )}
+      {isFirstPersonMode && <FirstPersonControls />}
       {isCaptureMode && !isXRMode && <CaptureCameraRig />}
       {!isXRMode && <CustomCameraControls sceneReady={!isLoading} />}
       {!isXRMode && <FollowPascal />}
@@ -1564,9 +1551,7 @@ function PreviewStage({
   return (
     <div className="dark relative h-full w-full overflow-hidden bg-neutral-100 text-foreground">
       {isFirstPersonMode ? (
-        <Suspense fallback={null}>
-          <LazyFirstPersonOverlay onExit={() => useEditor.getState().setFirstPersonMode(false)} />
-        </Suspense>
+        <FirstPersonOverlay onExit={() => useEditor.getState().setFirstPersonMode(false)} />
       ) : (
         <ViewerOverlay
           hideBottomBar={stageMode !== '3d'}
@@ -1961,11 +1946,7 @@ function EditorContent({
       <CeilingSystem />
       <RoofEditSystem />
       <StairEditSystem />
-      {isFirstPersonMode && (
-        <Suspense fallback={null}>
-          <LazyFirstPersonControls />
-        </Suspense>
-      )}
+      {isFirstPersonMode && <FirstPersonControls />}
       <CustomCameraControls />
       <ThumbnailGenerator onThumbnailCapture={onThumbnailCapture} />
       <VectorEdgeExtractor />
@@ -2147,11 +2128,9 @@ function EditorContent({
                       owns the framing chrome — the walkthrough HUD would both
                       clutter the frame and offer a second, conflicting exit. */}
                   {isFirstPersonMode && !isCaptureMode && (
-                    <Suspense fallback={null}>
-                      <LazyFirstPersonOverlay
-                        onExit={() => useEditor.getState().setFirstPersonMode(false)}
-                      />
-                    </Suspense>
+                    <FirstPersonOverlay
+                      onExit={() => useEditor.getState().setFirstPersonMode(false)}
+                    />
                   )}
                   {viewerBanner}
                   {projectId && isCaptureMode ? (
@@ -2229,11 +2208,7 @@ function EditorContent({
             />
             <LazyRiserDiagramGate />
             {isFirstPersonMode && (
-              <Suspense fallback={null}>
-                <LazyFirstPersonOverlay
-                  onExit={() => useEditor.getState().setFirstPersonMode(false)}
-                />
-              </Suspense>
+              <FirstPersonOverlay onExit={() => useEditor.getState().setFirstPersonMode(false)} />
             )}
           </ViewerOverlays>
         </>

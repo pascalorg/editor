@@ -18,6 +18,7 @@ import {
   useEditor,
   useFloorplanDraftPreview,
   usePlacementTyping,
+  useSegmentDraftChain,
 } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { Html } from '@react-three/drei'
@@ -226,6 +227,49 @@ test('collinear transit advances draft origin along an existing wall centerline 
       (end) => end.candidate,
     )
     expect(joinableGaps).toEqual([])
+  } finally {
+    await renderer.unmount()
+  }
+})
+
+test('first click publishes chain start so a refused first commit keeps split-view synced until cancel', async () => {
+  // Two very closely spaced parallel walls trigger a sliver refusal on a crossing draft
+  const wallA = WallNode.parse({
+    id: 'wall_sliver_a',
+    parentId: level.id,
+    start: [1, -2],
+    end: [1, 2],
+  })
+  const wallB = WallNode.parse({
+    id: 'wall_sliver_b',
+    parentId: level.id,
+    start: [1.005, -2],
+    end: [1.005, 2],
+  })
+  useScene.setState((state) => ({
+    nodes: {
+      ...state.nodes,
+      [level.id]: { ...level, children: [wallA.id, wallB.id] },
+      [wallA.id]: wallA,
+      [wallB.id]: wallB,
+    },
+  }))
+
+  const renderer = await mountWallTool()
+  try {
+    await act(async () => emitter.emit('grid:click', grid(0, 0)))
+    expect(useSegmentDraftChain.getState().wall).toEqual([0, 0])
+
+    // Attempt a crossing that planWallInsertion refuses (not collinear transit)
+    await act(async () => emitter.emit('grid:click', grid(3, 0)))
+    expect(levelWalls()).toHaveLength(2)
+    // Chain start remains published while 3D stays drafting so split-view 2D does not tear down
+    expect(useSegmentDraftChain.getState().wall).toEqual([0, 0])
+    expect(useFloorplanDraftPreview.getState().wallDraftStart).toEqual([0, 0])
+
+    // Canceling clears the published chain start
+    await act(async () => emitter.emit('tool:cancel'))
+    expect(useSegmentDraftChain.getState().wall).toBeNull()
   } finally {
     await renderer.unmount()
   }
