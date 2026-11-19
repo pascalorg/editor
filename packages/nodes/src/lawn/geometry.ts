@@ -38,7 +38,7 @@ export function lawnBufferGeometry(data: LawnMeshArrays): BufferGeometry {
   return geometry
 }
 
-function lawnFlowerGeometry(data: LawnBuild['flowers']) {
+export function lawnFlowerGeometry(data: LawnBuild['flowers']) {
   // Complete heads occupy contiguous triangle ranges. Their live draw can use the
   // vertices directly and pack normals and linear colours without an identity index.
   const geometry = new BufferGeometry()
@@ -126,7 +126,51 @@ function detailChunk(
   near.castShadow = mid.castShadow = true
   near.receiveShadow = mid.receiveShadow = true
   near.visible = mid.visible = false
-  return { near, mid, count: chunk.count, midCount: chunk.midCount, sphere, tier: 'far' }
+  return {
+    key: chunk.key,
+    near,
+    mid,
+    count: chunk.count,
+    midCount: chunk.midCount,
+    sphere,
+    tier: 'far',
+  }
+}
+
+/** The two blade meshes of one chunk built on its own (`buildLawnChunk`), as the full build makes them. */
+export function lawnChunkDetail(
+  node: LawnNode,
+  chunk: Pick<LawnChunk, 'key' | 'count' | 'midCount' | 'bounds'> & {
+    rootHeight: Float32Array
+    traits: Float32Array
+  },
+  material: MeshStandardNodeMaterial,
+  tuftWidthScale: number,
+): LawnDetailChunk {
+  return detailChunk(
+    node,
+    {
+      rootHeight: chunk.rootHeight,
+      traits: chunk.traits,
+      count: chunk.count,
+      chunks: [],
+      tuftWidthScale,
+    },
+    {
+      key: chunk.key,
+      start: 0,
+      count: chunk.count,
+      midCount: chunk.midCount,
+      bounds: chunk.bounds,
+    },
+    material,
+  )
+}
+
+export function lawnGroundGeometry(base: LawnBuild['base']): BufferGeometry {
+  const geometry = lawnBufferGeometry(base)
+  if (base.cover) geometry.setAttribute('lawnCover', new BufferAttribute(base.cover, 1))
+  return geometry
 }
 
 export function buildLawnGeometry(node: LawnNode, ctx?: Partial<GeometryContext>): Group {
@@ -139,9 +183,7 @@ export function buildLawnGeometry(node: LawnNode, ctx?: Partial<GeometryContext>
   group.name = 'lawn-detail'
   result.add(group)
   const turf = lawnGroundMaterial(node, !!built.base.cover)
-  const base = lawnBufferGeometry(built.base)
-  if (built.base.cover) base.setAttribute('lawnCover', new BufferAttribute(built.base.cover, 1))
-  const ground = new Mesh(base, turf.material)
+  const ground = new Mesh(lawnGroundGeometry(built.base), turf.material)
   ground.name = 'lawn-ground'
   ground.receiveShadow = true
   group.add(ground)
@@ -168,6 +210,14 @@ export function buildLawnGeometry(node: LawnNode, ctx?: Partial<GeometryContext>
     chunks,
     flowers,
     headIndexEnds: built.flowers.headIndexEnds,
+    live: {
+      nodeId: node.id,
+      strokes: node.strokes,
+      ground,
+      groundPainted: !!built.base.cover,
+      blades,
+      tuftWidthScale: built.blades.tuftWidthScale,
+    },
   })
   result.userData.lawn = built.facts
   noteLawnBuild(node.id, performance.now() - started)

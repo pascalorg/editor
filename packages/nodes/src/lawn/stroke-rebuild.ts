@@ -8,19 +8,37 @@
 export const LAWN_STROKE_REBUILD_MS = 120
 export const LAWN_STROKE_REBUILD_SHARE = 0.2
 
-type Stroke = { key?: string; at: number; cost: number }
+type Stroke = { key?: string; at: number; cost: number; chunked: boolean }
 const strokes = new Map<string, Stroke>()
+const issued = new Map<string, string>()
 let builds = 0
 
 const spacing = (stroke: Stroke) =>
   Math.max(LAWN_STROKE_REBUILD_MS, stroke.cost / LAWN_STROKE_REBUILD_SHARE)
 
 export function beginLawnStroke(id: string): void {
-  strokes.set(id, { at: 0, cost: 0 })
+  strokes.set(id, { at: 0, cost: 0, chunked: false })
 }
 
 export function endLawnStroke(id: string): void {
   strokes.delete(id)
+}
+
+export function lawnStrokeInProgress(id: string): boolean {
+  return strokes.has(id)
+}
+
+export function lawnStrokesInProgress(): string[] {
+  return [...strokes.keys()]
+}
+
+/**
+ * The mounted lawn redraws this stroke chunk by chunk (`stroke-chunks.ts`), so the viewer keeps
+ * the build it has until the stroke ends. Without it the spaced whole rebuilds below apply.
+ */
+export function setLawnStrokeChunked(id: string, chunked: boolean): void {
+  const stroke = strokes.get(id)
+  if (stroke) stroke.chunked = chunked
 }
 
 /** What the lawn's last full build cost; a slower lawn spaces its stroke rebuilds further apart. */
@@ -42,8 +60,11 @@ export function lawnStrokeCatchUpMs(id: string): number {
  */
 export function lawnGeometryKey(node: { id: string }, now = performance.now()): string {
   const stroke = strokes.get(node.id)
+  const held = issued.get(node.id)
+  if (stroke?.chunked && held !== undefined) return held
   if (stroke?.key !== undefined && now - stroke.at < spacing(stroke)) return stroke.key
   const key = `lawn-build-${++builds}`
+  issued.set(node.id, key)
   if (stroke) {
     stroke.key = key
     stroke.at = now
