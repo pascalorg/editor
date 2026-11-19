@@ -28,21 +28,47 @@ export function drawTreeSeed(): number {
 }
 
 /**
- * The tree a click would plant with this seed, standing at the Site's origin: what the tool
- * shows as a ghost. Null where the operation would refuse to plant at all (no Site).
+ * The tree a click would plant with this seed: what the tool shows as a ghost. Its shape does
+ * not depend on where it stands, so it is asked of the operation on the bare Site: asked at a
+ * point of the real scene, the operation refuses wherever a house stands (the Site's origin,
+ * often), and there was no ghost at all. Null only without a Site.
  */
 export function previewTree(
   nodes: ReturnType<SceneApi['nodes']>,
   siteId: string | undefined,
   seed: number,
 ): TreeNode | null {
+  const sites = Object.values(nodes).filter((node) => node?.type === 'site')
+  const site = siteId ? nodes[siteId as AnyNodeId] : sites.length === 1 ? sites[0] : undefined
+  if (site?.type !== 'site') return null
   try {
-    const node = addTree(nodes, { siteId, seed, trees: [{ at: [0, 0] }] }, { activeLevelId: null })
-      .changes?.create?.[0]?.node
+    const bare = { [site.id]: { ...site, children: [] } } as unknown as typeof nodes
+    const node = addTree(
+      bare,
+      { siteId: site.id, seed, trees: [{ at: [0, 0] }] },
+      {
+        activeLevelId: null,
+      },
+    ).changes?.create?.[0]?.node
     return node ? TreeNode.parse(node) : null
   } catch (error) {
     if (!isAgentRefusal(error)) throw error
     return null
+  }
+}
+
+/** Why a click at this point would plant nothing (the operation's refusal code), or null. */
+export function treePlacementRefusal(
+  nodes: ReturnType<SceneApi['nodes']>,
+  siteId: string | undefined,
+  at: Point,
+): string | null {
+  try {
+    addTree(nodes, { siteId, seed: 0, trees: [{ at }] }, { activeLevelId: null })
+    return null
+  } catch (error) {
+    if (!isAgentRefusal(error)) throw error
+    return error.code
   }
 }
 

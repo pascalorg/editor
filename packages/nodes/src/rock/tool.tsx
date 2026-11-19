@@ -39,7 +39,8 @@ export default function RockTool() {
     if (!rock) return null
     // Without its Site the rock is built around the origin on the datum: the tool moves it.
     const root = buildRockGeometry({ ...rock, parentId: null })
-    return { root, release: applyGhost(root) }
+    // The editor's ghost treatment; green, as a rock is refused at no ground point.
+    return { root, release: applyGhost(root, { valid: true }) }
   }, [sceneApi, siteId, seed])
   useEffect(
     () => () => {

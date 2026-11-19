@@ -11,6 +11,7 @@ import {
   subscribeFloorPlacementClicks,
 } from '../shared/floor-placement'
 import { GardenGhost, GardenToolTarget } from '../shared/garden-draft-preview'
+import { applyGhost } from '../shared/ghost-materials'
 import { siteFrame } from '../shared/site-frame'
 import { gridEventSiteGround } from '../shared/site-pointer-ground'
 import { buildTreeGeometry, disposeTreeResources } from './geometry'
@@ -20,14 +21,13 @@ import {
   placeTree,
   previewTree,
   snapTreePlacementPoint,
+  treePlacementRefusal,
 } from './placement'
 import { treePlacementMessage } from './placement-message'
 import { useTreePlacementScope } from './placement-scope'
 
 type PlacementRefusal = { code: string; at: [number, number] }
 type Point = [number, number]
-/** A plain preview ghost's opacity (`applyGhost`, neither valid nor invalid). */
-const GHOST_OPACITY = 0.5
 
 function useTreePlacementInput(
   context: ReturnType<typeof useRegistryToolContext>,
@@ -104,7 +104,7 @@ function useTreePlacementInput(
 }
 
 /**
- * A ghost of the tree a click would plant: the tree's own geometry, built once and translucent,
+ * The tree a click would plant, as a body for the ghost: the tree's own geometry, built once,
  * with its foot at the group's origin (the tool moves it over the ground).
  */
 function treeGhost(
@@ -118,16 +118,27 @@ function treeGhost(
   root.traverse((object) => {
     const mesh = object as Mesh<Mesh['geometry'], MeshStandardMaterial>
     if (!mesh.isMesh) return
-    // The material is this ghost's own (see `buildTreeLevel`): tinting it touches no planted tree.
-    mesh.material.transparent = true
-    mesh.material.opacity = GHOST_OPACITY
-    mesh.material.depthWrite = false
+    mesh.userData.leafCutoff = mesh.material.alphaTest
     mesh.position.y = 0
     mesh.castShadow = false
     mesh.receiveShadow = false
-    mesh.raycast = () => {}
   })
   return root
+}
+
+/**
+ * The editor's ghost treatment (`applyGhost`: green where the click will plant, red where it is
+ * refused), on the ghost's own copies of the tree's material. The leaf cut-off follows the
+ * ghost's opacity, or the translucent leaves would fall under it and the crown vanish.
+ */
+function tintTreeGhost(root: Object3D, refused: boolean) {
+  const release = applyGhost(root, { invalid: refused, valid: !refused })
+  root.traverse((object) => {
+    const mesh = object as Mesh<Mesh['geometry'], MeshStandardMaterial>
+    if (!mesh.isMesh || typeof mesh.userData.leafCutoff !== 'number') return
+    mesh.material.alphaTest = mesh.userData.leafCutoff * mesh.material.opacity
+  })
+  return release
 }
 
 /** Keep the same point object while the landing point has not moved, so a still pointer redraws nothing. */
@@ -158,6 +169,10 @@ export default function TreeTool() {
     },
     [ghost],
   )
+  // Red where the operation would refuse the tree (inside a house), green where it will stand.
+  const refusedHere =
+    target !== null && treePlacementRefusal(context.sceneApi.nodes(), siteId, target) !== null
+  useEffect(() => (ghost ? tintTreeGhost(ghost, refusedHere) : undefined), [ghost, refusedHere])
   // ToolManager mounts under the active building; the Site-space target must not inherit it.
   return createPortal(
     <group userData={{ pascalExport: 'strip' }}>

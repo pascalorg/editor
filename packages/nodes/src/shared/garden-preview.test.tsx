@@ -13,6 +13,8 @@ import {
   SiteNode,
   SlabNode,
   useScene,
+  WallNode,
+  ZoneNode,
 } from '@pascal-app/core'
 import {
   EDITOR_LAYER,
@@ -48,6 +50,7 @@ import { builtinPlugin } from '../index'
 import { lawnBrushColor, useLawnAuthoring } from '../lawn/brush'
 import { useLawnDraft } from '../lawn/draft'
 import { usePlantingDraft } from '../planting/draft'
+import { INVALID_GHOST_COLOR, VALID_GHOST_COLOR } from './ghost-materials'
 
 type PreviewMesh = Mesh<InstancedBufferGeometry>
 let restore: () => Promise<void> = async () => {}
@@ -764,3 +767,111 @@ for (const kind of ['tree', 'rock'] as const) {
     }
   })
 }
+
+// ---- The ghost carries the editor's placement look: green where the click will set the
+// object, red where it is refused (what a door or a window being placed shows).
+
+/** A second house, standing on the Site's origin: a tree is refused inside it. */
+function buildAHouseOnTheOrigin() {
+  const corners: [number, number][] = [
+    [-3, -3],
+    [3, -3],
+    [3, 3],
+    [-3, 3],
+  ]
+  const house = BuildingNode.parse({
+    id: 'building_house',
+    parentId: 'site_preview',
+    children: ['level_house'],
+  })
+  const walls = corners.map((start, index) =>
+    WallNode.parse({
+      id: `wall_house_${index}`,
+      parentId: 'level_house',
+      start,
+      end: corners[(index + 1) % corners.length],
+      height: 2.5,
+      thickness: 0.1,
+    }),
+  )
+  const zone = ZoneNode.parse({
+    id: 'zone_house',
+    parentId: 'level_house',
+    name: 'Room',
+    spaceRole: 'room',
+    polygon: corners,
+    boundaryWallIds: walls.map((wall) => wall.id),
+  })
+  const level = LevelNode.parse({
+    id: 'level_house',
+    parentId: house.id,
+    children: [...walls.map((wall) => wall.id), zone.id],
+  })
+  const nodes = useScene.getState().nodes as Record<string, AnyNode>
+  const site = nodes.site_preview as AnyNode & { children: string[] }
+  useScene.setState({
+    nodes: {
+      ...nodes,
+      [site.id]: { ...site, children: [...site.children, house.id] },
+      ...Object.fromEntries([house, level, zone, ...walls].map((node) => [node.id, node])),
+    } as typeof useScene extends { getState: () => { nodes: infer N } } ? N : never,
+  })
+}
+
+function ghostMaterials(root: Object3D) {
+  const found: (MeshBasicMaterial & { alphaTest: number })[] = []
+  root.traverse((object) => {
+    if (!object.userData.gardenGhost) return
+    object.traverse((child) => {
+      const mesh = child as Mesh<InstancedBufferGeometry, MeshBasicMaterial>
+      if (mesh.isMesh) found.push(mesh.material)
+    })
+  })
+  return found
+}
+
+test('tree: the ghost is green where the click will plant and red inside a house, with its leaves kept', async () => {
+  const { renderer, camera, canvas } = await mountGardenTool('tree')
+  try {
+    if (!canvas) throw new Error('Missing canvas')
+    await act(async () => buildAHouseOnTheOrigin())
+    await act(async () => pointAt('tree', canvas, camera, [8, 8]))
+    const planted = ghostMaterials(renderer.scene.instance)
+    expect(planted.length).toBeGreaterThan(0)
+    for (const material of planted) {
+      expect(material.color.getHex()).toBe(VALID_GHOST_COLOR)
+      expect(material.transparent).toBe(true)
+      expect(material.depthWrite).toBe(false)
+      expect(material.opacity).toBe(0.45)
+      // The leaf cut-off follows the opacity: translucent leaves are not cut away.
+      expect(material.alphaTest).toBeLessThan(material.opacity)
+      expect(material.alphaTest).toBeGreaterThan(0)
+    }
+    await act(async () => pointAt('tree', canvas, camera, [0.5, 0.5]))
+    const refused = ghostMaterials(renderer.scene.instance)
+    expect(refused.length).toBeGreaterThan(0)
+    for (const material of refused) {
+      expect(material.color.getHex()).toBe(INVALID_GHOST_COLOR)
+      expect(material.opacity).toBe(0.4)
+    }
+  } finally {
+    await act(async () => renderer.unmount())
+  }
+})
+
+test('rock: the ghost carries the same placement green', async () => {
+  const { renderer, camera, canvas } = await mountGardenTool('rock')
+  try {
+    if (!canvas) throw new Error('Missing canvas')
+    await act(async () => pointAt('rock', canvas, camera, [8, 8]))
+    const materials = ghostMaterials(renderer.scene.instance)
+    expect(materials.length).toBeGreaterThan(0)
+    for (const material of materials) {
+      expect(material.color.getHex()).toBe(VALID_GHOST_COLOR)
+      expect(material.transparent).toBe(true)
+      expect(material.opacity).toBe(0.45)
+    }
+  } finally {
+    await act(async () => renderer.unmount())
+  }
+})
