@@ -5,11 +5,13 @@ import {
   cameraPosition,
   color,
   cos,
+  Fn,
   float,
   instanceIndex,
   mix,
   modelWorldMatrix,
   positionGeometry,
+  positionPrevious,
   sin,
   smoothstep,
   step,
@@ -94,7 +96,7 @@ export function lawnBladeMaterial(
   const bendZ = cos(yaw).mul(traits.y).mul(1.6).add(gust.mul(wind).mul(0.22))
   const bend = progress.mul(progress).mul(root.w).mul(detail)
   const width = positionGeometry.x.mul(traits.w).mul(tuftWidthScale).mul(detail)
-  material.positionNode = root.xyz.add(
+  const placed = root.xyz.add(
     vec3(
       cos(yaw).mul(width).add(bendX.mul(bend)),
       progress
@@ -104,6 +106,19 @@ export function lawnBladeMaterial(
       sin(yaw).negate().mul(width).add(bendZ.mul(bend)),
     ),
   )
+  // A pass with a velocity attachment (the viewer's temporal anti-aliasing) reprojects each pixel
+  // from `positionPrevious`, which three does not derive from `positionNode`: a blade reported the
+  // lawn's origin, not its own place, as where it stood a frame ago. Every blade pixel then read
+  // its history from somewhere else on screen and the lawn flickered with the camera still.
+  material.positionNode = Fn((builder) => {
+    const position = placed.toVar()
+    // three's own test for a velocity attachment; @types/three 0.187 does not declare it.
+    const temporal = (
+      builder as typeof builder & { needsPreviousData(): boolean }
+    ).needsPreviousData()
+    if (temporal) positionPrevious.assign(position)
+    return position
+  })()
   // Each plane contains leaves facing both ways. A mostly upward canopy normal
   // avoids lighting the whole silhouette as one vertical sheet.
   material.normalNode = transformNormalToView(
