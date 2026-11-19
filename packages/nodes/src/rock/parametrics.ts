@@ -67,6 +67,8 @@ export const rockParametrics: ParametricDescriptor<RockNode> = {
     },
     {
       label: 'Upgrade to gen 2',
+      // Offered on a legacy rock only: a rock already on the current generator has nothing to upgrade.
+      visibleIf: (rock) => (rock.gen ?? 1) === 1,
       enabledIf: (rock) => (rock.gen ?? 1) === 1 && rockUpgradeProblem(rock) === null,
       onClick: (rock) => {
         if ((rock.gen ?? 1) !== 1 || rockUpgradeProblem(rock)) return

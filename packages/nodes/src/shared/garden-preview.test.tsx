@@ -3,8 +3,12 @@ import {
   BuildingNode,
   clearSceneHistory,
   createSceneApi,
+  emitter,
   FLAT_GROUND_Y,
+  type GridEvent,
   LevelNode,
+  nodeRegistry,
+  registerNode,
   SiteNode,
   SlabNode,
   useScene,
@@ -13,6 +17,9 @@ import {
   EDITOR_LAYER,
   RegistryToolProvider,
   sceneLayout,
+  TOOL_DRAFT_FILL_OPACITY,
+  TOOL_INVALID_COLOR,
+  TOOL_PREVIEW_COLOR,
   useEditor,
   useInteractionScope,
 } from '@pascal-app/editor'
@@ -21,10 +28,12 @@ import { act, create } from '@react-three/test-renderer'
 import { Window as TestWindow } from 'happy-dom'
 import type { ComponentType } from 'react'
 import {
+  type CircleGeometry,
   type InstancedBufferGeometry,
   type Intersection,
   type LineBasicMaterial,
   type Mesh,
+  type MeshBasicMaterial,
   NormalBlending,
   type Object3D,
   PerspectiveCamera,
@@ -80,7 +89,7 @@ beforeEach(() => {
 })
 afterEach(() => restore())
 
-type GardenToolKind = 'hedge' | 'planting' | 'lawn'
+type GardenToolKind = 'tree' | 'rock' | 'hedge' | 'planting' | 'lawn'
 
 function seedGardenScene(kind: GardenToolKind, brush: boolean) {
   const site = SiteNode.parse({
@@ -122,7 +131,8 @@ function seedGardenScene(kind: GardenToolKind, brush: boolean) {
   return { building, level }
 }
 
-async function mountGardenTool(kind: GardenToolKind, brush = false) {
+/** `onPage` puts the canvas in the document, so the tool's in-scene HTML (its cursor bubble) mounts. */
+async function mountGardenTool(kind: GardenToolKind, brush = false, onPage = false) {
   const { building, level } = seedGardenScene(kind, brush)
   const definition = builtinPlugin.nodes?.find((entry) => entry.kind === kind)
   if (!definition?.tool) throw new Error(`Missing ${kind} tool`)
@@ -153,6 +163,7 @@ async function mountGardenTool(kind: GardenToolKind, brush = false) {
       beforeReturn: (element) => {
         canvas = element
         element.getBoundingClientRect = () => new window.DOMRect(0, 0, 200, 200)
+        if (onPage) document.body.appendChild(element)
       },
     },
   )
@@ -214,9 +225,9 @@ function expectSelfContainedPreviewShader(mesh: PreviewMesh) {
 }
 
 for (const [kind, draft, color, closed] of [
-  ['hedge', useHedgeDraft, '#3f8f3a', false],
-  ['planting', usePlantingDraft, '#3f8f3a', true],
-  ['lawn', useLawnDraft, '#617c36', true],
+  ['hedge', useHedgeDraft, TOOL_PREVIEW_COLOR, false],
+  ['planting', usePlantingDraft, TOOL_PREVIEW_COLOR, true],
+  ['lawn', useLawnDraft, TOOL_PREVIEW_COLOR, true],
 ] as const) {
   test(`${kind} draft submits finite screen-space outlines accepted by WebGPURenderer`, async () => {
     const { renderer } = await mountGardenTool(kind)
@@ -306,3 +317,172 @@ test('lawn brush submits four finite translucent 2px rings on the ground', async
     await act(async () => renderer.unmount())
   }
 })
+
+// ---- What a person sees while placing by hand: the editor's own cursor and draft look.
+
+/** The ground dots of the editor's cursor (the wall tool's target) that are on screen. */
+function groundDots(root: Object3D) {
+  root.updateMatrixWorld(true)
+  const dots: { at: Vector3; color: string }[] = []
+  root.traverse((object) => {
+    const mesh = object as Mesh<CircleGeometry, MeshBasicMaterial>
+    if (mesh.geometry?.type !== 'CircleGeometry' || mesh.geometry.parameters.radius !== 0.06) return
+    for (let node: Object3D | null = mesh; node; node = node.parent) if (!node.visible) return
+    dots.push({
+      at: mesh.getWorldPosition(new Vector3()),
+      color: `#${mesh.material.color.getHexString()}`,
+    })
+  })
+  return dots
+}
+
+/** Put the pointer over a ground point the way each tool hears it. Alt keeps the raw point. */
+function pointAt(
+  kind: GardenToolKind,
+  canvas: HTMLCanvasElement,
+  camera: PerspectiveCamera,
+  [x, z]: [number, number],
+) {
+  if (kind === 'lawn') {
+    const ndc = new Vector3(x, FLAT_GROUND_Y, z).project(camera)
+    canvas.dispatchEvent(
+      new PointerEvent('pointermove', {
+        clientX: (ndc.x + 1) * 100,
+        clientY: (1 - ndc.y) * 100,
+        button: 0,
+        altKey: true,
+        bubbles: true,
+      }),
+    )
+    return
+  }
+  emitter.emit('grid:move', {
+    position: [x, 0, z],
+    localPosition: [x, 0, z],
+    nativeEvent: { target: canvas, buttons: 0, altKey: true },
+  } as unknown as GridEvent)
+}
+
+for (const [kind, brush, label] of [
+  ['tree', false, 'Tree'],
+  ['rock', false, 'Rock'],
+  ['hedge', false, 'Hedge'],
+  ['planting', false, 'Planting bed'],
+  ['lawn', false, 'Lawn'],
+  ['lawn', true, 'Lawn'],
+] as const) {
+  // The bubble is mounted for the tree only: its icon is a picture. The other four draw an
+  // Iconify glyph, which that library fetches over the network; which icon each shows is stated
+  // by the editor's `tool-cursor-icon` test.
+  const withBubble = kind === 'tree'
+  test(`${kind}${brush ? ' brush' : ''} in hand: the editor's target follows the pointer on the ground${withBubble ? ", under the tool's icon" : ''}`, async () => {
+    // The bubble reads the kind's icon and name from the registry.
+    const restoreRegistry = nodeRegistry._snapshot()
+    const definition = builtinPlugin.nodes?.find((entry) => entry.kind === kind)
+    if (withBubble && definition && !nodeRegistry.has(kind)) registerNode(definition)
+    const { renderer, camera, canvas } = await mountGardenTool(kind, brush, withBubble)
+    try {
+      if (!canvas) throw new Error('Missing canvas')
+      // Nothing is shown before the pointer reaches the ground.
+      expect(groundDots(renderer.scene.instance)).toEqual([])
+      for (const point of [
+        [2, 1],
+        [-3, 4],
+      ] as [number, number][]) {
+        await act(async () => pointAt(kind, canvas, camera, point))
+        const dots = groundDots(renderer.scene.instance)
+        expect(dots).toHaveLength(1)
+        expect(dots[0]?.color).toBe(TOOL_PREVIEW_COLOR)
+        expect(dots[0]?.at.x).toBeCloseTo(point[0], 3)
+        // The slab under the pointer is the ground here: its top, not the Site datum.
+        expect(dots[0]?.at.y).toBeCloseTo(0.7, 6)
+        expect(dots[0]?.at.z).toBeCloseTo(point[1], 3)
+      }
+      if (withBubble)
+        expect(document.querySelector('[role="img"]')?.getAttribute('aria-label')).toBe(label)
+    } finally {
+      await act(async () => renderer.unmount())
+      restoreRegistry()
+    }
+  })
+}
+
+for (const [kind, draft] of [
+  ['planting', usePlantingDraft],
+  ['lawn', useLawnDraft],
+] as const) {
+  test(`${kind} area being drawn is filled and marks every placed point, like a slab draft`, async () => {
+    const { renderer } = await mountGardenTool(kind)
+    try {
+      await act(async () =>
+        draft.setState({
+          points: [
+            [1, 2],
+            [4, 2],
+            [4, 4],
+          ],
+          hover: [1, 4],
+          error: null,
+        }),
+      )
+      // Three placed points and the target under the pointer.
+      const dots = groundDots(renderer.scene.instance)
+      expect(dots).toHaveLength(4)
+      expect(new Set(dots.map((dot) => dot.color))).toEqual(new Set([TOOL_PREVIEW_COLOR]))
+      const fills: Mesh<InstancedBufferGeometry, MeshBasicMaterial>[] = []
+      renderer.scene.instance.traverse((object) => {
+        const mesh = object as Mesh<InstancedBufferGeometry, MeshBasicMaterial>
+        if (mesh.isMesh && mesh.material?.opacity === TOOL_DRAFT_FILL_OPACITY) fills.push(mesh)
+      })
+      expect(fills).toHaveLength(1)
+      const fill = fills[0]
+      if (!fill) throw new Error('Missing area fill')
+      expect(`#${fill.material.color.getHexString()}`).toBe(TOOL_PREVIEW_COLOR)
+      // A quadrilateral: two triangles over the four outline points, on the editor's overlay.
+      expect(fill.geometry.getIndex()?.count).toBe(6)
+      expect(fill.geometry.getAttribute('position').count).toBe(4)
+      expect(fill.layers.mask).toBe(1 << EDITOR_LAYER)
+      expect(fill.userData.pascalExport).toBe('strip')
+      const outline = previewMeshes(renderer.scene.instance)
+      expect(outline).toHaveLength(1)
+      expect(outline[0]?.geometry.instanceCount).toBe(4)
+    } finally {
+      await act(async () => renderer.unmount())
+    }
+  })
+}
+
+for (const [kind, draft] of [
+  ['hedge', useHedgeDraft],
+  ['planting', usePlantingDraft],
+  ['lawn', useLawnDraft],
+] as const) {
+  test(`${kind} draft the tool refuses turns the editor's refusal red and loses its fill`, async () => {
+    const { renderer } = await mountGardenTool(kind)
+    try {
+      await act(async () =>
+        draft.setState({
+          points: [
+            [1, 2],
+            [4, 2],
+            [4, 4],
+          ],
+          hover: null,
+          error: 'Refused',
+        }),
+      )
+      const outline = previewMeshes(renderer.scene.instance)
+      expect(outline).toHaveLength(1)
+      const material = outline[0]?.material as LineBasicMaterial
+      expect(`#${material.color.getHexString()}`).toBe(TOOL_INVALID_COLOR)
+      let fills = 0
+      renderer.scene.instance.traverse((object) => {
+        const mesh = object as Mesh<InstancedBufferGeometry, MeshBasicMaterial>
+        if (mesh.isMesh && mesh.material?.opacity === TOOL_DRAFT_FILL_OPACITY) fills++
+      })
+      expect(fills).toBe(0)
+    } finally {
+      await act(async () => renderer.unmount())
+    }
+  })
+}

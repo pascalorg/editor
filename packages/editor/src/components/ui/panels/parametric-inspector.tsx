@@ -220,6 +220,13 @@ function ParamActionButton({ action, nodeId }: { action: ParamAction<AnyNode>; n
     const n = s.nodes[nodeId]
     return n ? !action.enabledIf(n as AnyNode) : false
   })
+  // An action that no longer applies to this node is not offered at all.
+  const hidden = useScene((s) => {
+    if (!action.visibleIf) return false
+    const n = s.nodes[nodeId]
+    return n ? !action.visibleIf(n as AnyNode) : false
+  })
+  if (hidden) return null
   return (
     <ActionButton
       className={disabled ? 'opacity-40 pointer-events-none' : ''}

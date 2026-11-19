@@ -5,8 +5,10 @@ import { forwardRef } from 'react'
 import { CircleGeometry, CylinderGeometry, type Group, SphereGeometry } from 'three'
 import { furnishTools } from '../../../components/ui/action-menu/furnish-tools'
 import { tools } from '../../../components/ui/action-menu/structure-tools'
+import { IconRefGlyph } from '../../../components/ui/icon-ref'
 import { EDITOR_LAYER } from '../../../lib/constants'
-import { wallCursorIcon } from '../../../lib/tool-cursor-icon'
+import { registryToolCursorIcon, wallCursorIcon } from '../../../lib/tool-cursor-icon'
+import { TOOL_PREVIEW_COLOR } from '../../../lib/tool-preview-colors'
 import useEditor from '../../../store/use-editor'
 import useWallSnapIndicator from '../../../store/use-wall-snap-indicator'
 
@@ -42,7 +44,7 @@ const TIP_GEOMETRY = new SphereGeometry(0.08, 20, 14)
 
 export const CursorSphere = forwardRef<Group, CursorSphereProps>(function CursorSphere(
   {
-    color = '#818cf8',
+    color = TOOL_PREVIEW_COLOR,
     showTooltip = true,
     height = 2.5,
     dotAtTip = false,
@@ -75,6 +77,10 @@ export const CursorSphere = forwardRef<Group, CursorSphereProps>(function Cursor
       activeToolConfig = tools.find((t) => t.id === tool)
     }
   }
+
+  // A tool outside the art table may still show its kind's registry icon.
+  const registryIcon =
+    mode === 'build' && tool && !activeToolConfig ? registryToolCursorIcon(tool) : null
 
   const isVisible = visible && !isFloorplanHovered
 
@@ -144,7 +150,7 @@ export const CursorSphere = forwardRef<Group, CursorSphereProps>(function Cursor
       )}
 
       {/* Tool Icon Tooltip at the top of the line */}
-      {isVisible && showTooltip && (activeToolConfig || tooltipContent) && (
+      {isVisible && showTooltip && (activeToolConfig || tooltipContent || registryIcon) && (
         <Html
           center
           position={[0, height > 0 ? height + 0.2 : 0.6, 0]}
@@ -162,23 +168,32 @@ export const CursorSphere = forwardRef<Group, CursorSphereProps>(function Cursor
             height: '36px',
           }}
         >
-          {tooltipContent || (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              alt={
-                typeof activeToolConfig!.label === 'string'
-                  ? activeToolConfig!.label
-                  : i18n._(activeToolConfig!.label)
-              }
-              src={activeToolConfig!.iconSrc}
-              style={{
-                width: '100%',
-                height: '100%',
-                objectFit: 'contain',
-                filter: 'drop-shadow(0px 2px 4px rgba(0,0,0,0.5))',
-              }}
-            />
-          )}
+          {tooltipContent ||
+            (registryIcon ? (
+              <span
+                aria-label={i18n._(registryIcon.label)}
+                role="img"
+                style={{ color: '#ffffff', display: 'flex' }}
+              >
+                <IconRefGlyph icon={registryIcon.icon} size={24} />
+              </span>
+            ) : (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                alt={
+                  typeof activeToolConfig!.label === 'string'
+                    ? activeToolConfig!.label
+                    : i18n._(activeToolConfig!.label)
+                }
+                src={activeToolConfig!.iconSrc}
+                style={{
+                  width: '100%',
+                  height: '100%',
+                  objectFit: 'contain',
+                  filter: 'drop-shadow(0px 2px 4px rgba(0,0,0,0.5))',
+                }}
+              />
+            ))}
         </Html>
       )}
     </group>

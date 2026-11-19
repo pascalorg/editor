@@ -6,6 +6,7 @@ import { Html } from '@react-three/drei'
 import { createPortal, useThree } from '@react-three/fiber'
 import { useCallback, useEffect, useState } from 'react'
 import type { Camera } from 'three'
+import { GardenDraftPreview, GardenToolTarget } from '../shared/garden-draft-preview'
 import { GardenPreviewLine } from '../shared/garden-preview-line'
 import { siteFrame } from '../shared/site-frame'
 import { lawnBrushColor, useLawnAuthoring } from './brush'
@@ -208,7 +209,6 @@ export default function LawnTool() {
   })
   return (
     <LawnFeedback
-      line={draft.line}
       cursor={cursor}
       error={settings.mode === 'brush' ? brush.message : draft.error}
       siteId={frame?.site.id}
@@ -248,14 +248,12 @@ function LawnBrushCursor({
 }
 
 function LawnFeedback({
-  line: draftLine,
   cursor,
   error,
   siteId,
   sceneApi,
   settings,
 }: {
-  line: Point[]
   cursor: Point | null
   error: string | null
   siteId?: string
@@ -265,18 +263,24 @@ function LawnFeedback({
   const scene = useThree((state) => state.scene)
   const ground = resolveSiteGround(siteId, sceneApi.nodes())
   const elevate = ([x, z]: Point): [number, number, number] => [x, ground.heightAt(x, z) + 0.035, z]
-  const first = draftLine[0]
-  const line = first && draftLine.length >= 3 ? [...draftLine, first] : draftLine
+  const points = useLawnDraft((draft) => draft.points)
+  const hover = useLawnDraft((draft) => draft.hover)
+  const first = points[0]
   const anchor = settings.mode === 'brush' ? cursor : first
   return createPortal(
     <group userData={{ pascalExport: 'strip' }}>
-      {settings.mode === 'area' && line.length > 1 && (
-        <GardenPreviewLine
-          points={line.map(elevate)}
-          color={error ? '#b45309' : '#617c36'}
-          lineWidth={3}
+      {settings.mode === 'area' && (
+        <GardenDraftPreview
+          closed
+          ground={ground}
+          hover={hover}
+          invalid={!!error}
+          lift={0.035}
+          points={points}
         />
       )}
+      {/* The ring keeps the colour of its effect, as the terrain brush's ring keeps its verb's. */}
+      {settings.mode === 'brush' && <GardenToolTarget at={cursor} ground={ground} />}
       {settings.mode === 'brush' && cursor && (
         <LawnBrushCursor cursor={cursor} settings={settings} elevate={elevate} />
       )}

@@ -2,7 +2,7 @@
 
 import { Icon } from '@iconify/react'
 import { memo, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { wallCursorIcon } from '../../lib/tool-cursor-icon'
+import { registryToolCursorIcon, wallCursorIcon } from '../../lib/tool-cursor-icon'
 import useEditor, { type FloorplanSelectionTool } from '../../store/use-editor'
 import { useFloorplanDraftPreview } from '../../store/use-floorplan-draft-preview'
 import { furnishTools } from '../ui/action-menu/furnish-tools'
@@ -77,6 +77,11 @@ export const FloorplanCursorIndicatorOverlay = memo(function FloorplanCursorIndi
       return { kind: 'asset', iconSrc: activeFloorplanToolConfig.iconSrc }
     }
 
+    // A tool outside the art table may still show its kind's registry icon.
+    const registryIcon = mode === 'build' && tool ? registryToolCursorIcon(tool)?.icon : null
+    if (registryIcon?.kind === 'url') return { kind: 'asset', iconSrc: registryIcon.src }
+    if (registryIcon?.kind === 'iconify') return { kind: 'icon', icon: registryIcon.name }
+
     if (mode === 'select' && floorplanSelectionTool === 'marquee') {
       return { kind: 'icon', icon: 'mdi:select-drag' }
     }
@@ -90,7 +95,7 @@ export const FloorplanCursorIndicatorOverlay = memo(function FloorplanCursorIndi
     }
 
     return null
-  }, [activeFloorplanToolConfig, floorplanSelectionTool, mode])
+  }, [activeFloorplanToolConfig, floorplanSelectionTool, mode, tool])
 
   useLayoutEffect(() => {
     const anchor = anchorRef.current
