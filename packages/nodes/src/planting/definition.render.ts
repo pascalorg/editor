@@ -43,7 +43,7 @@ export const plantingRenderDefinition: NodeRenderDefinition<typeof PlantingNode>
   presentation: {
     label: 'Planting bed',
     description: 'An organic bed of layered plants, with soil or mulch and optional edging.',
-    icon: { kind: 'iconify', name: 'lucide:flower-2' },
+    icon: { kind: 'url', src: '/icons/garden-planting.webp' },
     paletteSection: 'structure',
     paletteOrder: 80,
   },

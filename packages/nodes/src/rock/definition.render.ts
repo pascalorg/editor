@@ -50,7 +50,7 @@ export const rockRenderDefinition: NodeRenderDefinition<typeof RockNode> & { kin
   presentation: {
     label: 'Rock',
     description: 'A boulder or outcrop on the ground that can rise through floors.',
-    icon: { kind: 'iconify', name: 'lucide:mountain' },
+    icon: { kind: 'url', src: '/icons/garden-rock.webp' },
     paletteSection: 'structure',
     paletteOrder: 77,
   },

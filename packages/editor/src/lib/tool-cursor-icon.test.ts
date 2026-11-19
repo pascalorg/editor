@@ -37,11 +37,11 @@ function registerKind(kind: string, label: string, icon: IconRef) {
 }
 
 const GARDEN_ICONS: [string, string, IconRef][] = [
-  ['tree', 'Tree', { kind: 'url', src: '/icons/tree.webp' }],
-  ['rock', 'Rock', { kind: 'iconify', name: 'lucide:mountain' }],
-  ['hedge', 'Hedge', { kind: 'iconify', name: 'lucide:trees' }],
-  ['planting', 'Planting bed', { kind: 'iconify', name: 'lucide:flower-2' }],
-  ['lawn', 'Lawn', { kind: 'iconify', name: 'lucide:sprout' }],
+  ['tree', 'Tree', { kind: 'url', src: '/icons/garden-tree.webp' }],
+  ['rock', 'Rock', { kind: 'url', src: '/icons/garden-rock.webp' }],
+  ['hedge', 'Hedge', { kind: 'url', src: '/icons/garden-hedge.webp' }],
+  ['planting', 'Planting bed', { kind: 'url', src: '/icons/garden-planting.webp' }],
+  ['lawn', 'Lawn', { kind: 'url', src: '/icons/garden-lawn.webp' }],
 ]
 
 test("a garden tool in hand shows its kind's own registry icon and name in the cursor bubble", () => {

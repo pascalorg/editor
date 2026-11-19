@@ -42,7 +42,7 @@ export const treeRenderDefinition: NodeRenderDefinition<typeof TreeNode> & { kin
   presentation: {
     label: 'Tree',
     description: 'A seeded garden tree, rooted on the Site ground.',
-    icon: { kind: 'url', src: '/icons/tree.webp' },
+    icon: { kind: 'url', src: '/icons/garden-tree.webp' },
     paletteSection: 'structure',
     paletteOrder: 81,
   },
