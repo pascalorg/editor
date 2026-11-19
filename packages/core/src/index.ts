@@ -474,13 +474,22 @@ export {
 export { hierarchyCycleErrors, wouldCreateHierarchyCycle } from './lib/hierarchy'
 export {
   buildLawn,
+  buildLawnChunk,
+  buildLawnChunkFlowers,
+  LAWN_CHUNK_M,
   type LawnBuild,
   LawnBuildError,
   type LawnChunk,
+  type LawnChunkBuild,
+  type LawnChunkContext,
   type LawnFacts,
   type LawnMesh,
   type LawnPlan,
+  type LawnPlanMemo,
+  lawnChunkContext,
+  lawnChunksTouched,
   lawnFacts,
+  lawnGroundChunkAt,
   planLawn,
   sampleLawnStrokes,
 } from './lib/lawn'

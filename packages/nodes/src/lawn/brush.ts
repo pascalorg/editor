@@ -3,6 +3,7 @@ import {
   LAWN_LIMITS,
   LawnBuildError,
   LawnNode,
+  type LawnPlanMemo,
   LawnStroke,
   planLawn,
   useLiveNodeOverrides,
@@ -102,7 +103,12 @@ function currentLawn(node: LawnNode): LawnNode | null {
     : null
 }
 
-function preflight(node: LawnNode, patch: Partial<LawnNode>, refuse: Refuse): LawnNode | null {
+function preflight(
+  node: LawnNode,
+  patch: Partial<LawnNode>,
+  refuse: Refuse,
+  memo: LawnPlanMemo,
+): LawnNode | null {
   const nodes: Readonly<Record<string, AnyNode | undefined>> = useScene.getState().nodes
   const site = node.parentId ? nodes[node.parentId] : undefined
   if (site?.type !== 'site') {
@@ -115,7 +121,7 @@ function preflight(node: LawnNode, patch: Partial<LawnNode>, refuse: Refuse): La
     return null
   }
   try {
-    planLawn(parsed.data, useScene.getState().nodes)
+    planLawn(parsed.data, useScene.getState().nodes, memo)
     return parsed.data
   } catch (error) {
     if (!(error instanceof LawnBuildError)) throw error
@@ -137,6 +143,9 @@ function strokeSession(
   const append = strokePath(first, stroke.radiusM)
   const savedPointCount = node.strokes.reduce((count, saved) => count + saved.points.length, 0)
   let active = true
+  // Every sample is checked against the whole lawn's budgets; the parts of that plan no stroke
+  // can change (retained area, ground before subdivision) are worked out once a stroke.
+  const memo: LawnPlanMemo = {}
   let catchUp: ReturnType<typeof setTimeout> | undefined
   const clear = () => {
     clearTimeout(catchUp)
@@ -155,7 +164,7 @@ function strokeSession(
       refuse('changed')
       return null
     }
-    return preflight(live, proposed(), refuse)
+    return preflight(live, proposed(), refuse, memo)
   }
   const preview = (): boolean => {
     if (!validate()) {

@@ -1,7 +1,9 @@
+import type { LawnNode } from '@pascal-app/core'
 import {
   type Camera,
   Frustum,
   type Group,
+  type Material,
   Matrix4,
   type Mesh,
   type Object3D,
@@ -12,12 +14,25 @@ import { setLawnBladeView } from './blade-material'
 
 export type LawnTier = 'near' | 'mid' | 'far'
 export type LawnDetailChunk = {
+  key: string
   near: Mesh
   mid: Mesh
   count: number
   midCount: number
   sphere: Sphere
   tier: LawnTier
+}
+/** What a brush stroke needs to redraw single chunks of a mounted lawn. */
+export type LawnLive = {
+  nodeId: string
+  strokes: LawnNode['strokes']
+  ground: Mesh
+  groundPainted: boolean
+  /** Ground the strokes have redrawn chunk by chunk, taken out of `ground`, and its material. */
+  groundChunks: Map<string, Mesh>
+  groundMaterial: Material
+  blades?: Material
+  tuftWidthScale: number
 }
 export type LawnDetail = {
   group: Group
@@ -26,10 +41,25 @@ export type LawnDetail = {
   chunks: LawnDetailChunk[]
   flowers?: Mesh
   headIndexEnds: Uint32Array
+  live?: LawnLive
 }
 const details = new WeakMap<Object3D, LawnDetail>()
+const builds = new Map<string, WeakRef<LawnDetail>[]>()
 export function registerLawnDetail(detail: LawnDetail) {
   details.set(detail.group, detail)
+  if (!detail.live) return
+  const kept = (builds.get(detail.live.nodeId) ?? []).filter((build) => build.deref())
+  builds.set(detail.live.nodeId, [...kept, new WeakRef(detail)])
+}
+/** The build of a lawn that is in a scene now; exports and replaced builds are not. */
+export function mountedLawnDetail(nodeId: string): LawnDetail | undefined {
+  for (const build of builds.get(nodeId) ?? []) {
+    const detail = build.deref()
+    let root: Object3D | null | undefined = detail?.group
+    while (root?.parent) root = root.parent
+    if (detail && root && 'isScene' in root) return detail
+  }
+  return undefined
 }
 export function unregisterLawnDetail(group: Object3D) {
   details.delete(group)
