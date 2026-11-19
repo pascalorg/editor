@@ -20,7 +20,7 @@ export const plantingEditContribution: NodeEditContribution<typeof PlantingNode>
   },
   toolHints: [
     { key: 'Left click', label: 'Add an outline point' },
-    { key: 'Enter', label: 'Plant the bed' },
+    { key: 'Enter', label: 'Plant the bed', minDraftVertices: 3 },
     { key: 'Backspace', label: 'Take the last point back' },
     { key: 'Esc', label: 'Cancel' },
   ],

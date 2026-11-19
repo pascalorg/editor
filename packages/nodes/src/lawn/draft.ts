@@ -133,6 +133,16 @@ export function useLawnDraftController(context: DraftContext) {
   useEffect(() => {
     if (mode === 'area') return installDraftKeys(view, finish, finishTool)
   }, [mode, view, finish, finishTool])
+  // The hint card lists the finishing key only once there is something to finish (as the slab's).
+  const placed = mode === 'area' ? draft.points.length : 0
+  useEffect(() => {
+    useEditor.getState().setDraftVertexCount(placed)
+  }, [placed])
+  useEffect(() => () => useEditor.getState().setDraftVertexCount(0), [])
+  // A double-click finishes like Enter, once there is an outline to lay (as the slab's does).
+  const finishIfReady = useCallback(() => {
+    if (mode === 'area' && useLawnDraft.getState().points.length >= 3) finish()
+  }, [finish, mode])
   const line = draft.hover && draft.points.length ? [...draft.points, draft.hover] : draft.points
-  return { addPoint, line, error: draft.error }
+  return { addPoint, finish: finishIfReady, line, error: draft.error }
 }

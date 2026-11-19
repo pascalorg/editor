@@ -115,6 +115,12 @@ export function useHedgeDraftController({
     window.addEventListener('keydown', onKey, true)
     return () => window.removeEventListener('keydown', onKey, true)
   }, [view, finishTool, plant])
+  // The hint card lists the finishing key only once there is something to finish (as the slab's).
+  const placed = draft.points.length
+  useEffect(() => {
+    useEditor.getState().setDraftVertexCount(placed)
+  }, [placed])
+  useEffect(() => () => useEditor.getState().setDraftVertexCount(0), [])
   const line = draft.hover && draft.points.length ? [...draft.points, draft.hover] : draft.points
   return { addPoint, line, error: draft.error }
 }

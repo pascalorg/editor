@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, expect, test } from 'bun:test'
 import {
+  type AnyNode,
   BuildingNode,
   clearSceneHistory,
   createSceneApi,
@@ -481,6 +482,283 @@ for (const [kind, draft] of [
         if (mesh.isMesh && mesh.material?.opacity === TOOL_DRAFT_FILL_OPACITY) fills++
       })
       expect(fills).toBe(0)
+    } finally {
+      await act(async () => renderer.unmount())
+    }
+  })
+}
+
+// ---- The target and the placed object are under the pointer, whatever plane the grid measures on.
+
+for (const kind of ['tree', 'rock', 'hedge', 'planting'] as const) {
+  test(`${kind}: from its first event the target stands under the pointer's ray, not where a floor plane above the garden reports`, async () => {
+    const { renderer, camera, canvas } = await mountGardenTool(kind)
+    try {
+      if (!canvas) throw new Error('Missing canvas')
+      // Nothing is drawn while the pointer has not reached the canvas.
+      expect(groundDots(renderer.scene.instance)).toEqual([])
+      // The pointer is on the ground point (2, 1): here the top of the Site's slab, 0.7 m up.
+      const ndc = new Vector3(2, 0.7, 1).project(camera)
+      const pointer = {
+        target: canvas,
+        clientX: (ndc.x + 1) * 100,
+        clientY: (1 - ndc.y) * 100,
+        buttons: 0,
+        altKey: true,
+      }
+      // The editor's grid reports the same ray on a floor 3 m above: a point metres short of it.
+      const eye = camera.position
+      const along = new Vector3(2, 0.7, 1).sub(eye)
+      const short = eye.clone().addScaledVector(along, (3.7 - eye.y) / along.y)
+      const event = {
+        position: [short.x, 3.7, short.z],
+        localPosition: [short.x, 3.7, short.z],
+        nativeEvent: pointer,
+      } as unknown as GridEvent
+      expect(Math.hypot(short.x - 2, short.z - 1)).toBeGreaterThan(2)
+      await act(async () => emitter.emit('grid:move', event))
+      const dots = groundDots(renderer.scene.instance)
+      expect(dots).toHaveLength(1)
+      expect(dots[0]?.at.x).toBeCloseTo(2, 3)
+      expect(dots[0]?.at.y).toBeCloseTo(0.7, 6)
+      expect(dots[0]?.at.z).toBeCloseTo(1, 3)
+      if (kind !== 'tree' && kind !== 'rock') return
+      // A click there sets the object at that same point.
+      await act(async () => emitter.emit('grid:click', event))
+      const placed = Object.values(useScene.getState().nodes).find((node) => node.type === kind)
+      if (!placed) throw new Error(`No ${kind} was placed`)
+      const at =
+        placed.type === 'tree'
+          ? [placed.position[0], placed.position[2]]
+          : placed.type === 'rock'
+            ? [
+                placed.polygon.reduce((sum, corner) => sum + corner[0], 0) / placed.polygon.length,
+                placed.polygon.reduce((sum, corner) => sum + corner[1], 0) / placed.polygon.length,
+              ]
+            : [Number.NaN, Number.NaN]
+      // The rock's footprint is an organic outline around the point: its centre is within a hand's width.
+      expect(at[0]).toBeCloseTo(2, kind === 'tree' ? 3 : 0)
+      expect(at[1]).toBeCloseTo(1, kind === 'tree' ? 3 : 0)
+    } finally {
+      await act(async () => renderer.unmount())
+    }
+  })
+}
+
+// ---- Finishing a draft, and what the card says about it.
+
+const TRIANGLE: [number, number][] = [
+  [1, 2],
+  [4, 2],
+  [4, 4],
+]
+const nodesOf = (kind: GardenToolKind) =>
+  Object.values(useScene.getState().nodes).filter((node) => node.type === kind)
+
+/** Bare ground: the seeded scene paves the whole Site, where nothing can be planted. */
+function liftThePaving() {
+  const { slab_preview: _paving, ...nodes } = useScene.getState().nodes as Record<string, AnyNode>
+  const site = nodes.site_preview as AnyNode & { children: string[] }
+  useScene.setState({
+    nodes: {
+      ...nodes,
+      [site.id]: { ...site, children: site.children.filter((id) => id !== 'slab_preview') },
+    } as typeof useScene extends { getState: () => { nodes: infer N } } ? N : never,
+  })
+}
+
+for (const [kind, draft, least] of [
+  ['hedge', useHedgeDraft, 2],
+  ['planting', usePlantingDraft, 3],
+  ['lawn', useLawnDraft, 3],
+] as const) {
+  test(`${kind}: the card lists Enter only once there is something to finish (${least} points)`, async () => {
+    const definition = builtinPlugin.nodes?.find((entry) => entry.kind === kind)
+    const enter = definition?.toolHints?.find((hint) => hint.key === 'Enter')
+    expect(enter?.minDraftVertices).toBe(least)
+    const { renderer } = await mountGardenTool(kind)
+    try {
+      expect(useEditor.getState().draftVertexCount).toBe(0)
+      await act(async () => draft.setState({ points: TRIANGLE.slice(0, least - 1), hover: null }))
+      expect(useEditor.getState().draftVertexCount).toBe(least - 1)
+      await act(async () => draft.setState({ points: TRIANGLE.slice(0, least), hover: null }))
+      expect(useEditor.getState().draftVertexCount).toBe(least)
+    } finally {
+      await act(async () => renderer.unmount())
+    }
+    expect(useEditor.getState().draftVertexCount).toBe(0)
+  })
+}
+
+test('planting bed: a double-click plants the outline, and does nothing while it has fewer than three points', async () => {
+  const { renderer, canvas } = await mountGardenTool('planting')
+  try {
+    await act(async () => liftThePaving())
+    const doubleClick = () =>
+      act(async () =>
+        emitter.emit('grid:double-click', {
+          position: [4, 0, 4],
+          localPosition: [4, 0, 4],
+          nativeEvent: { target: canvas, buttons: 0, altKey: true },
+        } as unknown as GridEvent),
+      )
+    await act(async () => usePlantingDraft.setState({ points: TRIANGLE.slice(0, 2), hover: null }))
+    await doubleClick()
+    expect(nodesOf('planting')).toHaveLength(0)
+    expect(usePlantingDraft.getState().error).toBeNull()
+    expect(usePlantingDraft.getState().points).toHaveLength(2)
+    await act(async () => usePlantingDraft.setState({ points: TRIANGLE, hover: null }))
+    await doubleClick()
+    expect(nodesOf('planting')).toHaveLength(1)
+    expect(usePlantingDraft.getState().points).toEqual([])
+  } finally {
+    await act(async () => renderer.unmount())
+  }
+})
+
+test('lawn: a double-click lays the outline, and does nothing while it has fewer than three points', async () => {
+  const { renderer, camera, canvas } = await mountGardenTool('lawn')
+  try {
+    if (!canvas) throw new Error('Missing canvas')
+    await act(async () => liftThePaving())
+    const ndc = new Vector3(4, FLAT_GROUND_Y, 4).project(camera)
+    const doubleClick = () =>
+      act(async () => {
+        canvas.dispatchEvent(
+          new PointerEvent('dblclick', {
+            clientX: (ndc.x + 1) * 100,
+            clientY: (1 - ndc.y) * 100,
+            button: 0,
+            bubbles: true,
+          }),
+        )
+      })
+    await act(async () => useLawnDraft.setState({ points: TRIANGLE.slice(0, 2), hover: null }))
+    await doubleClick()
+    expect(nodesOf('lawn')).toHaveLength(0)
+    expect(useLawnDraft.getState().error).toBeNull()
+    await act(async () => useLawnDraft.setState({ points: TRIANGLE, hover: null }))
+    await doubleClick()
+    expect(nodesOf('lawn')).toHaveLength(1)
+    expect(useLawnDraft.getState().points).toEqual([])
+  } finally {
+    await act(async () => renderer.unmount())
+  }
+})
+
+test('hedge: a double-click plants the run, its second click landing on the point the first one set', async () => {
+  const { renderer, canvas } = await mountGardenTool('hedge')
+  try {
+    const clickAt = (x: number, z: number) =>
+      act(async () =>
+        emitter.emit('grid:click', {
+          position: [x, 0, z],
+          localPosition: [x, 0, z],
+          nativeEvent: { target: canvas, buttons: 0, altKey: true },
+        } as unknown as GridEvent),
+      )
+    await clickAt(1, 2)
+    await clickAt(4, 2)
+    expect(nodesOf('hedge')).toHaveLength(0)
+    await clickAt(4, 2)
+    expect(nodesOf('hedge')).toHaveLength(1)
+    expect(useHedgeDraft.getState().points).toEqual([])
+  } finally {
+    await act(async () => renderer.unmount())
+  }
+})
+
+test("hedge being drawn shows the volume it will take: its width and height along every segment, in the editor's preview colour", async () => {
+  const { renderer } = await mountGardenTool('hedge')
+  try {
+    const volumes = () => {
+      const found: Mesh<InstancedBufferGeometry, MeshBasicMaterial>[] = []
+      renderer.scene.instance.traverse((object) => {
+        if (object.userData.gardenRunVolume)
+          found.push(object as Mesh<InstancedBufferGeometry, MeshBasicMaterial>)
+      })
+      return found
+    }
+    expect(volumes()).toEqual([])
+    await act(async () =>
+      useHedgeDraft.setState({
+        points: [
+          [1, 2],
+          [4, 2],
+        ],
+        hover: [4, 6],
+        error: null,
+      }),
+    )
+    // Two segments: 3 m then 4 m, each 1.2 m high and 0.7 m wide (the schema's own hedge).
+    expect(volumes().map((mesh) => mesh.scale.toArray())).toEqual([
+      [3, 1.2, 0.7],
+      [4, 1.2, 0.7],
+    ])
+    for (const mesh of volumes()) {
+      expect(`#${mesh.material.color.getHexString()}`).toBe(TOOL_PREVIEW_COLOR)
+      expect(mesh.material.opacity).toBe(0.5)
+      expect(mesh.layers.mask).toBe(1 << EDITOR_LAYER)
+      // It stands on the ground: here the slab's top.
+      expect(mesh.position.y).toBeCloseTo(0.7 + 0.05 + 0.6, 6)
+    }
+    await act(async () => useHedgeDraft.setState({ error: 'Refused' }))
+    expect(new Set(volumes().map((mesh) => `#${mesh.material.color.getHexString()}`))).toEqual(
+      new Set([TOOL_INVALID_COLOR]),
+    )
+  } finally {
+    await act(async () => renderer.unmount())
+  }
+})
+
+// ---- A ghost of the object, before the click.
+
+for (const kind of ['tree', 'rock'] as const) {
+  test(`${kind}: a translucent ghost of what the click will set follows the pointer, built once, and goes once it is set`, async () => {
+    const { renderer, camera, canvas } = await mountGardenTool(kind)
+    try {
+      if (!canvas) throw new Error('Missing canvas')
+      const holders = () => {
+        const found: Object3D[] = []
+        renderer.scene.instance.traverse((object) => {
+          if (object.userData.gardenGhost) found.push(object)
+        })
+        return found
+      }
+      // Built when the tool is taken, shown only once the pointer is on the ground.
+      expect(holders()).toHaveLength(1)
+      const holder = holders()[0]
+      if (!holder) throw new Error('Missing ghost')
+      expect(holder.visible).toBe(false)
+      await act(async () => pointAt(kind, canvas, camera, [2, 1]))
+      expect(holder.visible).toBe(true)
+      expect(holder.position.toArray()).toEqual([2, 0.7, 1])
+      const body = holder.children[0]
+      const meshes: Mesh<InstancedBufferGeometry, MeshBasicMaterial>[] = []
+      holder.traverse((object) => {
+        if ((object as Mesh).isMesh)
+          meshes.push(object as Mesh<InstancedBufferGeometry, MeshBasicMaterial>)
+      })
+      expect(meshes.length).toBeGreaterThan(0)
+      for (const mesh of meshes) {
+        expect(mesh.material.transparent).toBe(true)
+        expect(mesh.material.opacity).toBeLessThanOrEqual(0.5)
+        expect(mesh.geometry.getAttribute('position').count).toBeGreaterThan(0)
+      }
+      // Moving the pointer moves the same object: nothing is rebuilt per pointer event.
+      await act(async () => pointAt(kind, canvas, camera, [-3, 4]))
+      expect(holder.position.toArray()).toEqual([-3, 0.7, 4])
+      expect(holder.children[0]).toBe(body)
+      await act(async () =>
+        emitter.emit('grid:click', {
+          position: [-3, 0, 4],
+          localPosition: [-3, 0, 4],
+          nativeEvent: { target: canvas, buttons: 0, altKey: true },
+        } as unknown as GridEvent),
+      )
+      expect(nodesOf(kind)).toHaveLength(1)
+      expect(holder.visible).toBe(false)
+      expect(groundDots(renderer.scene.instance)).toEqual([])
     } finally {
       await act(async () => renderer.unmount())
     }

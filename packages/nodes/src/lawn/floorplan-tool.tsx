@@ -25,6 +25,7 @@ type PlanLawnControls = {
   building: BuildingNode | null
   mode: LawnSettings['mode']
   addPoint: (point: Point) => void
+  finish: () => void
   brush: Pick<ReturnType<typeof useLawnBrushController>, 'start' | 'move' | 'cancel'>
 }
 type PlanLawnInput = PlanLawnControls & {
@@ -90,10 +91,18 @@ function installPlanLawnInput(context: PlanLawnInput, svg: SVGSVGElement) {
   const down = (event: PointerEvent) => beginPlanLawnPress(event, context)
   const move = (event: PointerEvent) => movePlanLawnCursor(event, context)
   const click = (event: MouseEvent) => clickPlanLawnArea(event, context)
+  // The second click of a double-click repeats the last point and is dropped; the outline closes.
+  const doubleClick = (event: MouseEvent) => {
+    if (context.mode !== 'area' || event.button !== 0 || !ownsPlanLawnInput(event, context)) return
+    consumePlanLawnInput(event)
+    context.finish()
+  }
+  svg.addEventListener('dblclick', doubleClick, true)
   svg.addEventListener('pointerdown', down, true)
   svg.addEventListener('pointermove', move, true)
   svg.addEventListener('click', click, true)
   return () => {
+    svg.removeEventListener('dblclick', doubleClick, true)
     svg.removeEventListener('pointerdown', down, true)
     svg.removeEventListener('pointermove', move, true)
     svg.removeEventListener('click', click, true)
@@ -102,7 +111,7 @@ function installPlanLawnInput(context: PlanLawnInput, svg: SVGSVGElement) {
 
 function usePlanLawnInput(
   groupRef: RefObject<SVGGElement | null>,
-  { building, mode, addPoint, brush }: PlanLawnControls,
+  { building, mode, addPoint, finish, brush }: PlanLawnControls,
 ) {
   const navigationAllows = useLawnNavigationGuard()
   const [cursor, setCursor] = useState<Point | null>(null)
@@ -117,13 +126,14 @@ function usePlanLawnInput(
         building,
         mode,
         addPoint,
+        finish,
         brush: { start, move, cancel },
         navigationAllows,
         setCursor,
       },
       svg,
     )
-  }, [groupRef, building, mode, addPoint, start, move, cancel, navigationAllows])
+  }, [groupRef, building, mode, addPoint, finish, start, move, cancel, navigationAllows])
   return cursor
 }
 
@@ -193,6 +203,7 @@ export default function FloorplanLawnTool(context: FloorplanToolContext) {
     building,
     mode: settings.mode,
     addPoint: draft.addPoint,
+    finish: draft.finish,
     brush,
   })
   const outline = useLawnDraft()

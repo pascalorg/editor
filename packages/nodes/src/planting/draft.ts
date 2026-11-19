@@ -119,6 +119,16 @@ export function usePlantingDraftController({
     window.addEventListener('keydown', onKey, true)
     return () => window.removeEventListener('keydown', onKey, true)
   }, [view, plant, finishTool])
+  // The hint card lists the finishing key only once there is something to finish (as the slab's).
+  const placed = draft.points.length
+  useEffect(() => {
+    useEditor.getState().setDraftVertexCount(placed)
+  }, [placed])
+  useEffect(() => () => useEditor.getState().setDraftVertexCount(0), [])
+  // A double-click finishes like Enter, once there is an outline to plant (as the slab's does).
+  const finish = useCallback(() => {
+    if (usePlantingDraft.getState().points.length >= PLANTING_LIMITS.minPoints) plant()
+  }, [plant])
   const line = draft.hover && draft.points.length ? [...draft.points, draft.hover] : draft.points
-  return { addPoint, line, error: draft.error }
+  return { addPoint, finish, line, error: draft.error }
 }

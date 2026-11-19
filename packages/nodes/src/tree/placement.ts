@@ -22,18 +22,44 @@ export function ownsTreePlacement(view: '2d' | '3d', target: EventTarget | null)
 }
 
 /** One click is one tree in the shared operation, including its trunk-in-building refusal. */
+/** A seed for the next hand-planted tree. */
+export function drawTreeSeed(): number {
+  return Math.floor(Math.random() * 2147483648)
+}
+
+/**
+ * The tree a click would plant with this seed, standing at the Site's origin: what the tool
+ * shows as a ghost. Null where the operation would refuse to plant at all (no Site).
+ */
+export function previewTree(
+  nodes: ReturnType<SceneApi['nodes']>,
+  siteId: string | undefined,
+  seed: number,
+): TreeNode | null {
+  try {
+    const node = addTree(nodes, { siteId, seed, trees: [{ at: [0, 0] }] }, { activeLevelId: null })
+      .changes?.create?.[0]?.node
+    return node ? TreeNode.parse(node) : null
+  } catch (error) {
+    if (!isAgentRefusal(error)) throw error
+    return null
+  }
+}
+
 export function placeTree(
   sceneApi: SceneApi,
   at: Point,
   select: (id: AnyNodeId) => void,
   siteId?: string,
   onRefusal?: (code: string) => void,
+  /** The seed of the tree shown as a ghost, so the planted tree is that one. */
+  seed: number = drawTreeSeed(),
 ): AnyNodeId | null {
   if (!sceneApi.applyChanges) throw new Error('Tree placement requires atomic scene changes.')
   try {
     const { result, changes } = addTree(
       sceneApi.nodes(),
-      { siteId, seed: Math.floor(Math.random() * 2147483648), trees: [{ at }] },
+      { siteId, seed, trees: [{ at }] },
       { activeLevelId: null },
     )
     const id = Array.isArray(result.treeIds) ? result.treeIds[0] : undefined
