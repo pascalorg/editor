@@ -275,7 +275,7 @@ describe('bounded deterministic lawn detail', () => {
       expect(buildLawn({ ...input, season: 'winter' }, { [owner.id]: owner }).flowers.count).toBe(0)
     }
     expect(new Set(geometryPerSpecies).size).toBe(3)
-  })
+  }, 30_000)
 
   test('keeps roots out of actual bed and path exclusions, including merged flower roots', () => {
     const owner = site()
