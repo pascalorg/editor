@@ -134,8 +134,13 @@ function LawnBoundaryEditor({ lawn }: { lawn: LawnNode }) {
   const edit = useLawnBoundaryEditing(lawn.id)
   const ground = resolveSiteGround(lawn.parentId ?? undefined, useScene.getState().nodes)
   const first = lawn.outline[0]
+  // The editor stands on the lawn's ground; `surfaceHeight` is a rise above the editor's own base,
+  // not an elevation (given one, every handle became a post from the world datum up to the ground).
   return createPortal(
-    <group userData={{ pascalExport: 'strip' }}>
+    <group
+      position={[0, first ? ground.heightAt(first[0], first[1]) : 0, 0]}
+      userData={{ pascalExport: 'strip' }}
+    >
       <PolygonEditor
         key={edit.epoch}
         polygon={lawn.outline}
@@ -148,7 +153,7 @@ function LawnBoundaryEditor({ lawn }: { lawn: LawnNode }) {
         resolvePlanPoint={({ rawPoint, nativeEvent }) =>
           snapLawnPoint(rawPoint, nativeEvent?.altKey)
         }
-        surfaceHeight={first ? ground.heightAt(first[0], first[1]) + 0.04 : 0.04}
+        surfaceHeight={0.04}
       />
     </group>,
     scene,

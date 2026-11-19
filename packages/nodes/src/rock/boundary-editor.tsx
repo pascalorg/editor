@@ -28,6 +28,9 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { createRockPolygonSession } from './edit-session'
 import { snapRockPlacementPoint } from './placement'
 
+/** The handles' rise above the ground the rock stands on. */
+const ROCK_EDIT_RISE = 0.02
+
 /** Live preview and cancellation stay kind-owned; the shared editor only supplies the handles. */
 export function RockBoundaryEditor({ rockId }: { rockId: RockNode['id'] }) {
   const rock = useScene((state) => {
@@ -129,8 +132,11 @@ export function RockBoundaryEditor({ rockId }: { rockId: RockNode['id'] }) {
       site?.type === 'site' ? terrainFieldOf(site) : null,
       site?.type === 'site' ? FLAT_GROUND_Y : 0,
     ).footY + ROCK_EMBED
+  // The editor stands on the rock's ground. Its `surfaceHeight` is the rise of the edited surface
+  // above the editor's own base, not an elevation: given the ground's elevation, every handle
+  // became a post from the world datum up to the ground.
   return createPortal(
-    <group userData={{ pascalExport: 'strip' }}>
+    <group position={[0, ground, 0]} userData={{ pascalExport: 'strip' }}>
       <PolygonEditor
         allowEdgeMove
         allowPolygonMove
@@ -144,7 +150,7 @@ export function RockBoundaryEditor({ rockId }: { rockId: RockNode['id'] }) {
         resolvePlanPoint={({ rawPoint, nativeEvent }) =>
           snapRockPlacementPoint(rawPoint, nativeEvent?.altKey)
         }
-        surfaceHeight={ground}
+        surfaceHeight={ROCK_EDIT_RISE}
       />
     </group>,
     scene,
