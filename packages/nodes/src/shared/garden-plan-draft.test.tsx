@@ -8,6 +8,7 @@ import {
   useScene,
 } from '@pascal-app/core'
 import {
+  FLOORPLAN_DRAFT_OUTLINE_WIDTH,
   type FloorplanToolContext,
   planDraftColors,
   sceneLayout,
@@ -197,6 +198,8 @@ for (const [kind, draft, closed] of [
     const outline = svg.querySelector('polyline')
     expect(outline?.getAttribute('stroke')).toBe(colors.stroke)
     expect(outline?.getAttribute('points')).toBe('1,2 4,2 4,4 1,4')
+    // A full line of the weight the plan gives a slab draft, not the hairline.
+    expect(outline?.getAttribute('stroke-width')).toBe(FLOORPLAN_DRAFT_OUTLINE_WIDTH)
     const markers = [...svg.querySelectorAll('circle')]
     expect(markers).toHaveLength(3)
     expect(new Set(markers.map((marker) => marker.getAttribute('fill')))).toEqual(

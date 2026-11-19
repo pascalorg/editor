@@ -2,6 +2,7 @@
 
 import { emitter, type LawnNode, resolveSiteGround, useScene } from '@pascal-app/core'
 import {
+  BOUNDARY_OUTLINE_COLOR,
   beginGesture,
   boundaryReshapeScope,
   isTypingTarget,
@@ -146,7 +147,7 @@ function LawnBoundaryEditor({ lawn }: { lawn: LawnNode }) {
         polygon={lawn.outline}
         minVertices={3}
         allowEdgeMove
-        color="#617c36"
+        color={BOUNDARY_OUTLINE_COLOR}
         onDragStart={edit.start}
         onPolygonPreview={edit.preview}
         onPolygonChange={edit.commit}

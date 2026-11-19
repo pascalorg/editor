@@ -13,6 +13,7 @@ import {
   useScene,
 } from '@pascal-app/core'
 import {
+  BOUNDARY_OUTLINE_COLOR,
   beginGesture,
   boundaryReshapeScope,
   isTypingTarget,
@@ -140,7 +141,7 @@ export function RockBoundaryEditor({ rockId }: { rockId: RockNode['id'] }) {
       <PolygonEditor
         allowEdgeMove
         allowPolygonMove
-        color="#a3a3a3"
+        color={BOUNDARY_OUTLINE_COLOR}
         key={epoch}
         minVertices={3}
         onDragStart={start}

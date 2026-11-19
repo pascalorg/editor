@@ -1,6 +1,7 @@
 'use client'
 
 import {
+  FLOORPLAN_DRAFT_OUTLINE_WIDTH,
   FloorplanDraftLayer,
   planDraftColors,
   TOOL_INVALID_COLOR,
@@ -94,6 +95,9 @@ export function GardenPlanDraft({
         }
         polygonDraftPolygonPoints={closed && line.length >= 3 ? svgPoints(line) : null}
         polygonDraftPolylinePoints={line.length >= 2 ? svgPoints(line) : null}
+        // A full line, as the slab draft's: a hedge has no fill to be read by.
+        polygonDraftStroke={stroke}
+        polygonDraftStrokeWidth={FLOORPLAN_DRAFT_OUTLINE_WIDTH}
         unitsPerPixel={render?.unitsPerPixel ?? 0.01}
       />
       {message && first && (
