@@ -22,6 +22,7 @@ type LawnCanvasControls = {
   siteId?: string
   mode: LawnSettings['mode']
   addPoint: (point: Point) => void
+  finish: () => void
   brush: Pick<ReturnType<typeof useLawnBrushController>, 'start' | 'move' | 'cancel'>
   isCameraDragging: () => boolean
 }
@@ -127,11 +128,19 @@ function installLawnCanvasInput(context: LawnCanvasInput) {
     press.clickEligible = false
     context.brush.cancel()
   }
+  // The second click of a double-click repeats the last point and is dropped; the outline closes.
+  const doubleClick = (event: MouseEvent) => {
+    if (context.mode !== 'area' || event.button !== 0 || !ownsLawnInput(event, context)) return
+    consumeLawnInput(event)
+    context.finish()
+  }
+  context.canvas.addEventListener('dblclick', doubleClick, true)
   context.canvas.addEventListener('pointermove', move, true)
   context.canvas.addEventListener('pointerdown', down, true)
   context.canvas.addEventListener('click', click, true)
   context.canvas.addEventListener('pointercancel', cancel, true)
   return () => {
+    context.canvas.removeEventListener('dblclick', doubleClick, true)
     context.canvas.removeEventListener('pointermove', move, true)
     context.canvas.removeEventListener('pointerdown', down, true)
     context.canvas.removeEventListener('click', click, true)
@@ -144,6 +153,7 @@ function useLawnCanvasInput({
   siteId,
   mode,
   addPoint,
+  finish,
   brush,
   isCameraDragging,
 }: LawnCanvasControls) {
@@ -159,6 +169,7 @@ function useLawnCanvasInput({
         siteId,
         mode,
         addPoint,
+        finish,
         isCameraDragging,
         camera,
         canvas,
@@ -171,6 +182,7 @@ function useLawnCanvasInput({
       siteId,
       mode,
       addPoint,
+      finish,
       isCameraDragging,
       camera,
       canvas,
@@ -205,6 +217,7 @@ export default function LawnTool() {
     siteId: frame?.site.id,
     mode: settings.mode,
     addPoint: draft.addPoint,
+    finish: draft.finish,
     brush,
   })
   return (

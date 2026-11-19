@@ -15,7 +15,7 @@ export default function FloorplanPlantingTool(context: FloorplanToolContext) {
     context.activeLevelId,
     context.drawingType ?? 'floor-plan',
   )
-  const { addPoint, error } = usePlantingDraftController({
+  const { addPoint, finish, error } = usePlantingDraftController({
     ...context,
     siteId: frame?.site.id,
     view: '2d',
@@ -50,15 +50,23 @@ export default function FloorplanPlantingTool(context: FloorplanToolContext) {
       const point = resolve(event)
       if (point) addPoint(point)
     }
+    // The second click of a double-click repeats the last point and is dropped; the outline closes.
+    const doubleClick = (event: MouseEvent) => {
+      if (event.button !== 0) return
+      consume(event)
+      finish()
+    }
     svg.addEventListener('pointerdown', down, true)
     svg.addEventListener('pointermove', move, true)
     svg.addEventListener('click', click, true)
+    svg.addEventListener('dblclick', doubleClick, true)
     return () => {
       svg.removeEventListener('pointerdown', down, true)
       svg.removeEventListener('pointermove', move, true)
       svg.removeEventListener('click', click, true)
+      svg.removeEventListener('dblclick', doubleClick, true)
     }
-  }, [addPoint, building])
+  }, [addPoint, finish, building])
   const draft = usePlantingDraft()
   return (
     <g ref={groupRef}>

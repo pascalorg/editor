@@ -23,7 +23,7 @@ export const hedgeEditContribution: NodeEditContribution<typeof HedgeNode> = {
   },
   toolHints: [
     { key: 'Left click', label: 'Add a point of the hedge' },
-    { key: 'Enter', label: 'Plant it' },
+    { key: 'Enter', label: 'Plant it', minDraftVertices: 2 },
     { key: 'Backspace', label: 'Take the last point back' },
     { key: 'Esc', label: 'Cancel' },
   ],

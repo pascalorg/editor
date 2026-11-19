@@ -183,6 +183,7 @@ export const lawnEditContribution: NodeEditContribution<typeof LawnNode> = {
     {
       key: 'Enter',
       label: i18n._({ id: 'node.lawn.tool.finish', message: 'Finish the lawn' }),
+      minDraftVertices: 3,
       visible: { subscribe, value: () => !brushVisible.value() },
     },
     {

@@ -227,3 +227,53 @@ for (const [kind, draft, closed] of [
     expect(reason?.getAttribute('fill')).toBe(TOOL_INVALID_COLOR)
   })
 }
+
+for (const [kind, draft] of [
+  ['planting', usePlantingDraft],
+  ['lawn', useLawnDraft],
+] as const) {
+  test(`${kind} on the plan: a double-click finishes the outline, and does nothing while it has fewer than three points`, async () => {
+    const { svg } = await mountPlanTool(kind)
+    const count = () =>
+      Object.values(useScene.getState().nodes).filter((node) => node.type === kind).length
+    const doubleClick = () =>
+      act(async () => {
+        svg.dispatchEvent(
+          new dom.MouseEvent('dblclick', {
+            bubbles: true,
+            cancelable: true,
+            button: 0,
+            clientX: 4,
+            clientY: 4,
+          }) as unknown as Event,
+        )
+      })
+    await act(async () =>
+      draft.setState({
+        points: [
+          [1, 2],
+          [4, 2],
+        ],
+        hover: null,
+        error: null,
+      }),
+    )
+    await doubleClick()
+    expect(count()).toBe(0)
+    expect(draft.getState().error).toBeNull()
+    await act(async () =>
+      draft.setState({
+        points: [
+          [1, 2],
+          [4, 2],
+          [4, 4],
+        ],
+        hover: null,
+        error: null,
+      }),
+    )
+    await doubleClick()
+    expect(count()).toBe(1)
+    expect(draft.getState().points).toEqual([])
+  })
+}
