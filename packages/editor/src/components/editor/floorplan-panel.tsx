@@ -156,6 +156,7 @@ import { enterBuildingFromPlanHit } from '../../lib/selection-routing'
 import { sfxEmitter } from '../../lib/sfx-bus'
 import { SITE_BOUNDARY_DRAG_LABEL, siteBoundaryHandlesEnabled } from '../../lib/site-boundary'
 import { resolveSlabPlanPointSnap } from '../../lib/slab-plan-snap'
+import { planDraftColors } from '../../lib/tool-preview-colors'
 import {
   cancelPendingZonePaint,
   focusedUnitNode,
@@ -7031,10 +7032,10 @@ export function FloorplanPanel({
             deleteWallHoverStroke: '#fca5a5',
             selectedFill: '#eff6ff',
             selectedStroke: '#60a5fa',
-            draftFill: '#818cf8',
-            draftStroke: '#c7d2fe',
+            draftFill: planDraftColors(true).fill,
+            draftStroke: planDraftColors(true).stroke,
             measurementStroke: '#e2e8f0',
-            cursor: '#818cf8',
+            cursor: planDraftColors(true).cursor,
             editCursor: '#8381ed',
             anchor: '#818cf8',
             openingFill: '#0a0e1b',
@@ -7087,10 +7088,10 @@ export function FloorplanPanel({
             deleteWallHoverStroke: '#f87171',
             selectedFill: '#ffffff',
             selectedStroke: '#3b82f6',
-            draftFill: '#6366f1',
-            draftStroke: '#4338ca',
+            draftFill: planDraftColors(false).fill,
+            draftStroke: planDraftColors(false).stroke,
             measurementStroke: '#334155',
-            cursor: '#6366f1',
+            cursor: planDraftColors(false).cursor,
             editCursor: '#8381ed',
             anchor: '#4338ca',
             openingFill: '#ffffff',
