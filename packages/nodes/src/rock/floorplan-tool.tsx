@@ -26,10 +26,10 @@ export default function FloorplanRockTool(context: FloorplanToolContext) {
     const down = (event: PointerEvent) => {
       if (event.button === 0 && ownsRockPlacement('2d', event.target)) consume(event)
     }
-    // The move is taken before the panel sees it (it would clear the plan's target for a tool it
-    // does not know); a pan with the middle or right button is left alone.
+    // A plain hover is taken before the panel sees it (it would clear the plan's target for a tool
+    // it does not know); any move with a button held (a pan, a drag) is left to the panel.
     const move = (event: PointerEvent) => {
-      if (event.buttons & 0b110 || !ownsRockPlacement('2d', event.target)) return
+      if (event.buttons !== 0 || !ownsRockPlacement('2d', event.target)) return
       const matrix = group.getScreenCTM()
       if (!matrix) return
       consume(event)

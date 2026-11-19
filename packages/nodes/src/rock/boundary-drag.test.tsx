@@ -144,3 +144,33 @@ for (const ground of ['flat', 'slope'] as const) {
     expect(useScene.temporal.getState().pastStates).toHaveLength(1)
   })
 }
+
+test('the centre handle moves the whole footprint by the pointer travel, without jumping to the pointer', async () => {
+  seed('flat')
+  useViewer.getState().setSelection({ selectedIds: [rock.id] })
+  const renderer = await mount(<RockSelectionAffordance node={rock} readOnly={false} />)
+  await settle(renderer)
+  const centre = renderer.scene
+    .findAll((entry) => typeof entry.props.onPointerDown === 'function')
+    .find((entry) => {
+      const at = entry.instance.getWorldPosition(new Vector3())
+      return Math.abs(at.x) < 1e-6 && Math.abs(at.z) < 1e-6
+    })
+  if (!centre) throw new Error('Missing the centre handle')
+  // The ground under the pointer lies 2.5 m behind the centre it is pressing.
+  await pointerOnGround(2, 1.5)
+  await renderer.fireEvent(centre, 'pointerDown', {
+    button: 0,
+    pointerId: 1,
+    point: new Vector3(0, 0.1, 0),
+    nativeEvent: { button: 0, stopPropagation() {}, stopImmediatePropagation() {} },
+    stopPropagation() {},
+  })
+  await pointerOnGround(2.1, 1.45)
+  const moved = useLiveNodeOverrides.getState().get(rock.id)?.polygon
+  expect(moved).toHaveLength(4)
+  for (const [index, [x, z]] of polygon.entries()) {
+    expect(moved?.[index]?.[0]).toBeCloseTo(x + 0.1, 9)
+    expect(moved?.[index]?.[1]).toBeCloseTo(z - 0.05, 9)
+  }
+})
