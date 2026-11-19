@@ -494,7 +494,15 @@ export function setPluginDiscovery(fn: PluginDiscovery): void {
 export function extendPluginDiscovery(fn: PluginDiscovery): void {
   const previous = pluginDiscovery
   pluginDiscovery = async () => {
-    const [base, extra] = await Promise.all([previous(), fn()])
+    const [baseResult, extraResult] = await Promise.allSettled([previous(), fn()])
+    const base = baseResult.status === 'fulfilled' ? baseResult.value : []
+    const extra = extraResult.status === 'fulfilled' ? extraResult.value : []
+    if (baseResult.status === 'rejected' && isDevMode()) {
+      console.warn('[registry] previous plugin discovery failed:', baseResult.reason)
+    }
+    if (extraResult.status === 'rejected' && isDevMode()) {
+      console.warn('[registry] extended plugin discovery failed:', extraResult.reason)
+    }
     return [...base, ...extra]
   }
 }

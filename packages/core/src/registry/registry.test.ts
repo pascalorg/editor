@@ -1,6 +1,8 @@
 import { beforeEach, describe, expect, test } from 'bun:test'
 import { z } from 'zod'
 import {
+  discoverPlugins,
+  extendPluginDiscovery,
   getHostRefFields,
   getInspectorExtensions,
   getNodePluginId,
@@ -14,6 +16,7 @@ import {
   loadPlugin,
   nodeRegistry,
   registerNode,
+  setPluginDiscovery,
 } from './registry'
 import type { AnyNodeDefinition, InspectorExtension, Plugin } from './types'
 
@@ -505,5 +508,21 @@ describe('inspector extensions', () => {
     expect(getInspectorExtensions('wall')).toHaveLength(1)
     nodeRegistry._reset()
     expect(getInspectorExtensions('wall')).toEqual([])
+  })
+})
+
+describe('discoverPlugins and extendPluginDiscovery', () => {
+  test('combines discoveries and survives an individual discovery failure', async () => {
+    const pluginA = { id: 'test:plugin-a', apiVersion: 1 } as Plugin
+    const pluginB = { id: 'test:plugin-b', apiVersion: 1 } as Plugin
+
+    setPluginDiscovery(async () => [pluginA])
+    extendPluginDiscovery(async () => {
+      throw new Error('network failed chunk')
+    })
+    extendPluginDiscovery(async () => [pluginB])
+
+    const discovered = await discoverPlugins()
+    expect(discovered).toEqual([pluginA, pluginB])
   })
 })

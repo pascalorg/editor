@@ -4,6 +4,7 @@ import {
   extendPluginDiscovery,
   loadPlugin,
   nodeRegistry,
+  type Plugin,
   registerNode,
 } from '@pascal-app/core'
 import { sdfChecksFromEnv, setSdfChecks } from '@pascal-app/core/usage-field'
@@ -76,16 +77,30 @@ function loadBuiltinsSync(): void {
   }
 }
 
+function registerLazyPlugin(loader: () => Promise<unknown>): void {
+  extendPluginDiscovery(async () => {
+    try {
+      const res = await loader()
+      return (Array.isArray(res) ? res : []) as Plugin[]
+    } catch (err) {
+      if (isDev() && typeof console !== 'undefined') {
+        console.warn('[pascal:plugin-loader] failed to load external plugin chunk:', err)
+      }
+      return []
+    }
+  })
+}
+
 function registerExternalPluginLoaders(): void {
   if (discoveryRegistered) return
   discoveryRegistered = true
 
-  extendPluginDiscovery(async () => {
+  registerLazyPlugin(async () => {
     const { treesHostPanel, treesPlugin } = await import('@pascal-app/plugin-trees')
     registerEditorHostPanel(treesHostPanel)
     return [treesPlugin]
   })
-  extendPluginDiscovery(async () => {
+  registerLazyPlugin(async () => {
     const { environmentHostPanel, environmentPlugin, environmentPresentation } = await import(
       '@pascal-app/plugin-environment'
     )
@@ -93,34 +108,34 @@ function registerExternalPluginLoaders(): void {
     registerViewerPresentation(environmentPresentation)
     return [environmentPlugin]
   })
-  extendPluginDiscovery(async () => {
+  registerLazyPlugin(async () => {
     const { bonesHostPanel, bonesPlugin } = await import('@pascal-app/plugin-bones')
     // Opt-in: Bones ships uninstalled — users enable it per scene from the
     // Plugins panel (engineering X-ray is a specialist view, not a default).
     registerEditorHostPanel({ ...bonesHostPanel, defaultInstalled: false })
     return [bonesPlugin]
   })
-  extendPluginDiscovery(async () => {
+  registerLazyPlugin(async () => {
     const { mintHostPanel, mintPlugin } = await import('@mint/pascal-plugin')
     registerEditorHostPanel(mintHostPanel)
     return [mintPlugin]
   })
-  extendPluginDiscovery(async () => {
+  registerLazyPlugin(async () => {
     const { poolHostPanel, poolPlugin } = await import('@pascal-app/plugin-pool')
     registerEditorHostPanel(poolHostPanel)
     return [poolPlugin]
   })
-  extendPluginDiscovery(async () => {
+  registerLazyPlugin(async () => {
     const { landscapeHostPanel, landscapePlugin } = await import('@pascal-app/plugin-landscape')
     registerEditorHostPanel(landscapeHostPanel)
     return [landscapePlugin]
   })
-  extendPluginDiscovery(async () => {
+  registerLazyPlugin(async () => {
     const { bathSpaceHostPanel, bathSpacePlugin } = await import('@pascal-app/plugin-bath-space')
     registerEditorHostPanel(bathSpaceHostPanel)
     return [bathSpacePlugin]
   })
-  extendPluginDiscovery(async () => {
+  registerLazyPlugin(async () => {
     const { streetscapeHostPanel, streetscapePlugin } = await import(
       '@pascal-app/plugin-streetscape'
     )
@@ -130,7 +145,7 @@ function registerExternalPluginLoaders(): void {
     })
     return [streetscapePlugin]
   })
-  extendPluginDiscovery(async () => {
+  registerLazyPlugin(async () => {
     const { webXRHostPanel, webXRPlugin } = await import('@webxr/plugin')
     registerEditorHostPanel(webXRHostPanel)
     return [webXRPlugin]
@@ -146,9 +161,24 @@ function registerExternalPluginLoaders(): void {
 export async function loadExternalPlugins(): Promise<void> {
   if (externalsKickedOff) return
   externalsKickedOff = true
-  const externals = await discoverPlugins()
+  let externals: Plugin[] = []
+  try {
+    externals = await discoverPlugins()
+  } catch (err) {
+    externalsKickedOff = false
+    if (isDev() && typeof console !== 'undefined') {
+      console.warn('[pascal:registry] discoverPlugins failed:', err)
+    }
+    return
+  }
   for (const plugin of externals) {
-    await loadPlugin(plugin)
+    try {
+      await loadPlugin(plugin)
+    } catch (err) {
+      if (isDev() && typeof console !== 'undefined') {
+        console.warn(`[pascal:registry] failed to load plugin "${plugin?.id}":`, err)
+      }
+    }
   }
   if (isDev() && externals.length > 0 && typeof console !== 'undefined') {
     console.info(`[pascal:registry] + ${externals.length} discovered plugin(s)`)
