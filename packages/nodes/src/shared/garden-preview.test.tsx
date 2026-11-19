@@ -372,11 +372,9 @@ for (const [kind, brush, label] of [
   ['lawn', false, 'Lawn'],
   ['lawn', true, 'Lawn'],
 ] as const) {
-  // The bubble is mounted for the tree only: its icon is a picture. The other four draw an
-  // Iconify glyph, which that library fetches over the network; which icon each shows is stated
-  // by the editor's `tool-cursor-icon` test.
-  const withBubble = kind === 'tree'
-  test(`${kind}${brush ? ' brush' : ''} in hand: the editor's target follows the pointer on the ground${withBubble ? ", under the tool's icon" : ''}`, async () => {
+  // Every garden kind's icon is a picture served by the app, so the bubble can be mounted here.
+  const withBubble = true
+  test(`${kind}${brush ? ' brush' : ''} in hand: the editor's target follows the pointer on the ground, under the tool's own picture`, async () => {
     // The bubble reads the kind's icon and name from the registry.
     const restoreRegistry = nodeRegistry._snapshot()
     const definition = builtinPlugin.nodes?.find((entry) => entry.kind === kind)
@@ -399,8 +397,10 @@ for (const [kind, brush, label] of [
         expect(dots[0]?.at.y).toBeCloseTo(0.7, 6)
         expect(dots[0]?.at.z).toBeCloseTo(point[1], 3)
       }
-      if (withBubble)
-        expect(document.querySelector('[role="img"]')?.getAttribute('aria-label')).toBe(label)
+      // The bubble holds the kind's picture, as the wall's holds its art: named for the tool.
+      const picture = document.querySelector('img')
+      expect(picture?.getAttribute('alt')).toBe(label)
+      expect(picture?.getAttribute('src')).toBe(`/icons/garden-${kind}.webp`)
     } finally {
       await act(async () => renderer.unmount())
       restoreRegistry()

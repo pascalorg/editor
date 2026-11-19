@@ -49,7 +49,7 @@ export const hedgeRenderDefinition: NodeRenderDefinition<typeof HedgeNode> & { k
   presentation: {
     label: 'Hedge',
     description: 'A planted hedge along a line, freshly clipped or left to grow.',
-    icon: { kind: 'iconify', name: 'lucide:trees' },
+    icon: { kind: 'url', src: '/icons/garden-hedge.webp' },
     paletteSection: 'structure',
     paletteOrder: 79,
   },

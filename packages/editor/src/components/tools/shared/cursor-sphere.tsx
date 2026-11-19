@@ -78,9 +78,13 @@ export const CursorSphere = forwardRef<Group, CursorSphereProps>(function Cursor
     }
   }
 
-  // A tool outside the art table may still show its kind's registry icon.
-  const registryIcon =
+  // A tool outside the art table may still show its kind's registry icon: a picture goes through
+  // the same `<img>` as the table's art (same size and shadow), any other icon through the glyph.
+  const registryEntry =
     mode === 'build' && tool && !activeToolConfig ? registryToolCursorIcon(tool) : null
+  if (registryEntry?.icon.kind === 'url')
+    activeToolConfig = { label: registryEntry.label, iconSrc: registryEntry.icon.src }
+  const registryIcon = registryEntry?.icon.kind === 'url' ? null : registryEntry
 
   const isVisible = visible && !isFloorplanHovered
 

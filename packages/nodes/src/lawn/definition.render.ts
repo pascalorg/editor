@@ -64,7 +64,7 @@ export const lawnRenderDefinition: NodeRenderDefinition<typeof LawnNode> & { kin
   presentation: {
     label: 'Lawn',
     description: 'An editable lawn on Site ground, with mown or rough grass and optional flowers.',
-    icon: { kind: 'iconify', name: 'lucide:sprout' },
+    icon: { kind: 'url', src: '/icons/garden-lawn.webp' },
     paletteSection: 'structure',
     paletteOrder: 81,
   },

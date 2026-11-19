@@ -57,29 +57,37 @@ export const BASE_BUILD_TYPES: BuildType[] = [
   {
     id: 'rock',
     label: /* i18n */ { id: 'app.lib.buildPalette.rock', message: 'Rock' },
-    iconSrc: '/icons/mesh.webp',
+    iconSrc: '/icons/garden-rock.webp',
     kind: 'rock',
     section: 'outdoor',
   },
   {
     id: 'hedge',
     label: /* i18n */ { id: 'app.lib.buildPalette.hedge', message: 'Hedge' },
-    iconSrc: '/icons/tree.webp',
+    iconSrc: '/icons/garden-hedge.webp',
     kind: 'hedge',
     section: 'outdoor',
   },
   {
     id: 'planting',
     label: /* i18n */ { id: 'app.lib.buildPalette.planting', message: 'Planting bed' },
-    iconSrc: '/icons/tree.webp',
+    iconSrc: '/icons/garden-planting.webp',
     kind: 'planting',
     section: 'outdoor',
   },
   {
     id: 'tree',
     label: /* i18n */ { id: 'app.lib.buildPalette.tree', message: 'Tree' },
-    iconSrc: '/icons/tree.webp',
+    iconSrc: '/icons/garden-tree.webp',
     kind: 'tree',
+    section: 'outdoor',
+  },
+  {
+    id: 'lawn',
+    // The kind's own name: the palette has no message of its own for the lawn.
+    label: nodeLabelDescriptor('lawn', 'Lawn'),
+    iconSrc: '/icons/garden-lawn.webp',
+    kind: 'lawn',
     section: 'outdoor',
   },
   {
