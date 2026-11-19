@@ -9,6 +9,7 @@ import {
   useScene,
 } from '@pascal-app/core'
 import { create } from 'zustand'
+import { beginLawnStroke, endLawnStroke, lawnStrokeCatchUpMs } from './stroke-rebuild'
 
 type Point = [number, number]
 export type LawnBrushSettings = Pick<LawnStroke, 'radiusM' | 'effect' | 'strength'> & {
@@ -136,7 +137,10 @@ function strokeSession(
   const append = strokePath(first, stroke.radiusM)
   const savedPointCount = node.strokes.reduce((count, saved) => count + saved.points.length, 0)
   let active = true
+  let catchUp: ReturnType<typeof setTimeout> | undefined
   const clear = () => {
+    clearTimeout(catchUp)
+    endLawnStroke(node.id)
     useLiveNodeOverrides.getState().clear(node.id)
     useScene.getState().markDirty(node.id)
   }
@@ -161,9 +165,14 @@ function strokeSession(
     }
     useLiveNodeOverrides.getState().set(node.id, proposed())
     useScene.getState().markDirty(node.id)
+    // The lawn skips rebuilds between spaced samples; a pointer that then rests still gets its
+    // last samples drawn.
+    clearTimeout(catchUp)
+    catchUp = setTimeout(() => useScene.getState().markDirty(node.id), lawnStrokeCatchUpMs(node.id))
     onPointCount?.(savedPointCount + points.length)
     return true
   }
+  beginLawnStroke(node.id)
   if (!preview()) return null
   return {
     move(point: Point): boolean {

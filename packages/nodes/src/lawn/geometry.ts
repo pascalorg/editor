@@ -17,6 +17,7 @@ import { lawnBladeMaterial, setLawnBladeDraw } from './blade-material'
 import { lawnFlowerMaterial } from './flower-material'
 import { type LawnDetailChunk, registerLawnDetail, unregisterLawnDetail } from './lod'
 import { buildVisibleLawn } from './render-build'
+import { noteLawnBuild } from './stroke-rebuild'
 import { MID_ORDER, MID_TUFT, NEAR_ORDER, NEAR_TUFT } from './tuft-shape'
 import { lawnGroundMaterial } from './turf-ground'
 
@@ -124,6 +125,7 @@ function detailChunk(
 }
 
 export function buildLawnGeometry(node: LawnNode, ctx?: Partial<GeometryContext>): Group {
+  const started = performance.now()
   const result = new Group()
   result.name = 'lawn-geometry'
   const built = buildVisibleLawn(node, ctx)
@@ -163,6 +165,7 @@ export function buildLawnGeometry(node: LawnNode, ctx?: Partial<GeometryContext>
     headIndexEnds: built.flowers.headIndexEnds,
   })
   result.userData.lawn = built.facts
+  noteLawnBuild(node.id, performance.now() - started)
   return result
 }
 

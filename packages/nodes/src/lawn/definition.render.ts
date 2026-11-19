@@ -3,6 +3,7 @@ import type { NodeRenderDefinition } from '../definition-contributions'
 import { buildLawnBakeGeometry } from './bake-geometry'
 import { buildLawnFloorplan } from './floorplan'
 import { buildLawnGeometry } from './geometry'
+import { lawnGeometryKey } from './stroke-rebuild'
 
 export const lawnRenderDefinition: NodeRenderDefinition<typeof LawnNode> & { kind: 'lawn' } = {
   kind: 'lawn',
@@ -53,6 +54,7 @@ export const lawnRenderDefinition: NodeRenderDefinition<typeof LawnNode> & { kin
     surfaces: { hosting: false },
   },
   geometry: buildLawnGeometry,
+  geometryKey: lawnGeometryKey,
   bake: 'replace',
   bakeGeometry: buildLawnBakeGeometry,
   bakeReplaceRenderer: { module: () => import('./static-renderer') },
