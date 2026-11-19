@@ -5,29 +5,9 @@ import { disposeObject3DResources, snapLevelsToTruePositions, useViewer } from '
 import { useThree } from '@react-three/fiber'
 import { useEffect } from 'react'
 import * as THREE from 'three'
-import { OBJExporter } from 'three/examples/jsm/exporters/OBJExporter.js'
-import { STLExporter } from 'three/examples/jsm/exporters/STLExporter.js'
 import { downloadProjectFile } from '../../lib/download-project-file'
-import {
-  exportSceneToGlb,
-  prepareSceneForExport,
-  waitForExportGeometry,
-} from '../../lib/glb-export'
-import { exportPreparedSceneToIfc, ifcFileName } from '../../lib/ifc-export'
-import { exportSceneLevelsForPrint } from '../../lib/level-print-export'
 import type { ModelExport, ModelExportArtifact } from '../../lib/model-export'
-import {
-  expandInstancedMeshes,
-  fixReflectedMeshWinding,
-  freezeDeformedMeshes,
-} from '../../lib/portable-export'
-import { exportSceneToPrint3mf } from '../../lib/print-3mf'
-import { filterPreparedSceneForPrintContent } from '../../lib/print-content-scope'
-import { exportSceneToPrintStl, mergePrintExportDiagnostics } from '../../lib/print-export'
-import { applySemanticPrintFeatureThickness } from '../../lib/print-feature-thickness'
-import { compileSemanticPrintShellWithManifold } from '../../lib/print-shell-compiler-manifold-worker'
 import { getSavedSceneDocument } from '../../lib/scene'
-import { exportSceneToUsdz } from '../../lib/usdz-export'
 import useEditor from '../../store/use-editor'
 
 // prepareSceneForExport neutralises container meshes (door/window hitbox roots,
@@ -72,6 +52,12 @@ export function ExportManager() {
 
       const date = new Date().toISOString().split('T')[0]
 
+      // Load heavy format exporters dynamically so IFC, GLB, USDZ, STL, OBJ,
+      // 3MF, and Manifold print compilers are never bundled on editor startup.
+      const { exportSceneToGlb, prepareSceneForExport, waitForExportGeometry } = await import(
+        '../../lib/glb-export'
+      )
+
       // Signal export so instanced kinds (trees/flowers/grass) swap their
       // invisible proxy for real, exportable geometry, then wait for the
       // commit before cloning the scene graph (same dance as BakeExporter —
@@ -92,6 +78,7 @@ export function ExportManager() {
         }
 
         if (format === 'usdz') {
+          const { exportSceneToUsdz } = await import('../../lib/usdz-export')
           const warnings: string[] = []
           const data = await exportSceneToUsdz(sceneGroup, nodes, {
             ...options,
@@ -122,9 +109,14 @@ export function ExportManager() {
           const printContent = options.printContent ?? 'structure'
           const isPrintFormat = format === 'print-stl' || format === 'print-3mf'
           if (isPrintFormat) {
+            const { filterPreparedSceneForPrintContent } = await import(
+              '../../lib/print-content-scope'
+            )
             exportScene = filterPreparedSceneForPrintContent(exportScene, nodes, printContent)
           }
           if (!isPrintFormat) {
+            const { expandInstancedMeshes, fixReflectedMeshWinding, freezeDeformedMeshes } =
+              await import('../../lib/portable-export')
             expandInstancedMeshes(exportScene)
             exportScene.updateMatrixWorld(true)
             freezeDeformedMeshes(exportScene)
@@ -133,6 +125,11 @@ export function ExportManager() {
           ensurePositionAttributes(exportScene)
 
           if (isPrintFormat) {
+            const [{ compileSemanticPrintShellWithManifold }, { exportSceneLevelsForPrint }] =
+              await Promise.all([
+                import('../../lib/print-shell-compiler-manifold-worker'),
+                import('../../lib/level-print-export'),
+              ])
             const printFormat = format === 'print-3mf' ? '3mf' : 'stl'
             const scale = options.printScale ?? 100
             const compileShells = printContent === 'structure'
@@ -170,6 +167,13 @@ export function ExportManager() {
               ? await compileSemanticPrintShellWithManifold(exportScene, nodes)
               : null
             try {
+              const [
+                { exportSceneToPrintStl, mergePrintExportDiagnostics },
+                { applySemanticPrintFeatureThickness },
+              ] = await Promise.all([
+                import('../../lib/print-export'),
+                import('../../lib/print-feature-thickness'),
+              ])
               const printSource = compiled ? (compiled.scene ?? new THREE.Group()) : exportScene
               const printOptions = {
                 scale,
@@ -178,7 +182,10 @@ export function ExportManager() {
               }
               const output =
                 printFormat === '3mf'
-                  ? exportSceneToPrint3mf(printSource, printOptions)
+                  ? (await import('../../lib/print-3mf')).exportSceneToPrint3mf(
+                      printSource,
+                      printOptions,
+                    )
                   : exportSceneToPrintStl(printSource, printOptions)
               let report = compiled
                 ? mergePrintExportDiagnostics(
@@ -211,6 +218,7 @@ export function ExportManager() {
           }
 
           if (format === 'stl') {
+            const { STLExporter } = await import('three/examples/jsm/exporters/STLExporter.js')
             const exporter = new STLExporter()
             const result = exporter.parse(exportScene, { binary: true })
             const blob = new Blob([result], { type: 'model/stl' })
@@ -218,6 +226,7 @@ export function ExportManager() {
           }
 
           if (format === 'ifc') {
+            const { exportPreparedSceneToIfc, ifcFileName } = await import('../../lib/ifc-export')
             const { data, warnings } = exportPreparedSceneToIfc(exportScene, nodes, {
               collections,
               projectName: options.projectName,
@@ -235,6 +244,7 @@ export function ExportManager() {
           }
 
           if (format === 'obj') {
+            const { OBJExporter } = await import('three/examples/jsm/exporters/OBJExporter.js')
             const exporter = new OBJExporter()
             const result = exporter.parse(exportScene)
             const blob = new Blob([result], { type: 'model/obj' })

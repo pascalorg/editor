@@ -1,5 +1,6 @@
 'use client'
 
+import '@/lib/bootstrap'
 import { type ValidateBuildJsonResult, validateBuildJson } from '@pascal-app/core'
 import { useRouter } from 'next/navigation'
 import { useCallback, useEffect, useRef, useState } from 'react'

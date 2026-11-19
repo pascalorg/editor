@@ -70,6 +70,7 @@ import {
   WindowNode as WindowNodeSchema,
   wallClosesRoom,
   wallRectangleCorners,
+  wallSegmentsCoverSegment,
   worldToFloorplanLocalPoint,
 } from '@pascal-app/core'
 import { useSegmentDraftChain, useWallSnapIndicator } from '@pascal-app/editor'
@@ -5145,14 +5146,17 @@ export function FloorplanPanel({
   // subscription stays dormant there.
   useEffect(() => {
     if (!(mode === 'build' && tool === 'wall')) return
-    return useSegmentDraftChain.subscribe((state, previousState) => {
-      const next = state.wall
-      if (next === previousState.wall) return
+    const adopt = (next: WallPlanPoint | null) => {
       if (!next) return
       setDraftStart((current) =>
         current && current[0] === next[0] && current[1] === next[1] ? current : next,
       )
       setWallChainFirstVertex((current) => current ?? next)
+    }
+    adopt(useSegmentDraftChain.getState().wall)
+    return useSegmentDraftChain.subscribe((state, previousState) => {
+      if (state.wall === previousState.wall) return
+      adopt(state.wall)
     })
   }, [mode, tool])
   // Direction of the run's last wall (a pulled run's source first): the next
@@ -10069,6 +10073,7 @@ export function FloorplanPanel({
         setWallChainFirstVertex(point)
         setDraftEnd(point)
         setCursorPoint(point)
+        useSegmentDraftChain.getState().setChainStart('wall', point)
         return
       }
 
@@ -10123,50 +10128,58 @@ export function FloorplanPanel({
 
       // Chain the next segment from the resolved commit endpoint (it may
       // have corner-snapped or split-adjusted): the wall we just made in
-      // 2D-only, otherwise the 3D tool's published chain start. Both views
-      // then draft from the same start.
-      const publishedNextStart = useSegmentDraftChain.getState().wall
-      const nextStart: WallPlanPoint = createdWall
-        ? (createdWall.end as WallPlanPoint)
-        : (publishedNextStart ?? point)
+      // Split view: the 3D tool owns both the commit and the continuation
+      // decision (including collinear transit), and clears the published
+      // chain start whenever it stops drafting (room close, T-junction,
+      // loop close). Mirror that here instead of chaining from a dead point.
+      const { wall: publishedNextStart, wallOutcome } = useSegmentDraftChain.getState()
+      let nextStart: WallPlanPoint
 
-      if (
-        !wallDraftIsRun() ||
-        (wallChainFirstVertex && isWithinWallJoinSnapRadius(nextStart, wallChainFirstVertex))
-      ) {
-        clearWallPlacementDraft()
-        setCursorPoint(null)
-        return
-      }
-
-      if (createdWall) {
-        // 2D-only committer: mirror the 3D tool's auto-close. Stop when the
-        // segment seals a room against the wall network, or when its resolved
-        // end tees into wall geometry outside the chain — continuing from a
-        // T-junction only drafts on top of existing walls.
+      if (viewIs2DOnly) {
         const levelWalls = Object.values(useScene.getState().nodes).filter(
           (node): node is WallNode => node?.type === 'wall' && node.parentId === levelId,
         )
-        if (
-          chainEndJoinsExistingWall(
-            createdWall.end as WallPlanPoint,
-            levelWalls,
-            wallChainWallIdsRef.current,
-          ) ||
-          (createdWall.type === 'wall' && wallClosesRoom(levelWalls, createdWall))
+        if (createdWall) {
+          nextStart = createdWall.end as WallPlanPoint
+          // 2D-only committer: mirror the 3D tool's auto-close. Stop when the
+          // segment closes back to the chain start, seals a room against the
+          // wall network, or tees into wall geometry outside the chain —
+          // continuing from a T-junction only drafts on top of existing walls.
+          if (
+            (wallChainFirstVertex && isWithinWallJoinSnapRadius(nextStart, wallChainFirstVertex)) ||
+            chainEndJoinsExistingWall(
+              createdWall.end as WallPlanPoint,
+              levelWalls,
+              wallChainWallIdsRef.current,
+            ) ||
+            (createdWall.type === 'wall' && wallClosesRoom(levelWalls, createdWall))
+          ) {
+            clearWallPlacementDraft()
+            setCursorPoint(null)
+            return
+          }
+        } else if (
+          getWallLineKind() !== 'invisible' &&
+          wallSegmentsCoverSegment(draftStart, point, levelWalls)
         ) {
-          clearWallPlacementDraft()
-          setCursorPoint(null)
+          // Collinear tracking: advance the draft origin along the host wall's
+          // centerline without creating a duplicate wall so the next branch T-joins cleanly.
+          sfxEmitter.emit('sfx:grid-snap')
+          nextStart = point
+        } else {
           return
         }
-      } else if (!(viewIs2DOnly || publishedNextStart)) {
-        // Split view: the 3D tool owns both the commit and the continuation
-        // decision, and it clears the published chain start whenever it stops
-        // drafting (room close, T-junction, single). Mirror that here instead
-        // of chaining the 2D draft from a dead point.
+        useSegmentDraftChain.getState().setChainStart('wall', nextStart)
+      } else if (!publishedNextStart) {
         clearWallPlacementDraft()
         setCursorPoint(null)
         return
+      } else if (wallOutcome === 'refused') {
+        // Split view: 3D refused this click without stopping the chain, so keep
+        // the current 2D draft, run reference, and typed fields intact.
+        return
+      } else {
+        nextStart = createdWall ? (createdWall.end as WallPlanPoint) : publishedNextStart
       }
 
       wallRunReferenceRef.current = placedDirection

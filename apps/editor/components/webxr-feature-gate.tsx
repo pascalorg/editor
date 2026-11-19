@@ -1,52 +1,27 @@
 'use client'
 
 import { useScene } from '@pascal-app/editor'
-import { WEBXR_PLUGIN_ID } from '@webxr/plugin'
-import { usePascalWebXR } from '@webxr/plugin/pascal-editor'
 import {
   createContext,
+  lazy,
   type ReactNode,
+  Suspense,
   useCallback,
   useContext,
-  useEffect,
-  useMemo,
   useState,
 } from 'react'
-import { webXRWandBindings } from './webxr-wand-bindings'
+import type { PascalWebXRFeature } from './webxr-enabled-runtime'
 
-export type PascalWebXRFeature = ReturnType<typeof usePascalWebXR>
+export type { PascalWebXRFeature }
+
+// Kept inline instead of importing from `@webxr/plugin` so the WebXR bundle
+// (`@react-three/xr`, `iwer`, `@iwer/devui`) is never loaded unless the plugin
+// is actually installed in the active scene.
+const WEBXR_PLUGIN_ID = 'webxr:core'
+
+const LazyEnabledWebXRFeature = lazy(() => import('./webxr-enabled-runtime'))
 
 const WebXRFeatureContext = createContext<PascalWebXRFeature | null>(null)
-
-function EnabledWebXRFeature({
-  onFeature,
-}: {
-  onFeature: (feature: PascalWebXRFeature | null) => void
-}) {
-  const feature = usePascalWebXR(webXRWandBindings)
-  // Keep the context stable when the plugin returns a new aggregate object.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: stabilize on public feature fields
-  const stableFeature = useMemo(
-    () => feature,
-    [
-      feature.enter,
-      feature.entering,
-      feature.error,
-      feature.exit,
-      feature.immersive,
-      feature.ready,
-      feature.runtime,
-      feature.session,
-    ],
-  )
-
-  useEffect(() => {
-    onFeature(stableFeature)
-    return () => onFeature(null)
-  }, [onFeature, stableFeature])
-
-  return null
-}
 
 export function WebXRFeatureRuntime({
   enabled,
@@ -61,7 +36,11 @@ export function WebXRFeatureRuntime({
   return (
     <WebXRFeatureContext.Provider value={enabled ? feature : null}>
       {children}
-      {enabled ? <EnabledWebXRFeature onFeature={setFeatureStable} /> : null}
+      {enabled ? (
+        <Suspense fallback={null}>
+          <LazyEnabledWebXRFeature onFeature={setFeatureStable} />
+        </Suspense>
+      ) : null}
     </WebXRFeatureContext.Provider>
   )
 }

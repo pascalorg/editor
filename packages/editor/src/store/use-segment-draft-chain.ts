@@ -10,19 +10,35 @@ import { create } from 'zustand'
 import type { WallPlanPoint } from '../components/tools/wall/wall-snap-geometry'
 
 type SegmentKind = 'wall' | 'fence'
+export type SegmentDraftChainOutcome = 'idle' | 'active' | 'refused'
 
 type SegmentDraftChainState = {
   wall: WallPlanPoint | null
   fence: WallPlanPoint | null
+  wallOutcome: SegmentDraftChainOutcome
+  fenceOutcome: SegmentDraftChainOutcome
   setChainStart(kind: SegmentKind, point: WallPlanPoint | null): void
+  markRefused(kind: SegmentKind): void
   clear(kind: SegmentKind): void
 }
 
 const useSegmentDraftChain = create<SegmentDraftChainState>((set) => ({
   wall: null,
   fence: null,
-  setChainStart: (kind, point) => set({ [kind]: point }),
-  clear: (kind) => set({ [kind]: null }),
+  wallOutcome: 'idle',
+  fenceOutcome: 'idle',
+  setChainStart: (kind, point) =>
+    set(
+      kind === 'wall'
+        ? { wall: point, wallOutcome: point ? 'active' : 'idle' }
+        : { fence: point, fenceOutcome: point ? 'active' : 'idle' },
+    ),
+  markRefused: (kind) =>
+    set(kind === 'wall' ? { wallOutcome: 'refused' } : { fenceOutcome: 'refused' }),
+  clear: (kind) =>
+    set(
+      kind === 'wall' ? { wall: null, wallOutcome: 'idle' } : { fence: null, fenceOutcome: 'idle' },
+    ),
 }))
 
 export default useSegmentDraftChain

@@ -50,10 +50,12 @@ import {
 } from '@pascal-app/viewer/ui'
 import {
   type CSSProperties,
+  lazy,
   memo,
   Profiler,
   type ProfilerOnRenderCallback,
   type ReactNode,
+  Suspense,
   useCallback,
   useEffect,
   useLayoutEffect,
@@ -133,7 +135,6 @@ import { FirstPersonControls, FirstPersonOverlay } from './first-person-controls
 import { FloatingActionMenu } from './floating-action-menu'
 import { FloatingBuildingActionMenu } from './floating-building-action-menu'
 import { FloorplanModeCoordinator } from './floorplan-mode-coordinator'
-import { FloorplanPanel } from './floorplan-panel'
 import { FollowPascal } from './follow-pascal'
 import { FootprintHeightHandle } from './footprint-height-handle'
 import { Grid } from './grid'
@@ -143,12 +144,10 @@ import { GroupSelectionBox3D } from './group-selection-box-3d'
 import { EditorHandleHitPriority } from './handles/handle-hit-priority'
 import { NodeArrowHandles } from './node-arrow-handles'
 import { QuickMeasurementHud } from './quick-measurement-hud'
-import { RiserDiagramPanel } from './riser-diagram-panel'
 import { RoomLabels3D } from './room-labels'
 import { SelectionManager } from './selection-manager'
 import { SiteEdgeLabels } from './site-edge-labels'
 import { SlabHoleHighlights } from './slab-hole-highlights'
-import { SnapshotCaptureOverlay } from './snapshot-capture-overlay'
 import { type SnapshotCameraData, ThumbnailGenerator } from './thumbnail-generator'
 import { VectorEdgeExtractor } from './vector-edge-extractor'
 import { HostView } from './views/host-view'
@@ -158,6 +157,31 @@ import { WallMeasurementLabel } from './wall-measurement-label'
 import { WallMoveSideHandles } from './wall-move-side-handles'
 import { WallOpeningHighlights } from './wall-opening-highlights'
 import { WallRegionHandles } from './wall-region-handles'
+
+const LazyFloorplanPanel = lazy(async () => {
+  const mod = await import('./floorplan-panel')
+  return { default: mod.FloorplanPanel }
+})
+
+const LazyRiserDiagramPanel = lazy(async () => {
+  const mod = await import('./riser-diagram-panel')
+  return { default: mod.RiserDiagramPanel }
+})
+
+const LazySnapshotCaptureOverlay = lazy(async () => {
+  const mod = await import('./snapshot-capture-overlay')
+  return { default: mod.SnapshotCaptureOverlay }
+})
+
+function LazyRiserDiagramGate() {
+  const isOpen = useEditor((s) => s.isRiserOpen)
+  if (!isOpen) return null
+  return (
+    <Suspense fallback={null}>
+      <LazyRiserDiagramPanel />
+    </Suspense>
+  )
+}
 
 const CAMERA_CONTROLS_HINT_DISMISSED_STORAGE_KEY = 'editor-camera-controls-hint-dismissed:v1'
 const PREVIEW_STAGE_SWITCHER_POSITION =
@@ -1368,7 +1392,12 @@ const ViewerCanvas = memo(function ViewerCanvas({
             style={paneStyle(pane2d)}
           >
             <div className="relative isolate h-full w-full overflow-hidden">
-              <FloorplanPanel compassHost={viewerAreaEl} floorplanSceneSlot={floorplanSceneSlot} />
+              <Suspense fallback={null}>
+                <LazyFloorplanPanel
+                  compassHost={viewerAreaEl}
+                  floorplanSceneSlot={floorplanSceneSlot}
+                />
+              </Suspense>
             </div>
             {isSceneDataLoading && loadingOverlay}
           </div>
@@ -2104,7 +2133,11 @@ function EditorContent({
                     />
                   )}
                   {viewerBanner}
-                  {projectId ? <SnapshotCaptureOverlay projectId={projectId} /> : null}
+                  {projectId && isCaptureMode ? (
+                    <Suspense fallback={null}>
+                      <LazySnapshotCaptureOverlay projectId={projectId} />
+                    </Suspense>
+                  ) : null}
                 </>
               }
               renderTabContent={renderTabContent}
@@ -2173,7 +2206,7 @@ function EditorContent({
               inspector={<PanelManager />}
               reserveBottomMenu={actionMenuPlacement !== 'top' || isMobile}
             />
-            <RiserDiagramPanel />
+            <LazyRiserDiagramGate />
             {isFirstPersonMode && (
               <FirstPersonOverlay onExit={() => useEditor.getState().setFirstPersonMode(false)} />
             )}

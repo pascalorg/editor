@@ -1,8 +1,8 @@
 'use client'
 
-// Node registry bootstrap is loaded once at the root via
-// `<ClientBootstrap>` in `app/layout.tsx` — no per-page side-effect
-// import here.
+// Populates the built-in node registry synchronously before `<Editor>` mounts,
+// scoped to 3D routes instead of the root layout so non-3D pages stay light.
+import '@/lib/bootstrap'
 import { type MessageDescriptor, usePascalI18n } from '@pascal-app/core'
 import {
   applySceneGraphToEditor,
@@ -11,11 +11,10 @@ import {
   type SceneGraph,
   type SidebarTab,
 } from '@pascal-app/editor'
-import { PascalWebXRButton } from '@webxr/plugin/pascal-editor'
 import { Hammer, Layers, Package, Palette, Settings } from 'lucide-react'
 import Image from 'next/image'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { PoolSectionBanner } from '@/components/pool-section-banner'
 import { countGraphNodes, isEmptyGraphOverwrite } from '@/lib/empty-graph-guard'
 import { useLocalArtifactStore } from '@/lib/local-artifact-store'
@@ -31,6 +30,11 @@ import { KitchenCommands } from './kitchen-browser'
 import { PaintPanel } from './paint-panel'
 import { EditorViewerToolbarLeft, EditorViewerToolbarRight } from './viewer-toolbar'
 import { useWebXRFeature, useWebXRInstalled, WebXRFeatureRuntime } from './webxr-feature-gate'
+
+const LazyPascalWebXRButton = lazy(async () => {
+  const mod = await import('@webxr/plugin/pascal-editor')
+  return { default: mod.PascalWebXRButton }
+})
 
 export interface SceneMeta {
   id: string
@@ -421,10 +425,12 @@ function SceneEditor({ initialScene, meta: initialMeta }: SceneLoaderProps) {
           <EditorViewerToolbarRight
             vrButton={
               vr ? (
-                <PascalWebXRButton
-                  className="flex h-8 w-8 items-center justify-center text-muted-foreground hover:bg-accent disabled:opacity-50"
-                  feature={vr}
-                />
+                <Suspense fallback={null}>
+                  <LazyPascalWebXRButton
+                    className="flex h-8 w-8 items-center justify-center text-muted-foreground hover:bg-accent disabled:opacity-50"
+                    feature={vr}
+                  />
+                </Suspense>
               ) : null
             }
             vrLabel="Enter VR"
