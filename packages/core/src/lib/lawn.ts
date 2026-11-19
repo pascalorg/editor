@@ -305,7 +305,7 @@ export function lawnChunkContext(input: LawnNode, nodes: Nodes): LawnChunkContex
 /**
  * The chunks a change of strokes can alter. A stroke reaches a blade, a ground vertex or a ground
  * triangle only within its radius of a segment, so the chunks outside the changed segments' boxes
- * (grown by the radius and by one ground cell, whose centre names its chunk) keep every byte.
+ * (grown by the radius and by half a ground cell, whose centre names its chunk) keep every byte.
  */
 export function lawnChunksTouched(
   context: LawnChunkContext,
@@ -323,7 +323,7 @@ export function lawnChunksTouched(
       const start = stroke.points[index],
         end = stroke.points[index + 1] ?? start
       if (!start || !end) continue
-      const reach = stroke.radiusM + cell
+      const reach = stroke.radiusM + cell / 2
       const minX = Math.max(context.cells.minX, Math.min(start[0], end[0]) - reach),
         maxX = Math.min(context.cells.maxX, Math.max(start[0], end[0]) + reach)
       const minZ = Math.max(context.cells.minZ, Math.min(start[1], end[1]) - reach),
@@ -413,14 +413,6 @@ export function buildLawnChunk(
       traits.set(blade.traits, offset * 4)
       offset++
     }
-  const triangles = lawnGroundTrianglesIn(
-    context.polygons,
-    context.coverage,
-    context.axes,
-    node,
-    context.field,
-    bounds,
-  )
   return {
     key: `${chunkX},${chunkZ}`,
     bounds,
@@ -428,8 +420,33 @@ export function buildLawnChunk(
     traits,
     count,
     midCount: Math.floor(count * 0.2),
-    base: lawnGroundMesh(triangles, node),
+    base: lawnGroundMesh(
+      lawnGroundTrianglesIn(
+        context.polygons,
+        context.coverage,
+        context.axes,
+        node,
+        context.field,
+        bounds,
+      ),
+      node,
+    ),
   }
+}
+
+/** The chunk whose cells hold a ground point, by the centre of the point's ground cell. */
+export function lawnGroundChunkAt(context: LawnChunkContext, x: number, z: number): string {
+  const centre = (axis: number[], value: number) => {
+    let low = 0,
+      high = axis.length - 2
+    while (low < high) {
+      const middle = (low + high + 1) >> 1
+      if ((axis[middle] ?? 0) <= value) low = middle
+      else high = middle - 1
+    }
+    return ((axis[low] ?? 0) + (axis[low + 1] ?? 0)) / 2
+  }
+  return `${Math.floor(centre(context.axes.xs, x) / LAWN_CHUNK_M)},${Math.floor(centre(context.axes.zs, z) / LAWN_CHUNK_M)}`
 }
 
 /** The whole flower population for the strokes as they stand: its thinning is not local. */

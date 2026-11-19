@@ -488,6 +488,7 @@ export {
   lawnChunkContext,
   lawnChunksTouched,
   lawnFacts,
+  lawnGroundChunkAt,
   planLawn,
   sampleLawnStrokes,
 } from './lib/lawn'

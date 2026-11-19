@@ -11,6 +11,7 @@ import {
   type LawnStroke,
   lawnChunkContext,
   lawnChunksTouched,
+  lawnGroundChunkAt,
   SiteNode,
   SlabNode,
 } from '../index'
@@ -252,6 +253,15 @@ describe('a stroke painted chunk by chunk equals the full build of the same lawn
   })
 })
 
+test('on a terrain grid that does not line up with the chunks, the chunked ground is still exact', () => {
+  const field = createTerrainField({ origin: [-10.3, -15.2], cols: 30, rows: 44, spacing: 0.7 })
+  for (let index = 0; index < field.heights.length; index++)
+    field.heights[index] = Math.round(20 * Math.sin(index / 7))
+  const { lawn, nodes } = scene(lot, { terrain: commitTerrainField(field) })
+  paint(lawn, nodes, bare, growing(line([-9, 7.4], [9, 8.6], 30)))
+  paint(lawn, nodes, bare, growing(line([7.5, -14], [8.5, 14], 30)))
+})
+
 test('a sample rebuilds the chunks under the brush, on a 30 m2 and on a 2,000 m2 lawn alike', () => {
   const small = scene(rectangle(-3, -2.5, 3, 2.5))
   const large = scene(rectangle(-20, -25, 20, 25))
@@ -264,4 +274,29 @@ test('a sample rebuilds the chunks under the brush, on a 30 m2 and on a 2,000 m2
     onSmall.reduce((sum, count) => sum + count, 0),
   )
   expect(buildLawn(large.lawn, large.nodes).blades.chunks.length).toBeGreaterThan(20)
+})
+
+test('every ground triangle of the full build is named by the chunk that builds it', () => {
+  const field = createTerrainField({ origin: [-10.3, -15.2], cols: 30, rows: 44, spacing: 0.7 })
+  const { lawn, nodes } = scene(lot, { terrain: commitTerrainField(field) })
+  const context = lawnChunkContext(lawn, nodes)
+  const full = buildLawn(lawn, nodes).base
+  const byChunk = new Map<string, string[]>()
+  const records = triangles(full)
+  for (let triangle = 0; triangle < records.length; triangle++) {
+    const at = (corner: number, axis: number) =>
+      full.positions[triangle * 9 + corner * 3 + axis] ?? 0
+    const key = lawnGroundChunkAt(
+      context,
+      (at(0, 0) + at(1, 0) + at(2, 0)) / 3,
+      (at(0, 2) + at(1, 2) + at(2, 2)) / 3,
+    )
+    byChunk.set(key, [...(byChunk.get(key) ?? []), records[triangle] ?? ''])
+  }
+  expect(byChunk.size).toBeGreaterThan(4)
+  for (const [key, expected] of byChunk) {
+    const [chunkX, chunkZ] = key.split(',').map(Number)
+    const chunk = buildLawnChunk(context, lawn, chunkX ?? 0, chunkZ ?? 0)
+    expect(triangles(chunk.base).sort()).toEqual(expected.sort())
+  }
 })
