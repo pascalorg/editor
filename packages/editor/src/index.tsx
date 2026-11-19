@@ -284,7 +284,10 @@ export { useWallsBelowSetting } from './components/editor-2d/floorplan-adjacent-
 export { useFloorplanRender } from './components/editor-2d/floorplan-render-context'
 // The plan's own draft drawing (area fill, outline, closing side, vertex markers), so a
 // kind-owned plan tool draws its draft exactly as the slab and zone drafts are drawn.
-export { FloorplanDraftLayer } from './components/editor-2d/renderers/floorplan-draft-layer'
+export {
+  FLOORPLAN_DRAFT_OUTLINE_WIDTH,
+  FloorplanDraftLayer,
+} from './components/editor-2d/renderers/floorplan-draft-layer'
 export {
   type DraftMeasurement,
   FloorplanDraftMeasurement,
@@ -970,6 +973,7 @@ export {
   terrainPointInsideSite,
 } from './lib/terrain-sculpt'
 export {
+  BOUNDARY_OUTLINE_COLOR,
   type PlanDraftColors,
   planDraftColors,
   TOOL_DRAFT_FILL_OPACITY,

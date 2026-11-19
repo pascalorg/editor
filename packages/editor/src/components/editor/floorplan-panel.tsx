@@ -236,7 +236,10 @@ import {
 } from '../editor-2d/floorplan-render-context'
 import { FloorplanSnapBeaconLayer } from '../editor-2d/floorplan-snap-beacon-layer'
 import { FloorplanWallMoveGhostLayer } from '../editor-2d/floorplan-wall-move-ghost-layer'
-import { FloorplanDraftLayer } from '../editor-2d/renderers/floorplan-draft-layer'
+import {
+  FLOORPLAN_DRAFT_OUTLINE_WIDTH,
+  FloorplanDraftLayer,
+} from '../editor-2d/renderers/floorplan-draft-layer'
 import { FloorplanDraftMeasurement } from '../editor-2d/renderers/floorplan-draft-measurement'
 import { FloorplanMarqueeLayer } from '../editor-2d/renderers/floorplan-marquee-layer'
 import { FloorplanPlacementPreviewLayer } from '../editor-2d/renderers/floorplan-placement-preview-layer'
@@ -359,7 +362,6 @@ const FLOORPLAN_MARQUEE_OUTLINE_WIDTH = 0.055
 const FLOORPLAN_MARQUEE_GLOW_WIDTH = 0.14
 const FLOORPLAN_HOVER_TRANSITION = 'opacity 180ms cubic-bezier(0.2, 0, 0, 1)'
 const FLOORPLAN_WALL_HIT_STROKE_WIDTH = 18
-const FLOORPLAN_WALL_STROKE_WIDTH = '1'
 const FLOORPLAN_OPENING_HIT_STROKE_WIDTH = 16
 const FLOORPLAN_OPENING_STROKE_WIDTH = 0.05
 const FLOORPLAN_ENDPOINT_HIT_STROKE_WIDTH = 18
@@ -4344,7 +4346,7 @@ function FloorplanDraftCursorLayer({
 }) {
   const cursorPoint = useFloorplanDraftPreview((s) => s.cursorPoint)
   const activeStroke = polygonDraftStroke ?? draftStroke
-  const strokeWidth = polygonDraftStroke ? FLOORPLAN_WALL_STROKE_WIDTH : '0.08'
+  const strokeWidth = polygonDraftStroke ? FLOORPLAN_DRAFT_OUTLINE_WIDTH : '0.08'
 
   const polygon = useMemo(() => {
     if (!(isPolygonDraftBuildActive && cursorPoint && activePolygonDraftPoints.length >= 2)) {
