@@ -3041,7 +3041,8 @@ export type ParametricDescriptor<N> = {
    * Extra buttons rendered in the inspector's Actions section
    * (below Move/Delete). Lets a kind declare "do this thing to the
    * current node" affordances without escaping to a full custom
-   * panel. Buttons whose `enabledIf` returns false stay disabled.
+   * panel. Buttons whose `enabledIf` returns false stay disabled; those
+   * whose `visibleIf` returns false are not shown.
    */
   actions?: ParamAction<N>[]
   /**
@@ -3059,6 +3060,8 @@ export type ParamAction<N> = {
   label: string
   /** Optional asset URL for a leading icon — same shape as palette icons. */
   iconSrc?: string
+  /** The button is not shown at all while this returns false (an action that no longer applies). */
+  visibleIf?: (n: N) => boolean
   enabledIf?: (n: N) => boolean
   /** Click handler. Receives the current node value at click time. */
   onClick: (n: N) => void
