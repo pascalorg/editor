@@ -1,6 +1,12 @@
 'use client'
 
-import { emitter, type LawnNode, resolveSiteGround, useScene } from '@pascal-app/core'
+import {
+  emitter,
+  type LawnNode,
+  resolveSiteGround,
+  useLiveNodeOverrides,
+  useScene,
+} from '@pascal-app/core'
 import {
   BOUNDARY_OUTLINE_COLOR,
   beginGesture,
@@ -15,6 +21,7 @@ import {
 } from '@pascal-app/editor'
 import { createPortal, useThree } from '@react-three/fiber'
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { GardenAreaFill } from '../shared/garden-draft-preview'
 import { createLawnOutlineSession } from './definition.edit-session'
 import { snapLawnPoint } from './placement'
 
@@ -135,27 +142,32 @@ function LawnBoundaryEditor({ lawn }: { lawn: LawnNode }) {
   const edit = useLawnBoundaryEditing(lawn.id)
   const ground = resolveSiteGround(lawn.parentId ?? undefined, useScene.getState().nodes)
   const first = lawn.outline[0]
+  // The area follows the outline while a handle is dragged.
+  const dragged = useLiveNodeOverrides((state) => state.overrides.get(lawn.id)?.outline)
+  const shown = (Array.isArray(dragged) ? dragged : lawn.outline) as [number, number][]
+  const area = shown.map(([x, z]): [number, number, number] => [x, ground.heightAt(x, z) + 0.04, z])
   // The editor stands on the lawn's ground; `surfaceHeight` is a rise above the editor's own base,
   // not an elevation (given one, every handle became a post from the world datum up to the ground).
   return createPortal(
-    <group
-      position={[0, first ? ground.heightAt(first[0], first[1]) : 0, 0]}
-      userData={{ pascalExport: 'strip' }}
-    >
-      <PolygonEditor
-        key={edit.epoch}
-        polygon={lawn.outline}
-        minVertices={3}
-        allowEdgeMove
-        color={BOUNDARY_OUTLINE_COLOR}
-        onDragStart={edit.start}
-        onPolygonPreview={edit.preview}
-        onPolygonChange={edit.commit}
-        resolvePlanPoint={({ rawPoint, nativeEvent }) =>
-          snapLawnPoint(rawPoint, nativeEvent?.altKey)
-        }
-        surfaceHeight={0.04}
-      />
+    <group userData={{ pascalExport: 'strip' }}>
+      {/* A selected lawn shows its area, as a selected slab does: the grass alone hides its edge. */}
+      {area.length >= 3 && <GardenAreaFill outline={area} />}
+      <group position={[0, first ? ground.heightAt(first[0], first[1]) : 0, 0]}>
+        <PolygonEditor
+          key={edit.epoch}
+          polygon={lawn.outline}
+          minVertices={3}
+          allowEdgeMove
+          color={BOUNDARY_OUTLINE_COLOR}
+          onDragStart={edit.start}
+          onPolygonPreview={edit.preview}
+          onPolygonChange={edit.commit}
+          resolvePlanPoint={({ rawPoint, nativeEvent }) =>
+            snapLawnPoint(rawPoint, nativeEvent?.altKey)
+          }
+          surfaceHeight={0.04}
+        />
+      </group>
     </group>,
     scene,
   )

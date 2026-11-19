@@ -30,8 +30,11 @@ export function GardenToolTarget({ at, ground }: { at: Point | null; ground: Gro
   )
 }
 
-/** The area a closed draft encloses, laid on the ground it is drawn over. */
-function GardenDraftFill({ outline }: { outline: [number, number, number][] }) {
+/**
+ * An area laid on the ground it covers, in the editor's preview colour: what a closed draft
+ * encloses, or a selected lawn (the tint a selected slab shows). Corners in Site metres.
+ */
+export function GardenAreaFill({ outline }: { outline: [number, number, number][] }) {
   const geometry = useMemo(() => {
     const faces = ShapeUtils.triangulateShape(
       outline.map(([x, , z]) => new Vector2(x, z)),
@@ -106,7 +109,7 @@ export function GardenDraftPreview({
           showTooltip={false}
         />
       ))}
-      {area && !invalid && <GardenDraftFill outline={outline} />}
+      {area && !invalid && <GardenAreaFill outline={outline} />}
       {loop.length >= 2 && (
         <GardenPreviewLine
           color={invalid ? TOOL_INVALID_COLOR : TOOL_PREVIEW_COLOR}
