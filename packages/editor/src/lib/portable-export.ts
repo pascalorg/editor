@@ -490,6 +490,70 @@ function canKeepMappedGltfColors(mesh: THREE.Mesh, materials: THREE.Material[]):
   return true
 }
 
+function simplifyMappedUsdzColors(root: THREE.Object3D): {
+  simplified: boolean
+  clampedHdr: boolean
+} {
+  let simplified = false
+  let clampedHdr = false
+  root.traverse((object) => {
+    const mesh = object as THREE.Mesh
+    if (!mesh.isMesh) return
+    const geometry = mesh.geometry
+    const color = geometry.getAttribute('color')
+    if (!color) return
+    const materials = materialsOf(mesh)
+    const converted = materials.map((material, materialIndex) => {
+      if (!material.vertexColors || !((material as TexturedMaterial).map instanceof THREE.Texture))
+        return material
+
+      const count = geometry.index?.count ?? geometry.getAttribute('position').count
+      const groups = Array.isArray(mesh.material)
+        ? geometry.groups
+        : [{ start: 0, count, materialIndex: 0 }]
+      const vertices = new Set<number>()
+      for (const group of groups) {
+        if ((group.materialIndex ?? 0) !== materialIndex) continue
+        const start = Math.max(group.start, geometry.drawRange.start)
+        const end = Math.min(
+          group.start + group.count,
+          geometry.drawRange.start + geometry.drawRange.count,
+          count,
+        )
+        for (let offset = start; offset < end; offset++)
+          vertices.add(geometry.index?.getX(offset) ?? offset)
+      }
+      if (vertices.size === 0) return material
+
+      // USDZExporter connects the map (not displayColor) to the surface. Fold each
+      // material's linear vertex tints into its texture scale without replacing the cutout.
+      const mean = [0, 0, 0, 0]
+      let first: number[] | undefined
+      for (const vertex of vertices) {
+        const value = [0, 1, 2, 3].map((component) => colorComponent(color, vertex, component))
+        first ??= value
+        for (let component = 0; component < 4; component++) {
+          const channel = value[component]!
+          simplified ||= channel !== first[component]
+          if (component < 3 && (channel < 0 || channel > 1)) clampedHdr = true
+          mean[component]! += THREE.MathUtils.clamp(channel, 0, 1)
+        }
+      }
+      for (let component = 0; component < 4; component++) mean[component]! /= vertices.size
+      const clone = material.clone() as THREE.MeshStandardMaterial
+      clone.color.multiply(new THREE.Color(mean[0]!, mean[1]!, mean[2]!))
+      clone.opacity *= mean[3]!
+      // USDZExporter emits the cutout threshold only for non-blended materials.
+      clone.transparent = clone.alphaTest > 0 ? false : clone.transparent || clone.opacity < 1
+      clone.vertexColors = false
+      rememberDiscarded(root, material)
+      return clone
+    })
+    mesh.material = Array.isArray(mesh.material) ? converted : converted[0]!
+  })
+  return { simplified, clampedHdr }
+}
+
 function bakeVertexColors(
   root: THREE.Object3D,
   options: PortableNormalizeOptions,
@@ -979,17 +1043,24 @@ export function normalizePortableScene(
   freezeDeformedMeshes(root)
   const clampedMaterialColors = clampPortableMaterialColors(root)
   materializeDataTextures(root)
+  const mappedColors =
+    options.format === 'usdz'
+      ? simplifyMappedUsdzColors(root)
+      : { simplified: false, clampedHdr: false }
   const clampedVertexColors = bakeVertexColors(root, options)
-  const clampedHdr = clampedMaterialColors || clampedVertexColors
+  const clampedHdr = clampedMaterialColors || clampedVertexColors || mappedColors.clampedHdr
   canonicalizeAlphaMaps(root)
   canonicalizeNormalMaps(root, options)
   bakeDoubleSidedMeshes(root, options)
   root.updateMatrixWorld(true)
-  return clampedHdr
+  const warnings = clampedHdr
     ? [
         'Some rendered colors were outside the portable range (including colors brighter than the portable range) and were clipped to 0–1; the brightest areas may lose contrast.',
       ]
     : []
+  if (mappedColors.simplified)
+    warnings.push('Tree foliage tints and other textured vertex colors were simplified for USDZ.')
+  return warnings
 }
 /**
  * Canonicalize baked static material details without freezing authored item
