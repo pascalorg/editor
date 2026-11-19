@@ -3,9 +3,11 @@ import {
   type FloorplanGeometry,
   floorplanGeometryMetadata,
   type GeometryContext,
+  type LawnBuild,
   type LawnNode,
 } from '@pascal-app/core'
 import { buildVisibleLawn } from './render-build'
+import { lawnStrokeInProgress } from './stroke-rebuild'
 
 const ringPath = (ring: [number, number][]) => `M${ring.map(([x, z]) => `${x} ${z}`).join('L')}Z`
 
@@ -42,11 +44,46 @@ function outlineHandles(node: LawnNode): FloorplanGeometry[] {
   return [...edges, ...midpoints, ...corners]
 }
 
+type Point = [number, number]
+type LawnPlanSource = { polygons: LawnBuild['polygons']; blades: Point[]; flowers: Point[] }
+/** While a stroke is painted the plan keeps the marks it had: one generator run a stroke, not a sample. */
+const painted = new Map<string, LawnPlanSource>()
+
+function planSource(node: LawnNode, ctx?: Partial<GeometryContext>): LawnPlanSource | null {
+  const held = lawnStrokeInProgress(node.id)
+  if (!held) painted.delete(node.id)
+  const kept = held ? painted.get(node.id) : undefined
+  if (kept) return kept
+  const built = buildVisibleLawn(node, ctx)
+  if (!built) return null
+  const blades: Point[] = []
+  const stride = Math.max(1, Math.ceil(built.blades.count / 64))
+  for (let index = 0; index < built.blades.count; index += stride)
+    blades.push([
+      built.blades.rootHeight[index * 4] ?? 0,
+      built.blades.rootHeight[index * 4 + 2] ?? 0,
+    ])
+  const flowers: Point[] = []
+  const flowerStride = Math.max(1, Math.ceil(built.flowers.count / 24))
+  for (let head = 0; head < built.flowers.count; head += flowerStride) {
+    const start = head ? (built.flowers.headIndexEnds[head - 1] ?? 0) : 0
+    const first = (built.flowers.indices[start] ?? 0) * 3
+    const second = (built.flowers.indices[start + 1] ?? 0) * 3
+    flowers.push([
+      ((built.flowers.positions[first] ?? 0) + (built.flowers.positions[second] ?? 0)) / 2,
+      ((built.flowers.positions[first + 2] ?? 0) + (built.flowers.positions[second + 2] ?? 0)) / 2,
+    ])
+  }
+  const source = { polygons: built.polygons, blades, flowers }
+  if (held) painted.set(node.id, source)
+  return source
+}
+
 export function buildLawnFloorplan(
   node: LawnNode,
   ctx?: Partial<GeometryContext>,
 ): FloorplanGeometry | null {
-  const built = buildVisibleLawn(node, ctx)
+  const built = planSource(node, ctx)
   if (!built?.polygons.length) return null
   const view = ctx?.viewState
   const marked = view?.selected || view?.highlighted
@@ -65,10 +102,7 @@ export function buildLawnFloorplan(
     metadata: floorplanGeometryMetadata({ annotationObstacle: 'outline' }),
   }
   const marks: FloorplanGeometry[] = []
-  const stride = Math.max(1, Math.ceil(built.blades.count / 64))
-  for (let index = 0; index < built.blades.count; index += stride) {
-    const x = built.blades.rootHeight[index * 4] ?? 0
-    const z = built.blades.rootHeight[index * 4 + 2] ?? 0
+  for (const [x, z] of built.blades)
     marks.push({
       kind: 'circle',
       cx: x,
@@ -78,15 +112,7 @@ export function buildLawnFloorplan(
       stroke: 'none',
       pointerEvents: 'none',
     })
-  }
-  const flowerStride = Math.max(1, Math.ceil(built.flowers.count / 24))
-  for (let head = 0; head < built.flowers.count; head += flowerStride) {
-    const start = head ? (built.flowers.headIndexEnds[head - 1] ?? 0) : 0
-    const first = (built.flowers.indices[start] ?? 0) * 3
-    const second = (built.flowers.indices[start + 1] ?? 0) * 3
-    const x = ((built.flowers.positions[first] ?? 0) + (built.flowers.positions[second] ?? 0)) / 2
-    const z =
-      ((built.flowers.positions[first + 2] ?? 0) + (built.flowers.positions[second + 2] ?? 0)) / 2
+  for (const [x, z] of built.flowers)
     marks.push({
       kind: 'circle',
       cx: x,
@@ -96,7 +122,6 @@ export function buildLawnFloorplan(
       stroke: 'none',
       pointerEvents: 'none',
     })
-  }
   return {
     kind: 'group',
     children: [body, ...marks, ...(view?.selected ? outlineHandles(node) : [])],
