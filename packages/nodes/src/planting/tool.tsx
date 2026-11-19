@@ -8,17 +8,21 @@ import { useCallback, useEffect } from 'react'
 import {
   stopPlacementCommitPropagation,
   subscribeFloorPlacementClicks,
+  subscribeFloorPlacementDoubleClicks,
 } from '../shared/floor-placement'
 import { GardenDraftPreview } from '../shared/garden-draft-preview'
 import { siteFrame } from '../shared/site-frame'
+import { gridEventSiteGround } from '../shared/site-pointer-ground'
 import { snapPlantingDraftPoint, usePlantingDraft, usePlantingDraftController } from './draft'
 
 export default function PlantingTool() {
   const context = useRegistryToolContext()
   const scene = useThree((state) => state.scene)
+  const camera = useThree((state) => state.camera)
+  const canvas = useThree((state) => state.gl.domElement)
   const frame = siteFrame(context.sceneApi, context.activeLevelId)
   const finishTool = useCallback(() => useEditor.getState().setTool(null), [])
-  const { addPoint, error } = usePlantingDraftController({
+  const { addPoint, finish, error } = usePlantingDraftController({
     ...context,
     siteId: frame?.site.id,
     finishTool,
@@ -30,12 +34,15 @@ export default function PlantingTool() {
       typeof HTMLCanvasElement !== 'undefined' &&
       native?.target instanceof HTMLCanvasElement &&
       !context.isCameraDragging()
+    // Under the pointer's own ray, not on the active floor's plane (see `sitePointerGround`).
+    const groundUnder = (event: Parameters<typeof gridEventSiteGround>[0]) => {
+      const site = siteFrame(context.sceneApi, context.activeLevelId)?.site ?? null
+      const ground = resolveSiteGround(site?.id, context.sceneApi.nodes())
+      return gridEventSiteGround(event, camera, canvas, site, ground)
+    }
     const move = (event: GridEvent) => {
       if (!owns(event.nativeEvent)) return
-      const point = snapPlantingDraftPoint(
-        [event.position[0], event.position[2]],
-        event.nativeEvent?.altKey,
-      )
+      const point = snapPlantingDraftPoint(groundUnder(event), event.nativeEvent?.altKey)
       usePlantingDraft.setState({ hover: point })
     }
     emitter.on('grid:move', move)
@@ -46,17 +53,29 @@ export default function PlantingTool() {
       const point =
         'node' in event
           ? usePlantingDraft.getState().hover
-          : snapPlantingDraftPoint(
-              [event.position[0], event.position[2]],
-              event.nativeEvent?.altKey,
-            )
+          : snapPlantingDraftPoint(groundUnder(event), event.nativeEvent?.altKey)
       if (point) addPoint(point)
+    })
+    // The second click of a double-click repeats the last point and is dropped; the outline closes.
+    const stopDoubleClicks = subscribeFloorPlacementDoubleClicks((event) => {
+      if (!owns(event.nativeEvent)) return
+      stopPlacementCommitPropagation(event)
+      finish()
     })
     return () => {
       emitter.off('grid:move', move)
       unsubscribe()
+      stopDoubleClicks()
     }
-  }, [addPoint, context.isCameraDragging])
+  }, [
+    addPoint,
+    finish,
+    context.isCameraDragging,
+    context.sceneApi,
+    context.activeLevelId,
+    camera,
+    canvas,
+  ])
   const points = usePlantingDraft((draft) => draft.points)
   const hover = usePlantingDraft((draft) => draft.hover)
   const ground = resolveSiteGround(frame?.site.id, context.sceneApi.nodes())

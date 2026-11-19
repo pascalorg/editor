@@ -49,6 +49,35 @@ export function planPointToSite(
   return planToSite(building?.type === 'building' ? building : null, point)
 }
 
+/** A seed for the next hand-placed rock. */
+export function drawRockSeed(): number {
+  return Math.floor(Math.random() * 9999)
+}
+
+/**
+ * The rock a click would set with this seed, around the Site's origin: what the tool shows as a
+ * ghost. Null where the operation would refuse to set one at all (no Site).
+ */
+export function previewRock(
+  nodes: ReturnType<SceneApi['nodes']>,
+  siteId: string | undefined,
+  seed: number,
+): RockNode | null {
+  try {
+    const node = addRock(
+      nodes,
+      { outline: placedOutline([0, 0]), siteId, seed },
+      {
+        activeLevelId: null,
+      },
+    ).changes?.create?.[0]?.node
+    return node ? RockNode.parse(node) : null
+  } catch (error) {
+    if (!isAgentRefusal(error)) throw error
+    return null
+  }
+}
+
 /** Both UI views use the agent operation, with one atomic history entry and explicit Site. */
 export function placeRock(
   sceneApi: SceneApi,
@@ -56,12 +85,14 @@ export function placeRock(
   select: (id: AnyNodeId) => void,
   siteId?: string,
   onRefusal?: (message: string) => void,
+  /** The seed of the rock shown as a ghost, so the rock set down is that one. */
+  seed: number = drawRockSeed(),
 ): AnyNodeId | null {
   if (!sceneApi.applyChanges) throw new Error('Rock placement requires atomic scene changes.')
   try {
     const { result, changes } = addRock(
       sceneApi.nodes(),
-      { outline: placedOutline(at), siteId, seed: Math.floor(Math.random() * 9999) },
+      { outline: placedOutline(at), siteId, seed },
       { activeLevelId: null },
     )
     sceneApi.applyChanges({
