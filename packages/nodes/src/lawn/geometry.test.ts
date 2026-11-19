@@ -377,3 +377,30 @@ describe('lawn render adapter', () => {
     }
   })
 })
+
+test('live flowers carry the normals and colours of the generator, one rounded byte a channel', () => {
+  const { lawn, context, nodes } = fixture(6)
+  const flowering = LawnNode.parse({
+    ...lawn,
+    flowerDensity: 2,
+    flowers: [{ species: 'daisy', share: 1 }],
+  })
+  const canonical = buildLawn(flowering, nodes).flowers
+  const group = buildLawnGeometry(flowering, context)
+  try {
+    const [flowers] = meshes(group).filter((mesh) => mesh.name === 'lawn-flowers')
+    if (!flowers) throw new Error('A flowering lawn builds a flower mesh')
+    expect(canonical.normals.length).toBeGreaterThan(0)
+    const normal = flowers.geometry.getAttribute('normal')
+    const color = flowers.geometry.getAttribute('color')
+    expect(normal.normalized && color.normalized).toBe(true)
+    expect(normal.array).toEqual(
+      new Int8Array(Array.from(canonical.normals, (channel) => Math.round(channel * 127))),
+    )
+    expect(color.array).toEqual(
+      new Uint8Array(Array.from(canonical.colors, (channel) => Math.round(channel * 255))),
+    )
+  } finally {
+    disposeLawnGeometry(group)
+  }
+})

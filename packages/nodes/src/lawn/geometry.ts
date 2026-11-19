@@ -42,8 +42,13 @@ function lawnFlowerGeometry(data: LawnBuild['flowers']) {
   // Complete heads occupy contiguous triangle ranges. Their live draw can use the
   // vertices directly and pack normals and linear colours without an identity index.
   const geometry = new BufferGeometry()
-  const normals = Int8Array.from(data.normals, (channel) => Math.round(channel * 127))
-  const colors = Uint8Array.from(data.colors, (channel) => Math.round(channel * 255))
+  // Plain loops: `TypedArray.from` with a mapper took most of a flowering lawn's mesh build.
+  const normals = new Int8Array(data.normals.length)
+  for (let index = 0; index < normals.length; index++)
+    normals[index] = Math.round((data.normals[index] ?? 0) * 127)
+  const colors = new Uint8Array(data.colors.length)
+  for (let index = 0; index < colors.length; index++)
+    colors[index] = Math.round((data.colors[index] ?? 0) * 255)
   geometry.setAttribute('position', new BufferAttribute(data.positions, 3))
   geometry.setAttribute('normal', new BufferAttribute(normals, 3, true))
   geometry.setAttribute('color', new BufferAttribute(colors, 3, true))
