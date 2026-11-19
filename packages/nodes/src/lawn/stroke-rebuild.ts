@@ -1,9 +1,11 @@
 /**
+ * What the viewer is told about rebuilding a lawn while it is painted (the lawn's `geometryKey`).
  * A hand stroke publishes the lawn it proposes on every pointer sample, and each one used to
- * rebuild the whole lawn: tens of milliseconds a sample on a full lot. While a stroke is in
- * progress the lawn now rebuilds at most every `LAWN_STROKE_REBUILD_MS`, and never spends more
- * than `LAWN_STROKE_REBUILD_SHARE` of the time rebuilding; release, cancel and every other
- * change rebuild at once, as before.
+ * rebuild the whole lawn. A mounted lawn now redraws the touched chunks itself
+ * (`stroke-chunks.ts`) and the viewer keeps its build, through the stroke and after an exact
+ * release. Where no mounted build can be redrawn, whole rebuilds are spaced: at most every
+ * `LAWN_STROKE_REBUILD_MS`, and never more than `LAWN_STROKE_REBUILD_SHARE` of the time. The same
+ * spacing paces the whole-lawn flower rebuilds. A cancel and every other change rebuild at once.
  */
 import { useLiveNodeOverrides, useScene } from '@pascal-app/core'
 
