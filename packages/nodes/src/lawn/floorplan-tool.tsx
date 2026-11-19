@@ -1,8 +1,18 @@
 'use client'
 
 import type { BuildingNode } from '@pascal-app/core'
-import { type FloorplanToolContext, useEditor, visibleScene } from '@pascal-app/editor'
+import {
+  type FloorplanToolContext,
+  TOOL_INVALID_COLOR,
+  useEditor,
+  visibleScene,
+} from '@pascal-app/editor'
 import { type RefObject, useEffect, useRef, useState } from 'react'
+import {
+  GardenPlanDraft,
+  publishGardenPlanPointer,
+  useGardenPlanTarget,
+} from '../shared/garden-plan-draft'
 import { planToSite, siteFloorplanFrame, siteFrame, siteToPlan } from '../shared/site-frame'
 import { lawnBrushColor, useLawnAuthoring } from './brush'
 import { useLawnBrushController, useLawnNavigationGuard } from './brush-controller'
@@ -59,6 +69,8 @@ function movePlanLawnCursor(event: PointerEvent, context: PlanLawnInput) {
   }
   const point = planLawnPoint(event, context)
   if (!point) return
+  const svg = context.group.ownerSVGElement
+  if (svg) publishGardenPlanPointer(svg, event)
   if (context.mode === 'brush') {
     context.setCursor(point)
     context.brush.move(point, event)
@@ -137,37 +149,29 @@ function PlanLawnBrushCursor({ cursor, settings }: { cursor: Point; settings: La
   )
 }
 
-function PlanLawnFeedback({
-  points,
+/** The brush on the plan: the plan's own target at its centre, and the ring in its effect's colour. */
+function PlanLawnBrush({
   cursor,
   settings,
-  error,
+  message,
 }: {
-  points: Point[]
   cursor: Point | null
   settings: LawnSettings
-  error: string | null
+  message: string | null
 }) {
-  const first = settings.mode === 'brush' ? cursor : points[0]
+  useGardenPlanTarget(cursor)
   return (
     <>
-      {settings.mode === 'area' && (
-        <polygon
-          fill={points.length >= 3 ? '#617c36' : 'none'}
-          fillOpacity={0.2}
+      {cursor && <PlanLawnBrushCursor cursor={cursor} settings={settings} />}
+      {message && cursor && (
+        <text
+          fill={TOOL_INVALID_COLOR}
+          fontSize={0.18}
           pointerEvents="none"
-          points={points.map((point) => point.join(',')).join(' ')}
-          stroke={error ? '#b45309' : '#617c36'}
-          strokeWidth={3}
-          vectorEffect="non-scaling-stroke"
-        />
-      )}
-      {settings.mode === 'brush' && cursor && (
-        <PlanLawnBrushCursor cursor={cursor} settings={settings} />
-      )}
-      {error && first && (
-        <text fill="#b45309" fontSize={0.18} pointerEvents="none" x={first[0]} y={first[1] - 0.25}>
-          {error}
+          x={cursor[0]}
+          y={cursor[1] - 0.25}
+        >
+          {message}
         </text>
       )}
     </>
@@ -191,12 +195,20 @@ export default function FloorplanLawnTool(context: FloorplanToolContext) {
     addPoint: draft.addPoint,
     brush,
   })
-  const points = draft.line.map((point) => siteToPlan(building, point))
+  const outline = useLawnDraft()
   const cursorPlan = cursor ? siteToPlan(building, cursor) : null
-  const error = settings.mode === 'brush' ? brush.message : draft.error
   return (
     <g ref={groupRef}>
-      <PlanLawnFeedback points={points} cursor={cursorPlan} settings={settings} error={error} />
+      {settings.mode === 'area' ? (
+        <GardenPlanDraft
+          closed
+          hover={outline.hover ? siteToPlan(building, outline.hover) : null}
+          message={draft.error}
+          points={outline.points.map((point) => siteToPlan(building, point))}
+        />
+      ) : (
+        <PlanLawnBrush cursor={cursorPlan} message={brush.message} settings={settings} />
+      )}
     </g>
   )
 }

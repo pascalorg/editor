@@ -1,9 +1,10 @@
 'use client'
 
 import { usePascalI18n } from '@pascal-app/core'
-import type { FloorplanToolContext } from '@pascal-app/editor'
+import { type FloorplanToolContext, TOOL_INVALID_COLOR } from '@pascal-app/editor'
 import { type RefObject, useEffect, useRef, useState } from 'react'
-import { planToSite, siteFloorplanFrame, siteFrame } from '../shared/site-frame'
+import { publishGardenPlanPointer, useGardenPlanTarget } from '../shared/garden-plan-draft'
+import { planToSite, siteFloorplanFrame, siteFrame, siteToPlan } from '../shared/site-frame'
 import { ownsTreePlacement, placeTree, snapTreePlacementPoint } from './placement'
 import { treePlacementMessage } from './placement-message'
 import { useTreePlacementScope } from './placement-scope'
@@ -14,6 +15,7 @@ function useFloorplanTreePlacementInput(
   context: FloorplanToolContext,
   groupRef: RefObject<SVGGElement | null>,
   onRefusal: (refusal: PlacementRefusal) => void,
+  onTarget: (planPoint: [number, number] | null) => void,
 ) {
   const { sceneApi, activeLevelId, drawingType = 'floor-plan', selectNode, finishTool } = context
   useEffect(() => {
@@ -28,6 +30,26 @@ function useFloorplanTreePlacementInput(
     const down = (event: PointerEvent) => {
       if (event.button === 0 && ownsTreePlacement('2d', event.target)) consume(event)
     }
+    // The move is taken before the panel sees it (it would clear the plan's target for a tool it
+    // does not know); a pan with the middle or right button is left alone.
+    const move = (event: PointerEvent) => {
+      if (event.buttons & 0b110 || !ownsTreePlacement('2d', event.target)) return
+      const matrix = group.getScreenCTM()
+      if (!matrix) return
+      consume(event)
+      publishGardenPlanPointer(svg, event)
+      const point = new DOMPoint(event.clientX, event.clientY).matrixTransform(matrix.inverse())
+      const frame = siteFrame(sceneApi, activeLevelId)
+      const { building } = siteFloorplanFrame(frame?.building ?? null, activeLevelId, drawingType)
+      // The target stands where a click would plant, snapping included.
+      onTarget(
+        siteToPlan(
+          building,
+          snapTreePlacementPoint(planToSite(building, [point.x, point.y]), event.altKey),
+        ),
+      )
+    }
+    const leave = () => onTarget(null)
     const click = (event: MouseEvent) => {
       if (event.button !== 0 || !ownsTreePlacement('2d', event.target)) return
       consume(event)
@@ -45,12 +67,16 @@ function useFloorplanTreePlacementInput(
         finishTool()
     }
     svg.addEventListener('pointerdown', down, true)
+    svg.addEventListener('pointermove', move, true)
+    svg.addEventListener('pointerleave', leave)
     svg.addEventListener('click', click, true)
     return () => {
       svg.removeEventListener('pointerdown', down, true)
+      svg.removeEventListener('pointermove', move, true)
+      svg.removeEventListener('pointerleave', leave)
       svg.removeEventListener('click', click, true)
     }
-  }, [sceneApi, activeLevelId, drawingType, selectNode, finishTool, groupRef, onRefusal])
+  }, [sceneApi, activeLevelId, drawingType, selectNode, finishTool, groupRef, onRefusal, onTarget])
 }
 
 export default function FloorplanTreeTool(context: FloorplanToolContext) {
@@ -58,13 +84,15 @@ export default function FloorplanTreeTool(context: FloorplanToolContext) {
   const i18n = usePascalI18n()
   const groupRef = useRef<SVGGElement>(null)
   const [refusal, setRefusal] = useState<PlacementRefusal | null>(null)
-  useFloorplanTreePlacementInput(context, groupRef, setRefusal)
+  const [target, setTarget] = useState<[number, number] | null>(null)
+  useFloorplanTreePlacementInput(context, groupRef, setRefusal, setTarget)
+  useGardenPlanTarget(target)
   return (
     <g ref={groupRef}>
       {refusal && (
         <text
           aria-live="polite"
-          fill="#b45309"
+          fill={TOOL_INVALID_COLOR}
           fontSize={0.18}
           pointerEvents="none"
           x={refusal.at[0]}

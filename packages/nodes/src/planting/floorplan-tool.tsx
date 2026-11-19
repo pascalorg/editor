@@ -2,6 +2,7 @@
 
 import type { FloorplanToolContext } from '@pascal-app/editor'
 import { useEffect, useRef } from 'react'
+import { GardenPlanDraft, publishGardenPlanPointer } from '../shared/garden-plan-draft'
 import { planToSite, siteFloorplanFrame, siteFrame, siteToPlan } from '../shared/site-frame'
 import { snapPlantingDraftPoint, usePlantingDraft, usePlantingDraftController } from './draft'
 
@@ -14,7 +15,7 @@ export default function FloorplanPlantingTool(context: FloorplanToolContext) {
     context.activeLevelId,
     context.drawingType ?? 'floor-plan',
   )
-  const { addPoint, line, error } = usePlantingDraftController({
+  const { addPoint, error } = usePlantingDraftController({
     ...context,
     siteId: frame?.site.id,
     view: '2d',
@@ -40,6 +41,7 @@ export default function FloorplanPlantingTool(context: FloorplanToolContext) {
     const move = (event: PointerEvent) => {
       if (event.buttons & 0b110) return
       consume(event)
+      publishGardenPlanPointer(svg, event)
       usePlantingDraft.setState({ hover: resolve(event) })
     }
     const click = (event: MouseEvent) => {
@@ -57,24 +59,15 @@ export default function FloorplanPlantingTool(context: FloorplanToolContext) {
       svg.removeEventListener('click', click, true)
     }
   }, [addPoint, building])
-  const points = line.map((point) => siteToPlan(building, point))
-  const first = points[0]
+  const draft = usePlantingDraft()
   return (
     <g ref={groupRef}>
-      <polygon
-        fill={points.length >= 3 ? '#7fae5f' : 'none'}
-        fillOpacity={0.2}
-        pointerEvents="none"
-        points={points.map((point) => point.join(',')).join(' ')}
-        stroke={error ? '#b45309' : '#3f8f3a'}
-        strokeWidth={3}
-        vectorEffect="non-scaling-stroke"
+      <GardenPlanDraft
+        closed
+        hover={draft.hover ? siteToPlan(building, draft.hover) : null}
+        message={error}
+        points={draft.points.map((point) => siteToPlan(building, point))}
       />
-      {error && first && (
-        <text fill="#b45309" fontSize={0.18} pointerEvents="none" x={first[0]} y={first[1] - 0.25}>
-          {error}
-        </text>
-      )}
     </g>
   )
 }

@@ -9,7 +9,7 @@ import {
   stopPlacementCommitPropagation,
   subscribeFloorPlacementClicks,
 } from '../shared/floor-placement'
-import { GardenPreviewLine } from '../shared/garden-preview-line'
+import { GardenDraftPreview } from '../shared/garden-draft-preview'
 import { siteFrame } from '../shared/site-frame'
 import { snapHedgeDraftPoint, useHedgeDraft, useHedgeDraftController } from './draft'
 
@@ -19,7 +19,7 @@ export default function HedgeTool() {
   const scene = useThree((state) => state.scene)
   const frame = siteFrame(context.sceneApi, context.activeLevelId)
   const finishTool = useCallback(() => useEditor.getState().setTool(null), [])
-  const { addPoint, line, error } = useHedgeDraftController({
+  const { addPoint, error } = useHedgeDraftController({
     ...context,
     siteId: frame?.site.id,
     finishTool,
@@ -55,19 +55,26 @@ export default function HedgeTool() {
       unsubscribe()
     }
   }, [addPoint, context.isCameraDragging])
-  if (line.length < 2) return null
+  const points = useHedgeDraft((draft) => draft.points)
+  const hover = useHedgeDraft((draft) => draft.hover)
   const ground = resolveSiteGround(frame?.site.id, context.sceneApi.nodes())
-  const points = line.map(([x, z]): [number, number, number] => [
-    x,
-    ground.heightAt(x, z) + 0.05,
-    z,
-  ])
+  const first = points[0]
   // ToolManager mounts under the building; a Site-space guide must not inherit its transform.
   return createPortal(
     <group userData={{ pascalExport: 'strip' }}>
-      <GardenPreviewLine color={error ? '#b45309' : '#3f8f3a'} lineWidth={3} points={points} />
-      {error && (
-        <Html position={points[0]} style={{ pointerEvents: 'none', width: 260 }}>
+      <GardenDraftPreview
+        closed={false}
+        ground={ground}
+        hover={hover}
+        invalid={!!error}
+        lift={0.05}
+        points={points}
+      />
+      {error && first && (
+        <Html
+          position={[first[0], ground.heightAt(first[0], first[1]) + 0.05, first[1]]}
+          style={{ pointerEvents: 'none', width: 260 }}
+        >
           <p className="rounded-lg bg-background p-2 text-xs text-foreground" role="status">
             {error}
           </p>
