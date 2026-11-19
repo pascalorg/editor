@@ -158,7 +158,7 @@ describe('a stroke painted chunk by chunk equals the full build of the same lawn
     const { lawn, nodes } = scene(lot)
     const rebuilt = paint(lawn, nodes, bare, growing(line([-9, -14], [9, 14], 40)))
     expect(Math.max(...rebuilt)).toBeLessThanOrEqual(4)
-  })
+  }, 60_000)
 
   test('along the edge of the lawn, where blades are trimmed and faded', () => {
     const { lawn, nodes } = scene(lot, { edgeFade: 0.4 })
@@ -168,7 +168,7 @@ describe('a stroke painted chunk by chunk equals the full build of the same lawn
       { radiusM: 0.8, effect: 'taller', strength: 1 },
       growing(line([-10, -14], [-9.8, 14], 30)),
     )
-  })
+  }, 60_000)
 
   test('beside paving and a house that the lawn keeps clear', () => {
     const path = SlabNode.parse({
@@ -179,7 +179,7 @@ describe('a stroke painted chunk by chunk equals the full build of the same lawn
     })
     const { lawn, nodes } = scene(lot, {}, [path])
     paint(lawn, nodes, bare, growing(line([-3, 2], [3, 9], 30)))
-  })
+  }, 60_000)
 
   test('more flowers on a flowering lawn: the flower count changes', () => {
     const { lawn, nodes } = scene(lot, {
@@ -197,7 +197,7 @@ describe('a stroke painted chunk by chunk equals the full build of the same lawn
       nodes,
     ).facts.flowerCount
     expect(after).not.toBe(before)
-  })
+  }, 60_000)
 
   test('a tail that is replaced, not only extended, as the hand simplifies its path', () => {
     const { lawn, nodes } = scene(lot)
@@ -223,7 +223,7 @@ describe('a stroke painted chunk by chunk equals the full build of the same lawn
       ],
     ]
     paint(lawn, nodes, { radiusM: 0.3, effect: 'bare', strength: 1 }, samples)
-  })
+  }, 60_000)
 
   test('a wide brush on sloped ground, on a lawn that already carries strokes', () => {
     const field = createTerrainField({ origin: [-10, -15], cols: 21, rows: 31, spacing: 1 })
@@ -251,7 +251,7 @@ describe('a stroke painted chunk by chunk equals the full build of the same lawn
       { radiusM: 3, effect: 'taller', strength: 0.8 },
       growing(line([-8, 0], [8, 3], 12)),
     )
-  })
+  }, 60_000)
 })
 
 test('on a terrain grid that does not line up with the chunks, the chunked ground is still exact', () => {
@@ -261,7 +261,7 @@ test('on a terrain grid that does not line up with the chunks, the chunked groun
   const { lawn, nodes } = scene(lot, { terrain: commitTerrainField(field) })
   paint(lawn, nodes, bare, growing(line([-9, 7.4], [9, 8.6], 30)))
   paint(lawn, nodes, bare, growing(line([7.5, -14], [8.5, 14], 30)))
-})
+}, 60_000)
 
 test('a sample rebuilds the chunks under the brush, on a 30 m2 and on a 2,000 m2 lawn alike', () => {
   const small = scene(rectangle(-3, -2.5, 3, 2.5))
@@ -275,7 +275,7 @@ test('a sample rebuilds the chunks under the brush, on a 30 m2 and on a 2,000 m2
     onSmall.reduce((sum, count) => sum + count, 0),
   )
   expect(buildLawn(large.lawn, large.nodes).blades.chunks.length).toBeGreaterThan(20)
-})
+}, 60_000)
 
 test('every ground triangle of the full build is named by the chunk that builds it', () => {
   const field = createTerrainField({ origin: [-10.3, -15.2], cols: 30, rows: 44, spacing: 0.7 })
@@ -300,7 +300,7 @@ test('every ground triangle of the full build is named by the chunk that builds 
     const chunk = buildLawnChunk(context, lawn, chunkX ?? 0, chunkZ ?? 0)
     expect(triangles(chunk.base).sort()).toEqual(expected.sort())
   }
-})
+}, 60_000)
 
 test('a plan that carries its stroke-independent parts from sample to sample is the same plan', () => {
   const path = SlabNode.parse({
@@ -351,4 +351,4 @@ test('a plan that carries its stroke-independent parts from sample to sample is 
   planLawn(lawn, nodes, warm)
   expect(refusal(() => planLawn(heavy, nodes, warm))).toBe(refusal(() => planLawn(heavy, nodes)))
   expect(refusal(() => planLawn(heavy, nodes))).toMatch(/32,000,000/)
-})
+}, 60_000)

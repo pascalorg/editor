@@ -63,6 +63,8 @@ function releaseGround(session: Session, key: string) {
   const index = geometry?.getIndex()
   const position = geometry?.getAttribute('position')
   if (!geometry || !index || !position) return
+  // A bounds tree built over the old index would pick through triangles that are gone.
+  if ('boundsTree' in geometry) (geometry as { boundsTree?: unknown }).boundsTree = undefined
   const drawn = Math.min(index.count, geometry.drawRange.count)
   const array = index.array
   let kept = 0

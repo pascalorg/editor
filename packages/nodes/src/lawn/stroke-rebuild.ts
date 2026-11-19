@@ -21,6 +21,9 @@ const spacing = (stroke: Stroke) =>
 
 export function beginLawnStroke(id: string): void {
   strokes.set(id, { at: 0, cost: 0, chunked: false })
+  // A build kept from an earlier release is kept again only if this stroke is released too:
+  // a cancel or a refusal must rebuild.
+  exact.delete(id)
 }
 
 export function endLawnStroke(id: string): void {

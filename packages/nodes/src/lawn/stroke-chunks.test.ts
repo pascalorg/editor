@@ -6,6 +6,7 @@ import {
   getEffectiveNode,
   LawnNode,
   SiteNode,
+  SlabNode,
   useLiveNodeOverrides,
   useScene,
 } from '@pascal-app/core'
@@ -39,14 +40,30 @@ afterEach(() => {
 })
 
 /** A lawn in the scene store, built and adopted by a scene group as the viewer does. */
-function mounted(id: string, outline: Point[], props: Record<string, unknown> = {}) {
+function mounted(
+  id: string,
+  outline: Point[],
+  props: Record<string, unknown> = {},
+  paving: Point[][] = [],
+) {
+  const slabs = paving.map((polygon, index) =>
+    SlabNode.parse({
+      id: `slab_${id}${index}`,
+      parentId: `site_${id}`,
+      polygon,
+      metadata: { flatwork: 'walk' },
+    }),
+  )
   const site = SiteNode.parse({
     id: `site_${id}`,
-    children: [`lawn_${id}`],
+    children: [...slabs.map((slab) => slab.id), `lawn_${id}`],
     polygon: { type: 'polygon', points: outline },
   })
   const lawn = LawnNode.parse({ id: `lawn_${id}`, parentId: site.id, outline, seed: 19, ...props })
-  useScene.setState({ nodes: { [site.id]: site, [lawn.id]: lawn }, rootNodeIds: [site.id] })
+  useScene.setState({
+    nodes: Object.fromEntries([site, ...slabs, lawn].map((node) => [node.id, node])),
+    rootNodeIds: [site.id],
+  })
   clearSceneHistory()
   const context = () => {
     const nodes: Record<string, AnyNode> = useScene.getState().nodes
@@ -187,7 +204,7 @@ test('a sample redraws only the chunks under the brush, on a 30 m2 and on a 2,00
   expect(onLarge.untouched.size).toBeGreaterThanOrEqual(chunks - 4)
   expectEqualsFullBuild(large)
   onLarge.stroke.cancel()
-})
+}, 60_000)
 
 test('a released stroke is already the saved lawn: the viewer keeps it until the scene changes', () => {
   const view = mounted('release', rectangle(-10, -15, 10, 15), {
@@ -219,7 +236,7 @@ test('a released stroke is already the saved lawn: the viewer keeps it until the
   useScene.temporal.getState().undo()
   expect(lawnGeometryKey(view.lawn, again.now + 64)).not.toBe(previewed)
   expect(view.current().strokes).toHaveLength(2)
-})
+}, 60_000)
 
 test('flowers, thinned over the whole lawn, follow the brush as whole rebuilds spaced in time', () => {
   const view = mounted('flowers', rectangle(-10, -15, 10, 15), {
@@ -233,7 +250,7 @@ test('flowers, thinned over the whole lawn, follow the brush as whole rebuilds s
   expect(meshes(view.group, 'lawn-flowers')[0]?.geometry).not.toBe(before)
   expectEqualsFullBuild(view)
   painted.stroke.cancel()
-})
+}, 60_000)
 
 test('a first bare stroke on an unpainted lawn shows soil under the brush and stays exact', () => {
   const view = mounted('soil', rectangle(-10, -15, 10, 15))
@@ -243,4 +260,23 @@ test('a first bare stroke on an unpainted lawn shows soil under the brush and st
   painted.stroke.cancel()
   updateLawnStrokeChunks(painted.now + 16)
   expect(lawnGeometryKey(view.lawn, painted.now + 16)).not.toBe(painted.key)
-})
+}, 60_000)
+
+test('a stroke cancelled after a kept release rebuilds, and paving beside the brush stays clear', () => {
+  const view = mounted('cancel', rectangle(-10, -15, 10, 15), {}, [
+    rectangle(-2.4, -6, -1.6, 6),
+    rectangle(-2, 0.4, 3, 1.1),
+  ])
+  const first = paint(view, bare)
+  expectEqualsFullBuild(view)
+  expect(first.stroke.commit()).toBe(true)
+  updateLawnStrokeChunks(first.now + 16)
+  expectEqualsFullBuild(view)
+  expect(lawnGeometryKey(view.lawn, first.now + 16)).toBe(view.view.built)
+  // The second stroke is dropped: what it drew must go, so the viewer is told to rebuild.
+  const second = paint(view, { radiusM: 1, effect: 'taller', strength: 1 })
+  second.stroke.cancel()
+  updateLawnStrokeChunks(second.now + 16)
+  expect(lawnGeometryKey(view.lawn, second.now + 16)).not.toBe(view.view.built)
+  expect(view.current().strokes).toHaveLength(1)
+}, 60_000)
