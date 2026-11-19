@@ -4,6 +4,7 @@ import { type LawnCoverage, lawnCoverage } from './lawn-coverage'
 import { lawnFlowerProbes, lawnFlowers } from './lawn-flowers'
 import {
   type LawnGroundAxes,
+  type LawnGroundMemo,
   type LawnGroundTriangle,
   lawnGroundAxes,
   lawnGroundMesh,
@@ -64,9 +65,39 @@ function candidateBounds(polygons: MultiPolygon) {
   return { minX, minZ, maxX, maxZ, count: (maxX - minX) * (maxZ - minZ) * 100 }
 }
 
-export function planLawn(input: LawnNode, nodes: Nodes): LawnPlan {
+/**
+ * What one brush stroke may carry from sample to sample: the parts of a plan that strokes cannot
+ * change. Valid while the outline is the same, point for point, and the owning Site and the scene
+ * snapshot are the same objects.
+ */
+export type LawnPlanMemo = {
+  outline?: LawnNode['outline']
+  parentId?: LawnNode['parentId']
+  nodes?: Nodes
+  retained?: ReturnType<typeof retainedLawn>
+  coverage?: LawnCoverage
+  ground?: LawnGroundMemo
+}
+
+export function planLawn(input: LawnNode, nodes: Nodes, memo?: LawnPlanMemo): LawnPlan {
   const node = LawnNode.parse(input)
-  const retained = retainedLawn(node, nodes)
+  if (
+    memo &&
+    (memo.parentId !== node.parentId ||
+      memo.nodes !== nodes ||
+      memo.outline?.length !== node.outline.length ||
+      memo.outline.some(
+        (point, index) =>
+          point[0] !== node.outline[index]?.[0] || point[1] !== node.outline[index]?.[1],
+      ))
+  ) {
+    memo.outline = node.outline
+    memo.parentId = node.parentId
+    memo.nodes = nodes
+    memo.retained = memo.coverage = memo.ground = undefined
+  }
+  const retained = memo?.retained ?? retainedLawn(node, nodes)
+  if (memo) memo.retained = retained
   if (retained.retainedAreaM2 < 1e-6)
     throw new LawnBuildError(
       'lawn_empty',
@@ -83,9 +114,13 @@ export function planLawn(input: LawnNode, nodes: Nodes): LawnPlan {
   const site = node.parentId ? nodes[node.parentId] : undefined
   const field = site?.type === 'site' ? persistedTerrainFieldOf(site) : null
   const groundHeight = field ? (x: number, z: number) => heightAt(field, x, z) : () => FLAT_GROUND_Y
-  const coverage = lawnCoverage(retained.polygons)
+  const coverage = memo?.coverage ?? lawnCoverage(retained.polygons)
+  if (memo) {
+    memo.coverage = coverage
+    memo.ground ??= {}
+  }
   const topologyWork = { visits: candidates.count * strokePoints, points: strokePoints }
-  const triangles = lawnGroundTriangles(retained.polygons, node, field, topologyWork)
+  const triangles = lawnGroundTriangles(retained.polygons, node, field, topologyWork, memo?.ground)
   const flowerProbes = lawnFlowerProbes(
     node,
     candidates.maxX - candidates.minX,

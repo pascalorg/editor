@@ -12,6 +12,7 @@ import {
   lawnChunkContext,
   lawnChunksTouched,
   lawnGroundChunkAt,
+  planLawn,
   SiteNode,
   SlabNode,
 } from '../index'
@@ -299,4 +300,55 @@ test('every ground triangle of the full build is named by the chunk that builds 
     const chunk = buildLawnChunk(context, lawn, chunkX ?? 0, chunkZ ?? 0)
     expect(triangles(chunk.base).sort()).toEqual(expected.sort())
   }
+})
+
+test('a plan that carries its stroke-independent parts from sample to sample is the same plan', () => {
+  const path = SlabNode.parse({
+    id: 'slab_walk',
+    parentId: 'site_chunks',
+    polygon: rectangle(-0.6, -4, 0.6, 15),
+    metadata: { flatwork: 'walk' },
+  })
+  const { lawn, nodes } = scene(
+    lot,
+    { flowers: [{ species: 'daisy', share: 1 }], flowerDensity: 0.6 },
+    [path],
+  )
+  const memo = {}
+  for (const points of growing(line([-6, -3], [7, 9], 12))) {
+    const next = LawnNode.parse({ ...lawn, strokes: [{ ...bare, points }] })
+    const carried = planLawn(next, nodes, memo)
+    const fresh = planLawn(next, nodes)
+    expect(carried.facts).toEqual(fresh.facts)
+    expect(carried.triangles).toEqual(fresh.triangles)
+    expect(carried.polygons).toEqual(fresh.polygons)
+  }
+  // Another scene snapshot, or another outline, starts again from nothing.
+  const moved = {
+    ...nodes,
+    [path.id]: SlabNode.parse({ ...path, polygon: rectangle(3, -4, 4.2, 15) }),
+  }
+  expect(planLawn(lawn, moved, memo).facts).toEqual(planLawn(lawn, moved).facts)
+  const smaller = LawnNode.parse({ ...lawn, outline: rectangle(-5, -5, 5, 5) })
+  expect(planLawn(smaller, moved, memo).facts).toEqual(planLawn(smaller, moved).facts)
+  // A stroke that breaks the work budget is refused with the same error either way.
+  const heavy = LawnNode.parse({
+    ...lawn,
+    strokes: Array.from({ length: 4 }, () => ({
+      ...bare,
+      points: Array.from({ length: 128 }, (_, index): Point => [1 + index / 128, 1]),
+    })),
+  })
+  const refusal = (run: () => unknown) => {
+    try {
+      run()
+      return null
+    } catch (error) {
+      return String(error)
+    }
+  }
+  const warm = {}
+  planLawn(lawn, nodes, warm)
+  expect(refusal(() => planLawn(heavy, nodes, warm))).toBe(refusal(() => planLawn(heavy, nodes)))
+  expect(refusal(() => planLawn(heavy, nodes))).toMatch(/32,000,000/)
 })

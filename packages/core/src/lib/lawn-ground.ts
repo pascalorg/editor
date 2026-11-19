@@ -205,6 +205,7 @@ function appendGroundCell(
   right: number,
   top: number,
   bottom: number,
+  base?: LawnGroundTriangle[],
 ) {
   const status = coverage.cell(left, top, right, bottom)
   if (status === 'outside') return
@@ -226,21 +227,34 @@ function appendGroundCell(
             field ? heightAt(field, x, z) : FLAT_GROUND_Y,
             z,
           ]
-          appendGroundTriangle(triangles, [point(a), point(b), point(c)], node, work)
+          const triangle: LawnGroundTriangle = [point(a), point(b), point(c)]
+          base?.push(triangle)
+          appendGroundTriangle(triangles, triangle, node, work)
         }
       }
   }
 }
+
+/** The ground before any stroke divides it: a function of the retained area and the terrain only. */
+export type LawnGroundMemo = { base?: LawnGroundTriangle[] }
 
 export function lawnGroundTriangles(
   polygons: MultiPolygon,
   node: LawnNode,
   field: TerrainField | null,
   work = { visits: 0, points: node.strokes.reduce((sum, stroke) => sum + stroke.points.length, 0) },
+  memo?: LawnGroundMemo,
 ): LawnGroundTriangle[] {
+  const triangles: LawnGroundTriangle[] = []
+  if (memo?.base) {
+    // The same triangles in the same order as the cells below gave them: only the strokes' work
+    // and subdivision are done again.
+    for (const triangle of memo.base) appendGroundTriangle(triangles, triangle, node, work)
+    return triangles
+  }
   const { xs, zs } = terrainAxes(polygons, field)
   const coverage = lawnCoverage(polygons)
-  const triangles: LawnGroundTriangle[] = []
+  const base: LawnGroundTriangle[] | undefined = memo ? [] : undefined
   for (let row = 0; row + 1 < zs.length; row++)
     for (let col = 0; col + 1 < xs.length; col++) {
       const left = xs[col],
@@ -249,8 +263,21 @@ export function lawnGroundTriangles(
         bottom = zs[row + 1]
       if (left === undefined || right === undefined || top === undefined || bottom === undefined)
         continue
-      appendGroundCell(triangles, polygons, coverage, node, field, work, left, right, top, bottom)
+      appendGroundCell(
+        triangles,
+        polygons,
+        coverage,
+        node,
+        field,
+        work,
+        left,
+        right,
+        top,
+        bottom,
+        base,
+      )
     }
+  if (memo) memo.base = base
   return triangles
 }
 

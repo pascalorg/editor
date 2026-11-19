@@ -485,6 +485,7 @@ export {
   type LawnFacts,
   type LawnMesh,
   type LawnPlan,
+  type LawnPlanMemo,
   lawnChunkContext,
   lawnChunksTouched,
   lawnFacts,
