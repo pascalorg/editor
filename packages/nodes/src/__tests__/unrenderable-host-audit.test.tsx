@@ -31,7 +31,7 @@ import {
   useEditor,
   useInteractionScope,
 } from '@pascal-app/editor'
-import { useViewer } from '@pascal-app/viewer'
+import { NodeRenderer, useViewer } from '@pascal-app/viewer'
 import { events, type RootStore } from '@react-three/fiber'
 import { act, create } from '@react-three/test-renderer'
 import React from 'react'
@@ -93,7 +93,7 @@ function makeHost(kind: string) {
   const def = nodeRegistry.get(kind)!
   const fields = {
     ...NODE_REQUIRED_FIELDS[kind],
-    parentId: level.id,
+    parentId: def.capabilities.hostable?.parents?.includes('site') ? site.id : level.id,
     ...(kind === 'item' ? { asset: { ...asset, dimensions: [2, 1, 2] } } : {}),
     ...(kind === 'procedural-item'
       ? {
@@ -121,7 +121,15 @@ function makeHost(kind: string) {
     ...fields,
     ...(kind === 'elevator' ? { parentId: building.id } : {}),
   }) as AnyNode
-  if ('position' in host && Array.isArray(host.position)) host.position = [0.7, 0.2, -0.4]
+  if ('position' in host && Array.isArray(host.position)) {
+    const position: [number, number, number] = [0.7, 0.2, -0.4]
+    host.position =
+      def.capabilities.movable?.resolvePosition?.({
+        node: host,
+        position,
+        nodes: { [site.id]: site, [building.id]: building, [level.id]: level, [host.id]: host },
+      }) ?? position
+  }
   if ('rotation' in host) host.rotation = typeof host.rotation === 'number' ? 0.31 : [0, 0.31, 0]
   const nodes: Record<string, AnyNode> = { [host.id]: host }
   const parse = (type: string, values: Record<string, unknown>) =>
@@ -196,7 +204,15 @@ function seed(kind: string, mover: Mover) {
     nodes: {
       ...nodes,
       [child.id]: child,
-      [site.id]: { ...site, children: [building.id] },
+      [site.id]: {
+        ...site,
+        children: [
+          building.id,
+          ...Object.values(nodes)
+            .filter((node) => node.parentId === site.id)
+            .map((node) => node.id),
+        ],
+      },
       [building.id]: {
         ...building,
         children: [
@@ -276,9 +292,15 @@ function probe(host: AnyNode) {
 }
 function Scene({ mover, child }: { mover?: Mover; child?: AnyNode }) {
   const moving = useInteractionScope((s) => s.scope.kind === 'moving' || s.scope.kind === 'placing')
+  const siteChildren = useScene((s) => (s.nodes[site.id] as SiteNode | undefined)?.children)
   return (
     <>
       <LevelScene building={building} level={level} />
+      {siteChildren
+        ?.filter((id) => id !== building.id)
+        .map((id) => (
+          <NodeRenderer key={id} nodeId={id} />
+        ))}
       {mover &&
         child &&
         moving &&

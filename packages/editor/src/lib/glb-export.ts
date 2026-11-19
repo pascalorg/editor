@@ -361,6 +361,7 @@ export async function preparePortableSceneFromViewer(
   sceneGroup: Object3D,
   nodes: Record<string, AnyNode>,
   options: GlbExportOptions = {},
+  format: 'glb' | 'usdz' = 'glb',
 ): Promise<GlbExport> {
   emitter.emit('thumbnail:before-capture', undefined)
   const restoreLevels = snapLevelsToTruePositions()
@@ -374,7 +375,7 @@ export async function preparePortableSceneFromViewer(
     restoreLevels()
     emitter.emit('thumbnail:after-capture', undefined)
   }
-  return completeSceneExportPreparation(preparation)
+  return completeSceneExportPreparation(preparation, format)
 }
 
 /** Serialise a prepared scene; callers own the deadline (see `exportSceneToGlb`). */
@@ -427,7 +428,7 @@ type SceneExportPreparation = {
   builders: Map<
     string,
     {
-      sync: ((node: AnyNode, ctx: GeometryContext) => THREE.Object3D) | undefined
+      sync: ((node: AnyNode, ctx: GeometryContext) => THREE.Object3D | null) | undefined
       async: ((node: AnyNode, ctx: GeometryContext) => Promise<THREE.Object3D>) | undefined
     }
   >
@@ -499,7 +500,7 @@ function startSceneExportPreparation(
     const definition = nodeRegistry.get(node.type)
     builders.set(id, {
       sync: definition?.bakeGeometry as
-        | ((node: AnyNode, ctx: GeometryContext) => THREE.Object3D)
+        | ((node: AnyNode, ctx: GeometryContext) => THREE.Object3D | null)
         | undefined,
       async: definition?.bakeGeometryAsync as
         | ((node: AnyNode, ctx: GeometryContext) => Promise<THREE.Object3D>)
@@ -566,6 +567,7 @@ function resolveNormalMapDecompressor(options: GlbExportOptions): {
 
 async function completeSceneExportPreparation(
   preparation: SceneExportPreparation,
+  format: 'glb' | 'usdz' = 'glb',
 ): Promise<GlbExport> {
   const decompressor = resolveNormalMapDecompressor(preparation.options)
   try {
@@ -575,6 +577,7 @@ async function completeSceneExportPreparation(
     const { options } = preparation
     const byReference = (options.textures ?? 'embed') === 'reference'
     const normalizeOptions = {
+      format,
       preserveNormalMap: (texture: THREE.Texture) =>
         byReference && getPascalTextureRef(texture) !== null,
     }
@@ -693,9 +696,10 @@ function replaceBakedNode(
   preparation: SceneExportPreparation,
   id: string,
   original: THREE.Object3D,
-  replacement: THREE.Object3D,
+  replacement: THREE.Object3D | null,
   hook: 'bakeGeometry' | 'bakeGeometryAsync',
 ): void {
+  if (replacement === null) return
   const cloned = preparation.cloneByOriginal.get(original)
   if (!cloned || !isDescendantOf(cloned, preparation.scene)) return
   const parent = cloned.parent
@@ -826,6 +830,7 @@ function buildBakeGeometryContext(
 
   return {
     resolve,
+    sceneNodes: nodes,
     children,
     siblings,
     parent,

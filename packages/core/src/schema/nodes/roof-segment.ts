@@ -5,6 +5,7 @@ import { RoofBuildUp } from '../build-up'
 import type { MaterialSchema as MaterialSchemaType } from '../material'
 import { MaterialSchema } from '../material'
 import { getBarrelRoofProfile } from './barrel-roof'
+import { RoofCovering } from './roof-covering'
 import { RoofGlazing, RoofSystemType } from './roof-glazing'
 import { getRoofModuleFaces, getRoofShapeRatios } from './roof-segment-shape'
 import { RoofEaveCut, RoofType } from './roof-types'
@@ -98,6 +99,8 @@ export const RoofSegmentNode = BaseNode.extend({
   //   segment role → segment catch-all → roof role → roof catch-all.
   topMaterial: MaterialSchema.optional(),
   topMaterialPreset: z.string().optional(),
+  // A segment's own detail overrides the roof's; absent, inherit it without changing old scenes.
+  covering: RoofCovering.optional(),
   edgeMaterial: MaterialSchema.optional(),
   edgeMaterialPreset: z.string().optional(),
   wallMaterial: MaterialSchema.optional(),
@@ -1035,6 +1038,7 @@ export function getSegmentFasciaMaterial(
  */
 export function hasSegmentMaterialOverride(node: RoofSegmentNode): boolean {
   return (
+    node.covering !== undefined ||
     node.material !== undefined ||
     typeof node.materialPreset === 'string' ||
     node.topMaterial !== undefined ||

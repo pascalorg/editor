@@ -60,6 +60,7 @@ export function createConicalRoofSectorAboveWall(
     conicalFullCircle: true,
   })
   const target = roofLevelTarget(nodes, sourceLevelId, getActiveRoofHeight(segment))
+  if ('kind' in target) return null
   const roof = RoofNode.parse({
     name: `Roof ${roofCount + 1}`,
     metadata: { conicalSourceWallId: wall.id },

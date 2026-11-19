@@ -9,6 +9,7 @@ import {
   type WallFace,
   type WallFaceRegion,
   type WallNode,
+  type WallTrimSpan,
   type ZoneNode,
 } from '../../schema'
 import { getWallZoneSpans, resolveWallFaceChain } from './wall-finish'
@@ -65,6 +66,10 @@ export function wallStyleMismatch(
     0
   const alignedB = opposite ? { ...b, ...reverseWallDirection(b) } : b
   if (a.justification !== alignedB.justification) return 'justification'
+  // Bounded hidden trim is also authored intent; do not lose its settings in a merge.
+  const bounded = (['skirting', 'crown', 'chairRail'] as const).some(
+    (kind) => a[kind]?.spans !== undefined || b[kind]?.spans !== undefined,
+  )
   const { heightOf } = options
   if (
     !(a.endHeightOffset || b.endHeightOffset) &&
@@ -84,7 +89,7 @@ export function wallStyleMismatch(
     )
       return `side ${face.toUpperCase()} finish`
   }
-  if (wallTrimSignature(a) !== wallTrimSignature(alignedB)) return 'trim'
+  if (wallTrimSignature(a, bounded) !== wallTrimSignature(alignedB, bounded)) return 'trim'
   if (options.sides && (a.frontSide !== b.frontSide || a.backSide !== b.backSide))
     return 'room sides'
   if (a.visible !== b.visible) return 'visibility'
@@ -92,13 +97,14 @@ export function wallStyleMismatch(
 }
 
 /** Every trim as it draws: which faces, which profile and size, which finish per face. */
-function wallTrimSignature(wall: WallNode): string {
+function wallTrimSignature(wall: WallNode, includeHidden = false): string {
   return JSON.stringify(
     (['skirting', 'crown', 'chairRail'] as const).map((kind) => {
       const trim = { ...WALL_TRIM_DEFAULTS[kind], ...(wall[kind] ?? {}) }
-      if (!trim.enabled) return null
+      if (!trim.enabled && !includeHidden) return null
       const faces = getWallTrimFaces(trim.sides)
       return {
+        enabled: trim.enabled,
         faces,
         profile: trim.profile,
         height: trim.height,
@@ -119,6 +125,49 @@ function readsBackwards(
     (wall.end[0] - wall.start[0]) * (end[0] - start[0]) +
       (wall.end[1] - wall.start[1]) * (end[1] - start[1]) <
     0
+  )
+}
+
+/** Trim coordinates follow the same physical faces through explicit merges and delete heals. */
+export function mergeWallTrims(
+  walls: readonly WallNode[],
+  start: [number, number],
+  end: [number, number],
+): Partial<Pick<WallNode, 'skirting' | 'crown' | 'chairRail'>> {
+  const length = Math.hypot(end[0] - start[0], end[1] - start[1])
+  const station = (point: [number, number]) =>
+    ((point[0] - start[0]) * (end[0] - start[0]) + (point[1] - start[1]) * (end[1] - start[1])) /
+    length
+  const aligned = walls.map((wall) =>
+    readsBackwards(wall, start, end) ? { ...wall, ...reverseWallDirection(wall) } : wall,
+  )
+  return Object.fromEntries(
+    (['skirting', 'crown', 'chairRail'] as const).flatMap((kind) => {
+      if (!walls.some((wall) => wall[kind]?.spans !== undefined)) return []
+      const spans = aligned
+        .flatMap((wall) => {
+          const trim = wall[kind]
+          if (!trim) return []
+          const source: WallTrimSpan[] =
+            trim.spans ?? getWallTrimFaces(trim.sides).map((face) => ({ face }))
+          const from = station(wall.start)
+          const pieceLength = wallLength(wall)
+          return source.flatMap((span) => {
+            const a = from + Math.max(0, span.u0 ?? 0)
+            const b = from + Math.min(pieceLength, span.u1 ?? pieceLength)
+            if (b - a <= 1e-6) return []
+            return [
+              {
+                face: span.face,
+                ...(span.u0 === undefined && a <= 1e-6 ? {} : { u0: Math.max(0, a) }),
+                ...(span.u1 === undefined && b >= length - 1e-6 ? {} : { u1: Math.min(length, b) }),
+              },
+            ]
+          })
+        })
+        .sort((a, b) => a.face.localeCompare(b.face) || (a.u0 ?? 0) - (b.u0 ?? 0))
+      return [[kind, { ...WALL_TRIM_DEFAULTS[kind], ...aligned[0]?.[kind], spans }]]
+    }),
   )
 }
 
@@ -546,6 +595,7 @@ export function planWallMerge(
     merged = {
       ...kept,
       ...top,
+      ...mergeWallTrims([merged, next], start, end),
       ...(faceRegions.length > 0 ? { faceRegions } : {}),
       start,
       end,

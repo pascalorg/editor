@@ -593,6 +593,17 @@ msgstr "Ascenseur"
 msgid "app.lib.buildPalette.fence"
 msgstr "Clôture"
 
+# Source-Hash: 71b0dcd154aa1922
+# Review: required
+# AI-Provider: anthropic
+# AI-Model: claude-opus-5-5
+# Review-Notes: Offline coding-assistant draft in architectural/editor context; no translation-provider call; fluent human review required.
+# English: "Hedge"
+#: apps/editor/lib/build-palette.ts
+#, fuzzy
+msgid "app.lib.buildPalette.hedge"
+msgstr "Haie"
+
 # Source-Hash: 3bf1c1a8dbb93743
 # Review: required
 # AI-Provider: claude-code
@@ -643,6 +654,17 @@ msgstr "Ligne liquide"
 msgid "app.lib.buildPalette.mep"
 msgstr "CVC-P"
 
+# Source-Hash: 985dadd009185cae
+# Review: required
+# AI-Provider: anthropic
+# AI-Model: claude-opus-5-5
+# Review-Notes: Offline coding-assistant draft in architectural/editor context; no translation-provider call; fluent human review required.
+# English: "Planting bed"
+#: apps/editor/lib/build-palette.ts
+#, fuzzy
+msgid "app.lib.buildPalette.planting"
+msgstr "Massif"
+
 # Source-Hash: 5cc981e79d737694
 # Review: required
 # AI-Provider: claude-code
@@ -662,6 +684,17 @@ msgstr "Poteau bois"
 #, fuzzy
 msgid "app.lib.buildPalette.register"
 msgstr "Bouche"
+
+# Source-Hash: d2a6d9070a13dcc5
+# Review: required
+# AI-Provider: anthropic
+# AI-Model: claude-opus-5-5
+# Review-Notes: Offline coding-assistant draft in architectural/editor context; no translation-provider call; fluent human review required.
+# English: "Rock"
+#: apps/editor/lib/build-palette.ts
+#, fuzzy
+msgid "app.lib.buildPalette.rock"
+msgstr "Rocher"
 
 # Source-Hash: f5f730969df63d1d
 # Review: required
@@ -732,6 +765,14 @@ msgstr "Terrasse"
 #, fuzzy
 msgid "app.lib.buildPalette.terrain"
 msgstr "Terrain"
+
+# Source-Hash: 32f9f40b4513e783
+# Review: required
+# English: "Tree"
+#: apps/editor/lib/build-palette.ts
+#, fuzzy
+msgid "app.lib.buildPalette.tree"
+msgstr "Arbre"
 
 # Source-Hash: 2210e5ee50b74dc9
 # Review: required
@@ -1118,6 +1159,7 @@ msgstr "Une autre session a enregistré en premier — actualiser ?"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Build"
+#: apps/editor/app/fixtures/delivery/fixture-client.tsx
 #: apps/editor/components/scene-loader.tsx
 #, fuzzy
 msgid "app.sceneLoader.build"
@@ -3844,6 +3886,426 @@ msgstr "Fermer"
 msgid "editor.dismissCameraControlsHint"
 msgstr "Fermer l’aide sur les commandes de caméra"
 
+# Review: required
+# Source-Hash: 70f8eb319a09abd1
+# AI-Provider: openai
+# AI-Model: gpt-6-astra
+# English: "Feature wall"
+#: packages/editor/src/components/ui/panels/room-dressing.tsx
+#, fuzzy
+msgid "editor.dressing.accent"
+msgstr "Mur d’accent"
+
+# Review: required
+# Source-Hash: afcc2dbfb01b5e3f
+# AI-Provider: openai
+# AI-Model: gpt-6-astra
+# English: "Add layer"
+#: packages/editor/src/components/ui/panels/room-dressing.tsx
+#, fuzzy
+msgid "editor.dressing.add"
+msgstr "Ajouter une couche"
+
+# Review: required
+# Source-Hash: 95309dea75b11de5
+# AI-Provider: openai
+# AI-Model: gpt-6-astra
+# English: "No selection means all room walls; feature walls require a selection."
+#: packages/editor/src/components/ui/panels/room-dressing.tsx
+#, fuzzy
+msgid "editor.dressing.allWalls"
+msgstr "Sans sélection, tous les murs de la pièce sont concernés ; les murs d’accent nécessitent une sélection."
+
+# Review: required
+# Source-Hash: 41305e4ff35d38b3
+# AI-Provider: openai
+# AI-Model: gpt-6-astra
+# English: "Along cabinet run"
+#: packages/editor/src/components/ui/panels/room-dressing.tsx
+#, fuzzy
+msgid "editor.dressing.alongRun"
+msgstr "Le long de la rangée de meubles"
+
+# Review: required
+# Source-Hash: 1fb20983290d7a6f
+# AI-Provider: openai
+# AI-Model: gpt-6-astra
+# English: "Room dressing applied."
+#: packages/editor/src/components/ui/panels/room-dressing.tsx
+#, fuzzy
+msgid "editor.dressing.applied"
+msgstr "Habillage de la pièce appliqué."
+
+# Review: required
+# Source-Hash: 417cf9c08b0b8d6c
+# AI-Provider: openai
+# AI-Model: gpt-6-astra
+# English: "Apply"
+#: packages/editor/src/components/ui/panels/room-dressing.tsx
+#, fuzzy
+msgid "editor.dressing.apply"
+msgstr "Appliquer"
+
+# Review: required
+# Source-Hash: 36bb7c2a6edcd792
+# AI-Provider: openai
+# AI-Model: gpt-6-astra
+# English: "Around fixtures"
+#: packages/editor/src/components/ui/panels/room-dressing.tsx
+#, fuzzy
+msgid "editor.dressing.around"
+msgstr "Autour des équipements"
+
+# Review: required
+# Source-Hash: aae6cc2a23aeb0e1
+# AI-Provider: openai
+# AI-Model: gpt-6-astra
+# English: "ceiling"
+#: packages/editor/src/components/ui/panels/room-dressing.tsx
+#, fuzzy
+msgid "editor.dressing.ceiling"
+msgstr "plafond"
+
+# Review: required
+# Source-Hash: 32d0bfee628c42a5
+# AI-Provider: openai
+# AI-Model: gpt-6-astra
+# English: "Chair rail"
+#: packages/editor/src/components/ui/panels/room-dressing.tsx
+#, fuzzy
+msgid "editor.dressing.chairRail"
+msgstr "Cimaise"
+
+# Review: required
+# Source-Hash: 42c592c36ce5b481
+# AI-Provider: openai
+# AI-Model: gpt-6-astra
+# English: "Choose a base run"
+#: packages/editor/src/components/ui/panels/room-dressing.tsx
+#, fuzzy
+msgid "editor.dressing.chooseRun"
+msgstr "Choisir une rangée de meubles bas"
+
+# Review: required
+# Source-Hash: 49643244a196a45d
+# AI-Provider: openai
+# AI-Model: gpt-6-astra
+# English: "Crown"
+#: packages/editor/src/components/ui/panels/room-dressing.tsx
+#, fuzzy
+msgid "editor.dressing.crown"
+msgstr "Corniche"
+
+# Review: required
+# Source-Hash: 99ac4d03c3061f3a
+# AI-Provider: openai
+# AI-Model: gpt-6-astra
+# English: "Depth"
+#: packages/editor/src/components/ui/panels/room-dressing.tsx
+#, fuzzy
+msgid "editor.dressing.depth"
+msgstr "Profondeur"
+
+# Review: required
+# Source-Hash: a06a50e63f0c240e
+# AI-Provider: openai
+# AI-Model: gpt-6-astra
+# English: "Move down"
+#: packages/editor/src/components/ui/panels/room-dressing.tsx
+#, fuzzy
+msgid "editor.dressing.down"
+msgstr "Déplacer vers le bas"
+
+# Review: required
+# Source-Hash: 2c4e1ee5b5ddee36
+# AI-Provider: openai
+# AI-Model: gpt-6-astra
+# English: "Existing or default"
+#: packages/editor/src/components/ui/panels/room-dressing.tsx
+#, fuzzy
+msgid "editor.dressing.existing"
+msgstr "Existant ou par défaut"
+
+# Review: required
+# Source-Hash: 29fb2ac4894d511b
+# AI-Provider: openai
+# AI-Model: gpt-6-astra
+# English: "The room could not be dressed. No changes were applied."
+#: packages/editor/src/components/ui/panels/room-dressing.tsx
+#, fuzzy
+msgid "editor.dressing.failed"
+msgstr "Impossible d’habiller la pièce. Aucune modification n’a été appliquée."
+
+# Review: required
+# Source-Hash: b3907da0ad234f10
+# AI-Provider: openai
+# AI-Model: gpt-6-astra
+# English: "Finish"
+#: packages/editor/src/components/ui/panels/room-dressing.tsx
+#, fuzzy
+msgid "editor.dressing.finish"
+msgstr "Finition"
+
+# Review: required
+# Source-Hash: 6a842dc873ae0b7b
+# AI-Provider: openai
+# AI-Model: gpt-6-astra
+# English: "library:… / scene:… / #rrggbb"
+#: packages/editor/src/components/ui/panels/room-dressing.tsx
+#, fuzzy
+msgid "editor.dressing.finishPlaceholder"
+msgstr "library:… / scene:… / #rrggbb"
+
+# Review: required
+# Source-Hash: 702140636ff3977a
+# AI-Provider: openai
+# AI-Model: gpt-6-astra
+# English: "From"
+#: packages/editor/src/components/ui/panels/room-dressing.tsx
+#, fuzzy
+msgid "editor.dressing.from"
+msgstr "De"
+
+# Review: required
+# Source-Hash: 131bac2467f4fdf6
+# AI-Provider: openai
+# AI-Model: gpt-6-astra
+# English: "Full height"
+#: packages/editor/src/components/ui/panels/room-dressing.tsx
+#, fuzzy
+msgid "editor.dressing.full"
+msgstr "Toute la hauteur"
+
+# Review: required
+# Source-Hash: 646ef0fbcbc58edf
+# AI-Provider: openai
+# AI-Model: gpt-6-astra
+# English: "Height"
+#: packages/editor/src/components/ui/panels/room-dressing.tsx
+#, fuzzy
+msgid "editor.dressing.height"
+msgstr "Hauteur"
+
+# Review: required
+# Source-Hash: fc318493e95f53dc
+# AI-Provider: openai
+# AI-Model: gpt-6-astra
+# English: "Layer type"
+#: packages/editor/src/components/ui/panels/room-dressing.tsx
+#, fuzzy
+msgid "editor.dressing.kind"
+msgstr "Type de couche"
+
+# Review: required
+# Source-Hash: 8d484577c8370d12
+# AI-Provider: openai
+# AI-Model: gpt-6-astra
+# English: "Layer {number}"
+#: packages/editor/src/components/ui/panels/room-dressing.tsx
+#, fuzzy
+msgid "editor.dressing.layer"
+msgstr "Couche {number}"
+
+# Review: required
+# Source-Hash: ac333c71ced986e1
+# AI-Provider: openai
+# AI-Model: gpt-6-astra
+# English: "Margin"
+#: packages/editor/src/components/ui/panels/room-dressing.tsx
+#, fuzzy
+msgid "editor.dressing.margin"
+msgstr "Marge"
+
+# Review: required
+# Source-Hash: 0f0e13abf9b2bb67
+# AI-Provider: openai
+# AI-Model: gpt-6-astra
+# English: "Offset"
+#: packages/editor/src/components/ui/panels/room-dressing.tsx
+#, fuzzy
+msgid "editor.dressing.offset"
+msgstr "Décalage"
+
+# Review: required
+# Source-Hash: b3be684ac62fbf53
+# AI-Provider: openai
+# AI-Model: gpt-6-astra
+# English: "Placement"
+#: packages/editor/src/components/ui/panels/room-dressing.tsx
+#, fuzzy
+msgid "editor.dressing.placement"
+msgstr "Emplacement"
+
+# Review: required
+# Source-Hash: 20226b68d5467072
+# AI-Provider: openai
+# AI-Model: gpt-6-astra
+# English: "Preview"
+#: packages/editor/src/components/ui/panels/room-dressing.tsx
+#, fuzzy
+msgid "editor.dressing.preview"
+msgstr "Aperçu"
+
+# Review: required
+# Source-Hash: 4d29461a2bbbde99
+# AI-Provider: openai
+# AI-Model: gpt-6-astra
+# English: "Preview only — nothing changed."
+#: packages/editor/src/components/ui/panels/room-dressing.tsx
+#, fuzzy
+msgid "editor.dressing.previewOnly"
+msgstr "Aperçu uniquement — aucune modification."
+
+# Review: required
+# Source-Hash: 96ad4bd0f7baa40e
+# AI-Provider: openai
+# AI-Model: gpt-6-astra
+# English: "Profile"
+#: packages/editor/src/components/ui/panels/room-dressing.tsx
+#, fuzzy
+msgid "editor.dressing.profile"
+msgstr "Profil"
+
+# Review: required
+# Source-Hash: 9f0722e1b1299f59
+# AI-Provider: openai
+# AI-Model: gpt-6-astra
+# English: "{count} of 8 face regions"
+#: packages/editor/src/components/ui/panels/room-dressing.tsx
+#, fuzzy
+msgid "editor.dressing.regionCount"
+msgstr "{count} zones sur 8 par face"
+
+# Review: required
+# Source-Hash: 19e68acf5a0b92e9
+# AI-Provider: openai
+# AI-Model: gpt-6-astra
+# English: "Along {start}–{end}; height {bottom}–{top}"
+#: packages/editor/src/components/ui/panels/room-dressing.tsx
+#, fuzzy
+msgid "editor.dressing.regionExtent"
+msgstr "Le long du mur : {start}–{end} ; hauteur : {bottom}–{top}"
+
+# Review: required
+# Source-Hash: ca36e9fd7fba1fce
+# AI-Provider: openai
+# AI-Model: gpt-6-astra
+# English: "Remove layer"
+#: packages/editor/src/components/ui/panels/room-dressing.tsx
+#, fuzzy
+msgid "editor.dressing.remove"
+msgstr "Supprimer la couche"
+
+# Review: required
+# Source-Hash: 7bd836108a92cf75
+# AI-Provider: openai
+# AI-Model: gpt-6-astra
+# English: "Apply replaces this room’s previous dressing regions, not hand paint. An empty stack removes those regions; trims stay. Lengths are in metres."
+#: packages/editor/src/components/ui/panels/room-dressing.tsx
+#, fuzzy
+msgid "editor.dressing.replaces"
+msgstr "L’application remplace les anciennes zones d’habillage de cette pièce, mais pas la peinture manuelle. Une pile vide supprime ces zones ; les moulures sont conservées. Les longueurs sont en mètres."
+
+# Review: required
+# Source-Hash: 58327a6cea2d37de
+# AI-Provider: openai
+# AI-Model: gpt-6-astra
+# English: "Selected walls"
+#: packages/editor/src/components/ui/panels/room-dressing.tsx
+#, fuzzy
+msgid "editor.dressing.selectedWalls"
+msgstr "Murs sélectionnés"
+
+# Review: required
+# Source-Hash: d9d55c5883a53789
+# AI-Provider: openai
+# AI-Model: gpt-6-astra
+# English: "Skirting"
+#: packages/editor/src/components/ui/panels/room-dressing.tsx
+#, fuzzy
+msgid "editor.dressing.skirting"
+msgstr "Plinthe"
+
+# Review: required
+# Source-Hash: 6cf2493608aab3fb
+# AI-Provider: openai
+# AI-Model: gpt-6-astra
+# English: "Splashback"
+#: packages/editor/src/components/ui/panels/room-dressing.tsx
+#, fuzzy
+msgid "editor.dressing.splashback"
+msgstr "Crédence"
+
+# Review: required
+# Source-Hash: 590dc223596c70b5
+# AI-Provider: openai
+# AI-Model: gpt-6-astra
+# English: "Tiles"
+#: packages/editor/src/components/ui/panels/room-dressing.tsx
+#, fuzzy
+msgid "editor.dressing.tiles"
+msgstr "Carrelage"
+
+# Review: required
+# Source-Hash: de8b1eec4e822619
+# AI-Provider: openai
+# AI-Model: gpt-6-astra
+# English: "Dress room"
+#: packages/editor/src/components/ui/panels/room-dressing.tsx
+#, fuzzy
+msgid "editor.dressing.title"
+msgstr "Habiller la pièce"
+
+# Review: required
+# Source-Hash: b3214a20e45a7aed
+# AI-Provider: openai
+# AI-Model: gpt-6-astra
+# English: "To"
+#: packages/editor/src/components/ui/panels/room-dressing.tsx
+#, fuzzy
+msgid "editor.dressing.to"
+msgstr "À"
+
+# Review: required
+# Source-Hash: d49ea60a2312df2f
+# AI-Provider: openai
+# AI-Model: gpt-6-astra
+# English: "Move up"
+#: packages/editor/src/components/ui/panels/room-dressing.tsx
+#, fuzzy
+msgid "editor.dressing.up"
+msgstr "Déplacer vers le haut"
+
+# Review: required
+# Source-Hash: 7bf994f4d164e33a
+# AI-Provider: openai
+# AI-Model: gpt-6-astra
+# English: "Wainscot"
+#: packages/editor/src/components/ui/panels/room-dressing.tsx
+#, fuzzy
+msgid "editor.dressing.wainscot"
+msgstr "Soubassement"
+
+# Review: required
+# Source-Hash: ae801874723635b1
+# AI-Provider: openai
+# AI-Model: gpt-6-astra
+# English: "wall end"
+#: packages/editor/src/components/ui/panels/room-dressing.tsx
+#, fuzzy
+msgid "editor.dressing.wallEnd"
+msgstr "extrémité du mur"
+
+# Review: required
+# Source-Hash: aac9a732d2159ccc
+# AI-Provider: openai
+# AI-Model: gpt-6-astra
+# English: "Walls"
+#: packages/editor/src/components/ui/panels/room-dressing.tsx
+#, fuzzy
+msgid "editor.dressing.walls"
+msgstr "Murs"
+
 # Source-Hash: aeac665749d3101d
 # Review: required
 # AI-Provider: claude-code
@@ -4925,6 +5387,28 @@ msgstr "Pivoter"
 msgid "editor.helpers.registeredToolHelper.guidedConstraintsBypassed"
 msgstr "Contraintes guidées ignorées"
 
+# Source-Hash: 487ffdc11bd86645
+# Review: required
+# AI-Provider: anthropic
+# AI-Model: claude-opus-5-5
+# Review-Notes: Offline coding-assistant draft in architectural/editor context; no translation-provider call; fluent human review required.
+# English: "Randomise"
+#: packages/nodes/src/i18n/definition-messages.ts
+#, fuzzy
+msgid "editor.inspector.action.randomise.xcy1a1"
+msgstr "Aléatoire"
+
+# Source-Hash: 9530b62bcb182c7c
+# Review: required
+# AI-Provider: anthropic
+# AI-Model: claude-opus-5-5
+# Review-Notes: Offline coding-assistant draft in architectural/editor context; no translation-provider call; fluent human review required.
+# English: "Upgrade to gen 2"
+#: packages/nodes/src/i18n/definition-messages.ts
+#, fuzzy
+msgid "editor.inspector.action.upgradeToGen2.1idvvc0"
+msgstr "Passer à la génération 2"
+
 # Source-Hash: c69865ec5d9d1ac9
 # Review: required
 # AI-Provider: claude-code
@@ -5034,6 +5518,16 @@ msgstr "Hauteur de poutre"
 #, fuzzy
 msgid "editor.inspector.field.beamWidth.1q1mzbe"
 msgstr "Largeur de poutre"
+
+# Source-Hash: 3b0dccf3580199eb
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "Blade width"
+#: packages/nodes/src/i18n/definition-messages.ts
+#, fuzzy
+msgid "editor.inspector.field.bladeWidth.6rnj1x"
+msgstr "Largeur des brins"
 
 # Source-Hash: b98c0d0189526335
 # Review: required
@@ -5145,6 +5639,28 @@ msgstr "Hauteur du caisson"
 msgid "editor.inspector.field.cleanoutStyle.127zz6z"
 msgstr "Style de regard"
 
+# Source-Hash: b4b747470daf0cfa
+# Review: required
+# AI-Provider: anthropic
+# AI-Model: claude-opus-5-5
+# Review-Notes: Offline coding-assistant draft in architectural/editor context; no translation-provider call; fluent human review required.
+# English: "Clip"
+#: packages/nodes/src/i18n/definition-messages.ts
+#, fuzzy
+msgid "editor.inspector.field.clip.1mm17ob"
+msgstr "Taille"
+
+# Source-Hash: f2966b9efcc05104
+# Review: required
+# AI-Provider: anthropic
+# AI-Model: claude-opus-5-5
+# Review-Notes: Offline coding-assistant draft in architectural/editor context; no translation-provider call; fluent human review required.
+# English: "Closed"
+#: packages/nodes/src/i18n/definition-messages.ts
+#, fuzzy
+msgid "editor.inspector.field.closed.dvi7s5"
+msgstr "Fermée"
+
 # Source-Hash: a549dc98e2a1bd07
 # Review: required
 # AI-Provider: claude-code
@@ -5184,6 +5700,16 @@ msgstr "Forme du collier"
 #, fuzzy
 msgid "editor.inspector.field.collarWidth.qvc9ik"
 msgstr "Largeur du collier"
+
+# Source-Hash: fe18958cedd627d2
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "Color"
+#: packages/nodes/src/i18n/definition-messages.ts
+#, fuzzy
+msgid "editor.inspector.field.color.1rqg6wo"
+msgstr "Couleur"
 
 # Source-Hash: 30edd1c180aac9b4
 # Review: required
@@ -5305,6 +5831,17 @@ msgstr "Costière"
 msgid "editor.inspector.field.curbHeight.1yn97sg"
 msgstr "Hauteur de costière"
 
+# Source-Hash: f08fbb462e9afc0e
+# Review: required
+# AI-Provider: anthropic
+# AI-Model: claude-opus-5-5
+# Review-Notes: Offline coding-assistant draft in architectural/editor context; no translation-provider call; fluent human review required.
+# English: "Curve"
+#: packages/nodes/src/i18n/definition-messages.ts
+#, fuzzy
+msgid "editor.inspector.field.curve.ag5fhw"
+msgstr "Courbe"
+
 # Source-Hash: 0c01b9848f5d9673
 # Review: required
 # AI-Provider: claude-code
@@ -5344,6 +5881,16 @@ msgstr "Épaisseur de la terrasse"
 #, fuzzy
 msgid "editor.inspector.field.defaultLevelId.xmrjzp"
 msgstr "ID de niveau par défaut"
+
+# Source-Hash: f4a09d26c1ec5258
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "Density"
+#: packages/nodes/src/i18n/definition-messages.ts
+#, fuzzy
+msgid "editor.inspector.field.density.1q5zigr"
+msgstr "Densité"
 
 # Source-Hash: 99ac4d03c3061f3a
 # Review: required
@@ -5515,6 +6062,16 @@ msgstr "Ratio de longueur de taille"
 msgid "editor.inspector.field.dwellMs.1lkk0o5"
 msgstr "Arrêt ms"
 
+# Source-Hash: e06f5a5ca317560b
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "Edge fade"
+#: packages/nodes/src/i18n/definition-messages.ts
+#, fuzzy
+msgid "editor.inspector.field.edgeFade.1fpwnci"
+msgstr "Estompage des bords"
+
 # Source-Hash: 9cf550eb019bca1b
 # Review: required
 # AI-Provider: claude-code
@@ -5524,6 +6081,17 @@ msgstr "Arrêt ms"
 #, fuzzy
 msgid "editor.inspector.field.edgeInset.1obeimx"
 msgstr "Retrait de bord"
+
+# Source-Hash: 50d824d68d4d35f6
+# Review: required
+# AI-Provider: anthropic
+# AI-Model: claude-opus-5-5
+# Review-Notes: Offline coding-assistant draft in architectural/editor context; no translation-provider call; fluent human review required.
+# English: "Edging"
+#: packages/nodes/src/i18n/definition-messages.ts
+#, fuzzy
+msgid "editor.inspector.field.edging.azwyfj"
+msgstr "Bordure"
 
 # Source-Hash: 8a3bc5111b9e97f4
 # Review: required
@@ -5615,6 +6183,17 @@ msgstr "Épi de faîtage"
 msgid "editor.inspector.field.fittingType.18mz17s"
 msgstr "Type de raccord"
 
+# Source-Hash: 30677371ae61ba12
+# Review: required
+# AI-Provider: anthropic
+# AI-Model: claude-opus-5-5
+# Review-Notes: Offline coding-assistant draft in architectural/editor context; no translation-provider call; fluent human review required.
+# English: "Flashing"
+#: packages/nodes/src/i18n/definition-messages.ts
+#, fuzzy
+msgid "editor.inspector.field.flashing.1y1nk7r"
+msgstr "Solin"
+
 # Source-Hash: 3c1aec5e6fb180cf
 # Review: required
 # AI-Provider: claude-code
@@ -5634,6 +6213,16 @@ msgstr "Hauteur du solin"
 #, fuzzy
 msgid "editor.inspector.field.flashingProjection.hhf0fk"
 msgstr "Saillie du solin"
+
+# Source-Hash: c83fd122205ab970
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "Flower density"
+#: packages/nodes/src/i18n/definition-messages.ts
+#, fuzzy
+msgid "editor.inspector.field.flowerDensity.1k5s46u"
+msgstr "Densité des fleurs"
 
 # Source-Hash: 9473e2ab53370b40
 # Review: required
@@ -5685,6 +6274,14 @@ msgstr "Forme du conduit"
 msgid "editor.inspector.field.flueSpacing.exhzco"
 msgstr "Espacement des conduits"
 
+# Source-Hash: d04366bc15791583
+# Review: required
+# English: "Foliage"
+#: packages/nodes/src/i18n/definition-messages.ts
+#, fuzzy
+msgid "editor.inspector.field.foliage.166kiw8"
+msgstr "Feuillage"
+
 # Source-Hash: 0a64209c0edacaa1
 # Review: required
 # AI-Provider: claude-code
@@ -5694,6 +6291,17 @@ msgstr "Espacement des conduits"
 #, fuzzy
 msgid "editor.inspector.field.footingStyle.e3btg6"
 msgstr "Style de semelle"
+
+# Source-Hash: f5bc6cf3a4df6927
+# Review: required
+# AI-Provider: anthropic
+# AI-Model: claude-opus-5-5
+# Review-Notes: Offline coding-assistant draft in architectural/editor context; no translation-provider call; fluent human review required.
+# English: "Form"
+#: packages/nodes/src/i18n/definition-messages.ts
+#, fuzzy
+msgid "editor.inspector.field.form.1hf0yuf"
+msgstr "Forme"
 
 # Source-Hash: fd413477f1a9e5ed
 # Review: required
@@ -5794,6 +6402,17 @@ msgstr "Écart y"
 #, fuzzy
 msgid "editor.inspector.field.glassThickness.s97b0x"
 msgstr "Épaisseur du vitrage"
+
+# Source-Hash: 94cc8e9f1ee16edb
+# Review: required
+# AI-Provider: anthropic
+# AI-Model: claude-opus-5-5
+# Review-Notes: Offline coding-assistant draft in architectural/editor context; no translation-provider call; fluent human review required.
+# English: "Ground"
+#: packages/nodes/src/i18n/definition-messages.ts
+#, fuzzy
+msgid "editor.inspector.field.ground.1qwiu8u"
+msgstr "Sol"
 
 # Source-Hash: 4fc3e60be28f60d5
 # Review: required
@@ -5905,6 +6524,14 @@ msgstr "Hauteur 2"
 msgid "editor.inspector.field.heightAboveRidge.1k99brk"
 msgstr "Hauteur au-dessus du faîtage"
 
+# Source-Hash: dd265ca5023f3b95
+# Review: required
+# English: "Height m"
+#: packages/nodes/src/i18n/definition-messages.ts
+#, fuzzy
+msgid "editor.inspector.field.heightM.1wq86hd"
+msgstr "Hauteur (m)"
+
 # Source-Hash: b4905e5ec62a170f
 # Review: required
 # AI-Provider: claude-code
@@ -6015,6 +6642,28 @@ msgstr "Hauteur du lanterneau"
 msgid "editor.inspector.field.lanternTopScale.hkmpp2"
 msgstr "Échelle du haut du lanterneau"
 
+# Source-Hash: 7464eb69b02c406f
+# Review: required
+# AI-Provider: anthropic
+# AI-Model: claude-opus-5-5
+# Review-Notes: Offline coding-assistant draft in architectural/editor context; no translation-provider call; fluent human review required.
+# English: "Leaf color"
+#: packages/nodes/src/i18n/definition-messages.ts
+#, fuzzy
+msgid "editor.inspector.field.leafColor.103kjmm"
+msgstr "Couleur des feuilles"
+
+# Source-Hash: 5a8eef541e013b50
+# Review: required
+# AI-Provider: anthropic
+# AI-Model: claude-opus-5-5
+# Review-Notes: Offline coding-assistant draft in architectural/editor context; no translation-provider call; fluent human review required.
+# English: "Leaf size"
+#: packages/nodes/src/i18n/definition-messages.ts
+#, fuzzy
+msgid "editor.inspector.field.leafSize.nq3bxi"
+msgstr "Taille des feuilles"
+
 # Source-Hash: 17f854a76ebc033a
 # Review: required
 # AI-Provider: claude-code
@@ -6074,6 +6723,17 @@ msgstr "Débord gauche"
 #, fuzzy
 msgid "editor.inspector.field.length.1kpdcfp"
 msgstr "Longueur"
+
+# Source-Hash: 8c123ab0fa2a8ec8
+# Review: required
+# AI-Provider: anthropic
+# AI-Model: claude-opus-5-5
+# Review-Notes: Offline coding-assistant draft in architectural/editor context; no translation-provider call; fluent human review required.
+# English: "Lichen"
+#: packages/nodes/src/i18n/definition-messages.ts
+#, fuzzy
+msgid "editor.inspector.field.lichen.1upfxqy"
+msgstr "Lichen"
 
 # Source-Hash: d6deaf0ceb9f43af
 # Review: required
@@ -6164,6 +6824,17 @@ msgstr "Reprendre le matériau du toit porteur"
 #, fuzzy
 msgid "editor.inspector.field.matchHostRoofStructure.bojht3"
 msgstr "Reprendre la structure du toit porteur"
+
+# Source-Hash: a4803efb5f7bc352
+# Review: required
+# AI-Provider: anthropic
+# AI-Model: claude-opus-5-5
+# Review-Notes: Offline coding-assistant draft in architectural/editor context; no translation-provider call; fluent human review required.
+# English: "Moss"
+#: packages/nodes/src/i18n/definition-messages.ts
+#, fuzzy
+msgid "editor.inspector.field.moss.puxfub"
+msgstr "Mousse"
 
 # Source-Hash: 06b36a09a84fa8b1
 # Review: required
@@ -6284,6 +6955,17 @@ msgstr "Hauteur du panneau"
 #, fuzzy
 msgid "editor.inspector.field.panelWidth.946581"
 msgstr "Largeur du panneau"
+
+# Source-Hash: b403a5a26744f5ec
+# Review: required
+# AI-Provider: anthropic
+# AI-Model: claude-opus-5-5
+# Review-Notes: Offline coding-assistant draft in architectural/editor context; no translation-provider call; fluent human review required.
+# English: "Pattern"
+#: packages/nodes/src/i18n/definition-messages.ts
+#, fuzzy
+msgid "editor.inspector.field.pattern.1vuws7d"
+msgstr "Motif"
 
 # Source-Hash: aca94a3adc0b0f01
 # Review: required
@@ -6715,6 +7397,17 @@ msgstr "Condition d’extrémité droite"
 msgid "editor.inspector.field.rightOverhang.yqbeft"
 msgstr "Débord droit"
 
+# Source-Hash: a846ba4090dfffe5
+# Review: required
+# AI-Provider: anthropic
+# AI-Model: claude-opus-5-5
+# Review-Notes: Offline coding-assistant draft in architectural/editor context; no translation-provider call; fluent human review required.
+# English: "Rock type"
+#: packages/nodes/src/i18n/definition-messages.ts
+#, fuzzy
+msgid "editor.inspector.field.rockType.f2wywk"
+msgstr "Type de roche"
+
 # Source-Hash: 39c02aa2d97a62ba
 # Review: required
 # AI-Provider: claude-code
@@ -6765,6 +7458,16 @@ msgstr "Type de toit"
 msgid "editor.inspector.field.rotation.ly2rj"
 msgstr "Rotation"
 
+# Source-Hash: a6a7a36d982b4911
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "Roughness"
+#: packages/nodes/src/i18n/definition-messages.ts
+#, fuzzy
+msgid "editor.inspector.field.roughness.1q2hm6t"
+msgstr "Rugosité"
+
 # Source-Hash: c913b494c3901a17
 # Review: required
 # AI-Provider: claude-code
@@ -6794,6 +7497,17 @@ msgstr "Échelle"
 #, fuzzy
 msgid "editor.inspector.field.seamDetail.197za48"
 msgstr "Détail de joint"
+
+# Source-Hash: c5defa463b46241a
+# Review: required
+# AI-Provider: anthropic
+# AI-Model: claude-opus-5-5
+# Review-Notes: Offline coding-assistant draft in architectural/editor context; no translation-provider call; fluent human review required.
+# English: "Seed"
+#: packages/nodes/src/i18n/definition-messages.ts
+#, fuzzy
+msgid "editor.inspector.field.seed.1lu3q30"
+msgstr "Graine"
 
 # Source-Hash: 4b2aed9d56cc4dee
 # Review: required
@@ -7085,6 +7799,17 @@ msgstr "Espacement des feuillards"
 msgid "editor.inspector.field.strapStyle.fh1oy4"
 msgstr "Style de feuillard"
 
+# Source-Hash: 239649a4e86e91b8
+# Review: required
+# AI-Provider: anthropic
+# AI-Model: claude-opus-5-5
+# Review-Notes: Offline coding-assistant draft in architectural/editor context; no translation-provider call; fluent human review required.
+# English: "Strata"
+#: packages/nodes/src/i18n/definition-messages.ts
+#, fuzzy
+msgid "editor.inspector.field.strata.35dly4"
+msgstr "Strates"
+
 # Source-Hash: 1a79a485d91f3f28
 # Review: required
 # AI-Provider: claude-code
@@ -7325,6 +8050,17 @@ msgstr "Hauteur du soubassement"
 msgid "editor.inspector.field.wallThickness.17wn4iv"
 msgstr "Épaisseur du mur"
 
+# Source-Hash: ba6dea89d42791a8
+# Review: required
+# AI-Provider: anthropic
+# AI-Model: claude-opus-5-5
+# Review-Notes: Offline coding-assistant draft in architectural/editor context; no translation-provider call; fluent human review required.
+# English: "Weathering"
+#: packages/nodes/src/i18n/definition-messages.ts
+#, fuzzy
+msgid "editor.inspector.field.weathering.xdn5ut"
+msgstr "Altération"
+
 # Source-Hash: 3a0ccd6c46877a87
 # Review: required
 # AI-Provider: claude-code
@@ -7344,6 +8080,16 @@ msgstr "Largeur"
 #, fuzzy
 msgid "editor.inspector.field.width2.1nqawvr"
 msgstr "Largeur 2"
+
+# Source-Hash: a16ef3e7a48e3bbf
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "Wind"
+#: packages/nodes/src/i18n/definition-messages.ts
+#, fuzzy
+msgid "editor.inspector.field.wind.154vjmv"
+msgstr "Vent"
 
 # Source-Hash: 6199b641888a83fa
 # Review: required
@@ -7615,6 +8361,16 @@ msgstr "Face"
 msgid "editor.inspector.group.fitting.171z1r4"
 msgstr "Raccord"
 
+# Source-Hash: df1490f97b2a8ed3
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "Flowers"
+#: packages/nodes/src/i18n/definition-messages.ts
+#, fuzzy
+msgid "editor.inspector.group.flowers.2cwnnz"
+msgstr "Fleurs"
+
 # Source-Hash: f817c09ef0bb6d69
 # Review: required
 # AI-Provider: claude-code
@@ -7624,6 +8380,17 @@ msgstr "Raccord"
 #, fuzzy
 msgid "editor.inspector.group.flues.nq6pye"
 msgstr "Conduits"
+
+# Source-Hash: d04366bc15791583
+# Review: required
+# AI-Provider: anthropic
+# AI-Model: claude-opus-5-5
+# Review-Notes: Offline coding-assistant draft in architectural/editor context; no translation-provider call; fluent human review required.
+# English: "Foliage"
+#: packages/nodes/src/i18n/definition-messages.ts
+#, fuzzy
+msgid "editor.inspector.group.foliage.166kiw8"
+msgstr "Feuillage"
 
 # Source-Hash: a3c10560fa3c1612
 # Review: required
@@ -7655,6 +8422,16 @@ msgstr "Cadre"
 msgid "editor.inspector.group.geometry.a21os1"
 msgstr "Géométrie"
 
+# Source-Hash: 7b805e20b754329f
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "Grass"
+#: packages/nodes/src/i18n/definition-messages.ts
+#, fuzzy
+msgid "editor.inspector.group.grass.ogou1p"
+msgstr "Herbe"
+
 # Source-Hash: 7e4a0a38f694be6b
 # Review: required
 # AI-Provider: claude-code
@@ -7664,6 +8441,17 @@ msgstr "Géométrie"
 #, fuzzy
 msgid "editor.inspector.group.grid.d8gwxd"
 msgstr "Grille"
+
+# Source-Hash: 94cc8e9f1ee16edb
+# Review: required
+# AI-Provider: anthropic
+# AI-Model: claude-opus-5-5
+# Review-Notes: Offline coding-assistant draft in architectural/editor context; no translation-provider call; fluent human review required.
+# English: "Ground"
+#: packages/nodes/src/i18n/definition-messages.ts
+#, fuzzy
+msgid "editor.inspector.group.ground.1qwiu8u"
+msgstr "Sol"
 
 # Source-Hash: 30d8dba84c42040e
 # Review: required
@@ -7714,6 +8502,17 @@ msgstr "Isolation"
 #, fuzzy
 msgid "editor.inspector.group.lantern.1h7o2xb"
 msgstr "Lanterneau"
+
+# Source-Hash: 54800340a0eeab23
+# Review: required
+# AI-Provider: anthropic
+# AI-Model: claude-opus-5-5
+# Review-Notes: Offline coding-assistant draft in architectural/editor context; no translation-provider call; fluent human review required.
+# English: "Layout"
+#: packages/nodes/src/i18n/definition-messages.ts
+#, fuzzy
+msgid "editor.inspector.group.layout.1woj3tr"
+msgstr "Disposition"
 
 # Source-Hash: cc3d601d59e2e26c
 # Review: required
@@ -7895,6 +8694,17 @@ msgstr "Épaulement"
 msgid "editor.inspector.group.size.1a4x3zw"
 msgstr "Taille"
 
+# Source-Hash: 44c6466e6907a0b4
+# Review: required
+# AI-Provider: anthropic
+# AI-Model: claude-opus-5-5
+# Review-Notes: Offline coding-assistant draft in architectural/editor context; no translation-provider call; fluent human review required.
+# English: "Stone"
+#: packages/nodes/src/i18n/definition-messages.ts
+#, fuzzy
+msgid "editor.inspector.group.stone.uh2n4q"
+msgstr "Pierre"
+
 # Source-Hash: a20c89205a4448d2
 # Review: required
 # AI-Provider: claude-code
@@ -7974,6 +8784,14 @@ msgstr "Transformation"
 #, fuzzy
 msgid "editor.inspector.group.trap.1qc7vhe"
 msgstr "Siphon"
+
+# Source-Hash: 32f9f40b4513e783
+# Review: required
+# English: "Tree"
+#: packages/nodes/src/i18n/definition-messages.ts
+#, fuzzy
+msgid "editor.inspector.group.tree.1tyhj3p"
+msgstr "Arbre"
 
 # Source-Hash: c44f7ab8bbd24858
 # Review: required
@@ -8135,6 +8953,17 @@ msgstr "Les deux"
 msgid "editor.inspector.option.bottom.9mpruy"
 msgstr "Bas"
 
+# Source-Hash: 15c385e6ebeecb00
+# Review: required
+# AI-Provider: anthropic
+# AI-Model: claude-opus-5-5
+# Review-Notes: Offline coding-assistant draft in architectural/editor context; no translation-provider call; fluent human review required.
+# English: "Boulder"
+#: packages/nodes/src/i18n/definition-messages.ts
+#, fuzzy
+msgid "editor.inspector.option.boulder.lm7olu"
+msgstr "Bloc"
+
 # Source-Hash: e9a89a5e4ac8cd61
 # Review: required
 # AI-Provider: claude-code
@@ -8244,6 +9073,22 @@ msgstr "Dalle béton"
 #, fuzzy
 msgid "editor.inspector.option.condenser.a74nps"
 msgstr "Condenseur"
+
+# Review: required
+# Source-Hash: 3241ecabee8221a1
+# English: "Conical"
+#: packages/nodes/src/i18n/definition-messages.ts
+#, fuzzy
+msgid "editor.inspector.option.conical.1d9dreq"
+msgstr "Conique"
+
+# Source-Hash: 81318a19591adf07
+# Review: required
+# English: "Conifer"
+#: packages/nodes/src/i18n/definition-messages.ts
+#, fuzzy
+msgid "editor.inspector.option.conifer.12sy81j"
+msgstr "Conifère"
 
 # Source-Hash: 6786ac75cbe9af57
 # Review: required
@@ -8385,6 +9230,17 @@ msgstr "Dôme"
 msgid "editor.inspector.option.double.13h5354"
 msgstr "Double"
 
+# Source-Hash: 7bdd81d8d5a2c769
+# Review: required
+# AI-Provider: anthropic
+# AI-Model: claude-opus-5-5
+# Review-Notes: Offline coding-assistant draft in architectural/editor context; no translation-provider call; fluent human review required.
+# English: "Drifts"
+#: packages/nodes/src/i18n/definition-messages.ts
+#, fuzzy
+msgid "editor.inspector.option.drifts.17eavp"
+msgstr "Massifs"
+
 # Source-Hash: 72a84a9762461745
 # Review: required
 # AI-Provider: claude-code
@@ -8445,6 +9301,17 @@ msgstr "Embout"
 msgid "editor.inspector.option.equalFit.11vw52c"
 msgstr "Ajustement égal"
 
+# Source-Hash: c63bf1154bb7909f
+# Review: required
+# AI-Provider: anthropic
+# AI-Model: claude-opus-5-5
+# Review-Notes: Offline coding-assistant draft in architectural/editor context; no translation-provider call; fluent human review required.
+# English: "Faceted"
+#: packages/nodes/src/i18n/definition-messages.ts
+#, fuzzy
+msgid "editor.inspector.option.faceted.1r5ovix"
+msgstr "À facettes"
+
 # Source-Hash: 83579a6e420df2ec
 # Review: required
 # AI-Provider: claude-code
@@ -8464,6 +9331,17 @@ msgstr "Nombre fixe"
 #, fuzzy
 msgid "editor.inspector.option.fixedSpacing.hl4dr4"
 msgstr "Espacement fixe"
+
+# Source-Hash: fdc5a4f6a14e8005
+# Review: required
+# AI-Provider: anthropic
+# AI-Model: claude-opus-5-5
+# Review-Notes: Offline coding-assistant draft in architectural/editor context; no translation-provider call; fluent human review required.
+# English: "Fjord"
+#: packages/nodes/src/i18n/definition-messages.ts
+#, fuzzy
+msgid "editor.inspector.option.fjord.6kqv8s"
+msgstr "Fjord"
 
 # Source-Hash: 9cab4d4c95f63cdd
 # Review: required
@@ -8594,6 +9472,17 @@ msgstr "Cadre vitré"
 #, fuzzy
 msgid "editor.inspector.option.globe.1avkqoy"
 msgstr "Globe"
+
+# Source-Hash: d0fca28cc77d1c8d
+# Review: required
+# AI-Provider: anthropic
+# AI-Model: claude-opus-5-5
+# Review-Notes: Offline coding-assistant draft in architectural/editor context; no translation-provider call; fluent human review required.
+# English: "Granite"
+#: packages/nodes/src/i18n/definition-messages.ts
+#, fuzzy
+msgid "editor.inspector.option.granite.18t7615"
+msgstr "Granit"
 
 # Source-Hash: 398af4f45ba60c85
 # Review: required
@@ -8865,6 +9754,17 @@ msgstr "Panneau métallique"
 msgid "editor.inspector.option.minimal.fwmiwg"
 msgstr "Minimal"
 
+# Source-Hash: 37d9f63758abdb67
+# Review: required
+# AI-Provider: anthropic
+# AI-Model: claude-opus-5-5
+# Review-Notes: Offline coding-assistant draft in architectural/editor context; no translation-provider call; fluent human review required.
+# English: "Mixed"
+#: packages/nodes/src/i18n/definition-messages.ts
+#, fuzzy
+msgid "editor.inspector.option.mixed.1fii6jc"
+msgstr "Mélangé"
+
 # Source-Hash: 5d8a5912056f83ce
 # Review: required
 # AI-Provider: claude-code
@@ -8874,6 +9774,25 @@ msgstr "Minimal"
 #, fuzzy
 msgid "editor.inspector.option.mono.oszvd6"
 msgstr "Monopente"
+
+# Source-Hash: 613a92669ddd77da
+# Review: required
+# AI-Provider: anthropic
+# AI-Model: claude-opus-5-5
+# Review-Notes: Offline coding-assistant draft in architectural/editor context; no translation-provider call; fluent human review required.
+# English: "Mulch"
+#: packages/nodes/src/i18n/definition-messages.ts
+#, fuzzy
+msgid "editor.inspector.option.mulch.1xqhdoq"
+msgstr "Paillis"
+
+# Source-Hash: 7929bdf68e7d00cf
+# Review: required
+# English: "Multistem"
+#: packages/nodes/src/i18n/definition-messages.ts
+#, fuzzy
+msgid "editor.inspector.option.multistem.3bsvcn"
+msgstr "Multitronc"
 
 # Source-Hash: f2953d2931e36d0c
 # Review: required
@@ -9115,6 +10034,17 @@ msgstr "Grille de reprise"
 msgid "editor.inspector.option.right.8humpx"
 msgstr "Droite"
 
+# Source-Hash: 9b114eb978f015f3
+# Review: required
+# AI-Provider: anthropic
+# AI-Model: claude-opus-5-5
+# Review-Notes: Offline coding-assistant draft in architectural/editor context; no translation-provider call; fluent human review required.
+# English: "River"
+#: packages/nodes/src/i18n/definition-messages.ts
+#, fuzzy
+msgid "editor.inspector.option.river.1u771dd"
+msgstr "Galet de rivière"
+
 # Source-Hash: ad0457800a1f0eb4
 # Review: required
 # AI-Provider: claude-code
@@ -9134,6 +10064,17 @@ msgstr "Rond"
 #, fuzzy
 msgid "editor.inspector.option.rounded.199nwpm"
 msgstr "Arrondi"
+
+# Source-Hash: c913b494c3901a17
+# Review: required
+# AI-Provider: anthropic
+# AI-Model: claude-opus-5-5
+# Review-Notes: Offline coding-assistant draft in architectural/editor context; no translation-provider call; fluent human review required.
+# English: "Rows"
+#: packages/nodes/src/i18n/definition-messages.ts
+#, fuzzy
+msgid "editor.inspector.option.rows.1ba1neg"
+msgstr "Rangées"
 
 # Source-Hash: dc67a1cdb2482f23
 # Review: required
@@ -9305,6 +10246,17 @@ msgstr "Pente"
 msgid "editor.inspector.option.sloped.lo4sh0"
 msgstr "En pente"
 
+# Source-Hash: fa3774de133240ba
+# Review: required
+# AI-Provider: anthropic
+# AI-Model: claude-opus-5-5
+# Review-Notes: Offline coding-assistant draft in architectural/editor context; no translation-provider call; fluent human review required.
+# English: "Soil"
+#: packages/nodes/src/i18n/definition-messages.ts
+#, fuzzy
+msgid "editor.inspector.option.soil.12gbeoy"
+msgstr "Terre"
+
 # Source-Hash: ef3e765e692faf4c
 # Review: required
 # AI-Provider: claude-code
@@ -9355,6 +10307,14 @@ msgstr "Pare-éclaboussures"
 msgid "editor.inspector.option.spread.1g1zysu"
 msgstr "Écartement"
 
+# Source-Hash: 33bc4c6dfdecc051
+# Review: required
+# English: "Spreading"
+#: packages/nodes/src/i18n/definition-messages.ts
+#, fuzzy
+msgid "editor.inspector.option.spreading.is7i8y"
+msgstr "Étalé"
+
 # Source-Hash: 39287346366fc206
 # Review: required
 # AI-Provider: claude-code
@@ -9364,6 +10324,17 @@ msgstr "Écartement"
 #, fuzzy
 msgid "editor.inspector.option.square.1xl1lk6"
 msgstr "Carré"
+
+# Source-Hash: c203c84eee18c0f6
+# Review: required
+# AI-Provider: anthropic
+# AI-Model: claude-opus-5-5
+# Review-Notes: Offline coding-assistant draft in architectural/editor context; no translation-provider call; fluent human review required.
+# English: "Stacked"
+#: packages/nodes/src/i18n/definition-messages.ts
+#, fuzzy
+msgid "editor.inspector.option.stacked.13qbfby"
+msgstr "Empilé"
 
 # Source-Hash: 53d7084bc41c1ad6
 # Review: required
@@ -9395,6 +10366,17 @@ msgstr "Standard"
 msgid "editor.inspector.option.start.30xvgf"
 msgstr "Début"
 
+# Source-Hash: 5ff84f36f12a9a30
+# Review: required
+# AI-Provider: anthropic
+# AI-Model: claude-opus-5-5
+# Review-Notes: Offline coding-assistant draft in architectural/editor context; no translation-provider call; fluent human review required.
+# English: "Steel"
+#: packages/nodes/src/i18n/definition-messages.ts
+#, fuzzy
+msgid "editor.inspector.option.steel.1ea4gpw"
+msgstr "Acier"
+
 # Source-Hash: ed3989f23a2d185e
 # Review: required
 # AI-Provider: claude-code
@@ -9414,6 +10396,28 @@ msgstr "Gradin"
 #, fuzzy
 msgid "editor.inspector.option.stepped.naxzh0"
 msgstr "En gradins"
+
+# Source-Hash: be7f62fe8db75b55
+# Review: required
+# AI-Provider: anthropic
+# AI-Model: claude-opus-5-5
+# Review-Notes: Offline coding-assistant draft in architectural/editor context; no translation-provider call; fluent human review required.
+# English: "Stepping"
+#: packages/nodes/src/i18n/definition-messages.ts
+#, fuzzy
+msgid "editor.inspector.option.stepping.606bwz"
+msgstr "Pas japonais"
+
+# Source-Hash: 44c6466e6907a0b4
+# Review: required
+# AI-Provider: anthropic
+# AI-Model: claude-opus-5-5
+# Review-Notes: Offline coding-assistant draft in architectural/editor context; no translation-provider call; fluent human review required.
+# English: "Stone"
+#: packages/nodes/src/i18n/definition-messages.ts
+#, fuzzy
+msgid "editor.inspector.option.stone.uh2n4q"
+msgstr "Pierre"
 
 # Source-Hash: 4ee35f740730ae87
 # Review: required
@@ -9515,6 +10519,14 @@ msgstr "Haut"
 msgid "editor.inspector.option.transition.1rziz9e"
 msgstr "Transition"
 
+# Source-Hash: 798f6822fbf3a89a
+# Review: required
+# English: "Upright"
+#: packages/nodes/src/i18n/definition-messages.ts
+#, fuzzy
+msgid "editor.inspector.option.upright.136p3r6"
+msgstr "Érigé"
+
 # Source-Hash: 04bc0909a133a7e9
 # Review: required
 # AI-Provider: claude-code
@@ -9524,6 +10536,17 @@ msgstr "Transition"
 #, fuzzy
 msgid "editor.inspector.option.vent.xda5j2"
 msgstr "Ventilation"
+
+# Source-Hash: 85f03965690cbb06
+# Review: required
+# AI-Provider: anthropic
+# AI-Model: claude-opus-5-5
+# Review-Notes: Offline coding-assistant draft in architectural/editor context; no translation-provider call; fluent human review required.
+# English: "Volcanic"
+#: packages/nodes/src/i18n/definition-messages.ts
+#, fuzzy
+msgid "editor.inspector.option.volcanic.yuogew"
+msgstr "Volcanique"
 
 # Source-Hash: 7eee9aff0dd520b6
 # Review: required
@@ -9584,6 +10607,25 @@ msgstr "Étagère murale"
 #, fuzzy
 msgid "editor.inspector.option.waste.3xrp79"
 msgstr "Eaux usées"
+
+# Source-Hash: dde80d93c36805ce
+# Review: required
+# AI-Provider: anthropic
+# AI-Model: claude-opus-5-5
+# Review-Notes: Offline coding-assistant draft in architectural/editor context; no translation-provider call; fluent human review required.
+# English: "Weathered"
+#: packages/nodes/src/i18n/definition-messages.ts
+#, fuzzy
+msgid "editor.inspector.option.weathered.1rrqhyq"
+msgstr "Érodé"
+
+# Source-Hash: e7dbb75458d3c989
+# Review: required
+# English: "Weeping"
+#: packages/nodes/src/i18n/definition-messages.ts
+#, fuzzy
+msgid "editor.inspector.option.weeping.1kqivx8"
+msgstr "Pleureur"
 
 # Source-Hash: 00249876bb37079f
 # Review: required
@@ -15765,6 +16807,28 @@ msgstr "Un mur courbe n’accepte pas de fenêtre d’angle"
 msgid "editor.toolHint.addACornerClickTheFirst.o4r67t"
 msgstr "Ajouter un angle · cliquez sur le premier pour fermer"
 
+# Source-Hash: aedcabbf1af8324a
+# Review: required
+# AI-Provider: anthropic
+# AI-Model: claude-opus-5-5
+# Review-Notes: Offline coding-assistant draft in architectural/editor context; no translation-provider call; fluent human review required.
+# English: "Add an outline point"
+#: packages/nodes/src/i18n/definition-messages.ts
+#, fuzzy
+msgid "editor.toolHint.addAnOutlinePoint.18dq97f"
+msgstr "Ajouter un point du contour"
+
+# Source-Hash: dce8675337efc35e
+# Review: required
+# AI-Provider: anthropic
+# AI-Model: claude-opus-5-5
+# Review-Notes: Offline coding-assistant draft in architectural/editor context; no translation-provider call; fluent human review required.
+# English: "Add a point of the hedge"
+#: packages/nodes/src/i18n/definition-messages.ts
+#, fuzzy
+msgid "editor.toolHint.addAPointOfTheHedge.xrlpu0"
+msgstr "Ajouter un point de la haie"
+
 # Source-Hash: 6a0745dd047b149a
 # Review: required
 # AI-Provider: claude-code
@@ -16064,6 +17128,16 @@ msgstr "Terminer les repères multipoints"
 #, fuzzy
 msgid "editor.toolHint.finishSlab.xmnm8e"
 msgstr "Terminer la dalle"
+
+# Source-Hash: 42e47b2f0d97aa75
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "Finish the lawn"
+#: packages/nodes/src/i18n/definition-messages.ts
+#, fuzzy
+msgid "editor.toolHint.finishTheLawn.1dp3a41"
+msgstr "Terminer la pelouse"
 
 # Source-Hash: 66ed7c7598d3aa29
 # Review: required
@@ -16435,6 +17509,16 @@ msgstr "Aucun mur ne se rejoint ici"
 msgid "editor.toolHint.numberOfCutsScrollOrClick.1kqe84b"
 msgstr "Nombre de coupes — faites défiler ou cliquez pour modifier"
 
+# Source-Hash: 3814dbe813c23ece
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "Paint one stroke"
+#: packages/nodes/src/i18n/definition-messages.ts
+#, fuzzy
+msgid "editor.toolHint.paintOneStroke.1si1g1"
+msgstr "Peindre un trait"
+
 # Source-Hash: af01bde3ae4b7e59
 # Review: required
 # AI-Provider: claude-code
@@ -16464,6 +17548,17 @@ msgstr "Diamètre de tuyau moins / plus"
 #, fuzzy
 msgid "editor.toolHint.placeAndContinue.qfwkrq"
 msgstr "Placer et continuer"
+
+# Source-Hash: c0a68121e629d5ad
+# Review: required
+# AI-Provider: anthropic
+# AI-Model: claude-opus-5-5
+# Review-Notes: Offline coding-assistant draft in architectural/editor context; no translation-provider call; fluent human review required.
+# English: "Place a rock"
+#: packages/nodes/src/i18n/definition-messages.ts
+#, fuzzy
+msgid "editor.toolHint.placeARock.ip784s"
+msgstr "Placer un rocher"
 
 # Source-Hash: c6cda39e2e4b5d3a
 # Review: required
@@ -16834,6 +17929,36 @@ msgstr "Placer la fenêtre sur le mur"
 #, fuzzy
 msgid "editor.toolHint.placeWithoutTheCornerSnap.1nifqew"
 msgstr "Placer sans l’aimantation d’angle"
+
+# Source-Hash: 57f8f1538625f81c
+# Review: required
+# AI-Provider: anthropic
+# AI-Model: claude-opus-5-5
+# Review-Notes: Offline coding-assistant draft in architectural/editor context; no translation-provider call; fluent human review required.
+# English: "Plant it"
+#: packages/nodes/src/i18n/definition-messages.ts
+#, fuzzy
+msgid "editor.toolHint.plantIt.cwzva3"
+msgstr "La planter"
+
+# Source-Hash: dccce8abb5f13451
+# Review: required
+# AI-Provider: anthropic
+# AI-Model: claude-opus-5-5
+# Review-Notes: Offline coding-assistant draft in architectural/editor context; no translation-provider call; fluent human review required.
+# English: "Plant the bed"
+#: packages/nodes/src/i18n/definition-messages.ts
+#, fuzzy
+msgid "editor.toolHint.plantTheBed.r4x8fy"
+msgstr "Planter le massif"
+
+# Source-Hash: 9004b94324e6fa3a
+# Review: required
+# English: "Plant the tree"
+#: packages/nodes/src/i18n/definition-messages.ts
+#, fuzzy
+msgid "editor.toolHint.plantTheTree.bl41e3"
+msgstr "Planter l’arbre"
 
 # Source-Hash: dd2ea442152dca5b
 # Review: required
@@ -17334,6 +18459,17 @@ msgstr "Style : petits bois larges"
 #, fuzzy
 msgid "editor.toolHint.switchRotationAxisYXZ.15lohm6"
 msgstr "Changer l’axe de rotation (Y → X → Z)"
+
+# Source-Hash: c701017a3c204f10
+# Review: required
+# AI-Provider: anthropic
+# AI-Model: claude-opus-5-5
+# Review-Notes: Offline coding-assistant draft in architectural/editor context; no translation-provider call; fluent human review required.
+# English: "Take the last point back"
+#: packages/nodes/src/i18n/definition-messages.ts
+#, fuzzy
+msgid "editor.toolHint.takeTheLastPointBack.1bfgd5k"
+msgstr "Retirer le dernier point"
 
 # Source-Hash: d650c71e042c2598
 # Review: required
@@ -27390,6 +28526,28 @@ msgstr "Supprimer la descente"
 msgid "node.gutter.label"
 msgstr "Gouttière"
 
+# Source-Hash: 46367a7a5f34ea3f
+# Review: required
+# AI-Provider: anthropic
+# AI-Model: claude-opus-5-5
+# Review-Notes: Offline coding-assistant draft in architectural/editor context; no translation-provider call; fluent human review required.
+# English: "A planted hedge along a line, freshly clipped or left to grow."
+#: packages/nodes/src/i18n/definition-messages.ts
+#, fuzzy
+msgid "node.hedge.description"
+msgstr "Une haie plantée le long d’une ligne, fraîchement taillée ou laissée libre."
+
+# Source-Hash: 71b0dcd154aa1922
+# Review: required
+# AI-Provider: anthropic
+# AI-Model: claude-opus-5-5
+# Review-Notes: Offline coding-assistant draft in architectural/editor context; no translation-provider call; fluent human review required.
+# English: "Hedge"
+#: packages/nodes/src/i18n/definition-messages.ts
+#, fuzzy
+msgid "node.hedge.label"
+msgstr "Haie"
+
 # Source-Hash: 387082cd5f118bed
 # Review: required
 # AI-Provider: claude-code
@@ -27713,6 +28871,686 @@ msgstr "Échelle uniforme"
 #, fuzzy
 msgid "node.item.panel.xyz"
 msgstr "XYZ"
+
+# Source-Hash: 797ef27cad809a5f
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "The lawn changed during this stroke. Start a new stroke on the updated lawn."
+#: packages/nodes/src/lawn/brush-controller.ts
+#, fuzzy
+msgid "node.lawn.brush.changed"
+msgstr "La pelouse a changé pendant ce trait. Commencez un nouveau trait sur la pelouse mise à jour."
+
+# Source-Hash: 26325f7340e0ca39
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "Choose a flower species and a positive flower density before painting more flowers."
+#: packages/nodes/src/lawn/brush-controller.ts
+#, fuzzy
+msgid "node.lawn.brush.chooseFlowers"
+msgstr "Choisissez une espèce de fleur et une densité de fleurs supérieure à zéro avant de peindre davantage de fleurs."
+
+# Source-Hash: 4cce5a1d5e845da1
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "No lawn ground remains here. Check the outline and ground owners before painting."
+#: packages/nodes/src/lawn/brush-controller.ts
+#, fuzzy
+msgid "node.lawn.brush.empty"
+msgstr "Il ne reste ici aucun sol pour la pelouse. Vérifiez le contour et les éléments propriétaires du sol avant de peindre."
+
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "This lawn’s {pointBudget}-point budget is full. Remove older strokes to paint again."
+# Source-Hash: 80df656944cd7995
+# Review: required
+#: packages/nodes/src/lawn/brush-controller.ts
+#, fuzzy
+msgid "node.lawn.brush.full"
+msgstr "La limite de {pointBudget} points de cette pelouse est atteinte. Supprimez des traits plus anciens pour peindre à nouveau."
+
+# Source-Hash: 52b4f4e833a09451
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "This stroke has invalid coordinates or settings. Check the brush settings and try again."
+#: packages/nodes/src/lawn/brush-controller.ts
+#, fuzzy
+msgid "node.lawn.brush.invalid"
+msgstr "Ce trait comporte des coordonnées ou des réglages invalides. Vérifiez les réglages du pinceau et réessayez."
+
+# AI-Model: gpt-6.1-sol
+# AI-Provider: openai-codex
+# Source-Hash: 8ccb2ae038ac3038
+# English: "Near this lawn’s {pointBudget}-point budget. Remove older strokes to make room."
+# Review: required
+#: packages/nodes/src/lawn/brush-controller.ts
+#, fuzzy
+msgid "node.lawn.brush.nearBudget"
+msgstr "Cette pelouse approche de sa limite de {pointBudget} points. Supprimez des traits plus anciens pour faire de la place."
+
+# Source-Hash: c63c0e423c01c95d
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "This lawn has no owning Site. Restore its Site before painting."
+#: packages/nodes/src/lawn/brush-controller.ts
+#, fuzzy
+msgid "node.lawn.brush.noSite"
+msgstr "Cette pelouse n’appartient à aucun site. Rétablissez son site avant de peindre."
+
+# Source-Hash: 91e881b9f3a853e5
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "Start inside one lawn area. Overlapping lawns must be edited separately."
+#: packages/nodes/src/lawn/brush-controller.ts
+#, fuzzy
+msgid "node.lawn.brush.target"
+msgstr "Commencez à l’intérieur d’une seule zone de pelouse. Les pelouses qui se chevauchent doivent être modifiées séparément."
+
+# Source-Hash: edf490b8154ebcb1
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "This lawn exceeds the terrain detail budget. Reduce its outline or simplify the terrain before painting."
+#: packages/nodes/src/lawn/brush-controller.ts
+#, fuzzy
+msgid "node.lawn.brush.terrainBudget"
+msgstr "Cette pelouse dépasse le budget de détail du terrain. Réduisez son contour ou simplifiez le terrain avant de peindre."
+
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "Lawn work budget reached (32M stroke visits / 250k cells). Use fewer points or a smaller lawn."
+# Source-Hash: c44267646572171d
+# Review: required
+#: packages/nodes/src/lawn/brush-controller.ts
+#, fuzzy
+msgid "node.lawn.brush.workBudget"
+msgstr "Limite de calcul atteinte (32 M de visites de traits / 250 k cellules). Utilisez moins de points ou une pelouse plus petite."
+
+# Source-Hash: 38235a44d8b30ac5
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "An editable lawn on Site ground, with mown or rough grass and optional flowers."
+#: packages/nodes/src/i18n/definition-messages.ts
+#, fuzzy
+msgid "node.lawn.description"
+msgstr "Une pelouse modifiable sur le sol du site, avec de l’herbe tondue ou haute et des fleurs en option."
+
+# Source-Hash: 5d2a812946009ea6
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "This lawn cannot be placed here. Check the outline, area and available ground."
+#: packages/nodes/src/lawn/draft.ts
+#, fuzzy
+msgid "node.lawn.draft.invalid"
+msgstr "Cette pelouse ne peut pas être placée ici. Vérifiez le contour, la superficie et le sol disponible."
+
+# Source-Hash: 0ead3ce536fea415
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "The outline is full. Press Enter to finish, or Backspace to revise it."
+#: packages/nodes/src/lawn/draft.ts
+#, fuzzy
+msgid "node.lawn.draft.maxPoints"
+msgstr "Le contour a atteint sa limite de points. Appuyez sur Entrée pour terminer ou sur Retour arrière pour le modifier."
+
+# Source-Hash: 8222eb8305d57db5
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "Add at least three outline points."
+#: packages/nodes/src/lawn/draft.ts
+#, fuzzy
+msgid "node.lawn.draft.minPoints"
+msgstr "Ajoutez au moins trois points de contour."
+
+# Source-Hash: 8f724518123dd698
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "Bare ground"
+#: packages/nodes/src/lawn/definition.edit.ts
+#: packages/nodes/src/lawn/parametrics-flowers.tsx
+#, fuzzy
+msgid "node.lawn.effect.bare"
+msgstr "Sol nu"
+
+# Source-Hash: dfdfbe610c921616
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "Fewer flowers"
+#: packages/nodes/src/lawn/definition.edit.ts
+#: packages/nodes/src/lawn/parametrics-flowers.tsx
+#, fuzzy
+msgid "node.lawn.effect.fewerFlowers"
+msgstr "Moins de fleurs"
+
+# Source-Hash: e1081f8abaca4bd5
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "Restore grass"
+#: packages/nodes/src/lawn/definition.edit.ts
+#: packages/nodes/src/lawn/parametrics-flowers.tsx
+#, fuzzy
+msgid "node.lawn.effect.grass"
+msgstr "Rétablir l’herbe"
+
+# Source-Hash: edc73f47f9a3cdf5
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "More flowers"
+#: packages/nodes/src/lawn/definition.edit.ts
+#: packages/nodes/src/lawn/parametrics-flowers.tsx
+#, fuzzy
+msgid "node.lawn.effect.moreFlowers"
+msgstr "Plus de fleurs"
+
+# Source-Hash: 0ee46558a6b3a8e2
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "Shorter grass"
+#: packages/nodes/src/lawn/definition.edit.ts
+#: packages/nodes/src/lawn/parametrics-flowers.tsx
+#, fuzzy
+msgid "node.lawn.effect.shorter"
+msgstr "Herbe plus courte"
+
+# Source-Hash: 9b4e00fd6d84a18a
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "Taller grass"
+#: packages/nodes/src/lawn/definition.edit.ts
+#: packages/nodes/src/lawn/parametrics-flowers.tsx
+#, fuzzy
+msgid "node.lawn.effect.taller"
+msgstr "Herbe plus haute"
+
+# Source-Hash: 4838fa70c9dc96f2
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "Clover"
+#: packages/nodes/src/lawn/definition.edit.ts
+#: packages/nodes/src/lawn/parametrics-flowers.tsx
+#, fuzzy
+msgid "node.lawn.flower.clover"
+msgstr "Trèfle"
+
+# Source-Hash: d75c15627eeeffbc
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "Daisy"
+#: packages/nodes/src/lawn/definition.edit.ts
+#: packages/nodes/src/lawn/parametrics-flowers.tsx
+#, fuzzy
+msgid "node.lawn.flower.daisy"
+msgstr "Pâquerette"
+
+# Source-Hash: dcfaba29a5b5fed9
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "Yarrow"
+#: packages/nodes/src/lawn/definition.edit.ts
+#: packages/nodes/src/lawn/parametrics-flowers.tsx
+#, fuzzy
+msgid "node.lawn.flower.yarrow"
+msgstr "Achillée millefeuille"
+
+# Source-Hash: 7e1339c4b845d886
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "Add flower species"
+#: packages/nodes/src/lawn/parametrics-flowers.tsx
+#, fuzzy
+msgid "node.lawn.flowers.add"
+msgstr "Ajouter une espèce de fleur"
+
+# Source-Hash: 89ee78a6996a1560
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "Flower colour"
+#: packages/nodes/src/lawn/parametrics-flowers.tsx
+#, fuzzy
+msgid "node.lawn.flowers.color"
+msgstr "Couleur des fleurs"
+
+# Source-Hash: ef1b6ce9a40cde7a
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "Custom flower colour"
+#: packages/nodes/src/lawn/parametrics-flowers.tsx
+#, fuzzy
+msgid "node.lawn.flowers.customColor"
+msgstr "Couleur personnalisée des fleurs"
+
+# Source-Hash: f1d7f1165c117232
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "Choose up to three species and a positive flower density. Flowers are off until you choose them; winter has no blooms."
+#: packages/nodes/src/lawn/parametrics-flowers.tsx
+#, fuzzy
+msgid "node.lawn.flowers.help"
+msgstr "Choisissez jusqu’à trois espèces et une densité de fleurs supérieure à zéro. Les fleurs restent désactivées tant que vous ne les avez pas choisies ; il n’y a pas de floraison en hiver."
+
+# Source-Hash: 9b66e76a5d117c67
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "Flower mix"
+#: packages/nodes/src/lawn/parametrics-flowers.tsx
+#, fuzzy
+msgid "node.lawn.flowers.mix"
+msgstr "Mélange de fleurs"
+
+# Source-Hash: 95267ae7a8f281d5
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "Remove species"
+#: packages/nodes/src/lawn/parametrics-flowers.tsx
+#, fuzzy
+msgid "node.lawn.flowers.remove"
+msgstr "Supprimer l’espèce"
+
+# Source-Hash: e3f4676ea89ca3a3
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "Relative share"
+#: packages/nodes/src/lawn/parametrics-flowers.tsx
+#, fuzzy
+msgid "node.lawn.flowers.share"
+msgstr "Proportion relative"
+
+# Source-Hash: 155c313d644b5d3f
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "Species"
+#: packages/nodes/src/lawn/parametrics-flowers.tsx
+#, fuzzy
+msgid "node.lawn.flowers.species"
+msgstr "Espèce"
+
+# Source-Hash: 6f3d67fb06a78225
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "Lawn"
+#: packages/nodes/src/i18n/definition-messages.ts
+#, fuzzy
+msgid "node.lawn.label"
+msgstr "Pelouse"
+
+# Source-Hash: 3b0dccf3580199eb
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "Blade width"
+#: packages/nodes/src/lawn/parametrics.ts
+#, fuzzy
+msgid "node.lawn.parameters.bladeWidth"
+msgstr "Largeur des brins"
+
+# Source-Hash: 8f08d58eee35ee67
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "Grass colour"
+#: packages/nodes/src/lawn/parametrics.ts
+#, fuzzy
+msgid "node.lawn.parameters.color"
+msgstr "Couleur de l’herbe"
+
+# Source-Hash: a16b5bb3c84b687f
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "Blades per square metre"
+#: packages/nodes/src/lawn/parametrics.ts
+#, fuzzy
+msgid "node.lawn.parameters.density"
+msgstr "Brins par mètre carré"
+
+# Source-Hash: f4c1dd0896ea50b2
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "Soft edge"
+#: packages/nodes/src/lawn/parametrics.ts
+#, fuzzy
+msgid "node.lawn.parameters.edgeFade"
+msgstr "Bord adouci"
+
+# Source-Hash: 3100c12a41895738
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "Flower heads per square metre"
+#: packages/nodes/src/lawn/definition.edit.ts
+#: packages/nodes/src/lawn/parametrics.ts
+#, fuzzy
+msgid "node.lawn.parameters.flowerDensity"
+msgstr "Têtes florales par mètre carré"
+
+# Source-Hash: df1490f97b2a8ed3
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "Flowers"
+#: packages/nodes/src/lawn/parametrics.ts
+#, fuzzy
+msgid "node.lawn.parameters.flowers"
+msgstr "Fleurs"
+
+# Source-Hash: 7b805e20b754329f
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "Grass"
+#: packages/nodes/src/lawn/parametrics.ts
+#, fuzzy
+msgid "node.lawn.parameters.grass"
+msgstr "Herbe"
+
+# Source-Hash: 646ef0fbcbc58edf
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "Height"
+#: packages/nodes/src/lawn/parametrics.ts
+#, fuzzy
+msgid "node.lawn.parameters.height"
+msgstr "Hauteur"
+
+# Source-Hash: a6a7a36d982b4911
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "Roughness"
+#: packages/nodes/src/lawn/parametrics.ts
+#, fuzzy
+msgid "node.lawn.parameters.roughness"
+msgstr "Rugosité"
+
+# Source-Hash: ff74f2c8fc64aa3a
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "Season"
+#: packages/nodes/src/lawn/parametrics-flowers.tsx
+#, fuzzy
+msgid "node.lawn.parameters.season"
+msgstr "Saison"
+
+# Source-Hash: c5defa463b46241a
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "Seed"
+#: packages/nodes/src/lawn/parametrics.ts
+#, fuzzy
+msgid "node.lawn.parameters.seed"
+msgstr "Graine aléatoire"
+
+# Source-Hash: a16ef3e7a48e3bbf
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "Wind"
+#: packages/nodes/src/lawn/parametrics.ts
+#, fuzzy
+msgid "node.lawn.parameters.wind"
+msgstr "Vent"
+
+# Source-Hash: d181c54ad41c5858
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "Autumn"
+#: packages/nodes/src/lawn/parametrics-flowers.tsx
+#, fuzzy
+msgid "node.lawn.season.autumn"
+msgstr "Automne"
+
+# Source-Hash: 36a83e12c87eb96a
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "Spring"
+#: packages/nodes/src/lawn/parametrics-flowers.tsx
+#, fuzzy
+msgid "node.lawn.season.spring"
+msgstr "Printemps"
+
+# Source-Hash: 0ccbd59008f8e62c
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "Summer"
+#: packages/nodes/src/lawn/parametrics-flowers.tsx
+#, fuzzy
+msgid "node.lawn.season.summer"
+msgstr "Été"
+
+# Source-Hash: 9da21b5019bd861a
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "Winter"
+#: packages/nodes/src/lawn/parametrics-flowers.tsx
+#, fuzzy
+msgid "node.lawn.season.winter"
+msgstr "Hiver"
+
+# Source-Hash: b8cb8406230fb19a
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "Remove stroke"
+#: packages/nodes/src/lawn/parametrics-flowers.tsx
+#, fuzzy
+msgid "node.lawn.strokes.remove"
+msgstr "Supprimer le trait"
+
+# Source-Hash: ef04d2ea78c1dfe4
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "Brush strokes"
+#: packages/nodes/src/lawn/parametrics-flowers.tsx
+#, fuzzy
+msgid "node.lawn.strokes.title"
+msgstr "Traits de pinceau"
+
+# Source-Hash: aedcabbf1af8324a
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "Add an outline point"
+#: packages/nodes/src/lawn/definition.edit.ts
+#, fuzzy
+msgid "node.lawn.tool.addPoint"
+msgstr "Ajouter un point de contour"
+
+# Source-Hash: 9659377b49ba0d79
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "Draw area"
+#: packages/nodes/src/lawn/definition.edit.ts
+#, fuzzy
+msgid "node.lawn.tool.area"
+msgstr "Dessiner une zone"
+
+# Source-Hash: c701017a3c204f10
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "Take the last point back"
+#: packages/nodes/src/lawn/definition.edit.ts
+#, fuzzy
+msgid "node.lawn.tool.back"
+msgstr "Retirer le dernier point"
+
+# Source-Hash: 1a38e9b342b83677
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "Brush lawn"
+#: packages/nodes/src/lawn/definition.edit.ts
+#, fuzzy
+msgid "node.lawn.tool.brush"
+msgstr "Peindre la pelouse"
+
+# Source-Hash: c0774c185060fc13
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "Cancel"
+#: packages/nodes/src/lawn/definition.edit.ts
+#, fuzzy
+msgid "node.lawn.tool.cancel"
+msgstr "Annuler"
+
+# Source-Hash: dfb85b2addb7b9fa
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "Drag"
+#: packages/nodes/src/lawn/definition.edit.ts
+#, fuzzy
+msgid "node.lawn.tool.drag"
+msgstr "Faire glisser"
+
+# Source-Hash: be07125731528d14
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "Brush effect"
+#: packages/nodes/src/lawn/definition.edit.ts
+#, fuzzy
+msgid "node.lawn.tool.effect"
+msgstr "Effet du pinceau"
+
+# Source-Hash: fd620884179c3891
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "Keep lawn mix"
+#: packages/nodes/src/lawn/definition.edit.ts
+#, fuzzy
+msgid "node.lawn.tool.existingMix"
+msgstr "Conserver le mélange de la pelouse"
+
+# Source-Hash: 37913b64ebb2d275
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "Uses this lawn’s species and density. Configure flowers in the inspector first."
+#: packages/nodes/src/lawn/definition.edit.ts
+#, fuzzy
+msgid "node.lawn.tool.existingMixHelp"
+msgstr "Utilise les espèces et la densité de cette pelouse. Configurez d’abord les fleurs dans l’inspecteur."
+
+# Source-Hash: 42e47b2f0d97aa75
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "Finish the lawn"
+#: packages/nodes/src/lawn/definition.edit.ts
+#, fuzzy
+msgid "node.lawn.tool.finish"
+msgstr "Terminer la pelouse"
+
+# Source-Hash: f0eeadd3db22cad3
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "Flower species"
+#: packages/nodes/src/lawn/definition.edit.ts
+#, fuzzy
+msgid "node.lawn.tool.flowerSpecies"
+msgstr "Espèce de fleur"
+
+# Source-Hash: a58533594411e088
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "Left click"
+#: packages/nodes/src/lawn/definition.edit.ts
+#, fuzzy
+msgid "node.lawn.tool.leftClick"
+msgstr "Clic gauche"
+
+# Source-Hash: 4aca8a0d9a69fcbb
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "Lawn tool"
+#: packages/nodes/src/lawn/definition.edit.ts
+#, fuzzy
+msgid "node.lawn.tool.mode"
+msgstr "Outil pelouse"
+
+# Source-Hash: 3814dbe813c23ece
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "Paint one stroke"
+#: packages/nodes/src/lawn/definition.edit.ts
+#, fuzzy
+msgid "node.lawn.tool.paint"
+msgstr "Peindre un trait"
+
+# Source-Hash: 6aacbdce0ae7d3c0
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "Brush radius"
+#: packages/nodes/src/lawn/definition.edit.ts
+#, fuzzy
+msgid "node.lawn.tool.radius"
+msgstr "Rayon du pinceau"
+
+# Source-Hash: e4bd32c922e7d5df
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "Replaces the lawn’s flower mix with this species when the stroke is committed."
+#: packages/nodes/src/lawn/definition.edit.ts
+#, fuzzy
+msgid "node.lawn.tool.replaceMix"
+msgstr "Remplace le mélange de fleurs de la pelouse par cette espèce lorsque le trait est validé."
+
+# Source-Hash: 09f612f006a9af29
+# Review: required
+# AI-Provider: openai-codex
+# AI-Model: gpt-6.1-sol
+# English: "Brush strength"
+#: packages/nodes/src/lawn/definition.edit.ts
+#, fuzzy
+msgid "node.lawn.tool.strength"
+msgstr "Intensité du pinceau"
 
 # Source-Hash: a9e2d7b215696e2a
 # Review: required
@@ -28477,6 +30315,292 @@ msgstr "Siphon {diameter}\""
 msgid "node.pipeTrap.tool.rTRotate"
 msgstr "R/T pivoter"
 
+# Source-Hash: 8332ab41e22958f1
+# Review: required
+# AI-Provider: anthropic
+# AI-Model: claude-opus-5-5
+# Review-Notes: Offline coding-assistant draft in architectural/editor context; no translation-provider call; fluent human review required.
+# English: "Area"
+#: packages/nodes/src/planting/area-control.tsx
+#, fuzzy
+msgid "node.planting.area.label"
+msgstr "Surface"
+
+# Source-Hash: 2eb202d82486a2ea
+# Review: required
+# AI-Provider: anthropic
+# AI-Model: claude-opus-5-5
+# Review-Notes: Offline coding-assistant draft in architectural/editor context; no translation-provider call; fluent human review required.
+# English: "This area would put the outline outside the supported Site bounds."
+#: packages/nodes/src/planting/area-control.tsx
+#, fuzzy
+msgid "node.planting.area.outsideSite"
+msgstr "Cette surface placerait le contour hors des limites admises du terrain."
+
+# Source-Hash: 3ffcba4a89842257
+# Review: required
+# AI-Provider: anthropic
+# AI-Model: claude-opus-5-5
+# Review-Notes: Offline coding-assistant draft in architectural/editor context; no translation-provider call; fluent human review required.
+# English: "An organic bed of layered plants, with soil or mulch and optional edging."
+#: packages/nodes/src/i18n/definition-messages.ts
+#, fuzzy
+msgid "node.planting.description"
+msgstr "Un massif organique de plantes étagées, sur terre ou paillis, avec bordure en option."
+
+# Source-Hash: 985dadd009185cae
+# Review: required
+# AI-Provider: anthropic
+# AI-Model: claude-opus-5-5
+# Review-Notes: Offline coding-assistant draft in architectural/editor context; no translation-provider call; fluent human review required.
+# English: "Planting bed"
+#: packages/nodes/src/i18n/definition-messages.ts
+#, fuzzy
+msgid "node.planting.label"
+msgstr "Massif"
+
+# Source-Hash: 4d58f6ce90b44de9
+# Review: required
+# AI-Provider: anthropic
+# AI-Model: claude-opus-5-5
+# Review-Notes: Offline coding-assistant draft in architectural/editor context; no translation-provider call; fluent human review required.
+# English: "Add plant"
+#: packages/nodes/src/planting/plants-panel.tsx
+#, fuzzy
+msgid "node.planting.plants.add"
+msgstr "Ajouter une plante"
+
+# Source-Hash: 89ee78a6996a1560
+# Review: required
+# AI-Provider: anthropic
+# AI-Model: claude-opus-5-5
+# Review-Notes: Offline coding-assistant draft in architectural/editor context; no translation-provider call; fluent human review required.
+# English: "Flower colour"
+#: packages/nodes/src/planting/plants-panel.tsx
+#, fuzzy
+msgid "node.planting.plants.flowerColour"
+msgstr "Couleur des fleurs"
+
+# Source-Hash: df1490f97b2a8ed3
+# Review: required
+# AI-Provider: anthropic
+# AI-Model: claude-opus-5-5
+# Review-Notes: Offline coding-assistant draft in architectural/editor context; no translation-provider call; fluent human review required.
+# English: "Flowers"
+#: packages/nodes/src/planting/plants-panel.tsx
+#, fuzzy
+msgid "node.planting.plants.flowers"
+msgstr "Fleurs"
+
+# Source-Hash: a812fbea83a50111
+# Review: required
+# AI-Provider: anthropic
+# AI-Model: claude-opus-5-5
+# Review-Notes: Offline coding-assistant draft in architectural/editor context; no translation-provider call; fluent human review required.
+# English: "Habit"
+#: packages/nodes/src/planting/plants-panel.tsx
+#, fuzzy
+msgid "node.planting.plants.habit"
+msgstr "Port"
+
+# Source-Hash: 5a0034bbb698f3cf
+# Review: required
+# AI-Provider: anthropic
+# AI-Model: claude-opus-5-5
+# Review-Notes: Offline coding-assistant draft in architectural/editor context; no translation-provider call; fluent human review required.
+# English: "Ball"
+#: packages/nodes/src/planting/plants-panel.tsx
+#, fuzzy
+msgid "node.planting.plants.habit.ball"
+msgstr "Boule"
+
+# Source-Hash: e653669adc447902
+# Review: required
+# AI-Provider: anthropic
+# AI-Model: claude-opus-5-5
+# Review-Notes: Offline coding-assistant draft in architectural/editor context; no translation-provider call; fluent human review required.
+# English: "Carpet"
+#: packages/nodes/src/planting/plants-panel.tsx
+#, fuzzy
+msgid "node.planting.plants.habit.carpet"
+msgstr "Tapis"
+
+# Source-Hash: 7f6812f905ca4912
+# Review: required
+# AI-Provider: anthropic
+# AI-Model: claude-opus-5-5
+# Review-Notes: Offline coding-assistant draft in architectural/editor context; no translation-provider call; fluent human review required.
+# English: "Mound"
+#: packages/nodes/src/planting/plants-panel.tsx
+#, fuzzy
+msgid "node.planting.plants.habit.mound"
+msgstr "Coussin"
+
+# Source-Hash: da5fad5e1ca95cc0
+# Review: required
+# AI-Provider: anthropic
+# AI-Model: claude-opus-5-5
+# Review-Notes: Offline coding-assistant draft in architectural/editor context; no translation-provider call; fluent human review required.
+# English: "Spike"
+#: packages/nodes/src/planting/plants-panel.tsx
+#, fuzzy
+msgid "node.planting.plants.habit.spike"
+msgstr "Épi"
+
+# Source-Hash: f1513585eb49da6c
+# Review: required
+# AI-Provider: anthropic
+# AI-Model: claude-opus-5-5
+# Review-Notes: Offline coding-assistant draft in architectural/editor context; no translation-provider call; fluent human review required.
+# English: "Tuft"
+#: packages/nodes/src/planting/plants-panel.tsx
+#, fuzzy
+msgid "node.planting.plants.habit.tuft"
+msgstr "Touffe"
+
+# Source-Hash: 646ef0fbcbc58edf
+# Review: required
+# AI-Provider: anthropic
+# AI-Model: claude-opus-5-5
+# Review-Notes: Offline coding-assistant draft in architectural/editor context; no translation-provider call; fluent human review required.
+# English: "Height"
+#: packages/nodes/src/planting/plants-panel.tsx
+#, fuzzy
+msgid "node.planting.plants.height"
+msgstr "Hauteur"
+
+# Source-Hash: 3a1d9a5d3f1a9f45
+# Review: required
+# AI-Provider: anthropic
+# AI-Model: claude-opus-5-5
+# Review-Notes: Offline coding-assistant draft in architectural/editor context; no translation-provider call; fluent human review required.
+# English: "One to eight plant types. Back is away from the seen side (+Z); edge is nearest it. Spread is the mature width; spacing and relative share control the mix."
+#: packages/nodes/src/planting/plants-panel.tsx
+#, fuzzy
+msgid "node.planting.plants.help"
+msgstr "Une à huit sortes de plantes. L’arrière est à l’opposé du côté vu (+Z) ; la bordure en est la plus proche. L’étalement est la largeur adulte ; l’espacement et la part relative règlent le mélange."
+
+# Source-Hash: d7ee1cefa20d0e32
+# Review: required
+# AI-Provider: anthropic
+# AI-Model: claude-opus-5-5
+# Review-Notes: Offline coding-assistant draft in architectural/editor context; no translation-provider call; fluent human review required.
+# English: "Layer"
+#: packages/nodes/src/planting/plants-panel.tsx
+#, fuzzy
+msgid "node.planting.plants.layer"
+msgstr "Strate"
+
+# Source-Hash: 7ceade8f25b58fe9
+# Review: required
+# AI-Provider: anthropic
+# AI-Model: claude-opus-5-5
+# Review-Notes: Offline coding-assistant draft in architectural/editor context; no translation-provider call; fluent human review required.
+# English: "Back"
+#: packages/nodes/src/planting/plants-panel.tsx
+#, fuzzy
+msgid "node.planting.plants.layer.back"
+msgstr "Arrière"
+
+# Source-Hash: fd827b3002a47b84
+# Review: required
+# AI-Provider: anthropic
+# AI-Model: claude-opus-5-5
+# Review-Notes: Offline coding-assistant draft in architectural/editor context; no translation-provider call; fluent human review required.
+# English: "Edge"
+#: packages/nodes/src/planting/plants-panel.tsx
+#, fuzzy
+msgid "node.planting.plants.layer.edge"
+msgstr "Bordure"
+
+# Source-Hash: 23f876845c5fdc93
+# Review: required
+# AI-Provider: anthropic
+# AI-Model: claude-opus-5-5
+# Review-Notes: Offline coding-assistant draft in architectural/editor context; no translation-provider call; fluent human review required.
+# English: "Middle"
+#: packages/nodes/src/planting/plants-panel.tsx
+#, fuzzy
+msgid "node.planting.plants.layer.mid"
+msgstr "Milieu"
+
+# Source-Hash: b516cb2c57c17a82
+# Review: required
+# AI-Provider: anthropic
+# AI-Model: claude-opus-5-5
+# Review-Notes: Offline coding-assistant draft in architectural/editor context; no translation-provider call; fluent human review required.
+# English: "Leaf colour"
+#: packages/nodes/src/planting/plants-panel.tsx
+#, fuzzy
+msgid "node.planting.plants.leafColour"
+msgstr "Couleur des feuilles"
+
+# Source-Hash: e29c1c7319695de8
+# Review: required
+# AI-Provider: anthropic
+# AI-Model: claude-opus-5-5
+# Review-Notes: Offline coding-assistant draft in architectural/editor context; no translation-provider call; fluent human review required.
+# English: "Plant {number}"
+#: packages/nodes/src/planting/plants-panel.tsx
+#, fuzzy
+msgid "node.planting.plants.plant"
+msgstr "Plante {number}"
+
+# Source-Hash: cba96f4ea5bb84e6
+# Review: required
+# AI-Provider: anthropic
+# AI-Model: claude-opus-5-5
+# Review-Notes: Offline coding-assistant draft in architectural/editor context; no translation-provider call; fluent human review required.
+# English: "Remove plant"
+#: packages/nodes/src/planting/plants-panel.tsx
+#, fuzzy
+msgid "node.planting.plants.remove"
+msgstr "Retirer la plante"
+
+# Source-Hash: e3f4676ea89ca3a3
+# Review: required
+# AI-Provider: anthropic
+# AI-Model: claude-opus-5-5
+# Review-Notes: Offline coding-assistant draft in architectural/editor context; no translation-provider call; fluent human review required.
+# English: "Relative share"
+#: packages/nodes/src/planting/plants-panel.tsx
+#, fuzzy
+msgid "node.planting.plants.share"
+msgstr "Part relative"
+
+# Source-Hash: e4698e83d02beb6c
+# Review: required
+# AI-Provider: anthropic
+# AI-Model: claude-opus-5-5
+# Review-Notes: Offline coding-assistant draft in architectural/editor context; no translation-provider call; fluent human review required.
+# English: "Spacing"
+#: packages/nodes/src/planting/plants-panel.tsx
+#, fuzzy
+msgid "node.planting.plants.spacing"
+msgstr "Espacement"
+
+# Source-Hash: 324677a79ab15e22
+# Review: required
+# AI-Provider: anthropic
+# AI-Model: claude-opus-5-5
+# Review-Notes: Offline coding-assistant draft in architectural/editor context; no translation-provider call; fluent human review required.
+# English: "Spread"
+#: packages/nodes/src/planting/plants-panel.tsx
+#, fuzzy
+msgid "node.planting.plants.spread"
+msgstr "Étalement"
+
+# Source-Hash: 687b54aac7170f4b
+# Review: required
+# AI-Provider: anthropic
+# AI-Model: claude-opus-5-5
+# Review-Notes: Offline coding-assistant draft in architectural/editor context; no translation-provider call; fluent human review required.
+# English: "Plants"
+#: packages/nodes/src/planting/plants-panel.tsx
+#, fuzzy
+msgid "node.planting.plants.title"
+msgstr "Plantes"
+
 # Source-Hash: 0efe82436b915f6d
 # Review: required
 # AI-Provider: claude-code
@@ -28686,6 +30810,72 @@ msgstr "Style"
 #, fuzzy
 msgid "node.ridgeVent.panel.width"
 msgstr "Largeur"
+
+# Source-Hash: 0df24275817d421b
+# Review: required
+# AI-Provider: anthropic
+# AI-Model: claude-opus-5-5
+# Review-Notes: Offline coding-assistant draft in architectural/editor context; no translation-provider call; fluent human review required.
+# English: "A boulder or outcrop on the ground that can rise through floors."
+#: packages/nodes/src/i18n/definition-messages.ts
+#, fuzzy
+msgid "node.rock.description"
+msgstr "Un bloc ou un affleurement posé sur le sol, qui peut traverser les planchers."
+
+# Source-Hash: 75d900d1de222798
+# Review: required
+# AI-Provider: anthropic
+# AI-Model: claude-opus-5-5
+# Review-Notes: Offline coding-assistant draft in architectural/editor context; no translation-provider call; fluent human review required.
+# English: "Generator 2 · Rock type, weathering and moss are available."
+#: packages/nodes/src/rock/generation-field.tsx
+#, fuzzy
+msgid "node.rock.generation.current"
+msgstr "Génération 2 · Type de roche, altération et mousse disponibles."
+
+# Source-Hash: 1dbee84a0ce15a99
+# Review: required
+# AI-Provider: anthropic
+# AI-Model: claude-opus-5-5
+# Review-Notes: Offline coding-assistant draft in architectural/editor context; no translation-provider call; fluent human review required.
+# English: "Generator 1 · Legacy look. Upgrade to generator 2 to choose a rock type, weathering and moss. Upgrading changes the shape and stone finish, including any slab holes."
+#: packages/nodes/src/rock/generation-field.tsx
+#, fuzzy
+msgid "node.rock.generation.legacy"
+msgstr "Génération 1 · Aspect ancien. Passez à la génération 2 pour choisir un type de roche, l’altération et la mousse. Le passage change la forme et le fini de la pierre, y compris les trémies dans les dalles."
+
+# Source-Hash: 8357f83b94425cfc
+# Review: required
+# AI-Provider: anthropic
+# AI-Model: claude-opus-5-5
+# Review-Notes: Offline coding-assistant draft in architectural/editor context; no translation-provider call; fluent human review required.
+# English: "Randomise changes only the seed, keeping the type and looks."
+#: packages/nodes/src/rock/generation-field.tsx
+#, fuzzy
+msgid "node.rock.generation.randomise"
+msgstr "Aléatoire ne change que la graine ; le type et l’aspect restent."
+
+# Source-Hash: 7bb1fd2a39453c2b
+# Review: required
+# AI-Provider: anthropic
+# AI-Model: claude-opus-5-5
+# Review-Notes: Offline coding-assistant draft in architectural/editor context; no translation-provider call; fluent human review required.
+# English: "Upgrade unavailable: {problem}"
+#: packages/nodes/src/rock/generation-field.tsx
+#, fuzzy
+msgid "node.rock.generation.upgradeUnavailable"
+msgstr "Passage impossible : {problem}"
+
+# Source-Hash: d2a6d9070a13dcc5
+# Review: required
+# AI-Provider: anthropic
+# AI-Model: claude-opus-5-5
+# Review-Notes: Offline coding-assistant draft in architectural/editor context; no translation-provider call; fluent human review required.
+# English: "Rock"
+#: packages/nodes/src/i18n/definition-messages.ts
+#, fuzzy
+msgid "node.rock.label"
+msgstr "Rocher"
 
 # Source-Hash: c6d3976b4eb80586
 # Review: required
@@ -30172,6 +32362,7 @@ msgstr "Version tronquée"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Conical"
+#: packages/nodes/src/dormer/panel.tsx
 #: packages/nodes/src/roof-segment/panel.tsx
 #, fuzzy
 msgid "node.roofSegment.panel.conical"
@@ -34901,6 +37092,62 @@ msgstr "Axe de trame de construction persistant avec bulles d’identification."
 msgid "node.structuralGrid.label"
 msgstr "Trame structurelle"
 
+# Source-Hash: 953a0fa0fa0cdd5a
+# Review: required
+# English: "A seeded garden tree, rooted on the Site ground."
+#: packages/nodes/src/i18n/definition-messages.ts
+#, fuzzy
+msgid "node.tree.description"
+msgstr "Un arbre de jardin généré à partir d’une graine aléatoire, enraciné dans le sol du terrain."
+
+# Source-Hash: 32f9f40b4513e783
+# Review: required
+# English: "Tree"
+#: packages/nodes/src/i18n/definition-messages.ts
+#, fuzzy
+msgid "node.tree.label"
+msgstr "Arbre"
+
+# Source-Hash: e7e8803af151e5a7
+# Review: required
+# English: "Plant the trunk outside the building footprint."
+#: packages/nodes/src/tree/placement-message.ts
+#, fuzzy
+msgid "node.tree.placement.insideBuilding"
+msgstr "Plantez le tronc hors de l’emprise au sol du bâtiment."
+
+# Source-Hash: 0fc909bd43acb876
+# Review: required
+# English: "The tree cannot be planted here. Choose another ground position."
+#: packages/nodes/src/tree/placement-message.ts
+#, fuzzy
+msgid "node.tree.placement.invalid"
+msgstr "L’arbre ne peut pas être planté ici. Choisissez un autre emplacement au sol."
+
+# Source-Hash: d2bb985f38a13d39
+# Review: required
+# English: "Choose a Site before planting a tree."
+#: packages/nodes/src/tree/placement-message.ts
+#, fuzzy
+msgid "node.tree.placement.noSite"
+msgstr "Choisissez un terrain avant de planter un arbre."
+
+# Source-Hash: ee292fa43e81e186
+# Review: required
+# English: "This building transform cannot be used for tree placement."
+#: packages/nodes/src/tree/placement-message.ts
+#, fuzzy
+msgid "node.tree.placement.transform"
+msgstr "Cette transformation du bâtiment ne permet pas de placer un arbre."
+
+# Source-Hash: 324677a79ab15e22
+# Review: required
+# English: "Spread"
+#: packages/nodes/src/tree/spread-control.tsx
+#, fuzzy
+msgid "node.tree.spread.label"
+msgstr "Étalement"
+
 # Source-Hash: 36b714210f25c284
 # Review: required
 # AI-Provider: claude-code
@@ -36627,6 +38874,7 @@ msgstr "Référence"
 # AI-Model: claude-opus-5-5
 # English: "Remove"
 #: packages/nodes/src/wall/panel.tsx
+#: packages/nodes/src/wall/trim-bounds.tsx
 #, fuzzy
 msgid "node.wall.panel.remove"
 msgstr "Retirer"
@@ -37021,6 +39269,36 @@ msgstr "Face extérieure"
 msgid "node.wall.reference.right"
 msgstr "Droite"
 
+# Review: required
+# Source-Hash: 8758d464002c7f66
+# AI-Provider: openai
+# AI-Model: gpt-6-astra
+# English: "Add stretch"
+#: packages/nodes/src/wall/trim-bounds.tsx
+#, fuzzy
+msgid "node.wall.trim.addStretch"
+msgstr "Ajouter un tronçon"
+
+# Review: required
+# Source-Hash: 135874d189176d13
+# AI-Provider: openai
+# AI-Model: gpt-6-astra
+# English: "End"
+#: packages/nodes/src/wall/trim-bounds.tsx
+#, fuzzy
+msgid "node.wall.trim.end"
+msgstr "Fin"
+
+# Review: required
+# Source-Hash: 15110f0ffc1f837a
+# AI-Provider: openai
+# AI-Model: gpt-6-astra
+# English: "Trim face"
+#: packages/nodes/src/wall/trim-bounds.tsx
+#, fuzzy
+msgid "node.wall.trim.face"
+msgstr "Face du mur à garnir"
+
 # Source-Hash: eac63d14f275db3d
 # Review: required
 # AI-Provider: claude-code
@@ -37040,6 +39318,26 @@ msgstr "{trim, select, skirting {Masquer la plinthe} crown {Masquer la corniche}
 #, fuzzy
 msgid "node.wall.trim.show"
 msgstr "{trim, select, skirting {Afficher la plinthe} crown {Afficher la corniche} other {Afficher la cimaise}}"
+
+# Review: required
+# Source-Hash: 0a26a1e61c825660
+# AI-Provider: openai
+# AI-Model: gpt-6-astra
+# English: "Start"
+#: packages/nodes/src/wall/trim-bounds.tsx
+#, fuzzy
+msgid "node.wall.trim.start"
+msgstr "Début"
+
+# Review: required
+# Source-Hash: 6971027ba43d911a
+# AI-Provider: openai
+# AI-Model: gpt-6-astra
+# English: "Whole face"
+#: packages/nodes/src/wall/trim-bounds.tsx
+#, fuzzy
+msgid "node.wall.trim.wholeFace"
+msgstr "Toute la face"
 
 # Source-Hash: b1757d76048706b7
 # Review: required
@@ -39372,17 +41670,17 @@ msgstr "Visite : {state}"
 msgid "viewer.walkthrough.shutters"
 msgstr "Volets"
 
-# English: "Close"
 # Source-Hash: d7cf5045c01b2eb9
 # Review: required
+# English: "Close"
 #: packages/viewer/src/ui/components/walkthrough-touch-controls.tsx
 #, fuzzy
 msgid "viewer.walkthroughTouch.close"
 msgstr "Fermer"
 
-# English: "Crouch"
 # Source-Hash: f6bb8786828d83ab
 # Review: required
+# English: "Crouch"
 #: packages/viewer/src/ui/components/walkthrough-touch-controls.tsx
 #, fuzzy
 msgid "viewer.walkthroughTouch.crouch"

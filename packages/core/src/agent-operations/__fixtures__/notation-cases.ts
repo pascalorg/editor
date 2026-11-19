@@ -319,6 +319,47 @@ export const NOTATION_CASES: NotationCase[] = [
       ['2.6 cm', 26],
     ],
   },
+  {
+    tool: 'add_tree',
+    field: 'heightM',
+    readings: [
+      [8, 8],
+      ['20 ft', 6.096],
+    ],
+  },
+  {
+    tool: 'add_tree',
+    field: 'spreadM',
+    readings: [
+      [6, 6],
+      ['12 ft', 3.6576],
+    ],
+  },
+  {
+    tool: 'add_tree',
+    field: 'trees[].heightM',
+    readings: [
+      [4, 4],
+      ['10 ft', 3.048],
+    ],
+  },
+  {
+    tool: 'add_tree',
+    field: 'trees[].spreadM',
+    readings: [
+      [3, 3],
+      ['8 ft', 2.4384],
+    ],
+  },
+]
+
+export const TREE_POINT_NOTATION_CASES: {
+  sent: [number | string, number | string]
+  received: [number, number]
+}[] = [
+  { sent: [3, -2], received: [3, -2] },
+  { sent: ['10 ft', '-6 ft'], received: [3.048, -1.8288] },
+  { sent: ['120 cm', '24 in'], received: [1.2, 0.6096] },
 ]
 
 /**
@@ -327,6 +368,19 @@ export const NOTATION_CASES: NotationCase[] = [
  * pixels, so neither is listed; a length or an angle added as a bare number fails the test.
  */
 export const NOT_LENGTHS = new Set([
+  'add_hedge.clip',
+  'add_planting.plants[].share',
+  'add_rock.weathering',
+  'add_rock.moss',
+  'add_rock.lichen',
+  'add_tree.density',
+  'add_tree.trees[].density',
+  'add_site_surface.density',
+  'add_site_surface.roughness',
+  'add_site_surface.wind',
+  'add_site_surface.flowerDensity',
+  'add_site_surface.flowers[].share',
+  'add_site_surface.strokes[].strength',
   'add_window.rollerShutterOpen',
   'add_window.shutterOpen',
   'author_scene.payload.levels[].walls[].openings[].rollerShutterOpen',

@@ -51,6 +51,47 @@ A building's levels stand on a ground line: the level at grade (`set_ground_leve
 
 If a live-sync version conflict occurs, call `load_scene`, inspect the newer graph, and rebase the requested edit. Do not retry an old whole-scene write blindly.
 
+## Native lawn
+
+`add_site_surface` with `kind: "lawn"` creates one editable core lawn, not a slab.
+Give exactly one `polygon` or two opposite `corners`. With `siteId`, outline and
+strokes use Site metres and level/building targets are refused; otherwise both
+transform once from the level/building frame. Driveway, path and patio retain
+their level-owned paving semantics. Lawn refuses `materialPreset`.
+
+Height defaults to 0.06 m, roughness to 0.2 and flowers to off. Choose explicit
+daisy, clover or yarrow species with relative shares, `flowerDensity` in heads/m²
+and saved `season` when flowers are requested. No recipe, authored object or
+Environment plugin is needed. The lawn follows Site ground, clearing buildings,
+paving and planting beds. Parameters and seed are saved, not meshes or images.
+
+Read the existing lawn with `get_node` before an edit. `apply_patch` replaces its
+ordered `strokes` list, the same form the 2D/3D hand brush writes:
+`{ points: [[x,z], ...], radiusM, effect, strength }` in Site metres.
+Effects are `bare`, `grass`, `taller`, `shorter`, `more-flowers`, `fewer-flowers`;
+one point is a dab. All strokes share a 20,000-point budget; radius is 0.05–10 m
+and strength 0–1. Explicitly remove or replace older intent when full; no silent
+merge or eviction. Creation may carry the same strokes in `add_site_surface`.
+Each generic edit is preflighted and atomic, with one undo step per batch.
+
+Report the returned `lawnId`, requested and retained ground area, coverage,
+exclusion IDs/categories and their union area, canonical blade/flower counts,
+generator and disclosed budget thinning. Generic patch results carry these as
+`lawnFacts` per lawn. Brush areas are estimates with a sampling resolution;
+overlapping effect areas do not sum to the touched union.
+Invalid outlines, unsupported targets, work/terrain budgets or no retained area
+refuse before writes. Lawn bounds are 0.25–2,500 m² and 200 outline points.
+Refusal codes include `lawn_outline_required`, `surface_degenerate`,
+`invalid_input`, `lawn_target_conflict`, `lawn_transform_unsupported`,
+`lawn_material_unsupported`, `lawn_work_budget`, `lawn_terrain_budget` and
+`lawn_empty`. Inspect the refusal before retrying; changing a work-limited lawn
+may need fewer brush points even while the saved 20,000-point budget has room.
+
+Preserve existing flat lawn slabs and Environment ground cover unless the person
+requested replacement; plugin lawns still require Environment. Do not recreate
+lawn through generic plugin placement or deliberately overlap vegetation owners.
+Coexistence does not automatically hide, convert or clip other lawns.
+
 ## Build a scripted object (hosted)
 
 `add_object`, and `add_window`, `add_door` or `add_column` with `code` or new params on a scripted node, compile in the user's open Pascal editor tab of the project (a `bpy` module builds in Pascal's Blender service instead, with no tab). When none is open the call answers `editor_tab_required` with `editorUrl` and `mutationApplied: false`; nothing changed. Show the user the link, wait until they confirm the tab is open, and repeat the same call. `editor_tab_busy` means a tab is open but busy or still loading: wait a few seconds and repeat the same call, without asking the user. Whether you may open the link yourself is the person's setting ("Agents may open the editor for me"; Ask first: ask the user to open the link (or bring the tab forward), or ask their permission before opening it yourself; Allow: you may open the link yourself, in a tab in front; Never: ask the user, and do not open or switch windows yourself); the refusal's words say which, so follow them. `editor_tab_timeout` means the tab stopped answering; ask whether it is still open, then retry. `script_failed` is the module's own error: fix the code.
@@ -114,6 +155,95 @@ Do not mutate just to make a report unless the user authorizes a temporary or sa
 - No tool starts a room scan or clones a scan into a new project. Scans are created only by the Pascal iOS app, and `open_capture_as_project` opens the scan's existing owning project.
 
 When a requested deliverable is unsupported, return `partial` or `failed` with the tool status and the next supported action. Do not substitute an invented file, URL, or capability.
+
+## Native wall trim
+
+`set_wall_trim({ kind, wallIds?, zoneIds?, roomId?, height?, depth?, offsetY?, profile?, faces?, finish?, enabled? })` edits native skirting, crown or chairRail. Wall and room targets form a union; an explicit wall covers its selected faces whole, while a room covers only its inward stretches of shared walls. `faces` filters a room's inward faces, never selects its outside. `offsetY: 0` is valid; `finish` uses `paint` semantics on only the targeted trim slots. Hiding preserves settings. Another retained stretch's shared dimensions or same-face finish cannot silently change (`trim_conflict`); target all affected rooms together or keep their settings. Curtain and railing walls refuse; bounded room trims on curves refuse. Select a wall's trim panel to edit the same settings and Start/End bounds manually.
+
+## Room dressing
+
+`dress_room({ zoneIds, layers, dryRun? })` dresses inward room stretches in one
+atomic operation. Build the complete ordered stack: skirting, chairRail, crown,
+wainscot (default to 0.9 m), tiles (to 1.2 m), splashback (from 0.9 m, rising
+0.6 m), and accent (name `where.walls`). Finish layers need `finish`; `to: "full"`
+reaches the ceiling. `where.around` names fixtures, with optional `margin`
+(default 0.1 m); `where.alongRun` follows a base cabinet's footprint and worktop,
+including nested rotated runs. Targets must share the room's level.
+Each call replaces only its rooms' `dress:<zoneId>:` regions, even on former
+boundary walls; hand paint, other owners and the base finish remain.
+`layers: []` removes those regions, not trims. Preview with `dryRun: true`.
+Trims use `set_wall_trim`'s bounded coverage and atomic `trim_conflict` refusal;
+include all affected rooms when changing shared settings. Eight regions per
+face includes retained paint; a full-height finish script owns its face.
+Partial curved finish stretches are skipped and reported, never expanded.
+The selected-room panel's **Dress room** controls provide the same layer
+options, preview/refusals and one-undo apply.
+
+## Native roof accessories
+
+`add_roof_element({ kind, id, point, rows?, columns?, name? })` adds one
+chimney, skylight, solar-panel, cupola, box-vent, ridge-vent, turbine-vent or
+eyebrow-vent with native defaults and orientation. `point` is a finite numeric
+`[x, z]` in metres in the roof level's building-local plan axes, not world or
+segment-local coordinates. A roof id chooses the highest physical covering;
+a roof-segment id queries only that segment without bypassing cuts or higher
+covering. Missing covering refuses `roof_point_outside_segment`; unresolved
+accessory/plugin cuts or roof intersections refuse `roof_surface_unmeasured`
+with `reason` and `nodeIds`. Do not replace an unresolved seat with a guess.
+
+Solar `rows` and `columns` are independently optional integers from 1 to 20,
+defaulting to 2 and 3. Ridge vents snap to a native ridge/break line (a shed's
+high eave), refuse `roof_no_ridge_line` where absent, and validate the achieved
+point again. Their stored Y is zero; the renderer derives the seat.
+The result names the roof and supplying segment and reports segment-local
+`localPosition`, `rotation` in radians and achieved level-plan `planPoint`,
+rounded for readback; stored coordinates retain full precision.
+
+By hand, choose the matching roof-accessory tool and click the roof. Manual
+events with a genuine registered native mesh-triangle witness can preserve
+exceptional vertical/surviving CSG hits that a strict plan query cannot measure.
+Bare XYZ and accessory-child hits cannot authorize that fallback.
+For ridge vents, covering evidence applies only at an unchanged achieved point;
+moved snaps require strict support, and vertical witnesses do not certify it.
+
+## Dormers
+
+`add_dormer` creates a native dormer and its hosted window together. Supply
+`segmentId`, or `roofId` and `at: [x, z]` in metres in the roof level's
+building-local plan axes. With only a segment, the centre defaults to
+segment-local `[0, segment.depth / 4]`; a roof selects the highest physical
+covering under `at`. Naming both ids requires reciprocal ownership.
+
+Optional `width`, `depth`, `windowWidth` and `windowHeight` are positive
+lengths; `wallHeight` and `roofHeight` are nonnegative. Defaults match the
+native editor: 1.21 × 1.55 m body, 0 m wall height, 0.49 m own roof height
+and a 0.76 × 0.68 m window. `shedHighSide` is `back` (default) or `front`.
+`name` and overall/top/side/wall `materialPreset` refs are optional; finishes
+use the same `library:` and `scene:` material references as other tools.
+
+The shared planner seats on the bare structural shell, faces downhill and
+requires whole-footprint support on one architectural slope, no dormer
+overlap and a fitting default window whose actual centre clears finished
+covering by more than 0.01 m. Native curved tessellation is not by itself a
+ridge or profile break. Unresolved geometry refuses
+`dormer_geometry_unmeasured` with `reason` and relevant `nodeIds`; other
+refusals include `not_on_slope`, `too_wide`, `overlaps_dormer`,
+`window_too_wide` and `window_not_exposed`. A refused call creates neither
+part. The additive operation is available in `run_batch`.
+
+Own `roofType` supports hip, gable, shed, gambrel, dutch, mansard, flat and
+conical. Conical preserves the existing circular, depth-driven native body,
+rectangular window frames and legacy host cutter: do not promise independent
+conical axes or redesigned curved-wall windows.
+
+The result names both created nodes and their roof/segment, with the
+footprint in level-plan coordinates. On a level marked as an attic,
+`atticRoomId` and `windowSillAboveAtticFloorM` are independent nullable facts
+at the actual child position. A floor fact uses a real covering slab's top,
+respecting holes; missing floor is unknown, not an assumed zero datum.
+This tool does not create an attic or require another roof-sampling tool.
+By hand, choose Dormer, click the roof and use its existing inspector; the
+manual workflow uses the same placement admission.
 
 ## Greenhouse and barrel roofs
 

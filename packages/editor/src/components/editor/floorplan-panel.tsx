@@ -156,6 +156,7 @@ import { enterBuildingFromPlanHit } from '../../lib/selection-routing'
 import { sfxEmitter } from '../../lib/sfx-bus'
 import { SITE_BOUNDARY_DRAG_LABEL, siteBoundaryHandlesEnabled } from '../../lib/site-boundary'
 import { resolveSlabPlanPointSnap } from '../../lib/slab-plan-snap'
+import { planDraftColors } from '../../lib/tool-preview-colors'
 import {
   cancelPendingZonePaint,
   focusedUnitNode,
@@ -235,7 +236,10 @@ import {
 } from '../editor-2d/floorplan-render-context'
 import { FloorplanSnapBeaconLayer } from '../editor-2d/floorplan-snap-beacon-layer'
 import { FloorplanWallMoveGhostLayer } from '../editor-2d/floorplan-wall-move-ghost-layer'
-import { FloorplanDraftLayer } from '../editor-2d/renderers/floorplan-draft-layer'
+import {
+  FLOORPLAN_DRAFT_OUTLINE_WIDTH,
+  FloorplanDraftLayer,
+} from '../editor-2d/renderers/floorplan-draft-layer'
 import { FloorplanDraftMeasurement } from '../editor-2d/renderers/floorplan-draft-measurement'
 import { FloorplanMarqueeLayer } from '../editor-2d/renderers/floorplan-marquee-layer'
 import { FloorplanPlacementPreviewLayer } from '../editor-2d/renderers/floorplan-placement-preview-layer'
@@ -358,7 +362,6 @@ const FLOORPLAN_MARQUEE_OUTLINE_WIDTH = 0.055
 const FLOORPLAN_MARQUEE_GLOW_WIDTH = 0.14
 const FLOORPLAN_HOVER_TRANSITION = 'opacity 180ms cubic-bezier(0.2, 0, 0, 1)'
 const FLOORPLAN_WALL_HIT_STROKE_WIDTH = 18
-const FLOORPLAN_WALL_STROKE_WIDTH = '1'
 const FLOORPLAN_OPENING_HIT_STROKE_WIDTH = 16
 const FLOORPLAN_OPENING_STROKE_WIDTH = 0.05
 const FLOORPLAN_ENDPOINT_HIT_STROKE_WIDTH = 18
@@ -4343,7 +4346,7 @@ function FloorplanDraftCursorLayer({
 }) {
   const cursorPoint = useFloorplanDraftPreview((s) => s.cursorPoint)
   const activeStroke = polygonDraftStroke ?? draftStroke
-  const strokeWidth = polygonDraftStroke ? FLOORPLAN_WALL_STROKE_WIDTH : '0.08'
+  const strokeWidth = polygonDraftStroke ? FLOORPLAN_DRAFT_OUTLINE_WIDTH : '0.08'
 
   const polygon = useMemo(() => {
     if (!(isPolygonDraftBuildActive && cursorPoint && activePolygonDraftPoints.length >= 2)) {
@@ -7031,10 +7034,10 @@ export function FloorplanPanel({
             deleteWallHoverStroke: '#fca5a5',
             selectedFill: '#eff6ff',
             selectedStroke: '#60a5fa',
-            draftFill: '#818cf8',
-            draftStroke: '#c7d2fe',
+            draftFill: planDraftColors(true).fill,
+            draftStroke: planDraftColors(true).stroke,
             measurementStroke: '#e2e8f0',
-            cursor: '#818cf8',
+            cursor: planDraftColors(true).cursor,
             editCursor: '#8381ed',
             anchor: '#818cf8',
             openingFill: '#0a0e1b',
@@ -7087,10 +7090,10 @@ export function FloorplanPanel({
             deleteWallHoverStroke: '#f87171',
             selectedFill: '#ffffff',
             selectedStroke: '#3b82f6',
-            draftFill: '#6366f1',
-            draftStroke: '#4338ca',
+            draftFill: planDraftColors(false).fill,
+            draftStroke: planDraftColors(false).stroke,
             measurementStroke: '#334155',
-            cursor: '#6366f1',
+            cursor: planDraftColors(false).cursor,
             editCursor: '#8381ed',
             anchor: '#4338ca',
             openingFill: '#ffffff',

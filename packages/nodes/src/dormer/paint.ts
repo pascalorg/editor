@@ -12,20 +12,21 @@ import { swapPreviewMaterial } from '../shared/swap-preview-material'
 /**
  * Resolve a dormer face click to its logical surface role.
  *
- * The dormer body mesh has 5 material slots (see
+ * The dormer body mesh has 6 material slots (see
  * `csg-geometry.ts:generateDormerGeometry`):
  *   0 = wall (rectangular wall)
  *   1 = side (deck along the slope)
  *   2 = interior — paint as wall
  *   3 = top   (roof shingle)
  *   4 = gable triangle — paint as wall
+ *   5 = flashing — paint as side
  *
  * Window-frame meshes are not in the body mesh; they're routed to
  * 'side' separately by the editor when the click lands on them.
  */
 export function resolveDormerRole(materialIndex: number | null): DormerSurfaceMaterialRole {
   if (materialIndex === 3) return 'top'
-  if (materialIndex === 1) return 'side'
+  if (materialIndex === 1 || materialIndex === 5) return 'side'
   return 'wall'
 }
 
@@ -60,7 +61,7 @@ function buildPreviewMaterial(
  * Apply a preview material to the dormer's `dormer-body` mesh at the
  * slots that map to `role`:
  *   role='wall' → slots [0, 2, 4]
- *   role='side' → slot  [1]
+ *   role='side' → slots [1, 5]
  *   role='top'  → slot  [3]
  */
 function applyDormerPreview(
@@ -70,7 +71,7 @@ function applyDormerPreview(
 ): (() => void) | null {
   const slotsToPaint = (() => {
     if (role === 'top') return [3]
-    if (role === 'side') return [1]
+    if (role === 'side') return [1, 5]
     return [0, 2, 4]
   })()
 

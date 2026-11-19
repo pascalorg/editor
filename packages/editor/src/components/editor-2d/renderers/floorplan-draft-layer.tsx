@@ -2,6 +2,12 @@
 
 import { memo } from 'react'
 
+/**
+ * The weight of a draft outline drawn as a full line (screen pixels): the one the plan gives
+ * the slab and ceiling drafts. The default is a hairline, for drafts read by their fill.
+ */
+export const FLOORPLAN_DRAFT_OUTLINE_WIDTH = '1'
+
 type SvgLine = {
   x1: number
   y1: number

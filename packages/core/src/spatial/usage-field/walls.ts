@@ -13,6 +13,7 @@ import { getWallTop } from '../../services/storey'
 import { isCurvedWall } from '../../systems/wall/wall-curve'
 import { calculateLevelMiters, getWallPlanFootprint } from '../../systems/wall/wall-footprint'
 import { getWallFaceLine } from '../../systems/wall/wall-frame'
+import { wallTrimRanges } from '../../systems/wall/wall-trim'
 import { TRIM_PROFILES } from '../../systems/wall/wall-trim-profiles'
 import type { Prism, Ring } from './types'
 
@@ -183,12 +184,6 @@ export function wallTrims(
         const sign = face === 'a' ? 1 : -1
         const nx = (-dz / length) * sign * proud
         const nz = (dx / length) * sign * proud
-        const strip: Ring = [
-          [line.start.x, line.start.y],
-          [line.end.x, line.end.y],
-          [line.end.x + nx, line.end.y + nz],
-          [line.start.x + nx, line.start.y + nz],
-        ]
         const floor = support.elevation + wallFaceBaseOffset(support, face)
         const z0 =
           kind === 'crown'
@@ -201,18 +196,29 @@ export function wallTrims(
         const crossing = openings
           .filter(({ cut }) => cut.bottom < z1 && cut.top > z0)
           .map(({ cut }) => cut.band)
-        const pieces = crossing.length
-          ? difference(strip, union(crossing))
-          : [{ outer: strip, holes: [] }]
-        pushPieces(prisms, pieces, {
-          id: `${wall.id}#${kind}.${face}`,
-          nodeId: wall.id,
-          kind: 'wall-trim',
-          z0,
-          z1,
-          ...(kind === 'crown' ? sloped : { shape: 'exact' as const }),
-          host: { wallId: wall.id, face },
-        })
+        const ranges = wallTrimRanges(trim, face, length)
+        for (const [index, [a, b]] of ranges.entries()) {
+          const start = [line.start.x + (dx * a) / length, line.start.y + (dz * a) / length]
+          const end = [line.start.x + (dx * b) / length, line.start.y + (dz * b) / length]
+          const strip: Ring = [
+            [start[0]!, start[1]!],
+            [end[0]!, end[1]!],
+            [end[0]! + nx, end[1]! + nz],
+            [start[0]! + nx, start[1]! + nz],
+          ]
+          const pieces = crossing.length
+            ? difference(strip, union(crossing))
+            : [{ outer: strip, holes: [] }]
+          pushPieces(prisms, pieces, {
+            id: `${wall.id}#${kind}.${face}${ranges.length > 1 ? `.span${index}` : ''}`,
+            nodeId: wall.id,
+            kind: 'wall-trim',
+            z0,
+            z1,
+            ...(kind === 'crown' ? sloped : { shape: 'exact' as const }),
+            host: { wallId: wall.id, face },
+          })
+        }
       }
     }
   }

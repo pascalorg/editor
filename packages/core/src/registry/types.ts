@@ -80,8 +80,8 @@ export type GeometryContext = {
   materials?: Record<SceneMaterialId, SceneMaterial>
   /** Opaque host/plugin context. Core never interprets extension values. */
   extensions?: Readonly<Record<string, unknown>>
-  /** Read-only scene snapshot for pure floor-plan builders that need to
-   *  inspect cross-kind spatial relationships such as connected ports. */
+  /** Read-only scene snapshot for pure floor-plan and export builders that need to
+   *  inspect cross-kind spatial relationships such as connected ports or terrain. */
   sceneNodes?: Readonly<Record<AnyNodeId, AnyNode>>
   /**
    * Optional view state — only populated for `def.floorplan` builders. The
@@ -1154,6 +1154,8 @@ export type NodeDefinition<S extends ZodObject<any>> = {
    * example, a procedural NodeMaterial that masks a maximum candidate
    * population on the GPU). The returned tree must be a complete static
    * snapshot for this node and use exporter-supported Three.js materials.
+   * Return null to retain the existing live-tree clone unchanged, for instances
+   * whose rendered geometry is already suitable (for example a legacy generator).
    */
   bakeGeometry?: BakeGeometryBuilder<z.infer<S>>
   /**
@@ -1313,6 +1315,12 @@ export type NodeDefinition<S extends ZodObject<any>> = {
    * into the active building's plan coordinates below level architecture.
    */
   floorplanScope?: FloorplanScope
+  /**
+   * Opt site-scoped floor-plan geometry into automatic site-plan document
+   * contributions. Defaults to off; omit when a plugin registers its own
+   * site-plan contributor so the same geometry is not contributed twice.
+   */
+  readonly sitePlan?: boolean
   /**
    * Levels other than its own whose plans also draw this node: a stair that
    * climbs to an upper floor shows on that floor's plan too. The plan builds
@@ -1678,7 +1686,8 @@ export type BakeReplaceRenderer<N> = {
   }>
 }
 
-export type BakeGeometryBuilder<N> = (node: N, ctx: GeometryContext) => Object3D
+/** A detached export tree, or null to retain this instance's existing live-tree clone. */
+export type BakeGeometryBuilder<N> = (node: N, ctx: GeometryContext) => Object3D | null
 export type BakeGeometryAsyncBuilder<N> = (node: N, ctx: GeometryContext) => Promise<Object3D>
 
 export type AssetRef = {
@@ -3032,7 +3041,8 @@ export type ParametricDescriptor<N> = {
    * Extra buttons rendered in the inspector's Actions section
    * (below Move/Delete). Lets a kind declare "do this thing to the
    * current node" affordances without escaping to a full custom
-   * panel. Buttons whose `enabledIf` returns false stay disabled.
+   * panel. Buttons whose `enabledIf` returns false stay disabled; those
+   * whose `visibleIf` returns false are not shown.
    */
   actions?: ParamAction<N>[]
   /**
@@ -3050,6 +3060,8 @@ export type ParamAction<N> = {
   label: string
   /** Optional asset URL for a leading icon — same shape as palette icons. */
   iconSrc?: string
+  /** The button is not shown at all while this returns false (an action that no longer applies). */
+  visibleIf?: (n: N) => boolean
   enabledIf?: (n: N) => boolean
   /** Click handler. Receives the current node value at click time. */
   onClick: (n: N) => void

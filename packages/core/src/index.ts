@@ -276,6 +276,21 @@ export {
   SECTIONAL_GARAGE_RENDER_OPEN_SCALE,
 } from './lib/door-operation'
 export {
+  type DormerCreationOptions,
+  type DormerCreationPlan,
+  type DormerCreationResult,
+  type DormerPlacement,
+  type DormerPlacementFailure,
+  type DormerPlacementResult,
+  planDormerCreation,
+  validateDormerPlacement,
+} from './lib/dormer-placement'
+export type {
+  DormerExposureContext,
+  DormerWindowExposure,
+} from './lib/dormer-roof-context'
+export { triangulatePlanPolygon } from './lib/earcut'
+export {
   resolveElevatorNodeSupportY,
   resolveElevatorSupportLevelId,
   resolveElevatorSupportY,
@@ -400,6 +415,13 @@ export {
 export { type LevelGradeStanding, levelGradeStanding } from './lib/grade-standing'
 export { type GroundLevel, groundLevelOf, levelUnderNamedGround } from './lib/ground-level'
 export {
+  FLAT_GROUND,
+  type GroundRead,
+  groundReadOf,
+  resolveSiteGround,
+  SITE_GROUND_DEPENDENCY_TYPES,
+} from './lib/ground-read'
+export {
   GROUND_SEAT_TOLERANCE,
   type GroundSeat,
   gradeUnderLevel,
@@ -412,7 +434,65 @@ export {
   levelStackGroundBox,
   terrainBetweenEyeAndBox,
 } from './lib/ground-window'
+export {
+  buildHedge,
+  type HedgePlan,
+  hedgeCurrentGen,
+  hedgeFormFor,
+  planHedge,
+  registerHedgeForm,
+} from './lib/hedge-build'
+export { type HedgeFacts, hedgeFacts } from './lib/hedge-facts'
+export {
+  HEDGE_MAX_TRIANGLES,
+  type HedgeEstimate,
+  type HedgeForm,
+  type HedgeFormInput,
+  type HedgeMesh,
+} from './lib/hedge-form'
+export {
+  HEDGE_EMBED,
+  type HedgeFootRun,
+  type HedgeFootStation,
+  hedgeGroundRange,
+  standHedgeLine,
+} from './lib/hedge-ground'
+export {
+  HEDGE_MAX_STATIONS,
+  type HedgeGapFact,
+  type HedgeLine,
+  type HedgeLineInput,
+  type HedgeRun,
+  type HedgeStation,
+  hedgeBands,
+  hedgeCentreline,
+  hedgeEndScale,
+  hedgeLateral,
+  hedgeLine,
+  hedgeNormal,
+} from './lib/hedge-line'
 export { hierarchyCycleErrors, wouldCreateHierarchyCycle } from './lib/hierarchy'
+export {
+  buildLawn,
+  buildLawnChunk,
+  buildLawnChunkFlowers,
+  LAWN_CHUNK_M,
+  type LawnBuild,
+  LawnBuildError,
+  type LawnChunk,
+  type LawnChunkBuild,
+  type LawnChunkContext,
+  type LawnFacts,
+  type LawnMesh,
+  type LawnPlan,
+  type LawnPlanMemo,
+  lawnChunkContext,
+  lawnChunksTouched,
+  lawnFacts,
+  lawnGroundChunkAt,
+  planLawn,
+  sampleLawnStrokes,
+} from './lib/lawn'
 export {
   type ExposedInterval,
   exposedIntervals,
@@ -488,6 +568,47 @@ export {
   PORCH_FLOOR_DROP,
 } from './lib/outdoor-room'
 export {
+  buildPlanting,
+  type PlantingPlan,
+  planPlanting,
+  plantingCurrentGen,
+  plantingFormFor,
+  registerPlantingForm,
+} from './lib/planting-build'
+export { type PlantingFacts, plantingFacts } from './lib/planting-facts'
+export {
+  PLANTING_MAX_TRIANGLES,
+  type PlantingEstimate,
+  type PlantingForm,
+  type PlantingFormInput,
+  type PlantingMesh,
+} from './lib/planting-form'
+export { estimatePlanting } from './lib/planting-form-v1'
+export { plantingGroundLift, plantingSurfaceHeight } from './lib/planting-ground'
+export {
+  type PlantingPoint,
+  plantingArea,
+  plantingAreaOutline,
+  plantingBounds,
+  plantingCentroid,
+  plantingContains,
+  plantingEdgeDistance,
+  plantingOrganicOutline,
+  plantingOutlineProblem,
+  plantingSimple,
+} from './lib/planting-outline'
+export {
+  type PlantingAccept,
+  type PlantingPlacement,
+  plantingSeenDepth,
+  scatterPlanting,
+} from './lib/planting-scatter'
+export {
+  PLANTING_SCENE_DEPENDENCY_TYPES,
+  resolvePlantingAccept,
+  resolvePlantingGround,
+} from './lib/planting-scene'
+export {
   classifyPlateSideAt,
   clearPlateSurfaceCaches,
   computePlateSurfacePartition,
@@ -554,6 +675,38 @@ export {
   porchFramingSettings,
 } from './lib/porch-framing'
 export { type PorchPartMetadata, porchPartOf } from './lib/porch-framing-sync'
+export { buildRock, planRock, type RockPlan, rockCurrentGen, rockFormFor } from './lib/rock-build'
+export { rockHolesIn, rockSlabHoles, rocksOf } from './lib/rock-cuts'
+export { type RockFacts, rockFacts } from './lib/rock-facts'
+export { rockFootprint } from './lib/rock-footprint'
+export {
+  ROCK_MAX_FAR_TRIANGLES,
+  ROCK_MAX_NEAR_TRIANGLES,
+  ROCK_MAX_TRIANGLES,
+  type RockEstimate,
+  type RockForm,
+  type RockFormInput,
+  type RockLevel,
+  type RockLevelEstimate,
+  type RockMesh,
+  type RockShapeInput,
+} from './lib/rock-form'
+export {
+  highestGroundUnder,
+  lowestGroundUnder,
+  ROCK_EMBED,
+  type RockSpan,
+  rockSpan,
+} from './lib/rock-ground'
+export { effectiveBuilding, effectiveRock } from './lib/rock-live'
+export {
+  outlineProblem,
+  ROCK_RINGS,
+  rockCentre,
+  rockRings,
+  rockSection,
+  rockSections,
+} from './lib/rock-shape'
 export {
   type EavePoint,
   eaveContains,
@@ -571,6 +724,17 @@ export {
   SOFFIT_THICKNESS,
 } from './lib/roof-eave'
 export {
+  getRoofSegmentDownSlopeYaw,
+  getRoofSegmentSurfaceNormal,
+} from './lib/roof-element-orientation'
+export { roofSegmentFrame } from './lib/roof-frame'
+export {
+  clipRoofTrianglesByTrim,
+  getRoofSegmentTrimCuts,
+  ROOF_TRIM_CUT_EPSILON,
+  type RoofTrimCut,
+} from './lib/roof-outline'
+export {
   compareRoofOverlapIdentity,
   getRoofPlanBounds,
   type RoofOverlapEntry,
@@ -581,6 +745,43 @@ export {
   roofPlanBoundsOverlap,
   roofPlanOverlapEntryOwns,
 } from './lib/roof-overlap'
+export { type RidgeSnap, resolveRidgeSnap } from './lib/roof-ridge-snap'
+export {
+  getShedBandFacetCount,
+  getShedFootprintPieces,
+  getShedRenderOutlines,
+  getShedRenderPieces,
+  type ShedPlanPolygon,
+  type ShedRenderPiece,
+  sanitizeRoofPlanPolygon,
+} from './lib/roof-shed-pieces'
+export {
+  bendShedBandPoint,
+  getShedEdgeSibling,
+  getShedPieceSurface,
+  getShedSiblingTopY,
+} from './lib/roof-shed-surface'
+export {
+  getRoofSegmentCoveringSeat,
+  getRoofSegmentShellSeat,
+  getRoofSegmentShellSupport,
+  pickRoofCoveringSeat,
+  type RoofShellSupport,
+  type RoofSurfaceResult,
+  type RoofSurfaceSeat,
+} from './lib/roof-surface'
+export {
+  buildRoofSegmentCoveringTriangles,
+  buildRoofSegmentShellTriangles,
+  getRoofShingleModules,
+  type RoofModuleInput,
+  type RoofSurfaceTriangle,
+} from './lib/roof-surface-geometry'
+export {
+  getDutchRakeBoardTops,
+  getRoofFasciaBoardFaces,
+  wearsRoofFascia,
+} from './lib/roof-trim-faces'
 export { isRoomZone, type RoomCounts, roomCounts } from './lib/room-counts'
 export { type RoomDrawnFloor, roomDrawnFloor } from './lib/room-drawn-floor'
 export { type RoomFloorChoice, roomFloorChoices } from './lib/room-floor-choices'
@@ -765,6 +966,21 @@ export {
   SITE_DATUM_Y,
   terrainSupportLift,
 } from './lib/terrain-support'
+export { buildTree, estimateTree } from './lib/tree-build'
+export { type TreeFacts, treeFacts } from './lib/tree-facts'
+export {
+  defaultTreeSpread,
+  resolveTreeParameters,
+  TREE_FAR_MAX_TRIANGLES,
+  TREE_FORMS,
+  TREE_MAX_TRIANGLES,
+  type TreeEstimate,
+  type TreeForm,
+  type TreeInput,
+  type TreeMesh,
+  type TreeParameters,
+} from './lib/tree-form'
+export { resolveTreeGround } from './lib/tree-scene'
 export {
   deriveUnit,
   type UnitDerivation,
@@ -845,6 +1061,7 @@ export * from './registry'
 // and must stay free of React imports.
 export { useRegistryVersion } from './registry/use-registry-version'
 export * from './schema'
+export { getDormerWindowExposure } from './schema/nodes/dormer'
 export * from './schema/nodes/stair-defaults'
 export * from './services'
 export {
@@ -965,6 +1182,8 @@ export {
   sceneHistoryDraftRevertUpdates,
   settleSceneHistoryDrafts,
 } from './store/use-scene'
+export * from './systems/cabinet/run-coordinates'
+export * from './systems/cabinet/run-spans'
 export { resolveElevatorDispatchTarget } from './systems/elevator/elevator-dispatch'
 export {
   ELEVATOR_MIN_CAB_DIMENSION,
@@ -1356,7 +1575,7 @@ export {
   type WallJoinResult,
   type WallTopologyChanges,
 } from './systems/wall/wall-topology'
-export { wallTrimPatch } from './systems/wall/wall-trim'
+export { subtractTrimSpans, wallTrimPatch, wallTrimRanges } from './systems/wall/wall-trim'
 export type { SceneGraph } from './utils/clone-scene-graph'
 export { cloneLevelSubtree, cloneSceneGraph, forkSceneGraph } from './utils/clone-scene-graph'
 export * from './utils/measurement-format'

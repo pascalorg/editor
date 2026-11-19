@@ -1,0 +1,30 @@
+import type { HedgeNode } from '@pascal-app/core'
+import type { FloorplanNodeExtension } from '@pascal-app/editor'
+import type { NodeEditContribution } from '../definition-contributions'
+import { hedgeFloorplanMoveTarget } from './floorplan-move'
+import { hedgeFloorplanDependencies } from './ground-invalidation'
+import { hedgeParametrics } from './parametrics'
+
+/**
+ * Hedge: drawn point by point and moved whole in the 3D view or on the plan, and edited
+ * by its numbers in the panel.
+ */
+export const hedgeEditContribution: NodeEditContribution<typeof HedgeNode> = {
+  snapProfile: 'structural',
+  floorplanMoveTarget: hedgeFloorplanMoveTarget,
+  floorplanDependencies: hedgeFloorplanDependencies,
+  parametrics: hedgeParametrics,
+  tool: () => import('./tool'),
+  affordanceTools: { move: () => import('./move-tool') },
+  extensions: {
+    'pascal:editor/floorplan': {
+      tool: () => import('./floorplan-tool'),
+    } satisfies FloorplanNodeExtension<HedgeNode>,
+  },
+  toolHints: [
+    { key: 'Left click', label: 'Add a point of the hedge' },
+    { key: 'Enter', label: 'Plant it', minDraftVertices: 2 },
+    { key: 'Backspace', label: 'Take the last point back' },
+    { key: 'Esc', label: 'Cancel' },
+  ],
+}

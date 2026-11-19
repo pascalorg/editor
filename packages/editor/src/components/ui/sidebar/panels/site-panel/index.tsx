@@ -79,6 +79,7 @@ import { InlineRenameInput, RoomRenameInput } from './inline-rename-input'
 import { ZoneMembershipCheckbox } from './zone-membership-checkbox'
 import { focusTreeNode, TreeNode, TreeNodeWrapper } from './tree-node'
 import { TreeNodeDragProvider } from './tree-node-drag'
+import { resolveTreeChildIds } from './tree-structure'
 import { zoneDefaultName } from './default-names'
 import { nodeLabelDescriptor } from '../../../../../i18n/node-messages'
 import { authoredLevelName, localizedLevelName } from '@pascal-app/viewer/ui'
@@ -783,12 +784,14 @@ const LevelItem = memo(function LevelItem({
   }
 
   const handleDuplicateLevel = (preset: LevelDuplicatePreset = 'everything') => {
-    const { createOps, newLevelId, updateOps } = buildLevelDuplicateCreateOps({
+    const duplicate = buildLevelDuplicateCreateOps({
       nodes: useScene.getState().nodes,
       level,
       levels,
       preset,
     })
+    if ('kind' in duplicate) return
+    const { createOps, newLevelId, updateOps } = duplicate
 
     applyNodeChanges({ create: createOps, update: updateOps })
     selectLevel(newLevelId as LevelNode['id'], false)
@@ -1485,6 +1488,56 @@ const RoomsSection = memo(function RoomsSection() {
   )
 })
 
+const SiteElementsSection = memo(function SiteElementsSection() {
+  const i18n = usePascalI18n()
+  const site = useSiteNode()
+  const elementChildren = useScene(
+    useShallow((s) => {
+      if (!site) return []
+      return resolveTreeChildIds(site.id, s.nodes).filter((childId) => {
+        const node = s.nodes[childId]
+        return (
+          node && node.type !== 'building' &&
+          !nodeRegistry.get(node.type)?.tree?.hidden?.(node, s.nodes)
+        )
+      })
+    }),
+  )
+  const [expanded, setExpanded] = useState(true)
+
+  if (elementChildren.length === 0) return null
+
+  return (
+    <div className="subtle-scrollbar max-h-72 shrink-0 overflow-y-auto overflow-x-hidden">
+      <TreeNodeWrapper
+        depth={1}
+        expanded={expanded}
+        hasChildren
+        icon={<Boxes className="h-3.5 w-3.5" />}
+        label={
+          <span className="flex items-center gap-1.5">
+            {i18n._({ id: 'editor.sidebar.panels.sitePanel.elements', message: 'Elements' })}
+            <span className="text-muted-foreground text-xs">{elementChildren.length}</span>
+          </span>
+        }
+        onClick={() => setExpanded((value) => !value)}
+        onToggle={() => setExpanded((value) => !value)}
+      >
+        <TreeNodeDragProvider>
+          {elementChildren.map((childId, index) => (
+            <TreeNode
+              depth={2}
+              isLast={index === elementChildren.length - 1}
+              key={childId}
+              nodeId={childId}
+            />
+          ))}
+        </TreeNodeDragProvider>
+      </TreeNodeWrapper>
+    </div>
+  )
+})
+
 const ContentSection = memo(function ContentSection() {
   const i18n = usePascalI18n()
   const selectedLevelId = useViewer((state) => state.selection.levelId)
@@ -1728,6 +1781,7 @@ export function SitePanel({ projectId, onUploadAsset, onDeleteAsset }: SitePanel
   const rootNodeIds = useScene((state) => state.rootNodeIds)
   const updateNode = useScene((state) => state.updateNode)
   const selectedBuildingId = useViewer((state) => state.selection.buildingId)
+  const hasSelectedNodes = useViewer((state) => state.selection.selectedIds.length > 0)
   const setSelection = useViewer((state) => state.setSelection)
   const phase = useEditor((state) => state.phase)
   const setPhase = useEditor((state) => state.setPhase)
@@ -1809,15 +1863,18 @@ export function SitePanel({ projectId, onUploadAsset, onDeleteAsset }: SitePanel
                 transition={{ type: 'spring', bounce: 0, duration: 0.4 }}
               >
                 <PropertyLineSection />
-                {/* Address → parcel, setbacks, front edge: the site kind's own
-                    panel (packages/nodes/src/site/panel.tsx), loaded through
-                    the registry so the editor does not import the nodes package. */}
-                <Suspense fallback={null}>
-                  <SiteKindPanel />
-                </Suspense>
+                {/* Selected nodes already have an inspector in PanelManager;
+                    the contextual Site panel must not cover it. */}
+                {!hasSelectedNodes && (
+                  <Suspense fallback={null}>
+                    <SiteKindPanel />
+                  </Suspense>
+                )}
               </motion.div>
             )}
           </AnimatePresence>
+
+          <SiteElementsSection />
 
           {/* Buildings List */}
           {buildings.length === 0 ? (

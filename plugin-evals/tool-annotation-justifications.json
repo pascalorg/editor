@@ -46,6 +46,19 @@
       }
     },
     {
+      "name": "add_dormer",
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "openWorldHint": false
+      },
+      "justifications": {
+        "readOnlyHint": "Creates one native dormer and its hosted window in the connected Pascal scene.",
+        "destructiveHint": "Adds the complete subtree without replacing or deleting existing authored scene nodes.",
+        "openWorldHint": "Uses only the connected scene and its configured material library without accessing the public internet."
+      }
+    },
+    {
       "name": "add_fence",
       "annotations": {
         "readOnlyHint": false,
@@ -55,6 +68,19 @@
       "justifications": {
         "readOnlyHint": "It is not read-only because it adds fence nodes along points on a level of the connected Pascal scene.",
         "destructiveHint": "Its intended operation adds new modeled state without deleting or replacing existing Pascal scene or project state.",
+        "openWorldHint": "It operates on the connected Pascal scene without accessing the public internet."
+      }
+    },
+    {
+      "name": "add_hedge",
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": true,
+        "openWorldHint": false
+      },
+      "justifications": {
+        "readOnlyHint": "It is not read-only because it adds a hedge to a Site, or changes the fields given of an existing one, in the connected Pascal scene.",
+        "destructiveHint": "Changing a hedge replaces its line, height, width, openings, seed or looks; undo restores them. Nothing else in the scene is edited.",
         "openWorldHint": "It operates on the connected Pascal scene without accessing the public internet."
       }
     },
@@ -82,6 +108,84 @@
         "readOnlyHint": "It is not read-only because it creates an object from a three.js module in the connected Pascal scene, or rebuilds an existing one.",
         "destructiveHint": "Given an existing object's nodeId it replaces that object's geometry and script, so earlier authored state is overwritten (undo restores it).",
         "openWorldHint": "It runs the supplied module in the Pascal server's script host and stores the result with the scene, without accessing the public internet."
+      }
+    },
+    {
+      "name": "add_planting",
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": true,
+        "openWorldHint": false
+      },
+      "justifications": {
+        "readOnlyHint": "Adds one planting bed to the Site or changes an existing bed in the connected scene.",
+        "destructiveHint": "Changing a bed replaces its supplied outline, species, layout or appearance fields; undo restores the prior state.",
+        "openWorldHint": "It operates on the connected Pascal scene without accessing the public internet."
+      }
+    },
+    {
+      "name": "add_rock",
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": true,
+        "openWorldHint": false
+      },
+      "justifications": {
+        "readOnlyHint": "Adds a rock to a Site, or changes the fields given of an existing one, in the connected Pascal scene.",
+        "destructiveHint": "Changing a rock replaces its outline, height, seed or looks; undo restores them. Floors it passes through derive their holes and are not edited.",
+        "openWorldHint": "It operates on the connected Pascal scene and its persisted terrain without accessing the public internet."
+      }
+    },
+    {
+      "name": "add_roof_element",
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "openWorldHint": false
+      },
+      "justifications": {
+        "readOnlyHint": "Creates one native roof accessory in the connected Pascal scene.",
+        "destructiveHint": "Adds one accessory without replacing or deleting existing scene nodes.",
+        "openWorldHint": "Uses only the connected scene without network access."
+      }
+    },
+    {
+      "name": "add_site_surface",
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "openWorldHint": false
+      },
+      "justifications": {
+        "readOnlyHint": "Adds one level-owned driveway, path or patio slab, or one Site-owned procedural lawn, in the connected Pascal scene.",
+        "destructiveHint": "Adds one slab or lawn without replacing or deleting existing scene nodes, including legacy lawn slabs and plugin ground cover.",
+        "openWorldHint": "Uses only the connected scene without network access."
+      }
+    },
+    {
+      "name": "add_steps",
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "openWorldHint": false
+      },
+      "justifications": {
+        "readOnlyHint": "Adds one short outside flight of steps to a level of the connected Pascal scene.",
+        "destructiveHint": "Adds one stair and its segment without replacing or deleting existing scene nodes.",
+        "openWorldHint": "Uses only the connected scene without network access."
+      }
+    },
+    {
+      "name": "add_tree",
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "openWorldHint": false
+      },
+      "justifications": {
+        "readOnlyHint": "Creates one to forty procedural tree nodes on the Site in the connected Pascal scene.",
+        "destructiveHint": "Adds trees without replacing or deleting existing nodes; all refusals precede writes and undo removes the trees together.",
+        "openWorldHint": "Reads only the connected scene, its Site ground and building footprints without accessing the public internet."
       }
     },
     {
@@ -381,6 +485,19 @@
         "readOnlyHint": "Updates room intent and reconciles construction in the connected scene.",
         "destructiveHint": "Can replace room intent or boundaries and retire derived construction.",
         "openWorldHint": "Uses only the connected scene; no public internet access."
+      }
+    },
+    {
+      "name": "dress_room",
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": true,
+        "openWorldHint": false
+      },
+      "justifications": {
+        "readOnlyHint": "Writes wall finish layers and native trims for selected rooms; an optional dry run does not make the tool read-only.",
+        "destructiveHint": "Replaces the selected rooms' previously owned paint regions and can replace existing trim settings or finishes; empty layers remove owned regions.",
+        "openWorldHint": "Uses only the connected scene and its configured material library, without accessing the public internet."
       }
     },
     {
@@ -1057,6 +1174,19 @@
         "readOnlyHint": "It is not read-only because it rewrites the member zone list of an existing unit in the connected Pascal scene.",
         "destructiveHint": "It replaces the unit's whole member list, so a wrong call can drop zones from the unit; it never deletes zones or other modeled state.",
         "openWorldHint": "It operates on the connected Pascal scene, project, and configured catalog data without accessing the public internet."
+      }
+    },
+    {
+      "name": "set_wall_trim",
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": true,
+        "openWorldHint": false
+      },
+      "justifications": {
+        "readOnlyHint": "Writes native wall trim dimensions, coverage, visibility and finishes in the connected scene.",
+        "destructiveHint": "Can replace existing trim settings or finishes and hide existing trim; undo restores the previous state.",
+        "openWorldHint": "Uses only the connected scene and its configured material library, without accessing the public internet."
       }
     },
     {

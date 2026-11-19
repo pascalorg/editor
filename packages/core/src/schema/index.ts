@@ -136,7 +136,7 @@ export {
   CabinetTopFinishSchema,
 } from './nodes/cabinet'
 export { CeilingNode } from './nodes/ceiling'
-export { ChimneyMaterialRole, ChimneyNode } from './nodes/chimney'
+export { CHIMNEY_DEFAULT_MATERIAL, ChimneyMaterialRole, ChimneyNode } from './nodes/chimney'
 export {
   COLUMN_PRESETS,
   ColumnBaseStyle,
@@ -250,6 +250,7 @@ export {
   isAutoGutterEnabled,
   isDefaultGutterNode,
 } from './nodes/gutter'
+export { HEDGE_LIMITS, HedgeGap, HedgeNode } from './nodes/hedge'
 export { HvacEquipmentNode } from './nodes/hvac-equipment'
 export {
   ImportedMeshNode,
@@ -274,6 +275,7 @@ export {
   isLowProfileItemSurface,
   LOW_PROFILE_ITEM_SURFACE_MAX_HEIGHT,
 } from './nodes/item'
+export { LAWN_LIMITS, LawnFlower, LawnNode, LawnStroke } from './nodes/lawn'
 export {
   LeanToCanopyForm,
   LeanToConnectionMode,
@@ -303,6 +305,12 @@ export { PipeFittingNode } from './nodes/pipe-fitting'
 export { PipeSegmentNode } from './nodes/pipe-segment'
 export { PipeTrapNode } from './nodes/pipe-trap'
 export {
+  PLANTING_DEFAULT_PLANTS,
+  PLANTING_LIMITS,
+  PlantingNode,
+  PlantingSpecies,
+} from './nodes/planting'
+export {
   DEFAULT_RAILING_WALL,
   getRailingWallConfig,
   getRailingWallHeight,
@@ -330,8 +338,16 @@ export {
   type RidgeVentLine,
   RidgeVentNode,
 } from './nodes/ridge-vent'
+export { RockNode } from './nodes/rock'
 export type { RoofSupport, RoofSurfaceMaterialRole, RoofSurfaceMaterialSpec } from './nodes/roof'
 export { getEffectiveRoofSurfaceMaterial, RoofNode } from './nodes/roof'
+export { RoofCovering } from './nodes/roof-covering'
+export {
+  buildRoofElementNode,
+  type RoofElementNode,
+  type RoofElementOptions,
+} from './nodes/roof-element'
+export { ROOF_ELEMENT_KINDS, type RoofElementKind } from './nodes/roof-element-kinds'
 export {
   clipGlazedRoofPolygon,
   DEFAULT_ROOF_GLAZING,
@@ -476,6 +492,7 @@ export {
 export { StructuralGridNode } from './nodes/structural-grid'
 export { SurfaceHoleMetadata } from './nodes/surface-hole-metadata'
 export { SurfacePaintRegion } from './nodes/surface-paint-region'
+export { TreeNode } from './nodes/tree'
 export { TurbineVentMaterialRole, TurbineVentNode } from './nodes/turbine-vent'
 export { DEFAULT_UNIT_COLOR, UNIT_KINDS, type UnitKind, UnitNode } from './nodes/unit'
 export type {
@@ -516,6 +533,7 @@ export {
   WallNode,
   WallTreatmentSide,
   WallTrimProfile,
+  WallTrimSpan,
 } from './nodes/wall'
 export {
   WindowConstructionType,

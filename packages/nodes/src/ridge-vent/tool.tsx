@@ -11,12 +11,15 @@ import {
 } from '@pascal-app/core'
 import { triggerSFX } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import * as THREE from 'three'
-import { resolveRidgeSnap } from '../shared/ridge-snap'
 import { RoofAttachmentFallbackPreview } from '../shared/roof-attachment-fallback-preview'
-import { resolveRoofSegmentHit } from '../shared/roof-segment-hit'
-import { getRoofTopSurfaceY } from '../shared/roof-surface'
+import {
+  resolveRoofSegmentHit,
+  roofElementAtClick,
+  roofEventWitness,
+  roofRidgeSnapAtHit,
+} from '../shared/roof-segment-hit'
 import {
   clearRoofSurfacePlacementGuides,
   publishRoofSurfacePlacementGuides,
@@ -51,6 +54,11 @@ const RidgeVentTool = () => {
     [],
   )
 
+  const clearPreview = useCallback(() => {
+    setPreviewPos(null)
+    clearRoofSurfacePlacementGuides()
+  }, [])
+
   useEffect(() => {
     if (!activeBuildingId) return
 
@@ -68,26 +76,25 @@ const RidgeVentTool = () => {
         event.position[0],
         event.position[1],
         event.position[2],
+        roofEventWitness(event),
       )
-      if (!hit) return
+      if (!hit) {
+        clearPreview()
+        return
+      }
 
       // Project the cursor onto the nearest segment ridge/break line.
       // The preview then moves along that line as the cursor moves — never
       // off it. Flat segments have no ridge: hide.
-      const snap = resolveRidgeSnap(hit.segment, hit.localX, hit.localZ)
+      const snap = roofRidgeSnapAtHit(event.node as RoofNode, hit)
       if (!snap) {
-        setPreviewPos(null)
-        clearRoofSurfacePlacementGuides()
+        clearPreview()
         return
       }
       const segObj = sceneRegistry.nodes.get(hit.segment.id)
       let ridgeWorld: [number, number, number]
       if (segObj) {
-        const ridgeLocal = new THREE.Vector3(
-          snap.localX,
-          getRoofTopSurfaceY(snap.localX, snap.localZ, hit.segment),
-          snap.localZ,
-        )
+        const ridgeLocal = new THREE.Vector3(snap.localX, snap.localY, snap.localZ)
         segObj.updateWorldMatrix(true, false)
         ridgeLocal.applyMatrix4(segObj.matrixWorld)
         ridgeWorld = [ridgeLocal.x, ridgeLocal.y, ridgeLocal.z]
@@ -108,11 +115,7 @@ const RidgeVentTool = () => {
       publishRoofSurfacePlacementGuides({
         roof: event.node as RoofNode,
         segment: hit.segment,
-        center: [
-          snap.localX,
-          getRoofTopSurfaceY(snap.localX, snap.localZ, hit.segment),
-          snap.localZ,
-        ],
+        center: [snap.localX, snap.localY, snap.localZ],
         footprint: roofSurfaceFootprintFromNode(previewNode),
         mode: 'linear-edge',
       })
@@ -120,26 +123,22 @@ const RidgeVentTool = () => {
     }
 
     const onClick = (event: RoofEvent) => {
-      const hit = resolveRoofSegmentHit(
+      const placed = roofElementAtClick(
+        'ridge-vent',
         event.node as RoofNode,
-        event.position[0],
-        event.position[1],
-        event.position[2],
+        event.position,
+        undefined,
+        roofEventWitness(event),
       )
-      if (!hit) return
-      const snap = resolveRidgeSnap(hit.segment, hit.localX, hit.localZ)
-      if (!snap) return
+      if (!placed) {
+        clearPreview()
+        return
+      }
+      const { node: vent, segmentId } = placed
       const state = useScene.getState()
 
-      const vent = RidgeVentNode.parse({
-        ...ridgeVentDefinition.defaults(),
-        name: 'Ridge Vent',
-        roofSegmentId: hit.segment.id,
-        position: [snap.localX, 0, snap.localZ],
-        rotation: snap.rotation,
-      })
-      state.createNode(vent, hit.segment.id as AnyNodeId)
-      state.dirtyNodes.add(hit.segment.id as AnyNodeId)
+      state.createNode(vent, segmentId)
+      state.dirtyNodes.add(segmentId)
       setSelection({ selectedIds: [vent.id] })
       triggerSFX('sfx:item-place')
       clearRoofSurfacePlacementGuides()
@@ -156,7 +155,7 @@ const RidgeVentTool = () => {
       emitter.off('roof:click', onClick)
       clearRoofSurfacePlacementGuides()
     }
-  }, [activeBuildingId, setSelection, previewNode])
+  }, [activeBuildingId, setSelection, previewNode, clearPreview])
 
   return (
     <>
@@ -169,13 +168,11 @@ const RidgeVentTool = () => {
             event.position[0],
             event.position[1],
             event.position[2],
+            roofEventWitness(event),
           )
-          return !!hit && !!resolveRidgeSnap(hit.segment, hit.localX, hit.localZ)
+          return !!hit && !!roofRidgeSnapAtHit(event.node as RoofNode, hit)
         }}
-        onInvalidTarget={() => {
-          setPreviewPos(null)
-          clearRoofSurfacePlacementGuides()
-        }}
+        onInvalidTarget={clearPreview}
       />
       {activeBuildingId && previewPos && (
         <group position={previewPos}>

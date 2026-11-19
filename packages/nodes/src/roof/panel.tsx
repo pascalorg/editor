@@ -172,6 +172,7 @@ export default function RoofPanel() {
       if (!node || !isRoofOnStoreyWalls(s.nodes, node.id)) return null
       const level = s.nodes[node.parentId as AnyNodeId] as LevelNode
       const above = roofLevelAbove(s.nodes, level.id)
+      if (above.kind === 'refuse') return null
       return {
         storey: localizedLevelName(level, i18n, locale),
         label:
@@ -193,7 +194,7 @@ export default function RoofPanel() {
   const handleMoveOffStorey = useCallback(() => {
     if (!node?.parentId) return
     const move = planRoofsOffStorey(useScene.getState().nodes, node.parentId)
-    if (!move) return
+    if (!move || 'kind' in move) return
     triggerSFX('sfx:item-place')
     useScene.getState().applyNodeChanges({
       create: move.changes.create.map((op) => ({
@@ -215,9 +216,9 @@ export default function RoofPanel() {
 
   const handleUpdate = useCallback(
     (updates: Partial<RoofNode>) => {
-      if (!selectedId) return
+      if (!selectedId) return null
       // Moved or turned onto the walls that carry it, it goes to the level above them.
-      commitSeatedRoofEdit(
+      return commitSeatedRoofEdit(
         parametricNodeUpdates(selectedId as AnyNode['id'], updates),
         selectedId as AnyNode['id'],
       )
@@ -515,15 +516,15 @@ export default function RoofPanel() {
           <ActionButton
             label="-45°"
             onClick={() => {
+              if (handleUpdate({ rotation: node.rotation - Math.PI / 4 })) return
               triggerSFX('sfx:item-rotate')
-              handleUpdate({ rotation: node.rotation - Math.PI / 4 })
             }}
           />
           <ActionButton
             label="+45°"
             onClick={() => {
+              if (handleUpdate({ rotation: node.rotation + Math.PI / 4 })) return
               triggerSFX('sfx:item-rotate')
-              handleUpdate({ rotation: node.rotation + Math.PI / 4 })
             }}
           />
         </div>

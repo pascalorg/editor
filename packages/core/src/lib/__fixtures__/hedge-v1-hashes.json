@@ -1,0 +1,958 @@
+{
+  "provenance": {
+    "revision": "e2ca3a128",
+    "generator": 1,
+    "runtime": "1.4.4",
+    "sources": [
+      "packages/core/src/lib/hedge-form-v1.ts",
+      "packages/core/src/lib/foliage.ts",
+      "packages/core/src/lib/hedge-line.ts",
+      "packages/core/src/lib/hedge-ground.ts",
+      "packages/core/src/lib/smooth-line.ts",
+      "packages/core/src/lib/seeded-noise.ts",
+      "packages/core/src/lib/ground-read.ts",
+      "packages/core/src/schema/nodes/hedge.ts",
+      "packages/core/src/schema/nodes/hedge-limits.ts"
+    ]
+  },
+  "cases": {
+    "clipped": [
+      {
+        "bodyIndexCount": 3456,
+        "buffers": [
+          {
+            "key": "position",
+            "type": "Float32Array",
+            "bytes": 184668,
+            "sha256": "bedd5cae4f831cc4bb47d535d1d08dd6410b5e9b8a120604fc3128497f09f797"
+          },
+          {
+            "key": "normal",
+            "type": "Float32Array",
+            "bytes": 184668,
+            "sha256": "9bd9e22e896a2ec376c066e9e5f8b1bdc8b1d6ba2676139f1f95a3e629378bec"
+          },
+          {
+            "key": "color",
+            "type": "Float32Array",
+            "bytes": 184668,
+            "sha256": "392e38a7b7480ba9fd572ad5000c0e70541a75c958f3b48278fc3f5856d713cb"
+          },
+          {
+            "key": "index",
+            "type": "Uint16Array",
+            "bytes": 51168,
+            "sha256": "4cd16ff396c4274d16bf0c85de499080f2b54e113b633e127214cef495fc37be"
+          }
+        ]
+      },
+      {
+        "bodyIndexCount": 1512,
+        "buffers": [
+          {
+            "key": "position",
+            "type": "Float32Array",
+            "bytes": 72120,
+            "sha256": "a41135af402481d05578c75c606ad65347b6569d484db476292156f42025577e"
+          },
+          {
+            "key": "normal",
+            "type": "Float32Array",
+            "bytes": 72120,
+            "sha256": "355436deca267e66650e3d7d80e48e57eb6203ebef91fba9b9b89c4290c13072"
+          },
+          {
+            "key": "color",
+            "type": "Float32Array",
+            "bytes": 72120,
+            "sha256": "701d58624869caf145902c01aebb89c991754d1e6828925d12229fafde281c33"
+          },
+          {
+            "key": "index",
+            "type": "Uint16Array",
+            "bytes": 20196,
+            "sha256": "3ee6b0d40fd55a7bc69a5f8c63deb134edcdb6e8258af2d8c81779f3f297501f"
+          }
+        ]
+      }
+    ],
+    "loose": [
+      {
+        "bodyIndexCount": 3456,
+        "buffers": [
+          {
+            "key": "position",
+            "type": "Float32Array",
+            "bytes": 201420,
+            "sha256": "b6d9f305ceff1a4a716d1fdc38d5e5a4f75eff31d7a6695f026138f0a9ad4845"
+          },
+          {
+            "key": "normal",
+            "type": "Float32Array",
+            "bytes": 201420,
+            "sha256": "e0fb9923e4464cbcd7120b2592994f1fcfe51f830d28841d379c555737006de1"
+          },
+          {
+            "key": "color",
+            "type": "Float32Array",
+            "bytes": 201420,
+            "sha256": "fb91f775b8de29511bf360a285f9c4d28d40bc02bcc67da5ab151d42bb6cdfc3"
+          },
+          {
+            "key": "index",
+            "type": "Uint16Array",
+            "bytes": 55356,
+            "sha256": "2831f1b54d5026e128acee3d9c694fa9015f7cec3b2a433e18970136bafb2f4b"
+          }
+        ]
+      },
+      {
+        "bodyIndexCount": 1080,
+        "buffers": [
+          {
+            "key": "position",
+            "type": "Float32Array",
+            "bytes": 61344,
+            "sha256": "7e82a8eecf3c247bcd4f8b24d4cc21856f8ca60573cb6180c872000aea7c16c7"
+          },
+          {
+            "key": "normal",
+            "type": "Float32Array",
+            "bytes": 61344,
+            "sha256": "34e58f89a55c3d58ebe6a5ca293f25256c4488917451e9512dfa6962864523b6"
+          },
+          {
+            "key": "color",
+            "type": "Float32Array",
+            "bytes": 61344,
+            "sha256": "e3e02dde50e94c241c0104c381d88f2fd0f9159067b65b5dd611c6e9ccace196"
+          },
+          {
+            "key": "index",
+            "type": "Uint16Array",
+            "bytes": 16872,
+            "sha256": "cb5b0edf1b0b32b1eda7658f3364f8622bd42bfd85932d084de22c875c94edb0"
+          }
+        ]
+      }
+    ],
+    "curved": [
+      {
+        "bodyIndexCount": 3456,
+        "buffers": [
+          {
+            "key": "position",
+            "type": "Float32Array",
+            "bytes": 186540,
+            "sha256": "72bcd3a4ad65519b38d113e1eba76c2b9da4d92b0711874155fd65fe935996e9"
+          },
+          {
+            "key": "normal",
+            "type": "Float32Array",
+            "bytes": 186540,
+            "sha256": "e88a03d7fe459114a16216a3812bed931a6d83b8d3e71a290e34e8dfb1351da4"
+          },
+          {
+            "key": "color",
+            "type": "Float32Array",
+            "bytes": 186540,
+            "sha256": "1e04982315d951a5315882a1a3a6759ecc4cae1d22d9da3826832ef2e22110c9"
+          },
+          {
+            "key": "index",
+            "type": "Uint16Array",
+            "bytes": 51636,
+            "sha256": "6323eff716c5bc8f65e03c015cbb7d8c13f1c2711e31e22a3c01c35300596c81"
+          }
+        ]
+      },
+      {
+        "bodyIndexCount": 1584,
+        "buffers": [
+          {
+            "key": "position",
+            "type": "Float32Array",
+            "bytes": 77364,
+            "sha256": "5020dac97aaa0335e2a272f5ca39422de7428a1c518d5a5ad99af819f128a111"
+          },
+          {
+            "key": "normal",
+            "type": "Float32Array",
+            "bytes": 77364,
+            "sha256": "a3511b089a248533724fbbab31f62782f21732178e777e68a81d07e155d8876c"
+          },
+          {
+            "key": "color",
+            "type": "Float32Array",
+            "bytes": 77364,
+            "sha256": "4602ee38d9872fc1cf51aa81d977fe5e3a29e7e6e0bb6385835386a50f49df59"
+          },
+          {
+            "key": "index",
+            "type": "Uint16Array",
+            "bytes": 21612,
+            "sha256": "0c5cbebf91521839123f4356589315a949f864bb4da7afe71fd61b41ec1cec08"
+          }
+        ]
+      }
+    ],
+    "gatedRing": [
+      {
+        "bodyIndexCount": 3456,
+        "buffers": [
+          {
+            "key": "position",
+            "type": "Float32Array",
+            "bytes": 190716,
+            "sha256": "4ddd31d3a90e79ebbc298a4c0e1768f65c5b67332ebe533c8f809c66ee98b32e"
+          },
+          {
+            "key": "normal",
+            "type": "Float32Array",
+            "bytes": 190716,
+            "sha256": "6f6c44fbee2071eb8f0c0b79dd7ce23fb7e95bb525d20e0c0012b698db4bc77a"
+          },
+          {
+            "key": "color",
+            "type": "Float32Array",
+            "bytes": 190716,
+            "sha256": "dc77ffe03a000c92376d4bc58f30168d3108f4e176fd525ad2b7fc812238c9fc"
+          },
+          {
+            "key": "index",
+            "type": "Uint16Array",
+            "bytes": 52680,
+            "sha256": "792bfaf7101ef37a1aa634c753de04435e65f31f77a5e2b6543cf48de0df4114"
+          }
+        ]
+      },
+      {
+        "bodyIndexCount": 3456,
+        "buffers": [
+          {
+            "key": "position",
+            "type": "Float32Array",
+            "bytes": 210924,
+            "sha256": "aacffb41bc2a85480bfeed74b056aa5201292144b85c503bdfee89327c8b4e65"
+          },
+          {
+            "key": "normal",
+            "type": "Float32Array",
+            "bytes": 210924,
+            "sha256": "bd2ef01901bdf7b7fb59629450e2dc7e770b0384135923515ee44b6f7c8e93bc"
+          },
+          {
+            "key": "color",
+            "type": "Float32Array",
+            "bytes": 210924,
+            "sha256": "d4b5b5fdb465853dc5f5ebe4b8712946fb5157a5f657ec7b9312ff6ee64b68fd"
+          },
+          {
+            "key": "index",
+            "type": "Uint16Array",
+            "bytes": 57732,
+            "sha256": "4e2c479d1b45f599a8444789c25507533f60fcc62f9f420608b88e452fd829bd"
+          }
+        ]
+      },
+      {
+        "bodyIndexCount": 3456,
+        "buffers": [
+          {
+            "key": "position",
+            "type": "Float32Array",
+            "bytes": 211164,
+            "sha256": "db12f5755ed5f9bb48415291ca374f76f3b39c08b84aa90e3417cce2aedcb553"
+          },
+          {
+            "key": "normal",
+            "type": "Float32Array",
+            "bytes": 211164,
+            "sha256": "a2f6cf2c2d2eee5e8988c268e714dd997ef81bc0bbfb9c24ec8b9f553212b916"
+          },
+          {
+            "key": "color",
+            "type": "Float32Array",
+            "bytes": 211164,
+            "sha256": "758a7da9ca1428bd54d9e2bf003bd19be1e62d87f433a4bcdcb7e5242cdcff0a"
+          },
+          {
+            "key": "index",
+            "type": "Uint16Array",
+            "bytes": 57792,
+            "sha256": "cd198ff72fe830b49cfcff10a2b870b9b1085c0f904dd658a45c543abbde3767"
+          }
+        ]
+      },
+      {
+        "bodyIndexCount": 3456,
+        "buffers": [
+          {
+            "key": "position",
+            "type": "Float32Array",
+            "bytes": 200316,
+            "sha256": "641fd93e880063915dcd8c72387010ab451b9122461f7d1ab78185a48e40dc8b"
+          },
+          {
+            "key": "normal",
+            "type": "Float32Array",
+            "bytes": 200316,
+            "sha256": "0cc3f1267cf9db485d963d921e4e8a37c39926a93b0aca49528969d41db8c8ec"
+          },
+          {
+            "key": "color",
+            "type": "Float32Array",
+            "bytes": 200316,
+            "sha256": "b68bd68d534ca48ba13d04f7854a89b2f8d6728eaf23ae2e8892cff880359e4c"
+          },
+          {
+            "key": "index",
+            "type": "Uint16Array",
+            "bytes": 55080,
+            "sha256": "412d78014cf6a32a88bff4c9c5bbe601143efa83ef58dfd4414dfb02aec997ba"
+          }
+        ]
+      },
+      {
+        "bodyIndexCount": 216,
+        "buffers": [
+          {
+            "key": "position",
+            "type": "Float32Array",
+            "bytes": 5904,
+            "sha256": "bff1c3074dbdcc7ded5d5e8d25eddca69f6c77dfda4b9318a2065c0782862a2c"
+          },
+          {
+            "key": "normal",
+            "type": "Float32Array",
+            "bytes": 5904,
+            "sha256": "e684e6517cc59a40a736623a3182248963051257048c699673ac05600b4e2c70"
+          },
+          {
+            "key": "color",
+            "type": "Float32Array",
+            "bytes": 5904,
+            "sha256": "3b26687134a072d1a0e849f75b0497932307034dfa68cf79c6303fcb3c6cefa9"
+          },
+          {
+            "key": "index",
+            "type": "Uint16Array",
+            "bytes": 1752,
+            "sha256": "59f16c3e567a0242fa4a26772247dce2dd907d5ffc8784eef6a4d05248cb45d7"
+          }
+        ]
+      }
+    ],
+    "thinned": [
+      {
+        "bodyIndexCount": 5184,
+        "buffers": [
+          {
+            "key": "position",
+            "type": "Float32Array",
+            "bytes": 111876,
+            "sha256": "c9167690b9bdaf9f40daf33a627048f47855cc61b7924dd9aed730b6eb9c7a38"
+          },
+          {
+            "key": "normal",
+            "type": "Float32Array",
+            "bytes": 111876,
+            "sha256": "5b49c93087a610964ab5f5b2f03c9c53d6956778247885ba0babe5db769fe331"
+          },
+          {
+            "key": "color",
+            "type": "Float32Array",
+            "bytes": 111876,
+            "sha256": "e859356981958d635f5aa22d08652de1d7a705b5e3e557daf988e0edea69b1d2"
+          },
+          {
+            "key": "index",
+            "type": "Uint16Array",
+            "bytes": 35544,
+            "sha256": "e85e37e2e44f8d0dfb32f37c2854393f2d5ab07d08ef5c5d1b6daa8afe273951"
+          }
+        ]
+      },
+      {
+        "bodyIndexCount": 5184,
+        "buffers": [
+          {
+            "key": "position",
+            "type": "Float32Array",
+            "bytes": 104916,
+            "sha256": "e1838ad9a42f5129384bb909e9181a643aad95c3abf448de813795d8c83360f0"
+          },
+          {
+            "key": "normal",
+            "type": "Float32Array",
+            "bytes": 104916,
+            "sha256": "ec243fc08df142ee9de10860999a1bbb324c480980d59a9b0313397f9639dd2f"
+          },
+          {
+            "key": "color",
+            "type": "Float32Array",
+            "bytes": 104916,
+            "sha256": "f5668b5ac8cd7050c3e9ceb06fb9c286dabb6a5fb1e7bb5ab4da36ecd844fa3e"
+          },
+          {
+            "key": "index",
+            "type": "Uint16Array",
+            "bytes": 33804,
+            "sha256": "7f5961dd92f627d34c33e5e780e51b40a8cf0e8fd938c92cd2c8e92f342ffc34"
+          }
+        ]
+      },
+      {
+        "bodyIndexCount": 5184,
+        "buffers": [
+          {
+            "key": "position",
+            "type": "Float32Array",
+            "bytes": 112596,
+            "sha256": "bc2e5a62d7ec65da18c1a7d6d780edc8a78afde9483dca9e1bb8e19a660cdb33"
+          },
+          {
+            "key": "normal",
+            "type": "Float32Array",
+            "bytes": 112596,
+            "sha256": "df29ebe334ccc8997caced48a2b5cbb32a1c627c1e8587fda22ff9a42ccf736d"
+          },
+          {
+            "key": "color",
+            "type": "Float32Array",
+            "bytes": 112596,
+            "sha256": "268076451391d4c27abeec43948577e0a67f9d7b4cad532b819d26abd4c74cf4"
+          },
+          {
+            "key": "index",
+            "type": "Uint16Array",
+            "bytes": 35724,
+            "sha256": "6a0f146e1ead6a4f4bf52f628c996e6ab59533b8db93b5bab06a2d2819e77150"
+          }
+        ]
+      },
+      {
+        "bodyIndexCount": 5184,
+        "buffers": [
+          {
+            "key": "position",
+            "type": "Float32Array",
+            "bytes": 104148,
+            "sha256": "627ae28d22be057fee3b3e7a5abbee3189587254d01c0a34466337e73209cbb3"
+          },
+          {
+            "key": "normal",
+            "type": "Float32Array",
+            "bytes": 104148,
+            "sha256": "42e87505bc51cdbd2a19e2bfe29f775b814e7a3c8788cff914f57fd6168a0e34"
+          },
+          {
+            "key": "color",
+            "type": "Float32Array",
+            "bytes": 104148,
+            "sha256": "3057d56d7ddc68ff55be954be7362908f1ac85c5c06bfdb652301ed7c796c523"
+          },
+          {
+            "key": "index",
+            "type": "Uint16Array",
+            "bytes": 33612,
+            "sha256": "c3fa1dce2d0d06667fb56deb651467038a3f5564958cbaa48cc6f2c98ce1b0a4"
+          }
+        ]
+      },
+      {
+        "bodyIndexCount": 5184,
+        "buffers": [
+          {
+            "key": "position",
+            "type": "Float32Array",
+            "bytes": 105732,
+            "sha256": "a13d531d177b1e1b82acf121ff337714f4dec6ac1069f109dfb1e52b4df2d7d1"
+          },
+          {
+            "key": "normal",
+            "type": "Float32Array",
+            "bytes": 105732,
+            "sha256": "b82d607a1959872d362b82599f4356e1c081f8390e6785ba00928a108c132663"
+          },
+          {
+            "key": "color",
+            "type": "Float32Array",
+            "bytes": 105732,
+            "sha256": "4e839fcf0b9ac034790348292bcfc5a83f3f8a4bd15096ce2cdc6d61b36e2906"
+          },
+          {
+            "key": "index",
+            "type": "Uint16Array",
+            "bytes": 34008,
+            "sha256": "c25fc98ea7abefeb7fcd292b18fbdefcaad06b4e3fce98a8e732b33f21c30d9b"
+          }
+        ]
+      },
+      {
+        "bodyIndexCount": 5184,
+        "buffers": [
+          {
+            "key": "position",
+            "type": "Float32Array",
+            "bytes": 114468,
+            "sha256": "1cc9acfacdeff749134060c9b737a6b2ed0519dcb98d4815cd55f785db3395fb"
+          },
+          {
+            "key": "normal",
+            "type": "Float32Array",
+            "bytes": 114468,
+            "sha256": "9e1f2934d05dccc7fbe030f0fcd83b2e3def03ba58887c20672d8668833abd5a"
+          },
+          {
+            "key": "color",
+            "type": "Float32Array",
+            "bytes": 114468,
+            "sha256": "6167d1ad3fe8277902f274b999edad79a6588017c3f26fee76b2bb5da285fdbe"
+          },
+          {
+            "key": "index",
+            "type": "Uint16Array",
+            "bytes": 36192,
+            "sha256": "719695f8b9e8e150252f08091e751eef6789786e9afc56c70e0963c77ca38197"
+          }
+        ]
+      },
+      {
+        "bodyIndexCount": 5184,
+        "buffers": [
+          {
+            "key": "position",
+            "type": "Float32Array",
+            "bytes": 107412,
+            "sha256": "0d9bfa2dcc1977c645ec308bc2a5d426d4c99ce957b9f9d6e9939b93a024cee1"
+          },
+          {
+            "key": "normal",
+            "type": "Float32Array",
+            "bytes": 107412,
+            "sha256": "1239df2631939a2e15d79a685ebd5422bcfe47f94c7124faefda4a3df1af9cb1"
+          },
+          {
+            "key": "color",
+            "type": "Float32Array",
+            "bytes": 107412,
+            "sha256": "0ea745b05ce5065c5f5a787041e34beef9edd06093bedeba3e829a6fb16912d4"
+          },
+          {
+            "key": "index",
+            "type": "Uint16Array",
+            "bytes": 34428,
+            "sha256": "010bb5c9b3678f4fd4561b73ed7f64e328b908b79ca9ef05382e9c320b83e4de"
+          }
+        ]
+      },
+      {
+        "bodyIndexCount": 5184,
+        "buffers": [
+          {
+            "key": "position",
+            "type": "Float32Array",
+            "bytes": 105780,
+            "sha256": "07765b012caeb4bfd1d0e7b8ef267638a76744821dddb06a7329b9a7d8b6ac38"
+          },
+          {
+            "key": "normal",
+            "type": "Float32Array",
+            "bytes": 105780,
+            "sha256": "a4e5258df80fb7c67eb9211e1d300aacf61c5a4cfa7eae2e6cf91aa998602913"
+          },
+          {
+            "key": "color",
+            "type": "Float32Array",
+            "bytes": 105780,
+            "sha256": "6ec228e140ac3e45547bd7de2eb54f51a51b83039e7bda9b6fa347f8fca9276d"
+          },
+          {
+            "key": "index",
+            "type": "Uint16Array",
+            "bytes": 34020,
+            "sha256": "78be36a17b45de309b066c1636b257375de031fa9b415f502031c8cce0138708"
+          }
+        ]
+      },
+      {
+        "bodyIndexCount": 5184,
+        "buffers": [
+          {
+            "key": "position",
+            "type": "Float32Array",
+            "bytes": 106836,
+            "sha256": "f5084015d15ea100546c75c23a7ef80662ca0f209b9f82a1d553bfbfbe5b50bd"
+          },
+          {
+            "key": "normal",
+            "type": "Float32Array",
+            "bytes": 106836,
+            "sha256": "43af09069c63a0a6115204fa4e147663802d43472004da5162404e7f3f74ea96"
+          },
+          {
+            "key": "color",
+            "type": "Float32Array",
+            "bytes": 106836,
+            "sha256": "edea6207de54a0eb69942dd28a87d6bde720ce7135c24da3d62216f7cadec92e"
+          },
+          {
+            "key": "index",
+            "type": "Uint16Array",
+            "bytes": 34284,
+            "sha256": "52b667a4b229bc6c12a24102eb47c9fdb43a181c9daad9b160cf70a1257121d7"
+          }
+        ]
+      },
+      {
+        "bodyIndexCount": 5184,
+        "buffers": [
+          {
+            "key": "position",
+            "type": "Float32Array",
+            "bytes": 109092,
+            "sha256": "9cffbee445909ae82dcbc5f31db42a87f172607cf4997ae5d5332fa233501677"
+          },
+          {
+            "key": "normal",
+            "type": "Float32Array",
+            "bytes": 109092,
+            "sha256": "ce3f20817e601c45de87f5ee17dc20fb784765125e78655dccadea93e0f1b7fa"
+          },
+          {
+            "key": "color",
+            "type": "Float32Array",
+            "bytes": 109092,
+            "sha256": "8e6242743dbca86f1d35f2365d319a95244f46a38842c92b47561fd97ba02abd"
+          },
+          {
+            "key": "index",
+            "type": "Uint16Array",
+            "bytes": 34848,
+            "sha256": "748bcfa8bb9e5ff51c4336c2d0ebeb33f653778dfda099bd48b4b816cf9f5d31"
+          }
+        ]
+      },
+      {
+        "bodyIndexCount": 5184,
+        "buffers": [
+          {
+            "key": "position",
+            "type": "Float32Array",
+            "bytes": 111300,
+            "sha256": "20a0ce14712a574e433564012101de002660205a450959d094d58b76eaf696b7"
+          },
+          {
+            "key": "normal",
+            "type": "Float32Array",
+            "bytes": 111300,
+            "sha256": "accff76f7916ce2dcef77f097370ce926ac7fb3cf8310fa8a4ef3dd96e674a3c"
+          },
+          {
+            "key": "color",
+            "type": "Float32Array",
+            "bytes": 111300,
+            "sha256": "3c47fa12685ff37d9cb8590f6f4368e1cc730adf80f9a2cabb9aa266576fb8b5"
+          },
+          {
+            "key": "index",
+            "type": "Uint16Array",
+            "bytes": 35400,
+            "sha256": "046308cba579358bf57d31238cc4b09b4061a75e6d7e11e4bcb6213c647b6d28"
+          }
+        ]
+      },
+      {
+        "bodyIndexCount": 5184,
+        "buffers": [
+          {
+            "key": "position",
+            "type": "Float32Array",
+            "bytes": 109476,
+            "sha256": "81b5d3076cf40a0b11f7f9ac13da2bc0930011fb3ae4917b02aaa9fe72469789"
+          },
+          {
+            "key": "normal",
+            "type": "Float32Array",
+            "bytes": 109476,
+            "sha256": "1db3f1bc6ade02c3b2fc6c7c41c85c62f594f1f3c97f6ba3680314dab371f76b"
+          },
+          {
+            "key": "color",
+            "type": "Float32Array",
+            "bytes": 109476,
+            "sha256": "663c65ca3946259c2c7988825fedc1d5bf60067d4892042c0c028f1a0e4a57cf"
+          },
+          {
+            "key": "index",
+            "type": "Uint16Array",
+            "bytes": 34944,
+            "sha256": "62c6f4daa96c4bd97cc7cd0efc24bd33dcaf8f6c6bc7d984d832693de62257c5"
+          }
+        ]
+      },
+      {
+        "bodyIndexCount": 5184,
+        "buffers": [
+          {
+            "key": "position",
+            "type": "Float32Array",
+            "bytes": 106308,
+            "sha256": "29d52bb2c54822e10242bddc5c9dbfb95743460440b456a54d7dbfa7125ac699"
+          },
+          {
+            "key": "normal",
+            "type": "Float32Array",
+            "bytes": 106308,
+            "sha256": "506b8bba7419bdc28ed1d61c0a3fe146fafa7e433c6a41e1266399df660ef559"
+          },
+          {
+            "key": "color",
+            "type": "Float32Array",
+            "bytes": 106308,
+            "sha256": "67412ecf147a2eb731550a4bad2cc7ee9eb9bb4fc254218ecf724a2ac9c967e8"
+          },
+          {
+            "key": "index",
+            "type": "Uint16Array",
+            "bytes": 34152,
+            "sha256": "ebf695616efff2a12794e0415aaa665a634c4472ba961b851dd9983c238a2454"
+          }
+        ]
+      },
+      {
+        "bodyIndexCount": 5184,
+        "buffers": [
+          {
+            "key": "position",
+            "type": "Float32Array",
+            "bytes": 103428,
+            "sha256": "47fb555c65cab18ee118a1e62f9e2935aeee3331afc037d899e6081ec53346a5"
+          },
+          {
+            "key": "normal",
+            "type": "Float32Array",
+            "bytes": 103428,
+            "sha256": "5b4848722051e8efde07c555d140335d900eafd88d5420b83ae9c115ab781ff2"
+          },
+          {
+            "key": "color",
+            "type": "Float32Array",
+            "bytes": 103428,
+            "sha256": "db3d690cacac42caff19729acb4f71a82f275839652b87ac16e468dc72d7ab05"
+          },
+          {
+            "key": "index",
+            "type": "Uint16Array",
+            "bytes": 33432,
+            "sha256": "eb2fe42fec1fd3a6622958c566bd05a417575d1719e83cf00cda83e5543f1894"
+          }
+        ]
+      },
+      {
+        "bodyIndexCount": 5184,
+        "buffers": [
+          {
+            "key": "position",
+            "type": "Float32Array",
+            "bytes": 108084,
+            "sha256": "83379f8a557b53436fd80327754b78b3d4399cc63e5cfc3aeea0dee952436df1"
+          },
+          {
+            "key": "normal",
+            "type": "Float32Array",
+            "bytes": 108084,
+            "sha256": "aee1de13013c11ccd70dc5624339e63ed440b1e4f0b22f69c6f97575fe7abb4c"
+          },
+          {
+            "key": "color",
+            "type": "Float32Array",
+            "bytes": 108084,
+            "sha256": "2a9c687e4e8c160e84426d2ba034fcfbcc9bafa778e815fbdc0de091b86a77c4"
+          },
+          {
+            "key": "index",
+            "type": "Uint16Array",
+            "bytes": 34596,
+            "sha256": "75e6e657780ac5a2b05451c419aa8c8c5a8eef1daa05beb9430a37d8052fa586"
+          }
+        ]
+      },
+      {
+        "bodyIndexCount": 5184,
+        "buffers": [
+          {
+            "key": "position",
+            "type": "Float32Array",
+            "bytes": 108468,
+            "sha256": "c0471da74134d9243b9deed8cf1e16f28216b2a4529a3da4d2b9dbca29d408c7"
+          },
+          {
+            "key": "normal",
+            "type": "Float32Array",
+            "bytes": 108468,
+            "sha256": "f37dde48c5edf39565065ff1838ccf4147958e4fb68a89ebcddf1708e0013a64"
+          },
+          {
+            "key": "color",
+            "type": "Float32Array",
+            "bytes": 108468,
+            "sha256": "ee7e2ef08d9d2858720e4f9b74773462e126ca576ad3b7a45370c80d6e650212"
+          },
+          {
+            "key": "index",
+            "type": "Uint16Array",
+            "bytes": 34692,
+            "sha256": "c81dedada10b917af7e1f1fb3f7d72aea11a65f66665b73061d1881bdae97e45"
+          }
+        ]
+      },
+      {
+        "bodyIndexCount": 5184,
+        "buffers": [
+          {
+            "key": "position",
+            "type": "Float32Array",
+            "bytes": 103284,
+            "sha256": "33b41adc6573aa7536a486445a527411fa99302baa77437644ef20b9de6d895e"
+          },
+          {
+            "key": "normal",
+            "type": "Float32Array",
+            "bytes": 103284,
+            "sha256": "7c9b0512d24762be59c1fbe02d6bb7445b8928ea157d6fdd1c065a4c90d0e576"
+          },
+          {
+            "key": "color",
+            "type": "Float32Array",
+            "bytes": 103284,
+            "sha256": "720ce4a0234cb5f77adc504a8a105c5eead8ccb92d22da0be12f21010885f35a"
+          },
+          {
+            "key": "index",
+            "type": "Uint16Array",
+            "bytes": 33396,
+            "sha256": "027666cf574fa3359f27c7b5a60e6531ce16af618e5184f443f770e40adc6f52"
+          }
+        ]
+      },
+      {
+        "bodyIndexCount": 5184,
+        "buffers": [
+          {
+            "key": "position",
+            "type": "Float32Array",
+            "bytes": 106308,
+            "sha256": "9b9df32623c3905d84e96449b1bcb6578a538cb312248a9c7e3e8caecda1b3ea"
+          },
+          {
+            "key": "normal",
+            "type": "Float32Array",
+            "bytes": 106308,
+            "sha256": "1811abf943a550608189e5f81c4b8ba312c9db83c40ae1dac5ac2d7bad3f75f9"
+          },
+          {
+            "key": "color",
+            "type": "Float32Array",
+            "bytes": 106308,
+            "sha256": "116af103867e8549db7df2e0bcf1d0d47e448939f0fdd7e51a497ba2abf4793f"
+          },
+          {
+            "key": "index",
+            "type": "Uint16Array",
+            "bytes": 34152,
+            "sha256": "ebf695616efff2a12794e0415aaa665a634c4472ba961b851dd9983c238a2454"
+          }
+        ]
+      },
+      {
+        "bodyIndexCount": 5184,
+        "buffers": [
+          {
+            "key": "position",
+            "type": "Float32Array",
+            "bytes": 109908,
+            "sha256": "c07a8f3b18eced1c22c8ce7dc8fb0b7217dba54430789afcbac2b7c1dd43f2ce"
+          },
+          {
+            "key": "normal",
+            "type": "Float32Array",
+            "bytes": 109908,
+            "sha256": "f01fd70410fdbd2fe31a48120387c885eec0fe76f55376c1cd3f39742eb7be5f"
+          },
+          {
+            "key": "color",
+            "type": "Float32Array",
+            "bytes": 109908,
+            "sha256": "4a48d7b171b03086a9d0eee2935f4282f04095b880f9f5b93c75521cbc2dbbd1"
+          },
+          {
+            "key": "index",
+            "type": "Uint16Array",
+            "bytes": 35052,
+            "sha256": "ed5c4cb6149de8895e9eed2e6949df46f9d10cdf2bb14e62d2147a3a754f9e54"
+          }
+        ]
+      },
+      {
+        "bodyIndexCount": 5184,
+        "buffers": [
+          {
+            "key": "position",
+            "type": "Float32Array",
+            "bytes": 108180,
+            "sha256": "837b31e726da5e2ec2ad1ad95af0ddb805c37d94b834fb5b7e9a4855573bceae"
+          },
+          {
+            "key": "normal",
+            "type": "Float32Array",
+            "bytes": 108180,
+            "sha256": "447bba329aa0beb68586ae01784ea2f1d057cfdaf8eaf1f0d6b5bcf1fe00934a"
+          },
+          {
+            "key": "color",
+            "type": "Float32Array",
+            "bytes": 108180,
+            "sha256": "62af1c9f680edeadd27b822453826baccaf6ab168f6d7cdb120890aedac12d77"
+          },
+          {
+            "key": "index",
+            "type": "Uint16Array",
+            "bytes": 34620,
+            "sha256": "bbeb9551b19aafb6936052893e66d20cd5ffcb45c9a37bfe8e9f009ce7d46591"
+          }
+        ]
+      },
+      {
+        "bodyIndexCount": 4428,
+        "buffers": [
+          {
+            "key": "position",
+            "type": "Float32Array",
+            "bytes": 90456,
+            "sha256": "59d0ea1ce7a125e1d9bc87dc3aaa28057cd6b9fb5726d314b912242f5981fe8b"
+          },
+          {
+            "key": "normal",
+            "type": "Float32Array",
+            "bytes": 90456,
+            "sha256": "6d4cc92c1db4e016d9a9fc8e5d20697595f841f3dc7c01c82b3c5b82b441a8d8"
+          },
+          {
+            "key": "color",
+            "type": "Float32Array",
+            "bytes": 90456,
+            "sha256": "316dc183b6bae33f7559a1a3ff6ccd155d40ac197f2e441b3c7928b8c2d60903"
+          },
+          {
+            "key": "index",
+            "type": "Uint16Array",
+            "bytes": 29076,
+            "sha256": "ba07acf4e1afb511e1a7bfe3da780bcd76b54bf8d7889a0d8a5292e71428e60a"
+          }
+        ]
+      }
+    ]
+  }
+}

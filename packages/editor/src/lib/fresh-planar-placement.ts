@@ -177,6 +177,7 @@ export function createFreshPlacementSubtree(
     rootId,
     parentId,
   })
+  cloned.nodes = cloned.nodes.map((node) => remapNodeReferences(node, cloned.idMap))
 
   scene.applyNodeChanges({
     create: copyCreateOps(cloned, parentId),
@@ -205,7 +206,8 @@ function namedSurfaceRejection(
   if (surfaceId === null) return null
   const scene = createSceneApi(useScene)
   const host = root.parentId ? scene.get(root.parentId as AnyNodeId) : undefined
-  if (!host || !('position' in root) || !Array.isArray(root.rotation)) return 'no-surface'
+  if (!host || !('position' in root) || !('rotation' in root) || !Array.isArray(root.rotation))
+    return 'no-surface'
   const surface = getSurfaceProvider(host)
     .surfaces?.(host, { scene })
     .find((s) => s.id === surfaceId)
@@ -306,6 +308,7 @@ export function commitFreshPlacementSubtree(
   )
   const parentId = parentIdOf(root)
   const cloned = cloneNodesInto([root, ...descendants], { rootId, parentId })
+  cloned.nodes = cloned.nodes.map((node) => remapNodeReferences(node, cloned.idMap))
   // The drafts' memberships, read before they are deleted.
   const create = copyCreateOps(cloned, parentId)
   const updates = surfaceAttachmentUpdates(rootId, null, null)
@@ -322,7 +325,9 @@ export function commitFreshPlacementSubtree(
     if (!updates.some((entry) => entry.id === update.id)) updates.push(update)
 
   // A roof dropped onto the walls that carry it goes to the level above them, in the same step.
-  const seated = seatRoofs(scene.nodes, { create, update: updates, delete: [rootId] }).changes
+  const seat = seatRoofs(scene.nodes, { create, update: updates, delete: [rootId] })
+  if ('kind' in seat) return null
+  const seated = seat.changes
 
   const scope = useInteractionScope.getState()
   const factoryCreated =

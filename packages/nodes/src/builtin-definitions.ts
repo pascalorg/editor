@@ -26,9 +26,11 @@ import {
 import { floorOpeningRenderDefinition } from './floor-opening/definition.render'
 import { guideRenderDefinition } from './guide/definition.render'
 import { gutterRenderDefinition } from './gutter/definition.render'
+import { hedgeRenderDefinition } from './hedge/definition.render'
 import { hvacEquipmentRenderDefinition } from './hvac-equipment/definition.render'
 import { importedMeshRenderDefinition } from './imported-mesh/definition.render'
 import { itemRenderDefinition } from './item/definition.render'
+import { lawnRenderDefinition } from './lawn/definition.render'
 import { leanToExtensionRenderDefinition } from './lean-to-extension/definition.render'
 import { levelRenderDefinition } from './level/definition.render'
 import { linesetRenderDefinition } from './lineset/definition.render'
@@ -37,8 +39,10 @@ import { measurementRenderDefinition } from './measurement/definition.render'
 import { pipeFittingRenderDefinition } from './pipe-fitting/definition.render'
 import { pipeSegmentRenderDefinition } from './pipe-segment/definition.render'
 import { pipeTrapRenderDefinition } from './pipe-trap/definition.render'
+import { plantingRenderDefinition } from './planting/definition.render'
 import { proceduralItemRenderDefinition } from './procedural-item/definition.render'
 import { ridgeVentRenderDefinition } from './ridge-vent/definition.render'
+import { rockRenderDefinition } from './rock/definition.render'
 import { roofRenderDefinition } from './roof/definition.render'
 import { roofSegmentRenderDefinition } from './roof-segment/definition.render'
 import { scanRenderDefinition } from './scan/definition.render'
@@ -52,6 +56,7 @@ import { spawnRenderDefinition } from './spawn/definition.render'
 import { stairRenderDefinition } from './stair/definition.render'
 import { stairSegmentRenderDefinition } from './stair-segment/definition.render'
 import { structuralGridRenderDefinition } from './structural-grid/definition.render'
+import { treeRenderDefinition } from './tree/definition.render'
 import { turbineVentRenderDefinition } from './turbine-vent/definition.render'
 import { unitRenderDefinition } from './unit/definition.render'
 import { wallRenderDefinition } from './wall/definition.render'
@@ -88,6 +93,11 @@ export const builtinRenderDefinitions = [
   stairSegmentRenderDefinition,
   zoneRenderDefinition,
   siteRenderDefinition,
+  rockRenderDefinition,
+  hedgeRenderDefinition,
+  plantingRenderDefinition,
+  treeRenderDefinition,
+  lawnRenderDefinition,
   buildingRenderDefinition,
   levelRenderDefinition,
   guideRenderDefinition,

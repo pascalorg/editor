@@ -11,9 +11,12 @@ import { addCornerWindowTool } from './corner-window'
 import { createRoomTool } from './create-room'
 import { designBriefTool } from './design-brief'
 import { placeDesignTool, validateDesignTool } from './designs'
+import { addDormerTool } from './dormers'
+import { dressRoomTool } from './dress-room'
 import { addFenceTool } from './fences'
 import { findByTypeTool } from './find-by-type'
 import { furnishRoomTool } from './furnish-room'
+import { addHedgeTool } from './hedge'
 import {
   addLevelTool,
   duplicateLevelTool,
@@ -29,15 +32,21 @@ import { deleteNodeTool, getNodeTool } from './nodes'
 import { paintTool } from './paint'
 import { placeInRoomTool } from './place-in-room'
 import { placeItemsTool } from './place-items'
+import { addPlantingTool } from './planting'
+import { addRockTool } from './rock'
+import { addRoofElementTool } from './roof-elements'
 import { createRoofTool, moveRoofsToRoofLevelTool } from './roofs'
 import { ROOM_TOOL_CONTRACTS } from './room-structure'
 import { searchMaterialsTool } from './search-materials'
 import { getSiteTool, placeBuildingTool } from './site'
+import { addSiteSurfaceTool, addStepsTool } from './site-works'
 import { createStairTool, fitStairTool, measureStairTool } from './stairs'
+import { addTreeTool } from './tree'
 import { UNIT_TOOL_CONTRACTS } from './units'
 import { verifySceneTool } from './verify-scene'
 import { viewSceneTool } from './view-scene'
 import { addDoorTool, addWindowTool } from './wall-openings'
+import { setWallTrimTool } from './wall-trim'
 import { addWallTool, setWallTypeTool } from './walls'
 
 export * from './achieved'
@@ -50,9 +59,12 @@ export * from './columns'
 export * from './contract'
 export * from './corner-window'
 export * from './create-room'
+export * from './dormers'
+export * from './dress-room'
 export * from './fences'
 export * from './find-by-type'
 export * from './furnish-room'
+export * from './hedge'
 export * from './hosted-services'
 export * from './levels'
 export * from './measurement'
@@ -63,19 +75,25 @@ export * from './nodes'
 export * from './notation-inventory'
 export * from './paint'
 export * from './place-items'
+export * from './planting'
 export * from './project-files'
 export * from './refusal'
 export * from './retired'
+export * from './rock'
+export * from './roof-elements'
 export * from './roofs'
 export * from './room-structure'
 export * from './search-materials'
 export * from './site'
+export * from './site-works'
 export { CATALOG_SOURCE, OTHER_SOURCES, OUTSIDE_SOURCES } from './sources'
 export * from './stairs'
+export * from './tree'
 export * from './units'
 export * from './verify-scene'
 export * from './view-scene'
 export * from './wall-openings'
+export * from './wall-trim'
 export * from './walls'
 export * from './write-target'
 
@@ -85,6 +103,8 @@ export * from './write-target'
  * surface drifts. See wiki/architecture/agent-surfaces.md.
  */
 export const AGENT_TOOL_CONTRACTS = [
+  addDormerTool,
+  addRoofElementTool,
   addColumnTool,
   measureStairTool,
   fitStairTool,
@@ -104,7 +124,15 @@ export const AGENT_TOOL_CONTRACTS = [
   validateDesignTool,
   addWallTool,
   setWallTypeTool,
+  setWallTrimTool,
+  dressRoomTool,
   addFenceTool,
+  addHedgeTool,
+  addPlantingTool,
+  addTreeTool,
+  addRockTool,
+  addSiteSurfaceTool,
+  addStepsTool,
   addCornerWindowTool,
   mergeWindowsTool,
   addLevelTool,
