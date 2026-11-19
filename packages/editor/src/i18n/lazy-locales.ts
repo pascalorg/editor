@@ -4,14 +4,59 @@ import { messages as en } from './locales/en/messages'
 
 const loadedLocales = new Set<BundledLocale>()
 
-function resolveBundledLocale(locale: string): BundledLocale | null {
-  const normalized = locale.trim().toLowerCase()
+export function resolveBundledLocale(locale: string): BundledLocale | null {
+  const trimmed = locale.trim()
+  if (!trimmed) return 'en'
+  const normalized = trimmed.replace(/_/g, '-').toLowerCase()
   if (normalized === 'en-xa') return null
-  if (!normalized || normalized === 'en' || normalized.startsWith('en-')) return 'en'
+  if (normalized === 'en' || normalized.startsWith('en-')) return 'en'
   if (normalized === 'es' || normalized.startsWith('es-')) return 'es'
   if (normalized === 'fr' || normalized.startsWith('fr-')) return 'fr'
   if (normalized === 'ja' || normalized.startsWith('ja-')) return 'ja'
-  if (normalized === 'zh-cn' || normalized === 'zh-hans' || normalized === 'zh') return 'zh-CN'
+
+  // Traditional Chinese / non-simplified variants must not resolve to Simplified Chinese
+  if (
+    normalized === 'zh-hant' ||
+    normalized.startsWith('zh-hant-') ||
+    normalized === 'zh-tw' ||
+    normalized === 'zh-hk' ||
+    normalized === 'zh-mo'
+  ) {
+    return null
+  }
+
+  if (
+    normalized === 'zh' ||
+    normalized === 'zh-cn' ||
+    normalized === 'zh-sg' ||
+    normalized.startsWith('zh-hans')
+  ) {
+    return 'zh-CN'
+  }
+
+  try {
+    const parsed = new Intl.Locale(trimmed)
+    if (parsed.language === 'zh') {
+      if (
+        parsed.script === 'Hant' ||
+        parsed.region === 'TW' ||
+        parsed.region === 'HK' ||
+        parsed.region === 'MO'
+      ) {
+        return null
+      }
+      if (
+        parsed.script === 'Hans' ||
+        parsed.region === 'CN' ||
+        (!parsed.script && !parsed.region)
+      ) {
+        return 'zh-CN'
+      }
+    }
+  } catch {
+    // Ignore invalid locale tag
+  }
+
   return null
 }
 

@@ -38,6 +38,20 @@ test('Simplified Chinese aliases use zh-CN without affecting Traditional Chinese
   expect(translate('viewer.display.title', 'Display settings')).toBe('Display settings')
 })
 
+test('lazy loaded bundled locales resolve and load Simplified Chinese aliases', async () => {
+  const { loadBundledLocale, resolveBundledLocale } = await import('./lazy-locales')
+
+  expect(resolveBundledLocale('zh-Hans-CN')).toBe('zh-CN')
+  expect(resolveBundledLocale('zh-hans-cn')).toBe('zh-CN')
+  expect(resolveBundledLocale('zh-Hans')).toBe('zh-CN')
+  expect(resolveBundledLocale('zh-Hant')).toBeNull()
+  expect(resolveBundledLocale('zh-TW')).toBeNull()
+
+  const loaded = await loadBundledLocale('zh-Hans-CN')
+  expect(loaded).not.toBeNull()
+  expect(loaded?.locale).toBe('zh-CN')
+})
+
 test('generated stored level names localize while authored names remain unchanged', () => {
   registerBundledLocales()
   const french = createI18n({ locale: 'fr' })
