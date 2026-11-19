@@ -3,9 +3,12 @@ import { LAWN_LIMITS, LawnNode } from '../schema/nodes/lawn'
 import { type LawnCoverage, lawnCoverage } from './lawn-coverage'
 import { lawnFlowerProbes, lawnFlowers } from './lawn-flowers'
 import {
+  type LawnGroundAxes,
   type LawnGroundTriangle,
+  lawnGroundAxes,
   lawnGroundMesh,
   lawnGroundTriangles,
+  lawnGroundTrianglesIn,
   lawnSwath,
 } from './lawn-ground'
 import { retainedLawn } from './lawn-scene'
@@ -116,7 +119,7 @@ export function planLawn(input: LawnNode, nodes: Nodes): LawnPlan {
 }
 
 function bladeAt(
-  plan: LawnPlan,
+  plan: Pick<LawnPlan, 'node' | 'coverage' | 'groundHeight'>,
   col: number,
   row: number,
   candidate: number,
@@ -263,4 +266,173 @@ export function buildLawn(node: LawnNode, nodes: Nodes): LawnBuild {
 
 export function lawnFacts(node: LawnNode, nodes: Nodes): LawnFacts {
   return buildLawn(node, nodes).facts
+}
+
+/** Blades are packed in square chunks of this many metres (`bladeChunks`). */
+export const LAWN_CHUNK_M = 8
+
+/** Everything a lawn's chunks need that brush strokes cannot change. */
+export type LawnChunkContext = Pick<LawnPlan, 'polygons' | 'coverage' | 'groundHeight'> & {
+  field: ReturnType<typeof persistedTerrainFieldOf>
+  axes: LawnGroundAxes
+  cells: ReturnType<typeof candidateBounds>
+}
+export type LawnChunkBuild = {
+  key: string
+  bounds: LawnChunk['bounds']
+  rootHeight: Float32Array
+  traits: Float32Array
+  count: number
+  midCount: number
+  base: LawnBuild['base']
+}
+
+export function lawnChunkContext(input: LawnNode, nodes: Nodes): LawnChunkContext {
+  const node = LawnNode.parse(input)
+  const { polygons } = retainedLawn(node, nodes)
+  const site = node.parentId ? nodes[node.parentId] : undefined
+  const field = site?.type === 'site' ? persistedTerrainFieldOf(site) : null
+  return {
+    polygons,
+    coverage: lawnCoverage(polygons),
+    groundHeight: field ? (x: number, z: number) => heightAt(field, x, z) : () => FLAT_GROUND_Y,
+    field,
+    axes: lawnGroundAxes(polygons, field),
+    cells: candidateBounds(polygons),
+  }
+}
+
+/**
+ * The chunks a change of strokes can alter. A stroke reaches a blade, a ground vertex or a ground
+ * triangle only within its radius of a segment, so the chunks outside the changed segments' boxes
+ * (grown by the radius and by one ground cell, whose centre names its chunk) keep every byte.
+ */
+export function lawnChunksTouched(
+  context: LawnChunkContext,
+  before: LawnNode['strokes'],
+  after: LawnNode['strokes'],
+): [number, number][] {
+  const { xs, zs } = context.axes
+  let cell = 1
+  for (const axis of [xs, zs])
+    for (let index = 0; index + 1 < axis.length; index++)
+      cell = Math.max(cell, (axis[index + 1] ?? 0) - (axis[index] ?? 0))
+  const touched = new Map<string, [number, number]>()
+  const grow = (stroke: LawnNode['strokes'][number], from: number) => {
+    for (let index = Math.max(0, from); index < stroke.points.length; index++) {
+      const start = stroke.points[index],
+        end = stroke.points[index + 1] ?? start
+      if (!start || !end) continue
+      const reach = stroke.radiusM + cell
+      const minX = Math.max(context.cells.minX, Math.min(start[0], end[0]) - reach),
+        maxX = Math.min(context.cells.maxX, Math.max(start[0], end[0]) + reach)
+      const minZ = Math.max(context.cells.minZ, Math.min(start[1], end[1]) - reach),
+        maxZ = Math.min(context.cells.maxZ, Math.max(start[1], end[1]) + reach)
+      for (
+        let chunkZ = Math.floor(minZ / LAWN_CHUNK_M);
+        chunkZ <= Math.floor(maxZ / LAWN_CHUNK_M);
+        chunkZ++
+      )
+        for (
+          let chunkX = Math.floor(minX / LAWN_CHUNK_M);
+          chunkX <= Math.floor(maxX / LAWN_CHUNK_M);
+          chunkX++
+        )
+          touched.set(`${chunkX},${chunkZ}`, [chunkX, chunkZ])
+    }
+  }
+  for (let index = 0; index < Math.max(before.length, after.length); index++) {
+    const old = before[index],
+      now = after[index]
+    if (old === now) continue
+    const same =
+      old &&
+      now &&
+      old.radiusM === now.radiusM &&
+      old.effect === now.effect &&
+      old.strength === now.strength
+    // A stroke in progress only grows or moves its tail: the segments before the first point that
+    // differs are unchanged. Anything else redraws both strokes whole.
+    let first = 0
+    if (same)
+      while (
+        first < old.points.length &&
+        first < now.points.length &&
+        old.points[first]?.[0] === now.points[first]?.[0] &&
+        old.points[first]?.[1] === now.points[first]?.[1]
+      )
+        first++
+    if (same && first === old.points.length && first === now.points.length) continue
+    if (old) grow(old, same ? first - 1 : 0)
+    if (now) grow(now, same ? first - 1 : 0)
+  }
+  return [...touched.values()]
+}
+
+/** One chunk of a parsed lawn, cell for cell as `buildLawn` builds it (no blades: `count` 0). */
+export function buildLawnChunk(
+  context: LawnChunkContext,
+  node: LawnNode,
+  chunkX: number,
+  chunkZ: number,
+): LawnChunkBuild {
+  const plan = { node, coverage: context.coverage, groundHeight: context.groundHeight }
+  const bounds: LawnChunk['bounds'] = [
+    chunkX * LAWN_CHUNK_M,
+    chunkZ * LAWN_CHUNK_M,
+    chunkX * LAWN_CHUNK_M + LAWN_CHUNK_M,
+    chunkZ * LAWN_CHUNK_M + LAWN_CHUNK_M,
+  ]
+  const buckets: Blade[][] = Array.from({ length: 256 }, () => [])
+  let count = 0
+  for (
+    let row = Math.max(context.cells.minZ, bounds[1]);
+    row < Math.min(context.cells.maxZ, bounds[3]);
+    row++
+  )
+    for (
+      let col = Math.max(context.cells.minX, bounds[0]);
+      col < Math.min(context.cells.maxX, bounds[2]);
+      col++
+    ) {
+      const status = context.coverage.cell(col, row, col + 1, row + 1)
+      if (status === 'outside') continue
+      for (let candidate = 0; candidate < 100; candidate++) {
+        const blade = bladeAt(plan, col, row, candidate, status === 'inside')
+        if (!blade) continue
+        buckets[blade.bucket]?.push(blade)
+        count++
+      }
+    }
+  const rootHeight = new Float32Array(count * 4),
+    traits = new Float32Array(count * 4)
+  let offset = 0
+  for (const bucket of buckets)
+    for (const blade of bucket) {
+      rootHeight.set(blade.root, offset * 4)
+      traits.set(blade.traits, offset * 4)
+      offset++
+    }
+  const triangles = lawnGroundTrianglesIn(
+    context.polygons,
+    context.coverage,
+    context.axes,
+    node,
+    context.field,
+    bounds,
+  )
+  return {
+    key: `${chunkX},${chunkZ}`,
+    bounds,
+    rootHeight,
+    traits,
+    count,
+    midCount: Math.floor(count * 0.2),
+    base: lawnGroundMesh(triangles, node),
+  }
+}
+
+/** The whole flower population for the strokes as they stand: its thinning is not local. */
+export function buildLawnChunkFlowers(context: LawnChunkContext, node: LawnNode) {
+  return lawnFlowers(node, context.polygons, context.coverage, context.groundHeight).mesh
 }

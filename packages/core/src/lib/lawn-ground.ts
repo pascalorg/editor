@@ -2,7 +2,7 @@ import type { LawnNode } from '../schema/nodes/lawn'
 import { LAWN_LIMITS } from '../schema/nodes/lawn'
 import { triangulatePlanPolygon } from './earcut'
 import { linearColor, type Rgb } from './foliage'
-import { lawnCoverage } from './lawn-coverage'
+import { type LawnCoverage, lawnCoverage } from './lawn-coverage'
 import { sampleLawnStrokes } from './lawn-strokes'
 import { assertLawnStrokeWork, type LawnBuild, LawnBuildError } from './lawn-types'
 import { plantingBounds } from './planting-outline'
@@ -194,6 +194,44 @@ function appendGroundTriangle(
   triangles.push(triangle)
 }
 
+function appendGroundCell(
+  triangles: LawnGroundTriangle[],
+  polygons: MultiPolygon,
+  coverage: LawnCoverage,
+  node: LawnNode,
+  field: TerrainField | null,
+  work: { visits: number; points: number },
+  left: number,
+  right: number,
+  top: number,
+  bottom: number,
+) {
+  const status = coverage.cell(left, top, right, bottom)
+  if (status === 'outside') return
+  for (const cell of cellTriangles(left, right, top, bottom, field)) {
+    const retained =
+      status === 'inside' ? [{ outer: cell, holes: [] }] : intersection(polygons, cell)
+    for (const polygon of retained)
+      for (const ring of withoutHoles(polygon)) {
+        for (const indices of triangulatePlanPolygon(ring)) {
+          const points = indices
+            .map((index) => ring[index])
+            .filter((point): point is [number, number] => !!point)
+          const a = points[0],
+            b = points[1],
+            c = points[2]
+          if (!a || !b || !c || area([{ outer: [a, b, c], holes: [] }]) < 1e-9) continue
+          const point = ([x, z]: [number, number]): Rgb => [
+            x,
+            field ? heightAt(field, x, z) : FLAT_GROUND_Y,
+            z,
+          ]
+          appendGroundTriangle(triangles, [point(a), point(b), point(c)], node, work)
+        }
+      }
+  }
+}
+
 export function lawnGroundTriangles(
   polygons: MultiPolygon,
   node: LawnNode,
@@ -211,31 +249,47 @@ export function lawnGroundTriangles(
         bottom = zs[row + 1]
       if (left === undefined || right === undefined || top === undefined || bottom === undefined)
         continue
-      const status = coverage.cell(left, top, right, bottom)
-      if (status === 'outside') continue
-      for (const cell of cellTriangles(left, right, top, bottom, field)) {
-        const retained =
-          status === 'inside' ? [{ outer: cell, holes: [] }] : intersection(polygons, cell)
-        for (const polygon of retained)
-          for (const ring of withoutHoles(polygon)) {
-            for (const indices of triangulatePlanPolygon(ring)) {
-              const points = indices
-                .map((index) => ring[index])
-                .filter((point): point is [number, number] => !!point)
-              const a = points[0],
-                b = points[1],
-                c = points[2]
-              if (!a || !b || !c || area([{ outer: [a, b, c], holes: [] }]) < 1e-9) continue
-              const point = ([x, z]: [number, number]): Rgb => [
-                x,
-                field ? heightAt(field, x, z) : FLAT_GROUND_Y,
-                z,
-              ]
-              appendGroundTriangle(triangles, [point(a), point(b), point(c)], node, work)
-            }
-          }
-      }
+      appendGroundCell(triangles, polygons, coverage, node, field, work, left, right, top, bottom)
     }
+  return triangles
+}
+
+export type LawnGroundAxes = { xs: number[]; zs: number[] }
+export const lawnGroundAxes: (
+  polygons: MultiPolygon,
+  field: TerrainField | null,
+) => LawnGroundAxes = terrainAxes
+
+/**
+ * The ground cells whose centre lies in one rectangle, built by the same cell code as the whole
+ * ground and in the same order. Budgets belong to the whole plan and are not counted here.
+ */
+export function lawnGroundTrianglesIn(
+  polygons: MultiPolygon,
+  coverage: LawnCoverage,
+  axes: LawnGroundAxes,
+  node: LawnNode,
+  field: TerrainField | null,
+  [minX, minZ, maxX, maxZ]: [number, number, number, number],
+): LawnGroundTriangle[] {
+  const { xs, zs } = axes
+  const triangles: LawnGroundTriangle[] = []
+  const work = { visits: 0, points: 0 }
+  for (let row = 0; row + 1 < zs.length; row++) {
+    const top = zs[row],
+      bottom = zs[row + 1]
+    if (top === undefined || bottom === undefined) continue
+    const z = (top + bottom) / 2
+    if (z < minZ || z >= maxZ) continue
+    for (let col = 0; col + 1 < xs.length; col++) {
+      const left = xs[col],
+        right = xs[col + 1]
+      if (left === undefined || right === undefined) continue
+      const x = (left + right) / 2
+      if (x < minX || x >= maxX) continue
+      appendGroundCell(triangles, polygons, coverage, node, field, work, left, right, top, bottom)
+    }
+  }
   return triangles
 }
 
