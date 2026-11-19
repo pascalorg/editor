@@ -5,12 +5,15 @@
  * than `LAWN_STROKE_REBUILD_SHARE` of the time rebuilding; release, cancel and every other
  * change rebuild at once, as before.
  */
+import { useLiveNodeOverrides, useScene } from '@pascal-app/core'
+
 export const LAWN_STROKE_REBUILD_MS = 120
 export const LAWN_STROKE_REBUILD_SHARE = 0.2
 
 type Stroke = { key?: string; at: number; cost: number; chunked: boolean }
 const strokes = new Map<string, Stroke>()
 const issued = new Map<string, string>()
+const exact = new Map<string, unknown>()
 let builds = 0
 
 const spacing = (stroke: Stroke) =>
@@ -41,6 +44,14 @@ export function setLawnStrokeChunked(id: string, chunked: boolean): void {
   if (stroke) stroke.chunked = chunked
 }
 
+/**
+ * A released stroke left the mounted lawn, chunk by chunk, exactly as a full build of this scene
+ * would make it: the viewer keeps that build until the scene changes again.
+ */
+export function keepLawnBuildFor(id: string, scene: unknown): void {
+  exact.set(id, scene)
+}
+
 /** What the lawn's last full build cost; a slower lawn spaces its stroke rebuilds further apart. */
 export function noteLawnBuild(id: string, ms: number): void {
   const stroke = strokes.get(id)
@@ -62,6 +73,16 @@ export function lawnGeometryKey(node: { id: string }, now = performance.now()): 
   const stroke = strokes.get(node.id)
   const held = issued.get(node.id)
   if (stroke?.chunked && held !== undefined) return held
+  if (exact.has(node.id)) {
+    if (
+      !stroke &&
+      held !== undefined &&
+      exact.get(node.id) === useScene.getState().nodes &&
+      !useLiveNodeOverrides.getState().overrides.has(node.id)
+    )
+      return held
+    exact.delete(node.id)
+  }
   if (stroke?.key !== undefined && now - stroke.at < spacing(stroke)) return stroke.key
   const key = `lawn-build-${++builds}`
   issued.set(node.id, key)

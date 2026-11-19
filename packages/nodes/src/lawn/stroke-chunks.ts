@@ -10,13 +10,14 @@ import {
   lawnGroundChunkAt,
   useScene,
 } from '@pascal-app/core'
-import { type BufferAttribute, type Material, Mesh } from 'three'
+import { type BufferAttribute, Mesh } from 'three'
 import type { MeshStandardNodeMaterial } from 'three/webgpu'
 import { lawnBladeMaterial } from './blade-material'
 import { lawnFlowerMaterial } from './flower-material'
 import { lawnChunkDetail, lawnFlowerGeometry, lawnGroundGeometry } from './geometry'
-import { type LawnDetail, mountedLawnDetail } from './lod'
+import { type LawnDetail, type LawnLive, mountedLawnDetail } from './lod'
 import {
+  keepLawnBuildFor,
   LAWN_STROKE_REBUILD_MS,
   LAWN_STROKE_REBUILD_SHARE,
   lawnStrokesInProgress,
@@ -28,15 +29,14 @@ import { lawnGroundMaterial } from './turf-ground'
  * A brush stroke in progress redraws only the chunks it can reach. The generator works by
  * one-metre cells packed in 8 m chunks, and a stroke reaches a blade or the ground only within
  * its radius, so a chunk rebuilt alone holds the bytes a full build gives it. Flowers are thinned
- * over the whole lawn: they are rebuilt whole, spaced like the old whole-lawn rebuilds. The full
- * rebuild at release replaces all of this with the saved lawn.
+ * over the whole lawn: they are rebuilt whole, spaced like the old whole-lawn rebuilds. At release
+ * the mounted lawn already is the saved lawn, so the viewer keeps it; a cancel rebuilds in full.
  */
 type Session = {
   detail: LawnDetail
+  live: LawnLive
   context: LawnChunkContext
-  strokes: LawnNode['strokes']
-  ground: Map<string, Mesh>
-  groundMaterial: Material
+  node: LawnNode
   flowers: { stale: boolean; at: number; cost: number }
 }
 const sessions = new Map<string, Session>()
@@ -50,14 +50,7 @@ function start(id: string, node: LawnNode, detail: LawnDetail): Session | null {
   if (!live) return null
   try {
     const context = lawnChunkContext(node, useScene.getState().nodes)
-    return {
-      detail,
-      context,
-      strokes: live.strokes,
-      ground: new Map(),
-      groundMaterial: live.ground.material as Material,
-      flowers: { stale: false, at: 0, cost: 0 },
-    }
+    return { detail, live, context, node, flowers: { stale: false, at: 0, cost: 0 } }
   } catch (error) {
     if (error instanceof LawnBuildError) return null
     throw error
@@ -66,7 +59,7 @@ function start(id: string, node: LawnNode, detail: LawnDetail): Session | null {
 
 /** Takes one chunk's triangles out of the whole ground mesh: the chunk draws its own from now on. */
 function releaseGround(session: Session, key: string) {
-  const geometry = session.detail.live?.ground.geometry
+  const geometry = session.live.ground.geometry
   const index = geometry?.getIndex()
   const position = geometry?.getAttribute('position')
   if (!geometry || !index || !position) return
@@ -90,9 +83,7 @@ function releaseGround(session: Session, key: string) {
 }
 
 function drawChunk(session: Session, node: LawnNode, chunkX: number, chunkZ: number) {
-  const { detail } = session
-  const live = detail.live
-  if (!live) return
+  const { detail, live } = session
   const chunk = buildLawnChunk(session.context, node, chunkX, chunkZ)
   // Blades: the chunk's two meshes are replaced; every other chunk keeps its buffers.
   const at = detail.chunks.findIndex((existing) => existing.key === chunk.key)
@@ -117,7 +108,7 @@ function drawChunk(session: Session, node: LawnNode, chunkX: number, chunkZ: num
   } else if (at >= 0) detail.chunks.splice(at, 1)
   // Ground: the chunk's own mesh, with the bare-soil cover once any stroke needs it.
   const painted = !!chunk.base.cover
-  if (painted && !live.groundPainted && session.groundMaterial === live.ground.material) {
+  if (painted && !live.groundPainted && live.groundMaterial === live.ground.material) {
     const turf = lawnGroundMaterial(node, true)
     const whole = detail.groundDetail
     turf.detailed.value = whole.value
@@ -131,16 +122,16 @@ function drawChunk(session: Session, node: LawnNode, chunkX: number, chunkZ: num
         turf.detailed.value = value
       },
     }
-    session.groundMaterial = turf.material
-    for (const mesh of session.ground.values()) mesh.material = turf.material
+    live.groundMaterial = turf.material
+    for (const mesh of live.groundChunks.values()) mesh.material = turf.material
   }
-  let ground = session.ground.get(chunk.key)
+  let ground = live.groundChunks.get(chunk.key)
   if (!ground) {
     releaseGround(session, chunk.key)
-    ground = new Mesh(lawnGroundGeometry(chunk.base), session.groundMaterial)
+    ground = new Mesh(lawnGroundGeometry(chunk.base), live.groundMaterial)
     ground.name = `lawn-ground-${chunk.key}`
     ground.receiveShadow = true
-    session.ground.set(chunk.key, ground)
+    live.groundChunks.set(chunk.key, ground)
     detail.group.add(ground)
   } else {
     ground.geometry.dispose()
@@ -149,10 +140,10 @@ function drawChunk(session: Session, node: LawnNode, chunkX: number, chunkZ: num
   ground.visible = chunk.base.indices.length > 0
 }
 
-function drawFlowers(session: Session, node: LawnNode, now: number) {
+function drawFlowers(session: Session, node: LawnNode, now: number, due = false) {
   const { detail, flowers } = session
   const spacing = Math.max(LAWN_STROKE_REBUILD_MS, flowers.cost / LAWN_STROKE_REBUILD_SHARE)
-  if (!flowers.stale || now - flowers.at < spacing) return
+  if (!flowers.stale || (!due && now - flowers.at < spacing)) return
   const started = performance.now()
   const built = buildLawnChunkFlowers(session.context, node)
   if (detail.flowers) {
@@ -171,11 +162,49 @@ function drawFlowers(session: Session, node: LawnNode, now: number) {
   flowers.cost = performance.now() - started
 }
 
+const sameStrokes = (a: LawnNode['strokes'], b: LawnNode['strokes']) =>
+  a.length === b.length &&
+  a.every((stroke, index) => {
+    const other = b[index]
+    return (
+      stroke === other ||
+      (!!other &&
+        stroke.radiusM === other.radiusM &&
+        stroke.effect === other.effect &&
+        stroke.strength === other.strength &&
+        stroke.points.length === other.points.length &&
+        stroke.points.every(
+          (point, at) => point[0] === other.points[at]?.[0] && point[1] === other.points[at]?.[1],
+        ))
+    )
+  })
+
+/**
+ * The stroke ended. If the saved lawn is the lawn the chunks were drawn for, what is mounted is
+ * what a full build would give: the viewer keeps it. A cancelled stroke gets its full rebuild.
+ */
+function finish(id: string, session: Session, now: number) {
+  const scene = useScene.getState().nodes
+  const saved = scene[id as LawnNode['id']]
+  if (
+    saved?.type !== 'lawn' ||
+    mountedLawnDetail(id) !== session.detail ||
+    !sameStrokes(saved.strokes, session.live.strokes) ||
+    saved.flowerDensity !== session.node.flowerDensity ||
+    JSON.stringify(saved.flowers) !== JSON.stringify(session.node.flowers)
+  )
+    return
+  drawFlowers(session, saved, now, true)
+  session.live.strokes = saved.strokes
+  keepLawnBuildFor(id, scene)
+}
+
 /** Once a frame, before the viewer decides whether to rebuild: redraw what the strokes reached. */
 export function updateLawnStrokeChunks(now = performance.now()): void {
   const painting = new Set(lawnStrokesInProgress())
-  for (const id of sessions.keys())
+  for (const [id, session] of sessions)
     if (!painting.has(id)) {
+      finish(id, session, now)
       sessions.delete(id)
       lawnStrokeChunkCounts.delete(id)
     }
@@ -196,12 +225,14 @@ export function updateLawnStrokeChunks(now = performance.now()): void {
     }
     setLawnStrokeChunked(id, !!session)
     if (!session) continue
-    if (node.strokes !== session.strokes) {
-      const touched = lawnChunksTouched(session.context, session.strokes, node.strokes)
+    session.node = node
+    const { live } = session
+    if (node.strokes !== live.strokes) {
+      const touched = lawnChunksTouched(session.context, live.strokes, node.strokes)
       for (const [chunkX, chunkZ] of touched) drawChunk(session, node, chunkX, chunkZ)
       lawnStrokeChunkCounts.set(id, touched.length)
       if (touched.length && (flowering(node) || detail.flowers)) session.flowers.stale = true
-      session.strokes = node.strokes
+      live.strokes = node.strokes
     } else lawnStrokeChunkCounts.set(id, 0)
     drawFlowers(session, node, now)
   }

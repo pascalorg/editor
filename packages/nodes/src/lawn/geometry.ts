@@ -215,6 +215,8 @@ export function buildLawnGeometry(node: LawnNode, ctx?: Partial<GeometryContext>
       strokes: node.strokes,
       ground,
       groundPainted: !!built.base.cover,
+      groundChunks: new Map(),
+      groundMaterial: turf.material,
       blades,
       tuftWidthScale: built.blades.tuftWidthScale,
     },

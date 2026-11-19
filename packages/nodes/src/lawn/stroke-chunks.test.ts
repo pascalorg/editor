@@ -57,14 +57,15 @@ function mounted(id: string, outline: Point[], props: Record<string, unknown> = 
   const scene = new Scene()
   const group = new Group()
   scene.add(group)
-  lawnGeometryKey(lawn)
+  // The viewer asks for the key, then builds.
+  const view = { built: lawnGeometryKey(lawn) }
   for (const child of [...buildLawnGeometry(lawn, context()).children]) group.add(child)
   const current = () => {
     const node = useScene.getState().nodes[lawn.id]
     if (node?.type !== 'lawn') throw new Error('Expected the lawn')
     return getEffectiveNode(node)
   }
-  return { lawn, group, context, current }
+  return { lawn, group, context, current, view }
 }
 
 function meshes(root: Group, prefix: string): Mesh[] {
@@ -145,9 +146,12 @@ function paint(
   )
   const first = path[0]
   if (!first) throw new Error('A path has a first point')
-  const stroke = createLawnBrushStroke(view.lawn, settings, first)
+  const saved = useScene.getState().nodes[view.lawn.id]
+  if (saved?.type !== 'lawn') throw new Error('Expected the lawn')
+  const stroke = createLawnBrushStroke(saved, settings, first)
   if (!stroke) throw new Error('Expected a stroke')
-  const key = lawnGeometryKey(view.lawn, 0)
+  // The lawn's system runs before the viewer asks for the key, in every frame.
+  let key: string | undefined
   const counts: number[] = []
   let now = 0
   for (const point of [first, ...path.slice(1)]) {
@@ -158,8 +162,10 @@ function paint(
     for (const mesh of meshes(view.group, 'lawn-blades-near-'))
       if (untouched.get(mesh.name) !== mesh) untouched.delete(mesh.name)
     // The viewer is told to keep its build: no whole rebuild while the chunks follow the brush.
+    key ??= lawnGeometryKey(view.lawn, now)
     expect(lawnGeometryKey(view.lawn, now)).toBe(key)
   }
+  expect(key).toBe(view.view.built)
   return { stroke, counts, untouched, key, now }
 }
 
@@ -183,16 +189,35 @@ test('a sample redraws only the chunks under the brush, on a 30 m2 and on a 2,00
   onLarge.stroke.cancel()
 })
 
-test('what is drawn at release equals a full build, and the release then rebuilds once', () => {
+test('a released stroke is already the saved lawn: the viewer keeps it until the scene changes', () => {
   const view = mounted('release', rectangle(-10, -15, 10, 15), {
     strokes: [{ radiusM: 1, effect: 'shorter', strength: 1, points: [[4, 4]] }],
+    flowers: [{ species: 'daisy', share: 1 }],
+    flowerDensity: 0.6,
   })
   const painted = paint(view, { radiusM: 1.2, effect: 'taller', strength: 0.8 })
-  expectEqualsFullBuild(view)
   expect(painted.stroke.commit()).toBe(true)
-  updateLawnStrokeChunks(painted.now + 16)
-  expect(lawnGeometryKey(view.lawn, painted.now + 16)).not.toBe(painted.key)
   expect(useScene.temporal.getState().pastStates).toHaveLength(1)
+  expect(view.current().strokes).toHaveLength(2)
+  // The frame after release: flowers are brought up to date at once, nothing is rebuilt whole.
+  updateLawnStrokeChunks(painted.now + 16)
+  expectEqualsFullBuild(view)
+  expect(lawnGeometryKey(view.lawn, painted.now + 16)).toBe(painted.key)
+  expect(lawnGeometryKey(view.lawn, painted.now + 32)).toBe(painted.key)
+  // A second stroke starts from what the first one left mounted, and stays exact.
+  const again = paint(view, bare)
+  expect(again.key).toBe(view.view.built)
+  expect(again.stroke.commit()).toBe(true)
+  updateLawnStrokeChunks(again.now + 16)
+  expectEqualsFullBuild(view)
+  expect(lawnGeometryKey(view.lawn, again.now + 16)).toBe(painted.key)
+  // A live preview of another edit, or any change of the scene, rebuilds as it always did.
+  useLiveNodeOverrides.getState().set(view.lawn.id, { outline: rectangle(-9, -15, 10, 15) })
+  const previewed = lawnGeometryKey(view.lawn, again.now + 48)
+  expect(previewed).not.toBe(painted.key)
+  useLiveNodeOverrides.getState().clear(view.lawn.id)
+  useScene.temporal.getState().undo()
+  expect(lawnGeometryKey(view.lawn, again.now + 64)).not.toBe(previewed)
   expect(view.current().strokes).toHaveLength(2)
 })
 

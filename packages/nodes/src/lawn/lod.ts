@@ -28,6 +28,9 @@ export type LawnLive = {
   strokes: LawnNode['strokes']
   ground: Mesh
   groundPainted: boolean
+  /** Ground the strokes have redrawn chunk by chunk, taken out of `ground`, and its material. */
+  groundChunks: Map<string, Mesh>
+  groundMaterial: Material
   blades?: Material
   tuftWidthScale: number
 }
