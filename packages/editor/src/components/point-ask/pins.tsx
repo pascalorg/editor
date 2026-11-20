@@ -146,8 +146,23 @@ const PIN_SVG = (
             strokeDashoffset="-50"
           />
         </g>
-        <path className="pa-pk" d="M8 12.4l2.6 2.6 5.4-5.6" />
-        <path className="pa-sg" d="M7.5 8.5h9v6h-5l-2.5 2.2v-2.2h-1.5z" />
+        <path className="pa-pk" d="M7.8 12.3l2.8 2.8 5.6-5.8" />
+        <path
+          className="pa-sg"
+          d="M12 6.8a5.2 5.2 0 0 1 5.2 5.2c0 2.87-2.33 5.2-5.2 5.2H7.6a.8.8 0 0 1-.8-.8V12A5.2 5.2 0 0 1 12 6.8Z"
+        />
+        <g className="pa-ic pa-ic-ask">
+          <path d="M9.6 9.3a2.5 2.5 0 0 1 4.8.9c0 1.6-2.4 2.1-2.4 3.4" />
+          <path d="M12 17h.01" />
+        </g>
+        <g className="pa-ic pa-ic-change">
+          <path d="M15.8 6.8l1.4 1.4-7.4 7.4-2.3.7.7-2.3 7.6-7.2Z" />
+          <path d="M14.5 17.5h3" />
+        </g>
+        <g className="pa-ic pa-ic-wrong">
+          <path d="M12 7.5v5.2" />
+          <path d="M12 16.5h.01" />
+        </g>
       </svg>
     </span>
   </>

@@ -46,9 +46,23 @@ export function PointAskButton({ icon }: { icon?: ReactNode }) {
       variant="ghost"
     >
       {icon ?? (
-        <svg aria-hidden className="h-5 w-5" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.6" viewBox="0 0 24 24">
-          <path d="M4.5 3.5l8.2 3.7-3.4 1.3-1.3 3.4z" fill="currentColor" fillOpacity="0.25" />
-          <path d="M12.5 12.5h6.5a2 2 0 012 2v3a2 2 0 01-2 2h-2.2l-2.3 2v-2h-2a2 2 0 01-2-2v-3a2 2 0 012-2z" />
+        <svg
+          aria-hidden
+          className="size-4"
+          fill="none"
+          stroke="currentColor"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          strokeWidth="2"
+          viewBox="0 0 24 24"
+        >
+          <path
+            d="M12 3a8.5 8.5 0 0 1 8.5 8.5c0 4.69-3.81 8.5-8.5 8.5H4.5a1 1 0 0 1-1-1v-7.5A8.5 8.5 0 0 1 12 3Z"
+            fill="currentColor"
+            fillOpacity="0.12"
+          />
+          <path d="M8.5 10h7" />
+          <path d="M8.5 13.75h4.5" />
         </svg>
       )}
     </ActionButton>
