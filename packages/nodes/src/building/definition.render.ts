@@ -6,6 +6,7 @@ export const buildingRenderDefinition: NodeRenderDefinition<typeof BuildingNode>
   kind: 'building'
 } = {
   kind: 'building',
+  extensions: { 'pascal:viewer': { family: null } },
   schemaVersion: 3,
   schema: BuildingNode,
   category: 'site',

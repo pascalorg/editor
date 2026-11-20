@@ -4,6 +4,7 @@ import { ScanNode } from './schema'
 
 export const scanRenderDefinition: NodeRenderDefinition<typeof ScanNode> & { kind: 'scan' } = {
   kind: 'scan',
+  extensions: { 'pascal:viewer': { family: null } },
   // Heavy LiDAR asset: stripped from the bake, re-added live from scene_graph
   // in the viewer (see plans → Part D; glb-reference-nodes.tsx).
   bake: 'strip',

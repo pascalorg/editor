@@ -1,6 +1,11 @@
 import { describe, expect, test } from 'bun:test'
 import type { CaptureStreamPacket } from '@pascal-app/core/capture'
-import { buildPointCloudData, buildPointCloudPayloadData } from './layers/point-cloud-layer'
+import { BufferGeometry, Float32BufferAttribute, Uint8BufferAttribute } from 'three'
+import {
+  buildGeometryPointCloudData,
+  buildPointCloudData,
+  buildPointCloudPayloadData,
+} from './layers/point-cloud-layer'
 
 function packet(sequence: number, positions: number[], colors?: number[]): CaptureStreamPacket {
   return {
@@ -40,5 +45,39 @@ describe('buildPointCloudData', () => {
 
   test('drops non-finite live packet geometry', () => {
     expect(buildPointCloudData([packet(2, [0, 0, Number.NaN])], 100).positions).toHaveLength(0)
+  })
+})
+
+describe('buildGeometryPointCloudData', () => {
+  test('thins a loaded cloud evenly across the file and keeps its colours', () => {
+    const geometry = new BufferGeometry()
+    geometry.setAttribute(
+      'position',
+      new Float32BufferAttribute([0, 0, 0, 1, 0, 0, 2, 0, 0, 3, 0, 0, 4, 0, 0, 5, 0, 0], 3),
+    )
+    geometry.setAttribute(
+      'color',
+      new Uint8BufferAttribute(
+        [255, 0, 0, 0, 255, 0, 0, 0, 255, 255, 0, 0, 0, 255, 0, 0, 0, 255],
+        3,
+        true,
+      ),
+    )
+
+    const data = buildGeometryPointCloudData(geometry, 3)
+
+    expect([...data.positions]).toEqual([0, 0, 0, 2, 0, 0, 4, 0, 0])
+    expect(data.colors ? [...data.colors] : null).toEqual([1, 0, 0, 0, 0, 1, 0, 1, 0])
+  })
+
+  test('keeps every point under the cap and none without positions', () => {
+    const geometry = new BufferGeometry()
+    geometry.setAttribute('position', new Float32BufferAttribute([0, 1, 2, 3, 4, 5], 3))
+
+    const data = buildGeometryPointCloudData(geometry, 10)
+
+    expect([...data.positions]).toEqual([0, 1, 2, 3, 4, 5])
+    expect(data.colors).toBeNull()
+    expect(buildGeometryPointCloudData(new BufferGeometry(), 10).positions).toHaveLength(0)
   })
 })

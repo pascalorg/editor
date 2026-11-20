@@ -1,6 +1,6 @@
 'use client'
 
-import { type PascalI18n, usePascalI18n, useScene } from '@pascal-app/core'
+import { type PascalI18n, usePascalI18n } from '@pascal-app/core'
 import {
   Cloud,
   CloudSun,
@@ -23,7 +23,7 @@ import {
   useState,
 } from 'react'
 import { create } from 'zustand'
-import { requestDeviceLocation, resolveLocation } from '../../lib/daylight/location'
+import { requestDeviceLocation } from '../../lib/daylight/location'
 import { WEATHER_COVER, type Weather } from '../../lib/daylight/sky'
 import {
   presetInstant,
@@ -35,6 +35,8 @@ import {
   sunEvents,
   type TimeOfDay,
 } from '../../lib/daylight/solar'
+import { cancelTimeTransition, transitionTimeOfDay } from '../../lib/daylight/time-transition'
+import { useDaylightSite } from '../../lib/daylight/use-daylight-site'
 import useViewer from '../../store/use-viewer'
 import { cn } from '../lib/cn'
 import { Popover, PopoverAnchor, PopoverContent } from '../primitives/popover'
@@ -62,44 +64,8 @@ export const SKY_DOCK_BOTTOM = 24
 export const SKY_DOCK_HEIGHT = { editor: 58, viewer: 56 } as const
 export const SKY_COMPASS_BOTTOM = 36
 
-/**
- * A preset or reset eases the sun to its time the short way round the clock, slowly enough to
- * watch the light change: 1.5 s for a short hop, up to 3 s for half a day, easing in and out.
- */
-const TWEEN_MIN_MS = 1500
-const TWEEN_MAX_MS = 3000
-let tween = 0
-
-function stopTween() {
-  cancelAnimationFrame(tween)
-  tween = 0
-}
-
-function easeTimeTo(from: number, to: number, done: () => void) {
-  stopTween()
-  const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
-  const delta = ((((to - from + 2160) % 1440) + 1440) % 1440) - 720
-  if (reduce || Math.abs(delta) < 1) {
-    done()
-    return
-  }
-  const start = performance.now()
-  const duration = TWEEN_MIN_MS + (TWEEN_MAX_MS - TWEEN_MIN_MS) * (Math.abs(delta) / 720)
-  const step = (now: number) => {
-    const t = Math.min(1, (now - start) / duration)
-    const eased = t < 0.5 ? 4 * t ** 3 : 1 - (-2 * t + 2) ** 3 / 2
-    if (t >= 1) {
-      tween = 0
-      done()
-      return
-    }
-    useViewer.getState().setTimeOfDayMinutes((((from + delta * eased) % 1440) + 1440) % 1440)
-    tween = requestAnimationFrame(step)
-  }
-  tween = requestAnimationFrame(step)
-}
-
 const PRESETS: readonly { id: TimeOfDay; icon: typeof Sun }[] = [
+  { id: 'dawn', icon: Sunrise },
   { id: 'midday', icon: Sun },
   { id: 'golden', icon: Sunset },
   { id: 'blue', icon: Sunrise },
@@ -119,6 +85,8 @@ export function weatherIcon(weather: Weather) {
 
 function presetName(i18n: PascalI18n, id: TimeOfDay) {
   switch (id) {
+    case 'dawn':
+      return i18n._({ id: 'viewer.daylight.time.dawn', message: 'Dawn' })
     case 'golden':
       return i18n._({ id: 'viewer.daylight.time.golden', message: 'Golden hour' })
     case 'midday':
@@ -136,6 +104,8 @@ function phaseName(i18n: PascalI18n, phase: SkyPhase) {
       return presetName(i18n, 'night')
     case 'blue':
       return presetName(i18n, 'blue')
+    case 'dawn':
+      return presetName(i18n, 'dawn')
     case 'golden':
       return presetName(i18n, 'golden')
     case 'midday':
@@ -164,6 +134,7 @@ export function weatherName(i18n: PascalI18n, id: Weather) {
 const PHASE_SKY: Record<SkyPhase, [string, string]> = {
   night: ['#121a36', '#36406c'],
   blue: ['#263465', '#8c88b4'],
+  dawn: ['#8e98c6', '#f2cfb2'],
   golden: ['#8e98c6', '#f2cfb2'],
   morning: ['#6f9dd6', '#dbe7f2'],
   midday: ['#5a93d5', '#d3e4f3'],
@@ -183,22 +154,13 @@ const formatMinutes = (() => {
   }
 })()
 
-type SiteFacts = Parameters<typeof resolveLocation>[0]
-
 /** The sky the viewer shows right now: its time on the site's sun clock, phase and events. */
 function useSky() {
   const timeOfDay = useViewer((s) => s.timeOfDay)
   const timeOfDayMinutes = useViewer((s) => s.timeOfDayMinutes)
   const skyLive = useViewer((s) => s.skyLive)
   const weather = useViewer((s) => s.weather)
-  const deviceLocation = useViewer((s) => s.deviceLocation)
-  const site = useScene((state) => {
-    for (const id of state.rootNodeIds) {
-      const node = state.nodes[id]
-      if (node?.type === 'site') return node as unknown as SiteFacts
-    }
-    return undefined
-  })
+  const { location, source } = useDaylightSite()
   // The live clock moves the chip on once a minute.
   const [now, setNow] = useState(() => new Date())
   useEffect(() => {
@@ -208,7 +170,6 @@ function useSky() {
     return () => clearInterval(timer)
   }, [skyLive])
 
-  const { location, source } = resolveLocation(site, deviceLocation)
   const { lat, lng } = location
   const day = useMemo(() => {
     const today = new Date()
@@ -401,7 +362,7 @@ function MiniSky({ sky }: { sky: ReturnType<typeof useSky> }) {
   )
 }
 
-function SkyPanel({ sky }: { sky: ReturnType<typeof useSky> }) {
+export function SkyPanel({ sky }: { sky: ReturnType<typeof useSky> }) {
   const i18n = usePascalI18n()
   const [locating, setLocating] = useState(false)
   const viewer = useViewer.getState
@@ -422,7 +383,7 @@ function SkyPanel({ sky }: { sky: ReturnType<typeof useSky> }) {
         <button
           className="flex items-center gap-1 rounded-md px-1.5 py-1 text-violet-600 text-xs hover:bg-accent dark:text-violet-300"
           onClick={() => {
-            easeTimeTo(sky.minutes, sky.presets.midday, () => viewer().setTimeOfDay('midday'))
+            transitionTimeOfDay('midday')
             viewer().setWeather('fair')
           }}
           type="button"
@@ -471,19 +432,16 @@ function SkyPanel({ sky }: { sky: ReturnType<typeof useSky> }) {
         </span>
       </div>
 
-      <div className="grid grid-cols-4 gap-2">
+      <div className="grid grid-cols-5 gap-1">
         {PRESETS.map((preset) => (
           <OptionCard
             active={sky.activePreset === preset.id}
+            compact
             detail={formatMinutes(sky.presets[preset.id])}
             icon={preset.icon}
             key={preset.id}
             name={presetName(i18n, preset.id)}
-            onSelect={() =>
-              easeTimeTo(sky.minutes, sky.presets[preset.id], () =>
-                viewer().setTimeOfDay(preset.id),
-              )
-            }
+            onSelect={() => transitionTimeOfDay(preset.id)}
           />
         ))}
       </div>
@@ -512,7 +470,7 @@ function SkyPanel({ sky }: { sky: ReturnType<typeof useSky> }) {
           checked={sky.skyLive}
           disabled={locating}
           onCheckedChange={(live) => {
-            stopTween()
+            cancelTimeTransition()
             viewer().setSkyLive(live)
             if (!live || sky.source === 'site' || sky.source === 'device') return
             setLocating(true)
@@ -550,12 +508,14 @@ function SkyPanel({ sky }: { sky: ReturnType<typeof useSky> }) {
 
 function OptionCard({
   active,
+  compact = false,
   detail,
   icon: Icon,
   name,
   onSelect,
 }: {
   active: boolean
+  compact?: boolean
   detail: string
   icon: typeof Sun
   name: string
@@ -565,7 +525,8 @@ function OptionCard({
     <button
       aria-pressed={active}
       className={cn(
-        'flex flex-col items-center gap-0.5 rounded-xl border px-1 py-2 text-center transition hover:bg-accent',
+        'flex flex-col items-center gap-0.5 rounded-xl border py-2 text-center transition hover:bg-accent',
+        compact ? 'min-w-0 px-0.5' : 'px-1',
         active
           ? 'border-violet-500 bg-violet-500/10 text-violet-700 dark:text-violet-300'
           : 'border-border text-foreground',
@@ -574,8 +535,23 @@ function OptionCard({
       type="button"
     >
       <Icon className={cn('mb-0.5 h-4 w-4', active ? '' : 'text-amber-600 dark:text-amber-400')} />
-      <span className="text-xs leading-tight">{name}</span>
-      <span className="font-mono text-[11px] text-muted-foreground tabular-nums">{detail}</span>
+      <span
+        className={
+          compact ? 'whitespace-nowrap text-[10px] leading-[15px]' : 'text-xs leading-tight'
+        }
+      >
+        {name}
+      </span>
+      <span
+        className={cn(
+          'text-muted-foreground tabular-nums',
+          compact
+            ? 'whitespace-nowrap font-mono text-[10px] leading-[16.5px]'
+            : 'font-mono text-[11px]',
+        )}
+      >
+        {detail}
+      </span>
     </button>
   )
 }
@@ -639,7 +615,7 @@ function SunArc({ sky }: { sky: ReturnType<typeof useSky> }) {
     if (!rect) return
     const x = ((event.clientX - rect.left) / rect.width) * W
     const y = ((event.clientY - rect.top) / rect.height) * H
-    stopTween()
+    cancelTimeTransition()
     useViewer.getState().setTimeOfDayMinutes(arcMinutes(x, y, sunrise, sunset))
   }
 
@@ -658,7 +634,7 @@ function SunArc({ sky }: { sky: ReturnType<typeof useSky> }) {
         const step = event.key === 'ArrowRight' ? 15 : event.key === 'ArrowLeft' ? -15 : 0
         if (!step) return
         event.preventDefault()
-        stopTween()
+        cancelTimeTransition()
         useViewer.getState().setTimeOfDayMinutes((sky.minutes + step + 1440) % 1440)
       }}
       onPointerDown={(event) => {

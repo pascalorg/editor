@@ -7,6 +7,7 @@ export const liquidLineRenderDefinition: NodeRenderDefinition<typeof LiquidLineN
   kind: 'liquid-line'
 } = {
   kind: 'liquid-line',
+  extensions: { 'pascal:viewer': { family: 'hvac' } },
   schemaVersion: 1,
   schema: LiquidLineNode,
   category: 'utility',

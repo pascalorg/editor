@@ -2,10 +2,12 @@
 
 import type { CaptureStreamPacket } from '@pascal-app/core/capture'
 import { useLoader } from '@react-three/fiber'
-import { useEffect, useMemo } from 'react'
-import { BufferGeometry, Float32BufferAttribute } from 'three'
+import { useMemo } from 'react'
+import type { BufferGeometry } from 'three'
 import { PLYLoader } from 'three/addons/loaders/PLYLoader.js'
+import { OVERLAY_LAYER } from '../../lib/layers'
 import { rewriteLoopbackAssetUrl } from '../asset-url'
+import { POINT_DISC_SIZE, PointDiscCloud } from './point-disc-cloud'
 
 export type PointCloudData = {
   colors: Float32Array | null
@@ -17,12 +19,13 @@ export function CapturePointCloudLayer({
   inline,
   maxPoints = 250_000,
   packets = [],
-  pointSize = 0.012,
+  pointSize = POINT_DISC_SIZE,
 }: {
   artifactUrl?: string
   inline?: unknown
   maxPoints?: number
   packets?: readonly CaptureStreamPacket[]
+  /** Each point's diameter, in metres. */
   pointSize?: number
 }) {
   const liveData = useMemo(() => buildPointCloudData(packets, maxPoints), [maxPoints, packets])
@@ -36,46 +39,65 @@ export function CapturePointCloudLayer({
   if (inlineData.positions.length > 0) {
     return <PointCloudDataLayer data={inlineData} pointSize={pointSize} />
   }
-  return artifactUrl ? <PlyPointCloud pointSize={pointSize} url={artifactUrl} /> : null
+  return artifactUrl ? (
+    <PlyPointCloud maxPoints={maxPoints} pointSize={pointSize} url={artifactUrl} />
+  ) : null
 }
 
-function PlyPointCloud({ pointSize, url }: { pointSize: number; url: string }) {
+function PlyPointCloud({
+  maxPoints,
+  pointSize,
+  url,
+}: {
+  maxPoints: number
+  pointSize: number
+  url: string
+}) {
   const source = useLoader(PLYLoader, rewriteLoopbackAssetUrl(url))
-  const geometry = useMemo(() => source.clone(), [source])
-  useEffect(() => () => geometry.dispose(), [geometry])
-
-  return (
-    <points frustumCulled={false} geometry={geometry}>
-      <pointsMaterial
-        color={geometry.getAttribute('color') ? undefined : '#8fb8d8'}
-        size={pointSize}
-        sizeAttenuation
-        vertexColors={Boolean(geometry.getAttribute('color'))}
-      />
-    </points>
-  )
+  const data = useMemo(() => buildGeometryPointCloudData(source, maxPoints), [maxPoints, source])
+  return <PointCloudDataLayer data={data} pointSize={pointSize} />
 }
 
 function PointCloudDataLayer({ data, pointSize }: { data: PointCloudData; pointSize: number }) {
-  const geometry = useMemo(() => {
-    const next = new BufferGeometry()
-    next.setAttribute('position', new Float32BufferAttribute(data.positions, 3))
-    if (data.colors) next.setAttribute('color', new Float32BufferAttribute(data.colors, 3))
-    next.computeBoundingSphere()
-    return next
-  }, [data])
-  useEffect(() => () => geometry.dispose(), [geometry])
-
+  if (data.positions.length === 0) return null
   return (
-    <points frustumCulled={false} geometry={geometry}>
-      <pointsMaterial
-        color={data.colors ? undefined : '#8fb8d8'}
-        size={pointSize}
-        sizeAttenuation
-        vertexColors={Boolean(data.colors)}
-      />
-    </points>
+    <PointDiscCloud
+      colors={data.colors}
+      // As the phone streams it while scanning: flat colours over the image, untouched by the
+      // scene's exposure, grade and bloom, which turned light points into a warm glowing haze.
+      layer={OVERLAY_LAYER}
+      name="capture-point-cloud"
+      positions={data.positions}
+      size={pointSize}
+    />
   )
+}
+
+/** A loaded cloud's points and colours, thinned evenly across the file to at most `maxPoints`. */
+export function buildGeometryPointCloudData(
+  geometry: BufferGeometry,
+  maxPoints: number,
+): PointCloudData {
+  const position = geometry.getAttribute('position')
+  if (!position) return { colors: null, positions: new Float32Array() }
+  const color = geometry.getAttribute('color')
+  const available = position.count
+  const keep = Math.max(0, Math.min(available, Math.floor(maxPoints)))
+  const positions = new Float32Array(keep * 3)
+  const colors = color ? new Float32Array(keep * 3) : null
+  for (let index = 0; index < keep; index += 1) {
+    const from = keep === available ? index : Math.floor((index * available) / keep)
+    const to = index * 3
+    positions[to] = position.getX(from)
+    positions[to + 1] = position.getY(from)
+    positions[to + 2] = position.getZ(from)
+    if (colors && color) {
+      colors[to] = color.getX(from)
+      colors[to + 1] = color.getY(from)
+      colors[to + 2] = color.getZ(from)
+    }
+  }
+  return { colors, positions }
 }
 
 export function buildPointCloudData(

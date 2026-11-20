@@ -613,11 +613,13 @@ export function attachOcclusionCuller({
   pipeline,
   culler,
   getCamera,
+  isEnabled = () => true,
 }: {
   scene: THREE.Scene
   pipeline: CullingPipeline
   culler: OcclusionCuller
   getCamera: () => THREE.Camera
+  isEnabled?: () => boolean
 }): () => void {
   const previousBefore = scene.onBeforeRender
   const previousAfter = scene.onAfterRender
@@ -634,6 +636,11 @@ export function attachOcclusionCuller({
   scene.onBeforeRender = function (...args) {
     previousBefore.apply(this, args)
     const camera = args[2]
+    if (!isEnabled()) {
+      active = null
+      computedFor = null
+      return
+    }
     if (active || camera !== getCamera()) return
     const now = performance.now() / 1000
     // The pose and lens, not the projection matrix: temporal AA jitters that every frame.

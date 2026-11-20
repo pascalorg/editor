@@ -38,6 +38,11 @@ import { openSkyPanel, useSkyPanel, weatherIcon } from './sky-control'
 function timeOptions(i18n: PascalI18n) {
   return [
     {
+      id: 'dawn',
+      icon: Sunrise,
+      name: i18n._({ id: 'viewer.daylight.time.dawn', message: 'Dawn' }),
+    },
+    {
       id: 'golden',
       icon: Sunrise,
       name: i18n._({ id: 'viewer.daylight.time.golden', message: 'Golden hour' }),
@@ -175,7 +180,7 @@ export function DaylightMenu({
   const skyChip = useSkyPanel((s) => s.hosts > 0)
   const times = timeOptions(i18n)
   const weathers = weatherOptions(i18n)
-  const activeTime = times.find((o) => o.id === timeOfDay) ?? times[1]
+  const activeTime = times.find((o) => o.id === timeOfDay) ?? times[2]
   const activeWeather = weathers.find((o) => o.id === weather) ?? weathers[1]
   const source = siteHasLocation ? 'site' : resolveLocation(null, deviceLocation).source
 

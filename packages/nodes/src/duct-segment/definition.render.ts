@@ -9,6 +9,7 @@ export const ductSegmentRenderDefinition: NodeRenderDefinition<typeof DuctSegmen
   kind: 'duct-segment'
 } = {
   kind: 'duct-segment',
+  extensions: { 'pascal:viewer': { family: 'hvac' } },
   schemaVersion: 2,
   schema: DuctSegmentNode,
   category: 'utility',

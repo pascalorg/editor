@@ -7,6 +7,7 @@ export const pipeSegmentRenderDefinition: NodeRenderDefinition<typeof PipeSegmen
   kind: 'pipe-segment'
 } = {
   kind: 'pipe-segment',
+  extensions: { 'pascal:viewer': { family: 'plumbing' } },
   schemaVersion: 2,
   schema: PipeSegmentNode,
   category: 'utility',

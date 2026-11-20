@@ -8,6 +8,7 @@ export const pipeFittingRenderDefinition: NodeRenderDefinition<typeof PipeFittin
   kind: 'pipe-fitting'
 } = {
   kind: 'pipe-fitting',
+  extensions: { 'pascal:viewer': { family: 'plumbing' } },
   schemaVersion: 2,
   schema: PipeFittingNode,
   category: 'utility',

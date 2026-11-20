@@ -563,3 +563,30 @@ test('a scene with no level below grade has no hole and no pit', async () => {
   expect(pitParts(plain.scene.instance as Object3D)).toHaveLength(0)
   await plain.unmount()
 })
+
+test('capture ownership includes both lot and portaled horizon, and restores their veil state', async () => {
+  const { siteGround, siteSurfaces, temporarilyVeilGround } = await import('@pascal-app/viewer')
+  const site = lot(false)
+  setNodes([site])
+  useViewer.setState({ groundMode: 'auto', groundWindowVeiled: false, walkthroughMode: false })
+  const renderer = await create(<SiteRenderer node={site} />)
+  try {
+    const scene = renderer.scene.instance as Object3D
+    const solid = ground(scene, 'solid')
+    const veil = ground(scene, 'veil')
+    expect(solid).toHaveLength(2)
+    expect(veil).toHaveLength(2)
+    expect(new Set(siteGround().solid)).toEqual(new Set(solid))
+    expect(new Set(siteGround().veil)).toEqual(new Set(veil))
+    expect(solid.every((surface) => siteSurfaces().includes(surface))).toBe(true)
+    const restore = temporarilyVeilGround(true)
+    expect(solid.some(drawn)).toBe(false)
+    expect(veil.every(drawn)).toBe(true)
+    expect(veil.every((surface) => siteSurfaces().includes(surface))).toBe(true)
+    restore()
+    expect(solid.every(drawn)).toBe(true)
+    expect(veil.some(drawn)).toBe(false)
+  } finally {
+    await renderer.unmount()
+  }
+})

@@ -12,8 +12,8 @@ import {
   setKeyLightDirectionOverride,
   setProceduralEmission,
   setSlotDefaultOverrides,
-  siteSurfaces,
   temporarilyHideNodeTypes,
+  temporarilyHideSiteSurfaces,
   temporarilyWithoutAmbiance,
   useSceneAtmosphere,
   useViewer,
@@ -239,6 +239,7 @@ export function BakeThumbnail({
       // catcher keeps cast shadows, the wall shade keeps contact. Items the
       // framing leaves out are hidden so what's framed is what's shown.
       const hidden: Object3D[] = []
+      let restoreSiteSurfaces: (() => void) | undefined
       const added: Mesh[] = []
 
       try {
@@ -279,10 +280,10 @@ export function BakeThumbnail({
           Math.cos(keyAzimuth) * Math.cos(keyElevation),
         ])
 
-        for (const object of [
-          ...siteSurfaces(),
-          ...framing.detachedItemIds.flatMap((id) => sceneRegistry.nodes.get(id) ?? []),
-        ]) {
+        restoreSiteSurfaces = temporarilyHideSiteSurfaces()
+        for (const object of framing.detachedItemIds.flatMap(
+          (id) => sceneRegistry.nodes.get(id) ?? [],
+        )) {
           if (!object.visible) continue
           object.visible = false
           hidden.push(object)
@@ -378,6 +379,7 @@ export function BakeThumbnail({
         setKeyLightDirectionOverride(null)
         for (const mesh of added) disposeMesh(mesh)
         for (const object of hidden) object.visible = true
+        restoreSiteSurfaces?.()
         for (const [material, intensity] of emission)
           (material as Material & { emissiveIntensity: number }).emissiveIntensity = intensity
         for (const { object, position, rotation } of transforms) {

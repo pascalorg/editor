@@ -114,35 +114,77 @@ export function solarLight(
 
 /** Sun elevation each preset aims for (degrees); midday takes the day's highest sun. */
 const PRESET_ELEVATION = {
+  dawn: 6,
   golden: 6,
   midday: Number.POSITIVE_INFINITY,
   blue: -4,
   night: -14,
 } as const
 export type TimeOfDay = keyof typeof PRESET_ELEVATION
+export type TimeTarget = TimeOfDay | { elevation: number; side: 'rising' | 'setting' }
+
+function closestElevationInstant(
+  start: number,
+  end: number,
+  lat: number,
+  lng: number,
+  target: number,
+  refine = false,
+): Date {
+  let best = start
+  let bestScore = Number.POSITIVE_INFINITY
+  const search = (from: number, to: number, step: number) => {
+    for (let t = from; t <= to; t += step) {
+      const { elevation } = solarPosition(new Date(t), lat, lng)
+      const score = Number.isFinite(target) ? Math.abs(elevation - target) : -elevation
+      if (score < bestScore) {
+        bestScore = score
+        best = t
+      }
+    }
+  }
+  search(start, end, 5 * 60_000)
+  // Keep presets' five-minute samples unchanged; explicit elevations get second precision.
+  if (refine) search(Math.max(start, best - 5 * 60_000), Math.min(end, best + 5 * 60_000), 1000)
+  return new Date(best)
+}
+
+/** Resolve an elevation on its half-day, falling back to the closest sun that side reaches. */
+export function timeTargetInstant(day: Date, lat: number, lng: number, target: TimeTarget): Date {
+  if (typeof target === 'string') return presetInstant(day, lat, lng, target)
+  const noon = presetInstant(day, lat, lng, 'midday').getTime()
+  return closestElevationInstant(
+    noon + (target.side === 'rising' ? -12 * 3_600_000 : 0),
+    noon + (target.side === 'setting' ? 12 * 3_600_000 : 0),
+    lat,
+    lng,
+    target.elevation,
+    true,
+  )
+}
 
 /**
  * The instant on `day` (local calendar day at the site's longitude) when the sun reaches the
- * preset's elevation on the afternoon/evening side. Defined by the sun, not the clock, so no
- * timezone is needed. Falls back to the closest elevation reached (polar summer/winter).
+ * preset's elevation on the afternoon/evening side, or the rising side for dawn. Defined by
+ * the sun, not the clock, so no timezone is needed. Dawn searches the twelve hours preceding
+ * solar noon; if its target is unreachable, it uses the closest elevation on that half-day
+ * (the lowest sun in polar summer, the highest in polar winter).
  */
 export function presetInstant(day: Date, lat: number, lng: number, preset: TimeOfDay): Date {
   // Solar noon in UTC for this longitude: 12:00 local mean time.
   const noonUtc =
     Date.UTC(day.getFullYear(), day.getMonth(), day.getDate(), 12) - (lng / 15) * 3_600_000
-  const target = PRESET_ELEVATION[preset]
-  let best = noonUtc
-  let bestScore = Number.POSITIVE_INFINITY
-  for (let minutes = -120; minutes <= 14 * 60; minutes += 5) {
-    const t = noonUtc + minutes * 60_000
-    const { elevation } = solarPosition(new Date(t), lat, lng)
-    const score = Number.isFinite(target) ? Math.abs(elevation - target) : -elevation
-    if (score < bestScore) {
-      bestScore = score
-      best = t
-    }
+  if (preset === 'dawn') {
+    const noon = presetInstant(day, lat, lng, 'midday').getTime()
+    return closestElevationInstant(noon - 12 * 3_600_000, noon, lat, lng, PRESET_ELEVATION.dawn)
   }
-  return new Date(best)
+  return closestElevationInstant(
+    noonUtc - 120 * 60_000,
+    noonUtc + 14 * 3_600_000,
+    lat,
+    lng,
+    PRESET_ELEVATION[preset],
+  )
 }
 
 /**
@@ -185,12 +227,12 @@ export function sunEvents(
 }
 
 /** The phase a moment of the day reads as, from the sun's elevation and the side of noon. */
-export type SkyPhase = 'night' | 'blue' | 'golden' | 'morning' | 'midday' | 'afternoon'
+export type SkyPhase = 'night' | 'blue' | 'dawn' | 'golden' | 'morning' | 'midday' | 'afternoon'
 
 export function skyPhase(elevation: number, minutes: number): SkyPhase {
   if (elevation < -6) return 'night'
   if (elevation < 0) return 'blue'
-  if (elevation < 10) return 'golden'
+  if (elevation < 10) return minutes < 12 * 60 ? 'dawn' : 'golden'
   if (minutes < 11 * 60) return 'morning'
   if (minutes > 14.5 * 60) return 'afternoon'
   return 'midday'

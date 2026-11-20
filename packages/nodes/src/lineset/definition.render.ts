@@ -7,6 +7,7 @@ export const linesetRenderDefinition: NodeRenderDefinition<typeof LinesetNode> &
   kind: 'lineset'
 } = {
   kind: 'lineset',
+  extensions: { 'pascal:viewer': { family: 'hvac' } },
   schemaVersion: 1,
   schema: LinesetNode,
   category: 'utility',

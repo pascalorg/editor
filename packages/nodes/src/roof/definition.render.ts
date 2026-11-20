@@ -13,6 +13,7 @@ export const MIN_ROOF_FOOTPRINT = 1
 
 export const roofRenderDefinition: NodeRenderDefinition<typeof RoofNode> & { kind: 'roof' } = {
   kind: 'roof',
+  extensions: { 'pascal:viewer': { family: 'roofs' } },
   schemaVersion: 4,
   schema: RoofNode,
   category: 'structure',

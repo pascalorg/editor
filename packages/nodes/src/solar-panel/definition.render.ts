@@ -7,6 +7,7 @@ export const solarPanelRenderDefinition: NodeRenderDefinition<typeof SolarPanelN
   kind: 'solar-panel'
 } = {
   kind: 'solar-panel',
+  extensions: { 'pascal:viewer': { family: 'roof-services' } },
   schemaVersion: 1,
   schema: SolarPanelNode,
   category: 'structure',

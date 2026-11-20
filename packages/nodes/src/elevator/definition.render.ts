@@ -29,6 +29,7 @@ export const elevatorRenderDefinition: NodeRenderDefinition<typeof ElevatorNode>
   kind: 'elevator'
 } = {
   kind: 'elevator',
+  extensions: { 'pascal:viewer': { family: 'circulation' } },
   schemaVersion: 1,
   schema: ElevatorNode,
   category: 'structure',

@@ -7,6 +7,7 @@ export const turbineVentRenderDefinition: NodeRenderDefinition<typeof TurbineVen
   kind: 'turbine-vent'
 } = {
   kind: 'turbine-vent',
+  extensions: { 'pascal:viewer': { family: 'roof-services' } },
   schemaVersion: 3,
   schema: TurbineVentNode,
   category: 'structure',

@@ -8,6 +8,7 @@ import { ShelfNode } from './schema'
 
 export const shelfRenderDefinition: NodeRenderDefinition<typeof ShelfNode> & { kind: 'shelf' } = {
   kind: 'shelf',
+  extensions: { 'pascal:viewer': { family: 'items' } },
   schemaVersion: 2,
   schema: ShelfNode,
   category: 'furnish',
