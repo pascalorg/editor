@@ -193,4 +193,37 @@ describe('captured surface anchoring through pointer gestures', () => {
     expect(pin.footprint).toBeUndefined()
     expectPoint(pin.submit?.context.targets[0]?.hit?.point, [-1.5, 3, 2])
   })
+
+  test('empty clicks are ignored by default, but freeClick places a comment anywhere on the floor plane', async () => {
+    // Move the wall out of the way and point the camera straight down at the level floor.
+    sceneRegistry.nodes.delete(wall.id)
+    const prevUp = camera.up.clone()
+    camera.up.set(0, 0, -1)
+    camera.position.set(0, 10, 0)
+    camera.lookAt(0, 0, 0)
+    camera.updateMatrixWorld(true)
+
+    try {
+      // Default mode (freeClick = false): clicking empty space opens nothing.
+      pointer('pointerdown', 500, 350)
+      pointer('pointerup', 500, 350)
+      expect(usePointAsk.getState().bubble).toBeNull()
+
+      // Restart session with freeClick: true.
+      stop()
+      stop = startPointAskSession({ freeClick: true })
+      usePointAsk.setState({ active: true, latched: true })
+      pointer('pointerdown', 600, 250)
+      pointer('pointerup', 600, 250)
+      const bubble = usePointAsk.getState().bubble
+      expect(bubble?.gesture).toBe('click')
+      expect(bubble?.targets).toEqual([])
+      expectPoint(bubble?.anchor, [1, 0, -1])
+      const pin = await plantedPin()
+      expectPoint(pin.anchor, [1, 0, -1])
+      expect(pin.model.targetIds).toEqual([])
+    } finally {
+      camera.up.copy(prevUp)
+    }
+  })
 })

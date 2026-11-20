@@ -16,7 +16,7 @@ export function ModeVignette() {
  * Only when a tap latched the mode: the pill that says how to leave. It sits at the top centre of
  * the 3D view (not of the page: the panels beside it are not part of the view) and enters 8 px up.
  */
-export function ModePill() {
+export function ModePill({ freeClick = false }: { freeClick?: boolean }) {
   const active = usePointAsk((s) => s.active)
   const latched = usePointAsk((s) => s.latched)
   const el = useRef<HTMLDivElement>(null)
@@ -59,7 +59,12 @@ export function ModePill() {
   if (!shown) return null
   return (
     <div className="pa-pill" ref={el} role="status">
-      <b>Point at anything to ask Pascal</b> · Esc to leave
+      <b>
+        {freeClick
+          ? 'Click anywhere or drag an area to comment'
+          : 'Point at anything to ask Pascal'}
+      </b>{' '}
+      · Esc to leave
     </div>
   )
 }

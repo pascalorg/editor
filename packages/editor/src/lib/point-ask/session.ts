@@ -81,6 +81,7 @@ const CROP_WAIT_MS = 1_500
 const ENRICHED_CROP_WAIT_MS = 12_000
 type SessionCrop = CapturedCrop & { enriched?: EnrichedCapture }
 let enrichedRegions = false
+let freeClick = false
 
 type Down = {
   x: number
@@ -270,7 +271,7 @@ export function leavePointMode() {
 }
 
 const CURSOR =
-  "url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='28' height='28' viewBox='0 0 28 28'><path d='M5 3l15 7.2-6.4 1.9-2.3 6.4z' fill='%23a99bff' stroke='%2316171b' stroke-width='1.4' stroke-linejoin='round'/><rect x='15' y='15' width='11' height='9' rx='3' fill='%23edece9' stroke='%2316171b' stroke-width='1'/><text x='20.5' y='22' font-family='system-ui,sans-serif' font-size='7.5' font-weight='700' text-anchor='middle' fill='%2316171b'>C</text></svg>\") 5 3, crosshair"
+  "url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='26' height='26' viewBox='0 0 26 26'><path d='M13 3C18.523 3 23 7.477 23 13C23 18.523 18.523 23 13 23H4.5C3.672 23 3 22.328 3 21.5V13C3 7.477 7.477 3 13 3Z' fill='%2318191f' stroke='%23ffffff' stroke-width='1.75' stroke-linejoin='round'/><path d='M9.5 11.25H16.5M9.5 14.75H14' stroke='%23ffffff' stroke-width='1.65' stroke-linecap='round'/></svg>\") 4 22, crosshair"
 
 function setCursor(on: boolean) {
   const canvas = getEditorThreeContext()?.domElement
@@ -286,6 +287,7 @@ function openBubble(
   down: Pick<Down, 'crop' | 'capturedAt' | 'camera'> | null,
   area?: PointBubble['area'],
   changesAsk?: PointBubble['changesAsk'],
+  extra?: { locationLabel?: string; region?: [number, number, number, number] },
 ) {
   const state = usePointAsk.getState()
   // Asking for more starts from an empty field; the words just sent are not a draft to come back to.
@@ -294,6 +296,7 @@ function openBubble(
     : (state.bubble?.draft ?? state.drafts[targets[0]?.id ?? area?.ids.join() ?? ''] ?? '')
   const frame = canvasRect()
   const crop = down?.crop
+  const region = extra?.region ?? (area && frame ? regionFractions(area.rect, frame) : undefined)
   const bubble: PointBubble = {
     targets,
     anchor: hit.point,
@@ -304,7 +307,9 @@ function openBubble(
     crop: { state: crop ? 'pending' : 'none' },
     draft,
     error: null,
-    ...(area && frame ? { area, region: regionFractions(area.rect, frame) } : {}),
+    ...(area ? { area } : {}),
+    ...(region ? { region } : {}),
+    ...(extra?.locationLabel ? { locationLabel: extra.locationLabel } : {}),
     ...(changesAsk ? { changesAsk } : {}),
   }
   state.openBubble(bubble)
@@ -337,7 +342,9 @@ function openBubble(
                 camera: value.enriched.camera,
                 ...(value.enriched.world.center ? { anchor: value.enriched.world.center } : {}),
               }
-            : {}),
+            : value?.enriched
+              ? { camera: value.enriched.camera }
+              : {}),
         })
         if (value?.enriched && current.area) {
           const ids = visibleNodeIds(value.enriched)
@@ -670,11 +677,106 @@ function swallowCanvasClick(event: MouseEvent) {
   }
 }
 
+function freePointHit(x: number, y: number): PointHit {
+  const three = getEditorThreeContext()
+  const rect = canvasRect()
+  if (three && rect) {
+    three.raycaster.setFromCamera(
+      new Vector2(((x - rect.left) / rect.width) * 2 - 1, -((y - rect.top) / rect.height) * 2 + 1),
+      three.camera,
+    )
+    for (const hit of three.raycaster.intersectObjects([...sceneRegistry.nodes.values()], true)) {
+      let object: Object3D | null = hit.object
+      let hidden = false
+      for (; object; object = object.parent) {
+        if (!object.visible) {
+          hidden = true
+          break
+        }
+      }
+      if (hidden) continue
+      const normal = hit.face?.normal
+        .clone()
+        .applyNormalMatrix(new Matrix3().getNormalMatrix(hit.object.matrixWorld))
+      return {
+        point: [hit.point.x, hit.point.y, hit.point.z],
+        normal: normal ? [normal.x, normal.y, normal.z] : [0, 1, 0],
+      }
+    }
+  }
+  const planeY = levelFloorY()
+  const ray = cameraRay(x, y)
+  const t = ray && ray.direction[1] < -1e-6 ? (planeY - ray.origin[1]) / ray.direction[1] : null
+  const point: [number, number, number] =
+    ray && t !== null && t >= 0 && t <= 200
+      ? [ray.origin[0] + ray.direction[0] * t, planeY, ray.origin[2] + ray.direction[2] * t]
+      : ray
+        ? [
+            ray.origin[0] + ray.direction[0] * 6,
+            ray.origin[1] + ray.direction[1] * 6,
+            ray.origin[2] + ray.direction[2] * 6,
+          ]
+        : (cameraPoseStore.getState().pose?.target ?? [0, planeY, 0])
+  return { point, normal: [0, 1, 0] }
+}
+
+function localClickRect(x: number, y: number): Rect | null {
+  const bounds = canvasRect()
+  if (!bounds || bounds.width <= 0 || bounds.height <= 0) return null
+  const w = Math.min(240, bounds.width)
+  const h = Math.min(180, bounds.height)
+  const x0 = Math.max(bounds.left, Math.min(x - w / 2, bounds.right - w))
+  const y0 = Math.max(bounds.top, Math.min(y - h / 2, bounds.bottom - h))
+  return { x0, y0, x1: x0 + w, y1: y0 + h }
+}
+
+function freeLocationLabel(hit: PointHit): string {
+  const nodes = useScene.getState().nodes as Record<string, AnyNode>
+  const levelId = useViewer.getState().selection.levelId
+  if (levelId) {
+    const roomKey = resolveEditorRoomHit(null, levelId, [hit.point[0], hit.point[2]], '3d')
+    const roomNode = roomKey ? nodes[roomKey.zoneId] : undefined
+    const roomName = (roomNode as { name?: string } | undefined)?.name?.trim()
+    if (roomName) return roomName
+    const level = nodes[levelId] as { name?: string; level?: number } | undefined
+    const levelName =
+      level?.name?.trim() || (level?.level !== undefined ? `Level ${level.level}` : '')
+    if (levelName) return levelName
+  }
+  return 'Point'
+}
+
 function handleClick(press: Down, shift: boolean) {
   const state = usePointAsk.getState()
   const hover = press.hover
   if (!hover) {
-    if (state.bubble) closeBubble('dismiss')
+    if (!freeClick) {
+      if (state.bubble) closeBubble('dismiss')
+      return
+    }
+    const hit = freePointHit(press.x, press.y)
+    const locationLabel = freeLocationLabel(hit)
+    const frame = canvasRect()
+    const rect = localClickRect(press.x, press.y)
+    const capture: Promise<SessionCrop | null> = rect
+      ? enrichedRegions
+        ? captureEnrichedRegion(rect, { pad: 0 }).then((enriched) => ({
+            ...enriched.crop,
+            enriched,
+          }))
+        : captureViewCrop(rect, { pad: 0 })
+      : Promise.resolve(null)
+    const crop = capture.then(
+      (value) => value,
+      (error) => {
+        console.debug('[point-ask] no picture:', error instanceof Error ? error.message : error)
+        return null
+      },
+    )
+    openBubble([], hit, 'click', { ...press, crop }, undefined, undefined, {
+      locationLabel,
+      ...(rect && frame ? { region: regionFractions(rect, frame) } : {}),
+    })
     return
   }
   const bubble = state.bubble
@@ -885,7 +987,9 @@ export async function sendBubble(
   const first = bubble.targets[0]
   const area = bubble.area
   // closeBubble releases its pending crop; retain this enriched region's promise for the handoff.
-  const regionCrop = area && enrichedRegions ? downCrops.get(bubble.capturedAt) : undefined
+  const freeEnriched = !area && freeClick && bubble.targets.length === 0 && enrichedRegions
+  const regionCrop =
+    (area && enrichedRegions) || freeEnriched ? downCrops.get(bubble.capturedAt) : undefined
   const object = first ? sceneRegistry.nodes.get(first.id) : undefined
   let local: PinRecord['local'] = null
   if (object && first) {
@@ -903,7 +1007,7 @@ export async function sendBubble(
     ? regionLabel(area.ids.length + area.more)
     : bubble.targets.length > 1
       ? `${first?.name} and ${bubble.targets.length - 1} more`
-      : (first?.name ?? 'Selection')
+      : (first?.name ?? bubble.locationLabel ?? 'Point')
   state.addPin({
     model,
     anchor: bubble.anchor,
@@ -950,7 +1054,7 @@ export async function sendBubble(
         }
       : { state: 'failed' }
   }
-  const enriched = area && crop.state === 'ready' ? crop.enriched : undefined
+  const enriched = (area || freeEnriched) && crop.state === 'ready' ? crop.enriched : undefined
   if (enriched) {
     const ids = visibleNodeIds(enriched)
     usePointAsk.setState((state) => {
@@ -962,8 +1066,12 @@ export async function sendBubble(
           [askId]: {
             ...pin,
             model: { ...pin.model, targetIds: ids },
-            anchor: enriched.world.center ?? pin.anchor,
-            label: regionLabel(ids.length),
+            ...(area
+              ? {
+                  anchor: enriched.world.center ?? pin.anchor,
+                  label: regionLabel(ids.length),
+                }
+              : {}),
             before: crop,
           },
         },
@@ -981,7 +1089,7 @@ export async function sendBubble(
     nodes: nodes as Record<string, AnyNode>,
     levelId,
     targets: bubble.targets.map((t, i) => ({ id: t.id, ...(i === 0 ? { hit: bubble.hit } : {}) })),
-    ...(area
+    ...(area || enriched
       ? {
           inRegion: enriched
             ? {
@@ -991,7 +1099,7 @@ export async function sendBubble(
                 world: enriched.world,
                 rooms: enriched.rooms,
               }
-            : { ids: area.ids, more: area.more },
+            : { ids: area!.ids, more: area!.more },
         }
       : {}),
     camera: enriched?.camera ??
@@ -1054,19 +1162,34 @@ export function lookAtAsk(askId: string) {
     const box = worldBoxOf(nodes, id)
     return box ? [box] : []
   })
-  if (boxes.length === 0) return
-  const box = {
-    min: [0, 1, 2].map((i) => Math.min(...boxes.map((b) => b.min[i] as number))) as [
-      number,
-      number,
-      number,
-    ],
-    max: [0, 1, 2].map((i) => Math.max(...boxes.map((b) => b.max[i] as number))) as [
-      number,
-      number,
-      number,
-    ],
-  }
+  const points =
+    boxes.length === 0 && pin.footprint?.corners.length ? pin.footprint.corners : [pin.anchor]
+  const box =
+    boxes.length > 0
+      ? {
+          min: [0, 1, 2].map((i) => Math.min(...boxes.map((b) => b.min[i] as number))) as [
+            number,
+            number,
+            number,
+          ],
+          max: [0, 1, 2].map((i) => Math.max(...boxes.map((b) => b.max[i] as number))) as [
+            number,
+            number,
+            number,
+          ],
+        }
+      : {
+          min: [
+            Math.min(...points.map((p) => p[0])) - 1.5,
+            Math.min(...points.map((p) => p[1])) - 1,
+            Math.min(...points.map((p) => p[2])) - 1.5,
+          ] as [number, number, number],
+          max: [
+            Math.max(...points.map((p) => p[0])) + 1.5,
+            Math.max(...points.map((p) => p[1])) + 1,
+            Math.max(...points.map((p) => p[2])) + 1.5,
+          ] as [number, number, number],
+        }
   // The person asked to look: Follow Pascal must not take the camera back while it flies there.
   useFollowPascal.getState().pause()
   emitter.emit('camera-controls:apply-pose', sceneViewPose(box, {}))
@@ -1390,9 +1513,12 @@ export function handEditsSince(askId: string): number {
 // ─── lifecycle ──────────────────────────────────────────────────────────────
 
 /** Starts listening for the keys, the pointer, the chat's statuses and the scene's commits. */
-export function startPointAskSession(options: { enrichedRegions?: boolean } = {}): () => void {
+export function startPointAskSession(
+  options: { enrichedRegions?: boolean; freeClick?: boolean } = {},
+): () => void {
   if (stopSession) return stopSession
   enrichedRegions = options.enrichedRegions === true
+  freeClick = options.freeClick === true
   const offs: (() => void)[] = []
   const listen = <K extends keyof WindowEventMap>(
     type: K,
@@ -1470,6 +1596,7 @@ export function startPointAskSession(options: { enrichedRegions?: boolean } = {}
     leavePointMode()
     runningAskId = null
     enrichedRegions = false
+    freeClick = false
     stopSession = null
   }
   return stopSession

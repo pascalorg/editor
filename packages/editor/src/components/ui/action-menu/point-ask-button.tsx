@@ -56,13 +56,9 @@ export function PointAskButton({ icon }: { icon?: ReactNode }) {
           strokeWidth="2"
           viewBox="0 0 24 24"
         >
-          <path
-            d="M12 3a8.5 8.5 0 0 1 8.5 8.5c0 4.69-3.81 8.5-8.5 8.5H4.5a1 1 0 0 1-1-1v-7.5A8.5 8.5 0 0 1 12 3Z"
-            fill="currentColor"
-            fillOpacity="0.12"
-          />
-          <path d="M8.5 10h7" />
-          <path d="M8.5 13.75h4.5" />
+          <path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z" />
+          <path d="M12 8v6" />
+          <path d="M9 11h6" />
         </svg>
       )}
     </ActionButton>

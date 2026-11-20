@@ -60,15 +60,16 @@ export const POINT_ASK_CSS = `
 .pa-err{margin:8px 2px 0;font-size:12px;color:var(--pa-warm);display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 .pa-pin{position:absolute;left:0;top:0;width:32px;height:32px;margin:-38px 0 0 -16px;pointer-events:auto;cursor:pointer;display:grid;place-items:center;will-change:transform}
 .pa-pin::after{content:"";position:absolute;left:50%;top:35px;width:5px;height:5px;margin-left:-2.5px;border-radius:50%;background:var(--pa-accent);box-shadow:0 0 0 1.5px var(--pa-ink);opacity:.9;transition:background 180ms ease,transform 180ms var(--pa-ease)}
-.pa-pin[role="button"]:hover .pa-pdisc,.pa-pin[role="button"]:focus-visible .pa-pdisc{transform:rotate(-45deg) scale(1.08);box-shadow:inset 0 0 0 2px var(--pa-accent),0 0 0 4px rgba(169,155,255,.16),0 8px 20px -6px rgba(0,0,0,.78)}
+.pa-pin[role="button"]:hover .pa-pdisc,.pa-pin[role="button"]:focus-visible .pa-pdisc{transform:scale(1.08);box-shadow:inset 0 0 0 2px var(--pa-accent),0 0 0 4px rgba(169,155,255,.16),0 8px 20px -6px rgba(0,0,0,.78)}
 .pa-pin[role="button"]:focus-visible{outline:2px solid var(--pa-accent);outline-offset:2px;border-radius:999px}
 .pa-pin-link{position:absolute;left:0;top:0;width:1px;height:1px;overflow:visible;pointer-events:none}
 .pa-pin-link line{stroke:var(--pa-accent);stroke-width:1;opacity:.5}
 .pa-pin-link circle{fill:var(--pa-accent);stroke:var(--pa-ink);stroke-width:1}
 .pa-footprint{position:absolute;inset:0;width:100%;height:100%;overflow:visible;pointer-events:none}
 .pa-footprint polygon{fill:rgba(169,155,255,.10);stroke:var(--pa-accent);stroke-width:1.5;stroke-dasharray:6 4;stroke-linecap:round;stroke-linejoin:round}
-.pa-pdisc{width:26px;height:26px;border-radius:50% 50% 50% 4px;transform:rotate(-45deg);background:rgba(20,21,26,.94);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);box-shadow:inset 0 0 0 1.5px rgba(169,155,255,.92),0 8px 18px -6px rgba(0,0,0,.72);display:grid;place-items:center;transition:box-shadow 220ms ease,transform 180ms var(--pa-ease)}
-.pa-pdisc svg{width:16px;height:16px;overflow:visible;transform:rotate(45deg)}
+.pa-pdisc{width:28px;height:28px;border-radius:50% 50% 50% 4px;background:rgba(20,21,26,.94);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);box-shadow:inset 0 0 0 1.5px rgba(169,155,255,.92),0 8px 18px -6px rgba(0,0,0,.72);display:grid;place-items:center;transition:box-shadow 220ms ease,transform 180ms var(--pa-ease)}
+.pa-pdisc svg{width:15px;height:15px;overflow:visible}
+.pa-cm{fill:none;stroke:var(--pa-tx);stroke-width:1.85;stroke-linecap:round;opacity:0;transition:opacity 160ms ease}
 .pa-pq,.pa-pa{fill:none;stroke:#a99bff;stroke-width:1.8;opacity:0;transition:opacity 160ms ease}
 .pa-pq{stroke-dasharray:2.4 2.4}
 .pa-pa{stroke-width:2;stroke-linecap:round}

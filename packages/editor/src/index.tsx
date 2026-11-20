@@ -866,7 +866,10 @@ export {
   setPluginInstallLocks,
 } from './lib/plugin-panels'
 export {
+  closePointAskBubble,
+  lookAtPointAsk,
   retryPointAsk,
+  sendPointAskBubble,
   setPointAskBehindQueue,
   setPointAskBusy,
   setPointAskPlayful,

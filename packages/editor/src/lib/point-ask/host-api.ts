@@ -1,7 +1,25 @@
 import { usePointAsk } from '../../store/use-point-ask'
-import { chatWentIdle, retryAsk } from './session'
+import { chatWentIdle, closeBubble, lookAtAsk, retryAsk, sendBubble } from './session'
 
 // What a host app (the hosted chat) tells Point and ask about itself, without importing the store.
+
+/** Send the open Point and ask bubble through the session pipeline. */
+export function sendPointAskBubble(
+  text: string,
+  from: { x: number; y: number; width: number; height: number },
+): Promise<void> {
+  return sendBubble(text, from)
+}
+
+/** Dismiss or close the open Point and ask bubble. */
+export function closePointAskBubble(kind: 'send' | 'dismiss' = 'dismiss') {
+  closeBubble(kind)
+}
+
+/** Frame the camera on a planted ask/comment pin. */
+export function lookAtPointAsk(askId: string) {
+  lookAtAsk(askId)
+}
 
 /** The host's "Playful touches" setting: false turns the region flash, the ripples and the sounds off. */
 export function setPointAskPlayful(playful: boolean) {

@@ -225,8 +225,8 @@ function initializeEditorRuntime(): () => void {
 export interface EditorProps {
   /** UI locale. Hosts may also call `setLocale` before mounting. */
   locale?: string
-  /** Opt-in pixel evidence for regions only. Click and multi-target asks keep their existing bytes. */
-  pointAsk?: { enrichedRegions?: boolean }
+  /** Opt-in pixel evidence for regions and optional free-click placement anywhere in the 3D scene. */
+  pointAsk?: { enrichedRegions?: boolean; freeClick?: boolean }
   // Layout version — 'v1' (default) or 'v2' (navbar + two-column)
   layoutVersion?: 'v1' | 'v2'
   // Viewport edge the tool menu docks to (desktop only; mobile stays at the bottom)
@@ -1399,7 +1399,10 @@ const ViewerCanvas = memo(function ViewerCanvas({
                 isVersionPreviewMode={isVersionPreviewMode}
               />
               {!isVersionPreviewMode && (
-                <PointAskLayer enrichedRegions={pointAsk?.enrichedRegions} />
+                <PointAskLayer
+                  enrichedRegions={pointAsk?.enrichedRegions}
+                  freeClick={pointAsk?.freeClick}
+                />
               )}
               {!showLoader && isCameraControlsHintVisible && !isFirstPersonMode ? (
                 <ViewerCanvasControlsHint

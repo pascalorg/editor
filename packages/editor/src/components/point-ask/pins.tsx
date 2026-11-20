@@ -147,6 +147,10 @@ const PIN_SVG = (
           />
         </g>
         <path className="pa-pk" d="M7.8 12.3l2.8 2.8 5.6-5.8" />
+        <g className="pa-cm">
+          <path d="M8.5 10.5h7" />
+          <path d="M8.5 14h4.5" />
+        </g>
         <path
           className="pa-sg"
           d="M12 6.8a5.2 5.2 0 0 1 5.2 5.2c0 2.87-2.33 5.2-5.2 5.2H7.6a.8.8 0 0 1-.8-.8V12A5.2 5.2 0 0 1 12 6.8Z"

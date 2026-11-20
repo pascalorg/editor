@@ -70,6 +70,8 @@ export type PointBubble = {
   error: string | null
   /** A region's rectangle, 0-1 of the canvas, when the gesture was a drag. */
   region?: [number, number, number, number]
+  /** Friendly room or level label when pointing freely without an element target. */
+  locationLabel?: string
   footprint?: WorldFootprint
   /** Set when the bubble is about a region: it is a view, not a selection, so it has no targets. */
   area?: BubbleArea
