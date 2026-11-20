@@ -13842,6 +13842,22 @@ msgstr "長さ"
 msgid "editor.placementTyping.offset"
 msgstr "オフセット"
 
+# English: "Colour map & scene layers captured"
+# Source-Hash: 39096017e54e1b02
+# Review: required
+#: packages/editor/src/components/point-ask/bubble.tsx
+#, fuzzy
+msgid "editor.pointAsk.bubble.colourMapCaptured"
+msgstr "カラーマップとシーンレイヤーを取得しました"
+
+# English: "Click anywhere or drag an area to comment"
+# Source-Hash: c0276310a9eaec76
+# Review: required
+#: packages/editor/src/components/point-ask/mode-pill.tsx
+#, fuzzy
+msgid "editor.pointAsk.modePill.clickOrDragToComment"
+msgstr "任意の場所をクリックするか、範囲をドラッグしてコメント"
+
 # Source-Hash: 89ee318aad485f83
 # Review: required
 # AI-Provider: claude-code
@@ -39542,17 +39558,17 @@ msgstr "ウォークスルー：{state}"
 msgid "viewer.walkthrough.shutters"
 msgstr "雨戸"
 
-# English: "Close"
 # Source-Hash: d7cf5045c01b2eb9
 # Review: required
+# English: "Close"
 #: packages/viewer/src/ui/components/walkthrough-touch-controls.tsx
 #, fuzzy
 msgid "viewer.walkthroughTouch.close"
 msgstr "閉じる"
 
-# English: "Crouch"
 # Source-Hash: f6bb8786828d83ab
 # Review: required
+# English: "Crouch"
 #: packages/viewer/src/ui/components/walkthrough-touch-controls.tsx
 #, fuzzy
 msgid "viewer.walkthroughTouch.crouch"

@@ -1,6 +1,6 @@
 'use client'
 
-import { useScene } from '@pascal-app/core'
+import { usePascalI18n, useScene } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import {
@@ -128,6 +128,7 @@ function BubbleView({
   exiting: boolean
   fold: boolean
 }) {
+  const i18n = usePascalI18n()
   const wrap = useRef<HTMLDivElement>(null)
   const bub = useRef<HTMLDivElement>(null)
   const tail = useRef<HTMLSpanElement>(null)
@@ -458,7 +459,12 @@ function BubbleView({
             <span
               className="pa-thumb-wrap"
               title={
-                bubble.crop.enriched?.segmented ? 'Colour map & scene layers captured' : undefined
+                bubble.crop.enriched?.segmented
+                  ? i18n._({
+                      id: 'editor.pointAsk.bubble.colourMapCaptured',
+                      message: 'Colour map & scene layers captured',
+                    })
+                  : undefined
               }
             >
               <img alt="What Pascal will see" className="pa-thumb" src={bubble.crop.dataUrl} />

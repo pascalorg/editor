@@ -5568,6 +5568,14 @@ msgstr "Length"
 msgid "editor.placementTyping.offset"
 msgstr "Offset"
 
+#: packages/editor/src/components/point-ask/bubble.tsx
+msgid "editor.pointAsk.bubble.colourMapCaptured"
+msgstr "Colour map & scene layers captured"
+
+#: packages/editor/src/components/point-ask/mode-pill.tsx
+msgid "editor.pointAsk.modePill.clickOrDragToComment"
+msgstr "Click anywhere or drag an area to comment"
+
 #: packages/editor/src/components/procedural-items/inspector.tsx
 msgid "editor.proceduralItems.inspector.adjustDesign"
 msgstr "Adjust design"

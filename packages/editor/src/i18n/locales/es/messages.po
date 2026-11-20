@@ -13842,6 +13842,22 @@ msgstr "Longitud"
 msgid "editor.placementTyping.offset"
 msgstr "Desplazamiento"
 
+# English: "Colour map & scene layers captured"
+# Source-Hash: 39096017e54e1b02
+# Review: required
+#: packages/editor/src/components/point-ask/bubble.tsx
+#, fuzzy
+msgid "editor.pointAsk.bubble.colourMapCaptured"
+msgstr "Mapa de colores y capas de la escena capturados"
+
+# English: "Click anywhere or drag an area to comment"
+# Source-Hash: c0276310a9eaec76
+# Review: required
+#: packages/editor/src/components/point-ask/mode-pill.tsx
+#, fuzzy
+msgid "editor.pointAsk.modePill.clickOrDragToComment"
+msgstr "Haz clic en cualquier lugar o arrastra un área para comentar"
+
 # Source-Hash: 89ee318aad485f83
 # Review: required
 # AI-Provider: claude-code
@@ -39542,17 +39558,17 @@ msgstr "Recorrido: {state}"
 msgid "viewer.walkthrough.shutters"
 msgstr "Contraventanas"
 
-# English: "Close"
 # Source-Hash: d7cf5045c01b2eb9
 # Review: required
+# English: "Close"
 #: packages/viewer/src/ui/components/walkthrough-touch-controls.tsx
 #, fuzzy
 msgid "viewer.walkthroughTouch.close"
 msgstr "Cerrar"
 
-# English: "Crouch"
 # Source-Hash: f6bb8786828d83ab
 # Review: required
+# English: "Crouch"
 #: packages/viewer/src/ui/components/walkthrough-touch-controls.tsx
 #, fuzzy
 msgid "viewer.walkthroughTouch.crouch"
