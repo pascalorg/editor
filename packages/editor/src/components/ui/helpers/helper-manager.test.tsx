@@ -303,7 +303,8 @@ describe('Comment tool HUD', () => {
     const textOf = (value: { message?: string } | string | undefined) =>
       typeof value === 'string' ? value : value?.message
 
-    const pointing = commentToolHints({})
+    const idle = { altPressed: false, shiftPressed: false }
+    const pointing = commentToolHints({ ...idle, composing: false })
     expect(pointing.map((hint) => textOf(hint.label))).toEqual([
       'Pin a comment',
       'Smart capture',
@@ -314,7 +315,7 @@ describe('Comment tool HUD', () => {
     expect(textOf(pointing[1]?.subtitle)).toBe('Frame an area of the view')
     expect(textOf(pointing[2]?.subtitle)).toBe('Wall or floor behind a room')
 
-    const composing = commentToolHints({ composing: true })
+    const composing = commentToolHints({ ...idle, composing: true })
     expect(composing.map((hint) => textOf(hint.label))).toEqual([
       'Send',
       'Add or remove element',
