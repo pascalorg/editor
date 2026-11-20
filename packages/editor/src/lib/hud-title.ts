@@ -82,7 +82,7 @@ export const SMART_MEASURE_HUD_TITLE: HudTitle = {
 }
 export const COMMENT_HUD_TITLE: HudTitle = {
   label: /* i18n */ { id: 'editor.lib.hudTitle.comment', message: 'Comment' },
-  icon: { kind: 'iconify', name: 'lucide:message-circle-plus' },
+  icon: url('/icons/comment.webp'),
   shortcut: 'C',
 }
 

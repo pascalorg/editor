@@ -225,12 +225,12 @@ describe('a registry tool holding its draft', () => {
 })
 
 describe('Comment tool HUD', () => {
-  test('declares Comment title with message-circle-plus icon and C shortcut', () => {
+  test('declares Comment title with 3D comment icon and C shortcut', () => {
     expect(COMMENT_HUD_TITLE.label.id).toBe('editor.lib.hudTitle.comment')
     expect(COMMENT_HUD_TITLE.label.message).toBe('Comment')
     expect(COMMENT_HUD_TITLE.icon).toEqual({
-      kind: 'iconify',
-      name: 'lucide:message-circle-plus',
+      kind: 'url',
+      src: '/icons/comment.webp',
     })
     expect(COMMENT_HUD_TITLE.shortcut).toBe('C')
   })
