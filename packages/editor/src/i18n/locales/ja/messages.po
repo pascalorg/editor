@@ -4565,6 +4565,16 @@ msgstr "直線フェンスの連続配置 — クリックまたは C で切り�
 msgid "editor.helpers.contextualHelperPanel.straightSingle"
 msgstr "直線: 単体"
 
+# Source-Hash: 583d310ace346957
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Add or remove element"
+#: packages/editor/src/components/ui/helpers/helper-manager.tsx
+#, fuzzy
+msgid "editor.helpers.helperManager.addOrRemoveElement"
+msgstr "要素を追加または削除"
+
 # Source-Hash: 9a56d90d461b4bca
 # Review: required
 # AI-Provider: claude-code
@@ -4584,6 +4594,26 @@ msgstr "点を追加"
 #, fuzzy
 msgid "editor.helpers.helperManager.addPointClickTheFirstTo"
 msgstr "点を追加 · 最初の点をクリックして閉じる"
+
+# Source-Hash: 01e9f3254eb244eb
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Any object, wall, or space"
+#: packages/editor/src/components/ui/helpers/helper-manager.tsx
+#, fuzzy
+msgid "editor.helpers.helperManager.anyObjectWallOrSpace"
+msgstr "任意のオブジェクト、壁、または空間"
+
+# Source-Hash: a4e5aaf60c57ffd7
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Ask Architect"
+#: packages/editor/src/components/ui/helpers/helper-manager.tsx
+#, fuzzy
+msgid "editor.helpers.helperManager.askArchitect"
+msgstr "Architect に質問"
 
 # Source-Hash: d8cf72d482d56cd7
 # Review: required
@@ -4635,6 +4665,16 @@ msgstr "ストロークをキャンセル"
 msgid "editor.helpers.helperManager.detachTheJoint"
 msgstr "接合を外す"
 
+# Source-Hash: a2bd204e93e90598
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Dismiss"
+#: packages/editor/src/components/ui/helpers/helper-manager.tsx
+#, fuzzy
+msgid "editor.helpers.helperManager.dismiss"
+msgstr "閉じる"
+
 # Source-Hash: 16552c2580bbe8b8
 # Review: required
 # AI-Provider: claude-code
@@ -4675,6 +4715,16 @@ msgstr "開口を描く"
 msgid "editor.helpers.helperManager.drawTheTerrace"
 msgstr "テラスを描く"
 
+# Source-Hash: 0b1ca52008a3c70e
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Exit comment"
+#: packages/editor/src/components/ui/helpers/helper-manager.tsx
+#, fuzzy
+msgid "editor.helpers.helperManager.exitComment"
+msgstr "コメントを終了"
+
 # Source-Hash: e092e803eb60af69
 # Review: required
 # AI-Provider: claude-code
@@ -4704,6 +4754,26 @@ msgstr "完了"
 #, fuzzy
 msgid "editor.helpers.helperManager.finishAtTheEdge"
 msgstr "端で完了"
+
+# Source-Hash: ae14a2eb26809952
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Frame an area of the view"
+#: packages/editor/src/components/ui/helpers/helper-manager.tsx
+#, fuzzy
+msgid "editor.helpers.helperManager.frameAnAreaOfTheView"
+msgstr "ビューの領域を囲む"
+
+# Source-Hash: 9c80dc3706e50e11
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Frame an area with colour map"
+#: packages/editor/src/components/ui/helpers/helper-manager.tsx
+#, fuzzy
+msgid "editor.helpers.helperManager.frameAnAreaWithColourMap"
+msgstr "カラーマップ付きで領域を囲む"
 
 # Source-Hash: 21029cf1c45697cc
 # Review: required
@@ -4745,6 +4815,16 @@ msgstr "押したままで素材を取得"
 msgid "editor.helpers.helperManager.inspectSurfaceDimensions"
 msgstr "面の寸法を確認"
 
+# Source-Hash: a76193a09fb3dd72
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Object, wall, or room"
+#: packages/editor/src/components/ui/helpers/helper-manager.tsx
+#, fuzzy
+msgid "editor.helpers.helperManager.objectWallOrRoom"
+msgstr "オブジェクト、壁、または部屋"
+
 # Source-Hash: 63f1f7006ae14177
 # Review: required
 # AI-Provider: claude-code
@@ -4765,6 +4845,16 @@ msgstr "この素材で塗る"
 msgid "editor.helpers.helperManager.pickTargetHeight"
 msgstr "目標の高さを選ぶ"
 
+# Source-Hash: 93253401c349aec2
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Pin a comment"
+#: packages/editor/src/components/ui/helpers/helper-manager.tsx
+#, fuzzy
+msgid "editor.helpers.helperManager.pinAComment"
+msgstr "コメントをピン留め"
+
 # Source-Hash: 2880fc9752eababa
 # Review: required
 # AI-Provider: claude-code
@@ -4774,6 +4864,16 @@ msgstr "目標の高さを選ぶ"
 #, fuzzy
 msgid "editor.helpers.helperManager.pinMeasurementLens"
 msgstr "計測レンズを固定"
+
+# Source-Hash: fe11989d83afa8fb
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Pin without asking Architect"
+#: packages/editor/src/components/ui/helpers/helper-manager.tsx
+#, fuzzy
+msgid "editor.helpers.helperManager.pinWithoutAskingArchitect"
+msgstr "Architect に聞かずピン留め"
 
 # Source-Hash: 722741535b346e09
 # Review: required
@@ -4865,6 +4965,26 @@ msgstr "±45°回転"
 msgid "editor.helpers.helperManager.rotateTheSelection45"
 msgstr "選択を±45°回転"
 
+# Source-Hash: 689cc4eafbe8924b
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Save comment"
+#: packages/editor/src/components/ui/helpers/helper-manager.tsx
+#, fuzzy
+msgid "editor.helpers.helperManager.saveComment"
+msgstr "コメントを保存"
+
+# Source-Hash: 31d32c960114af1d
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Send"
+#: packages/editor/src/components/ui/helpers/helper-manager.tsx
+#, fuzzy
+msgid "editor.helpers.helperManager.send"
+msgstr "送信"
+
 # Source-Hash: c93ae898b4d59f6f
 # Review: required
 # AI-Provider: claude-code
@@ -4874,6 +4994,46 @@ msgstr "選択を±45°回転"
 #, fuzzy
 msgid "editor.helpers.helperManager.setOneCornerThenTheOpposite"
 msgstr "1つの角、次に対角を設定"
+
+# Source-Hash: 5111a19670b1de6b
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Smart capture"
+#: packages/editor/src/components/ui/helpers/helper-manager.tsx
+#, fuzzy
+msgid "editor.helpers.helperManager.smartCapture"
+msgstr "スマートキャプチャ"
+
+# Source-Hash: a2e3d89262c974c0
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Start an AI thread here"
+#: packages/editor/src/components/ui/helpers/helper-manager.tsx
+#, fuzzy
+msgid "editor.helpers.helperManager.startAnAiThreadHere"
+msgstr "ここで AI スレッドを開始"
+
+# Source-Hash: beebaf15d47e596d
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Target deeper surface"
+#: packages/editor/src/components/ui/helpers/helper-manager.tsx
+#, fuzzy
+msgid "editor.helpers.helperManager.targetDeeperSurface"
+msgstr "奥の面をターゲット"
+
+# Source-Hash: 16cbc61997ce85fb
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Wall or floor behind a room"
+#: packages/editor/src/components/ui/helpers/helper-manager.tsx
+#, fuzzy
+msgid "editor.helpers.helperManager.wallOrFloorBehindARoom"
+msgstr "部屋の奥の壁または床"
 
 # Source-Hash: c0774c185060fc13
 # Review: required
@@ -10229,6 +10389,16 @@ msgstr "単体フェンス"
 #, fuzzy
 msgid "editor.lib.continuation.walls"
 msgstr "壁"
+
+# Source-Hash: af3f2a0025aa014b
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Comment"
+#: packages/editor/src/lib/hud-title.ts
+#, fuzzy
+msgid "editor.lib.hudTitle.comment"
+msgstr "コメント"
 
 # Source-Hash: 4e4f1a24e4a9d61e
 # Review: required

@@ -4565,6 +4565,16 @@ msgstr "直线围栏连续 — 点击或按 C 切换"
 msgid "editor.helpers.contextualHelperPanel.straightSingle"
 msgstr "直线：单段"
 
+# Source-Hash: 583d310ace346957
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Add or remove element"
+#: packages/editor/src/components/ui/helpers/helper-manager.tsx
+#, fuzzy
+msgid "editor.helpers.helperManager.addOrRemoveElement"
+msgstr "添加或移除元素"
+
 # Source-Hash: 9a56d90d461b4bca
 # Review: required
 # AI-Provider: claude-code
@@ -4584,6 +4594,26 @@ msgstr "添加点"
 #, fuzzy
 msgid "editor.helpers.helperManager.addPointClickTheFirstTo"
 msgstr "添加点 · 点击第一个点闭合"
+
+# Source-Hash: 01e9f3254eb244eb
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Any object, wall, or space"
+#: packages/editor/src/components/ui/helpers/helper-manager.tsx
+#, fuzzy
+msgid "editor.helpers.helperManager.anyObjectWallOrSpace"
+msgstr "任意对象、墙体或空间"
+
+# Source-Hash: a4e5aaf60c57ffd7
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Ask Architect"
+#: packages/editor/src/components/ui/helpers/helper-manager.tsx
+#, fuzzy
+msgid "editor.helpers.helperManager.askArchitect"
+msgstr "询问 Architect"
 
 # Source-Hash: d8cf72d482d56cd7
 # Review: required
@@ -4635,6 +4665,16 @@ msgstr "取消笔画"
 msgid "editor.helpers.helperManager.detachTheJoint"
 msgstr "断开连接"
 
+# Source-Hash: a2bd204e93e90598
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Dismiss"
+#: packages/editor/src/components/ui/helpers/helper-manager.tsx
+#, fuzzy
+msgid "editor.helpers.helperManager.dismiss"
+msgstr "关闭"
+
 # Source-Hash: 16552c2580bbe8b8
 # Review: required
 # AI-Provider: claude-code
@@ -4675,6 +4715,16 @@ msgstr "绘制开口"
 msgid "editor.helpers.helperManager.drawTheTerrace"
 msgstr "绘制露台"
 
+# Source-Hash: 0b1ca52008a3c70e
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Exit comment"
+#: packages/editor/src/components/ui/helpers/helper-manager.tsx
+#, fuzzy
+msgid "editor.helpers.helperManager.exitComment"
+msgstr "退出评论"
+
 # Source-Hash: e092e803eb60af69
 # Review: required
 # AI-Provider: claude-code
@@ -4704,6 +4754,26 @@ msgstr "完成"
 #, fuzzy
 msgid "editor.helpers.helperManager.finishAtTheEdge"
 msgstr "在边缘处完成"
+
+# Source-Hash: ae14a2eb26809952
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Frame an area of the view"
+#: packages/editor/src/components/ui/helpers/helper-manager.tsx
+#, fuzzy
+msgid "editor.helpers.helperManager.frameAnAreaOfTheView"
+msgstr "框选视图区域"
+
+# Source-Hash: 9c80dc3706e50e11
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Frame an area with colour map"
+#: packages/editor/src/components/ui/helpers/helper-manager.tsx
+#, fuzzy
+msgid "editor.helpers.helperManager.frameAnAreaWithColourMap"
+msgstr "框选带颜色图层的区域"
 
 # Source-Hash: 21029cf1c45697cc
 # Review: required
@@ -4745,6 +4815,16 @@ msgstr "按住以拾取材质"
 msgid "editor.helpers.helperManager.inspectSurfaceDimensions"
 msgstr "查看表面尺寸"
 
+# Source-Hash: a76193a09fb3dd72
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Object, wall, or room"
+#: packages/editor/src/components/ui/helpers/helper-manager.tsx
+#, fuzzy
+msgid "editor.helpers.helperManager.objectWallOrRoom"
+msgstr "对象、墙体或房间"
+
 # Source-Hash: 63f1f7006ae14177
 # Review: required
 # AI-Provider: claude-code
@@ -4765,6 +4845,16 @@ msgstr "使用此材质涂装"
 msgid "editor.helpers.helperManager.pickTargetHeight"
 msgstr "拾取目标高度"
 
+# Source-Hash: 93253401c349aec2
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Pin a comment"
+#: packages/editor/src/components/ui/helpers/helper-manager.tsx
+#, fuzzy
+msgid "editor.helpers.helperManager.pinAComment"
+msgstr "固定评论"
+
 # Source-Hash: 2880fc9752eababa
 # Review: required
 # AI-Provider: claude-code
@@ -4774,6 +4864,16 @@ msgstr "拾取目标高度"
 #, fuzzy
 msgid "editor.helpers.helperManager.pinMeasurementLens"
 msgstr "固定测量放大镜"
+
+# Source-Hash: fe11989d83afa8fb
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Pin without asking Architect"
+#: packages/editor/src/components/ui/helpers/helper-manager.tsx
+#, fuzzy
+msgid "editor.helpers.helperManager.pinWithoutAskingArchitect"
+msgstr "仅固定而不询问 Architect"
 
 # Source-Hash: 722741535b346e09
 # Review: required
@@ -4865,6 +4965,26 @@ msgstr "旋转 ±45°"
 msgid "editor.helpers.helperManager.rotateTheSelection45"
 msgstr "将所选旋转 ±45°"
 
+# Source-Hash: 689cc4eafbe8924b
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Save comment"
+#: packages/editor/src/components/ui/helpers/helper-manager.tsx
+#, fuzzy
+msgid "editor.helpers.helperManager.saveComment"
+msgstr "保存评论"
+
+# Source-Hash: 31d32c960114af1d
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Send"
+#: packages/editor/src/components/ui/helpers/helper-manager.tsx
+#, fuzzy
+msgid "editor.helpers.helperManager.send"
+msgstr "发送"
+
 # Source-Hash: c93ae898b4d59f6f
 # Review: required
 # AI-Provider: claude-code
@@ -4874,6 +4994,46 @@ msgstr "将所选旋转 ±45°"
 #, fuzzy
 msgid "editor.helpers.helperManager.setOneCornerThenTheOpposite"
 msgstr "设置一个角，再设置对角"
+
+# Source-Hash: 5111a19670b1de6b
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Smart capture"
+#: packages/editor/src/components/ui/helpers/helper-manager.tsx
+#, fuzzy
+msgid "editor.helpers.helperManager.smartCapture"
+msgstr "智能捕获"
+
+# Source-Hash: a2e3d89262c974c0
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Start an AI thread here"
+#: packages/editor/src/components/ui/helpers/helper-manager.tsx
+#, fuzzy
+msgid "editor.helpers.helperManager.startAnAiThreadHere"
+msgstr "在此开始 AI 对话线程"
+
+# Source-Hash: beebaf15d47e596d
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Target deeper surface"
+#: packages/editor/src/components/ui/helpers/helper-manager.tsx
+#, fuzzy
+msgid "editor.helpers.helperManager.targetDeeperSurface"
+msgstr "选择后方表面"
+
+# Source-Hash: 16cbc61997ce85fb
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Wall or floor behind a room"
+#: packages/editor/src/components/ui/helpers/helper-manager.tsx
+#, fuzzy
+msgid "editor.helpers.helperManager.wallOrFloorBehindARoom"
+msgstr "房间后方的墙面或地面"
 
 # Source-Hash: c0774c185060fc13
 # Review: required
@@ -10229,6 +10389,16 @@ msgstr "单段围栏"
 #, fuzzy
 msgid "editor.lib.continuation.walls"
 msgstr "墙体"
+
+# Source-Hash: af3f2a0025aa014b
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Comment"
+#: packages/editor/src/lib/hud-title.ts
+#, fuzzy
+msgid "editor.lib.hudTitle.comment"
+msgstr "评论"
 
 # Source-Hash: 4e4f1a24e4a9d61e
 # Review: required

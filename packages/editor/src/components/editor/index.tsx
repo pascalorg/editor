@@ -2099,7 +2099,7 @@ function EditorContent({
                   <RightStack
                     belowTopMenu={topMenuShown}
                     reserveBottomMenu={!dockMenuOnTop}
-                    helper={isCaptureMode ? null : <HelperManager />}
+                    helper={isCaptureMode ? null : <HelperManager pointAsk={pointAsk} />}
                     inspector={
                       isVersionPreviewMode || isCaptureMode || isStudioMode ? null : (
                         <PanelManager
@@ -2183,7 +2183,7 @@ function EditorContent({
               <ActionMenu placement={actionMenuPlacement} pointAskIcon={pointAskIcon} />
             </div>
             <RightStack
-              helper={<HelperManager />}
+              helper={<HelperManager pointAsk={pointAsk} />}
               inspector={<PanelManager />}
               reserveBottomMenu={actionMenuPlacement !== 'top' || isMobile}
             />

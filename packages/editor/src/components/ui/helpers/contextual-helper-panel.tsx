@@ -555,7 +555,7 @@ export function ContextualHelperPanel({
   const actionHints = hints.filter((hint) => !isEscHint(hint))
   const escHints = hints.filter(isEscHint)
   const collapsedHints = actionHints.filter(
-    (hint, index) => index === 0 || hint.active || isNoteHint(hint),
+    (hint, index) => index === 0 || hint.active || hint.pinned || isNoteHint(hint),
   )
   const visibleHints = showAllHints ? actionHints : collapsedHints
 

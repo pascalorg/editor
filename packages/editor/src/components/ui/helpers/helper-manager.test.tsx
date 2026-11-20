@@ -5,12 +5,13 @@ import {
   PATH_POINT_DRAG_LABEL,
   ROTATE_HANDLE_DRAG_LABEL,
 } from '../../../lib/contextual-help'
-import { SELECT_HUD_TITLE, toolHudTitle } from '../../../lib/hud-title'
+import { COMMENT_HUD_TITLE, SELECT_HUD_TITLE, toolHudTitle } from '../../../lib/hud-title'
 import { snapContextOf } from '../../../lib/snapping-mode'
 import { cornerHintRows } from '../../../store/use-corner-snap-hint'
 import { TooltipProvider } from '@pascal-app/viewer/ui'
 import { ContextualHelperPanel } from './contextual-helper-panel'
 import {
+  commentToolHints,
   mepHandleGesture,
   mepHandleGestureHints,
   mezzanineHints,
@@ -220,5 +221,104 @@ describe('a registry tool holding its draft', () => {
         3,
       ),
     ).toBe(false)
+  })
+})
+
+describe('Comment tool HUD', () => {
+  test('declares Comment title with message-circle-plus icon and C shortcut', () => {
+    expect(COMMENT_HUD_TITLE.label.id).toBe('editor.lib.hudTitle.comment')
+    expect(COMMENT_HUD_TITLE.label.message).toBe('Comment')
+    expect(COMMENT_HUD_TITLE.icon).toEqual({
+      kind: 'iconify',
+      name: 'lucide:message-circle-plus',
+    })
+    expect(COMMENT_HUD_TITLE.shortcut).toBe('C')
+  })
+
+  test('pointing mode renders all primary gestures uncollapsed and marks Alt active when held', () => {
+    const hints = commentToolHints({
+      altPressed: false,
+      shiftPressed: false,
+      composing: false,
+      enrichedRegions: true,
+      freeClick: true,
+    })
+    const html = renderToStaticMarkup(
+      <TooltipProvider>
+        <ContextualHelperPanel hints={hints} title={COMMENT_HUD_TITLE} />
+      </TooltipProvider>,
+    )
+    expect(html).toContain('data-hud-title="Comment"')
+    for (const label of [
+      'Pin a comment',
+      'Any object, wall, or space',
+      'Smart capture',
+      'Frame an area with colour map',
+      'Target deeper surface',
+      'Wall or floor behind a room',
+      'Exit comment',
+    ]) {
+      expect(html).toContain(label)
+    }
+    expect(html).not.toContain('More shortcuts')
+
+    const activeAltHints = commentToolHints({
+      altPressed: true,
+      shiftPressed: false,
+      composing: false,
+      enrichedRegions: true,
+      freeClick: true,
+    })
+    expect(activeAltHints.find((hint) => hint.keys.includes('Alt'))?.active).toBe(true)
+  })
+
+  test('composing mode renders save, Ask Architect, multi-select, and dismiss rows and marks Shift active', () => {
+    const hints = commentToolHints({
+      altPressed: false,
+      shiftPressed: true,
+      composing: true,
+      enrichedRegions: true,
+      freeClick: true,
+    })
+    const html = renderToStaticMarkup(
+      <TooltipProvider>
+        <ContextualHelperPanel hints={hints} title={COMMENT_HUD_TITLE} />
+      </TooltipProvider>,
+    )
+    for (const label of [
+      'Save comment',
+      'Pin without asking Architect',
+      'Ask Architect',
+      'Start an AI thread here',
+      'Add or remove element',
+      'Dismiss',
+    ]) {
+      expect(html).toContain(label)
+    }
+    expect(html).not.toContain('More shortcuts')
+    expect(hints.find((hint) => hint.keys.includes('Shift'))?.active).toBe(true)
+  })
+
+  test('commentToolHints defaults fall back to generic capture descriptions when flags are omitted', () => {
+    const textOf = (value: { message?: string } | string | undefined) =>
+      typeof value === 'string' ? value : value?.message
+
+    const pointing = commentToolHints({})
+    expect(pointing.map((hint) => textOf(hint.label))).toEqual([
+      'Pin a comment',
+      'Smart capture',
+      'Target deeper surface',
+      'Exit comment',
+    ])
+    expect(textOf(pointing[0]?.subtitle)).toBe('Object, wall, or room')
+    expect(textOf(pointing[1]?.subtitle)).toBe('Frame an area of the view')
+    expect(textOf(pointing[2]?.subtitle)).toBe('Wall or floor behind a room')
+
+    const composing = commentToolHints({ composing: true })
+    expect(composing.map((hint) => textOf(hint.label))).toEqual([
+      'Send',
+      'Add or remove element',
+      'Dismiss',
+    ])
   })
 })

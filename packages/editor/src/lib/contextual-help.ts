@@ -10,6 +10,9 @@ export type ContextualShortcutHint = {
   // (e.g. "disable 15° snap"). The HUD wraps both lines rather than truncating.
   subtitle?: MessageDescriptor | string
   active?: boolean
+  // Keeps a primary gesture visible when secondary shortcuts are collapsed,
+  // without highlighting its keycap as pressed.
+  pinned?: boolean
 }
 
 // `activeHandleDrag.label` value a rotate gizmo sets while dragging, so the
