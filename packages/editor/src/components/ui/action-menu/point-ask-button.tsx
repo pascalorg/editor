@@ -33,7 +33,7 @@ export function PointAskButton({ icon }: { icon?: ReactNode }) {
       data-guide-target="mode-point-ask"
       disabled={unavailable}
       isActive={active}
-      label={i18n._({ id: 'editor.actionMenu.pointAskButton.pointAndAsk', message: 'Point and ask' })}
+      label={i18n._({ id: 'editor.actionMenu.pointAskButton.pointAndAsk', message: 'Comment' })}
       onClick={() => {
         if (active) leavePointMode()
         else if (canPoint()) enterPointMode(true)
@@ -41,7 +41,7 @@ export function PointAskButton({ icon }: { icon?: ReactNode }) {
       shortcut="C"
       size="icon"
       tooltipContent={
-        unavailable ? <p>{i18n._({ id: 'editor.actionMenu.pointAskButton.pointAndAskWorksInThe', message: 'Point and ask works in the 3D view' })}</p> : <p>{i18n._({ id: 'editor.actionMenu.pointAskButton.pointAndAskC', message: 'Point and ask (C)' })}</p>
+        unavailable ? <p>{i18n._({ id: 'editor.actionMenu.pointAskButton.pointAndAskWorksInThe', message: 'Comment works in the 3D view' })}</p> : <p>{i18n._({ id: 'editor.actionMenu.pointAskButton.pointAndAskC', message: 'Comment (C)' })}</p>
       }
       variant="ghost"
     >

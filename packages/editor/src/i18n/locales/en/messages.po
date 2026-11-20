@@ -972,15 +972,15 @@ msgstr "Volume"
 
 #: packages/editor/src/components/ui/action-menu/point-ask-button.tsx
 msgid "editor.actionMenu.pointAskButton.pointAndAsk"
-msgstr "Point and ask"
+msgstr "Comment"
 
 #: packages/editor/src/components/ui/action-menu/point-ask-button.tsx
 msgid "editor.actionMenu.pointAskButton.pointAndAskC"
-msgstr "Point and ask (C)"
+msgstr "Comment (C)"
 
 #: packages/editor/src/components/ui/action-menu/point-ask-button.tsx
 msgid "editor.actionMenu.pointAskButton.pointAndAskWorksInThe"
-msgstr "Point and ask works in the 3D view"
+msgstr "Comment works in the 3D view"
 
 #: packages/editor/src/components/ui/action-menu/structure-tools.tsx
 msgid "editor.actionMenu.structureTools.beam"

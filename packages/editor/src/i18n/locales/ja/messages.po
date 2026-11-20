@@ -2404,35 +2404,35 @@ msgstr "スマート"
 msgid "editor.actionMenu.measurementControl.volume"
 msgstr "体積"
 
-# Source-Hash: 64f3eb5e1936906d
+# Source-Hash: af3f2a0025aa014b
 # Review: required
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Point and ask"
+# English: "Comment"
 #: packages/editor/src/components/ui/action-menu/point-ask-button.tsx
 #, fuzzy
 msgid "editor.actionMenu.pointAskButton.pointAndAsk"
-msgstr "指して質問"
+msgstr "コメント"
 
-# Source-Hash: d86d31e83f6f0888
+# Source-Hash: d6de3c6d126430d6
 # Review: required
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Point and ask (C)"
+# English: "Comment (C)"
 #: packages/editor/src/components/ui/action-menu/point-ask-button.tsx
 #, fuzzy
 msgid "editor.actionMenu.pointAskButton.pointAndAskC"
-msgstr "指して質問 (C)"
+msgstr "コメント (C)"
 
-# Source-Hash: 65622d2ef53c1f3b
+# Source-Hash: 0eba830970fafe39
 # Review: required
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Point and ask works in the 3D view"
+# English: "Comment works in the 3D view"
 #: packages/editor/src/components/ui/action-menu/point-ask-button.tsx
 #, fuzzy
 msgid "editor.actionMenu.pointAskButton.pointAndAskWorksInThe"
-msgstr "指して質問は 3D ビューで使えます"
+msgstr "コメントは 3D ビューで使えます"
 
 # Source-Hash: e14858b33b6e2623
 # Review: required
