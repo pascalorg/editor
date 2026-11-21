@@ -1,0 +1,19 @@
+{
+  "mcpServers": {
+    "pascal": {
+      "type": "streamable-http",
+      "url": "https://editor.pascal.app/api/mcp",
+      "extensions": {
+        "com.openai": {
+          "auth": {
+            "type": "oauth",
+            "client": {
+              "mode": "cimd"
+            },
+            "baseScopes": ["offline_access", "scene:read", "scene:write"]
+          }
+        }
+      }
+    }
+  }
+}
