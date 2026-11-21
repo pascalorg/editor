@@ -45,7 +45,7 @@
     "ai": "^7.0.179",
     "dotenv-cli": "^11.1.0",
     "entities": "^9.0.0",
-    "esbuild": "^0.25.12",
+    "esbuild": "^0.28.2",
     "fast-xml-parser": "^5.12.1",
     "playwright-core": "1.65.1",
     "pofile-ts": "^4.0.3",
