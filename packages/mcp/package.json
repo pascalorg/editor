@@ -65,7 +65,7 @@
     "@pascal-app/core": "^1.1.6"
   },
   "dependencies": {
-    "@hono/node-server": "^2.1.6",
+    "@hono/node-server": "^2.1.11",
     "@modelcontextprotocol/node": "^2.1.2",
     "@modelcontextprotocol/server": "^2.4.0",
     "@pascal-app/geometry-script": "^1.1.6",

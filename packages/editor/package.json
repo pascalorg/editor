@@ -52,17 +52,17 @@
     "clsx": "^2.1.1",
     "cmdk": "^1.1.1",
     "fflate": "^0.8.3",
-    "lucide-react": "^1.69.0",
-    "manifold-3d": "3.5.4",
+    "lucide-react": "^1.77.0",
+    "manifold-3d": "3.5.5",
     "mitt": "^3.0.1",
-    "motion": "^14.9.1",
+    "motion": "^14.14.0",
     "nanoid": "^6.0.2",
-    "pdfkit": "^0.20.2",
-    "tailwind-merge": "^3.7.0",
+    "pdfkit": "^0.21.0",
+    "tailwind-merge": "^3.7.1",
     "three-bvh-csg": "^0.0.18",
     "three-mesh-bvh": "~0.9.18",
     "zod": ">=4.6.7 <4.7",
-    "zustand": "^5.0.16"
+    "zustand": "^5.1.0"
   },
   "devDependencies": {
     "@pascal-app/core": "^1.1.6",
@@ -70,12 +70,12 @@
     "@pascal/typescript-config": "*",
     "@react-three/test-renderer": "^9.1.1",
     "@types/blob-stream": "^0.1.33",
-    "@types/bun": "^1.4.4",
+    "@types/bun": "^1.4.5",
     "@types/pdfkit": "^0.17.7",
     "@types/react": "19.3.0",
     "@types/react-dom": "19.3.0",
     "@types/three": "^0.187",
-    "fast-xml-parser": "^5.12.0",
+    "fast-xml-parser": "^5.12.1",
     "typescript": "7.0.2"
   },
   "repository": {

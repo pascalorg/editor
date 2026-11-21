@@ -177,11 +177,11 @@
   },
   "devDependencies": {
     "@pascal/typescript-config": "*",
-    "@types/bun": "^1.4.4",
+    "@types/bun": "^1.4.5",
     "@types/react": "19.3.0",
     "@types/three": "^0.187",
     "@typescript/typescript6": "6.0.2",
-    "fake-indexeddb": "^6.2.7",
+    "fake-indexeddb": "^6.2.8",
     "typescript": "7.0.2"
   },
   "keywords": [
