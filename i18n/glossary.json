@@ -6,6 +6,7 @@
       "fr": "plafond",
       "es": "techo",
       "ja": "天井",
+      "ru": "потолок",
       "note": "A generic overhead room surface, not necessarily a suspended ceiling."
     },
     "floor plan": {
@@ -13,6 +14,7 @@
       "fr": "plan d’étage",
       "es": "plano de planta",
       "ja": "平面図",
+      "ru": "план этажа",
       "note": "A 2D architectural drawing, not a project plan."
     },
     "level": {
@@ -26,7 +28,8 @@
       "zh-CN": "房间",
       "fr": "pièce",
       "es": "estancia",
-      "ja": "部屋"
+      "ja": "部屋",
+      "ru": "комната"
     },
     "scan": {
       "zh-CN": "扫描模型",
@@ -35,17 +38,23 @@
       "ja": "3Dスキャン",
       "note": "A captured 3D reference, not the verb scan."
     },
+    "unit": {
+      "ru": "помещение",
+      "note": "A self-contained part of a building (apartment, suite, commercial space), not a measurement unit."
+    },
     "wall": {
       "zh-CN": "墙体",
       "fr": "mur",
       "es": "muro",
-      "ja": "壁"
+      "ja": "壁",
+      "ru": "стена"
     },
     "walkthrough": {
       "zh-CN": "漫游",
       "fr": "visite",
       "es": "recorrido",
       "ja": "ウォークスルー",
+      "ru": "прогулка",
       "note": "First-person navigation through the building."
     }
   }
