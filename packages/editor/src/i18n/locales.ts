@@ -2,10 +2,11 @@ import { type CompiledTranslationMessages, registerCompiledMessages } from '@pas
 import { messages as en } from './locales/en/messages'
 import { messages as es } from './locales/es/messages'
 import { messages as fr } from './locales/fr/messages'
+import { messages as it } from './locales/it/messages'
 import { messages as ja } from './locales/ja/messages'
 import { messages as zhCN } from './locales/zh-CN/messages'
 
-export type BundledLocale = 'en' | 'zh-CN' | 'fr' | 'es' | 'ja'
+export type BundledLocale = 'en' | 'zh-CN' | 'fr' | 'es' | 'ja' | 'it'
 
 type LocaleCatalog = {
   locale: BundledLocale
@@ -18,6 +19,7 @@ export const bundledLocalePacks: Record<BundledLocale, LocaleCatalog> = {
   fr: { locale: 'fr', messages: fr },
   es: { locale: 'es', messages: es },
   ja: { locale: 'ja', messages: ja },
+  it: { locale: 'it', messages: it },
 }
 
 let registered = false

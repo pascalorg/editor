@@ -22,7 +22,7 @@ const config: LinguiConfig = {
     lineNumbers: false,
     origins: true,
   }),
-  locales: ['en', 'zh-CN', 'fr', 'es', 'ja'],
+  locales: ['en', 'zh-CN', 'fr', 'es', 'ja', 'it'],
   orderBy: 'messageId',
   sourceLocale: 'en',
 }
