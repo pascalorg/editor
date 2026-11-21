@@ -6,6 +6,7 @@
       "fr": "plafond",
       "es": "techo",
       "ja": "天井",
+      "tr": "tavan",
       "note": "A generic overhead room surface, not necessarily a suspended ceiling."
     },
     "floor plan": {
@@ -13,6 +14,7 @@
       "fr": "plan d’étage",
       "es": "plano de planta",
       "ja": "平面図",
+      "tr": "kat planı",
       "note": "A 2D architectural drawing, not a project plan."
     },
     "level": {
@@ -20,32 +22,37 @@
       "fr": "niveau",
       "es": "planta",
       "ja": "階層",
+      "tr": "kat",
       "note": "A building storey."
     },
     "room": {
       "zh-CN": "房间",
       "fr": "pièce",
       "es": "estancia",
-      "ja": "部屋"
+      "ja": "部屋",
+      "tr": "oda"
     },
     "scan": {
       "zh-CN": "扫描模型",
       "fr": "relevé 3D",
       "es": "escaneo 3D",
       "ja": "3Dスキャン",
+      "tr": "3B tarama",
       "note": "A captured 3D reference, not the verb scan."
     },
     "wall": {
       "zh-CN": "墙体",
       "fr": "mur",
       "es": "muro",
-      "ja": "壁"
+      "ja": "壁",
+      "tr": "duvar"
     },
     "walkthrough": {
       "zh-CN": "漫游",
       "fr": "visite",
       "es": "recorrido",
       "ja": "ウォークスルー",
+      "tr": "gezinti",
       "note": "First-person navigation through the building."
     }
   }

@@ -562,7 +562,7 @@ const entry = (overrides: Partial<LocaleEntries[string][string]>) => ({
 })
 const everyLocale = (value: ReturnType<typeof entry>): LocaleEntries =>
   Object.fromEntries(
-    ['zh-CN', 'fr', 'es', 'ja'].map((locale) => [locale, { [advanced.id]: value }]),
+    ['zh-CN', 'fr', 'es', 'ja', 'tr'].map((locale) => [locale, { [advanced.id]: value }]),
   )
 
 test('AI drafts pass ordinary checks but block the reviewed release gate', () => {
@@ -616,10 +616,13 @@ test('an unrelated addition sharing English with a removed reviewed ID only warn
     fuzzy: false,
   })
   const base: LocaleEntries = Object.fromEntries(
-    ['zh-CN', 'fr', 'es', 'ja'].map((locale) => [locale, { [off.id]: reviewed('Désactivé') }]),
+    ['zh-CN', 'fr', 'es', 'ja', 'tr'].map((locale) => [
+      locale,
+      { [off.id]: reviewed('Désactivé') },
+    ]),
   )
   const current: LocaleEntries = Object.fromEntries(
-    ['zh-CN', 'fr', 'es', 'ja'].map((locale) => [
+    ['zh-CN', 'fr', 'es', 'ja', 'tr'].map((locale) => [
       locale,
       { [added.id]: { ...reviewed('Désactivé'), review: 'required' as const, fuzzy: true } },
     ]),
@@ -635,7 +638,7 @@ test('a declared rename must carry the reviewed translation over', () => {
   const base = everyLocale(entry({}))
   const declared = (overrides: Partial<LocaleEntries[string][string]>): LocaleEntries =>
     Object.fromEntries(
-      ['zh-CN', 'fr', 'es', 'ja'].map((locale) => [
+      ['zh-CN', 'fr', 'es', 'ja', 'tr'].map((locale) => [
         locale,
         { [renamed.id]: entry({ renamedFrom: advanced.id, ...overrides }) },
       ]),

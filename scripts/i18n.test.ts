@@ -47,7 +47,7 @@ test('PO output is stable when an unrelated source line is added', async () => {
   expect(await serialize(10)).toBe(await serialize(11))
 })
 
-const TARGETS = ['zh-CN', 'fr', 'es', 'ja'] as const
+const TARGETS = ['zh-CN', 'fr', 'es', 'ja', 'tr'] as const
 const SAMPLE = `export const messages = [
   /* i18n */ { id: 'viewer.camera.topView', message: 'Top view' },
   /* i18n */ { id: 'editor.buildPanel.advanced', message: 'Advanced' },
