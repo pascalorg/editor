@@ -148,7 +148,7 @@
   ],
   "scripts": {
     "build": "tsc --build && bun ../../scripts/fix-node-esm-imports.ts dist",
-    "dev": "tsgo --build --watch",
+    "dev": "tsc --build --watch",
     "test": "bun test src",
     "check-types": "tsc -p tsconfig.contracts.json --pretty false",
     "bench:registry": "bun run src/registry/__bench__/relations-resolver.bench.ts",

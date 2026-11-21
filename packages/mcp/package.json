@@ -54,7 +54,7 @@
   ],
   "scripts": {
     "build": "tsc --build && bun ../../scripts/fix-node-esm-imports.ts ../core/dist && bun ../../scripts/fix-node-esm-imports.ts ../geometry-script/dist && bun ../../scripts/fix-node-esm-imports.ts dist",
-    "dev": "tsgo --build --watch",
+    "dev": "tsc --build --watch",
     "start": "bun dist/bin/pascal-mcp.js",
     "test": "bun test",
     "smoke": "bun run scripts/smoke.ts",
