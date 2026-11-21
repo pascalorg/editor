@@ -1,5 +1,5 @@
 import { formatLinearMeasurement } from '@pascal-app/core'
-import type { Rect, ScreenPoint } from './types'
+import type { Rect, ScreenPoint, WorldFootprint } from './types'
 
 // A region is a view, not a selection (spec 2.3, "A region is a view, not a selection"): a
 // rectangle dragged on the canvas, its size shown live in metres, the crop it frames, and what lies
@@ -41,6 +41,45 @@ export function regionFractions(
 }
 
 type Ray = { origin: [number, number, number]; direction: [number, number, number] }
+
+/** The rectangle's world footprint on the actual centre surface, not on the level's floor. */
+export function regionFootprint(
+  rect: Rect,
+  cameraRay: (x: number, y: number) => Ray | null,
+  hit: { point: [number, number, number]; normal: [number, number, number] },
+): WorldFootprint | null {
+  const length = Math.hypot(...hit.normal)
+  if (!Number.isFinite(length) || length < RAY_EPSILON) return null
+  const normal: [number, number, number] = [
+    hit.normal[0] / length,
+    hit.normal[1] / length,
+    hit.normal[2] / length,
+  ]
+  const corners: WorldFootprint['corners'] = []
+  for (const [x, y] of [
+    [rect.x0, rect.y0],
+    [rect.x1, rect.y0],
+    [rect.x1, rect.y1],
+    [rect.x0, rect.y1],
+  ] as const) {
+    const ray = cameraRay(x, y)
+    if (!ray) return null
+    const denominator = normal.reduce((sum, value, i) => sum + value * (ray.direction[i] ?? 0), 0)
+    if (Math.abs(denominator) < RAY_EPSILON) return null
+    const distance =
+      normal.reduce(
+        (sum, value, i) => sum + value * ((hit.point[i] ?? 0) - (ray.origin[i] ?? 0)),
+        0,
+      ) / denominator
+    if (!Number.isFinite(distance) || distance < 0) return null
+    corners.push([
+      ray.origin[0] + ray.direction[0] * distance,
+      ray.origin[1] + ray.direction[1] * distance,
+      ray.origin[2] + ray.direction[2] * distance,
+    ])
+  }
+  return { center: hit.point, normal, corners }
+}
 
 /** Where a ray meets the horizontal plane `y = planeY` in front of it; null when it points up or along it. */
 function hitPlane(ray: Ray | null, planeY: number): [number, number, number] | null {

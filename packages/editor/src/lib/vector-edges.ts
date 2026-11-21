@@ -21,6 +21,7 @@
  * so the interpolated edge depth is exact. Not a boolean operation — an
  * edge test, cheap enough to run at capture time.
  */
+import { materialShows } from '@pascal-app/viewer'
 import * as THREE from 'three'
 import { normalView, positionView, vec4 } from 'three/tsl'
 import { MeshBasicNodeMaterial, RenderTarget } from 'three/webgpu'
@@ -85,13 +86,7 @@ function isShown(object: THREE.Object3D): boolean {
  * drew a tall rectangle through the elevations, 2026-09-23 — the rule
  * glb-export's `isRenderableMesh` already follows).
  */
-export function materialShows(material: THREE.Material | THREE.Material[]): boolean {
-  const list = Array.isArray(material) ? material : [material]
-  return list.some(
-    (m) =>
-      m && m.visible !== false && m.colorWrite !== false && !(m.transparent && m.opacity <= 0.02),
-  )
-}
+export { materialShows }
 
 /**
  * The shown meshes whose own materials draw nothing — pick proxies, hit
@@ -101,14 +96,22 @@ export function materialShows(material: THREE.Material | THREE.Material[]): bool
  */
 export function hideUndrawnMeshes(scene: THREE.Object3D): () => void {
   const hidden: THREE.Object3D[] = []
+  const layers: { object: THREE.Object3D; mask: number }[] = []
   scene.traverse((object) => {
     const mesh = object as THREE.Mesh
     if (!mesh.isMesh || !mesh.visible || materialShows(mesh.material)) return
-    mesh.visible = false
-    hidden.push(mesh)
+    // An opening's pick mesh can own its rendered frame and glass. Suppress only its own draw.
+    if (mesh.children.length > 0) {
+      layers.push({ object: mesh, mask: mesh.layers.mask })
+      mesh.layers.mask = 0
+    } else {
+      mesh.visible = false
+      hidden.push(mesh)
+    }
   })
   return () => {
     for (const mesh of hidden) mesh.visible = true
+    for (const { object, mask } of layers) object.layers.mask = mask
   }
 }
 

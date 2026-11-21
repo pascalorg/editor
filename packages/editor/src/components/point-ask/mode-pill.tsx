@@ -1,5 +1,6 @@
 'use client'
 
+import { usePascalI18n } from '@pascal-app/core'
 import { useEffect, useRef } from 'react'
 import { EASE_OUT, ENTER_MS } from '../../lib/point-ask/choreography'
 import { canvasRect, freeViewport } from '../../lib/point-ask/projector'
@@ -16,7 +17,8 @@ export function ModeVignette() {
  * Only when a tap latched the mode: the pill that says how to leave. It sits at the top centre of
  * the 3D view (not of the page: the panels beside it are not part of the view) and enters 8 px up.
  */
-export function ModePill() {
+export function ModePill({ freeClick = false }: { freeClick?: boolean }) {
+  const i18n = usePascalI18n()
   const active = usePointAsk((s) => s.active)
   const latched = usePointAsk((s) => s.latched)
   const el = useRef<HTMLDivElement>(null)
@@ -59,7 +61,15 @@ export function ModePill() {
   if (!shown) return null
   return (
     <div className="pa-pill" ref={el} role="status">
-      <b>Point at anything to ask Pascal</b> · Esc to leave
+      <b>
+        {freeClick
+          ? i18n._({
+              id: 'editor.pointAsk.modePill.clickOrDragToComment',
+              message: 'Click anywhere or drag an area to comment',
+            })
+          : 'Point at anything to ask Pascal'}
+      </b>{' '}
+      · Esc to leave
     </div>
   )
 }

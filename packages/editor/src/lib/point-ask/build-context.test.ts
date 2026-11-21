@@ -163,6 +163,34 @@ describe('the camera and the picture', () => {
     })
   })
 
+  test('an ordinary region has no enrichment keys, including own undefined properties', () => {
+    const context = build({
+      gesture: 'region',
+      targets: [],
+      region: [0.2, 0.3, 0.6, 0.8],
+      inRegion: { ids: ['wall_north'], more: 0 },
+      image: { dataUrl: 'data:image/png;base64,AAAA', width: 640, height: 480, marked: false },
+    })
+
+    expect(Object.keys(context.inRegion!).sort()).toEqual(['ids', 'more'])
+    expect(Object.keys(context.image!).sort()).toEqual(['dataUrl', 'height', 'marked', 'width'])
+    expect(JSON.stringify(context.inRegion)).toBe('{"ids":["wall_north"],"more":0}')
+  })
+
+  test('clicks and multi-clicks keep their ordinary image and omit region metadata', () => {
+    for (const gesture of ['click', 'multi'] as const) {
+      const context = build({
+        gesture,
+        image: { dataUrl: 'data:image/png;base64,AAAA', width: 640, height: 480, marked: true },
+      })
+
+      expect(Object.hasOwn(context, 'inRegion')).toBe(false)
+      expect(Object.hasOwn(context, 'region')).toBe(false)
+      expect(Object.hasOwn(context.image!, 'segmented')).toBe(false)
+      expect(context.targets.map((target) => target.id)).toEqual(['zone_kitchen'])
+    }
+  })
+
   test('the crop and the suggestion pass through as given', () => {
     const image = { dataUrl: 'data:image/png;base64,AAAA', width: 640, height: 480, marked: true }
     const context = build({ image, suggestion: 'make-it-wider' })

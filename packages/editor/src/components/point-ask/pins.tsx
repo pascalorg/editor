@@ -23,6 +23,7 @@ import {
 } from '../../lib/point-ask/choreography'
 import { edgeMarker } from '../../lib/point-ask/edge-marker'
 import { subscribeFrame } from '../../lib/point-ask/frame-loop'
+import { spreadPinMarkers } from '../../lib/point-ask/pin-layout'
 import { alsoChangedLine, cardCarriedFromPointer, cardTitle } from '../../lib/point-ask/pin-machine'
 import { canvasRect, freeViewport, projectWorld } from '../../lib/point-ask/projector'
 import {
@@ -36,8 +37,10 @@ import {
   startCompare,
   undoAsk,
 } from '../../lib/point-ask/session'
+import type { ScreenPoint } from '../../lib/point-ask/types'
 import { type PinRecord, usePointAsk } from '../../store/use-point-ask'
 import { finishOptionalAnimations, pointMotionCalm, usePointMotionCalm } from './optional-motion'
+import { PinFootprint } from './pin-footprint'
 
 const COMPARE_REFUSAL_WORDS = {
   'history-held': 'Another change is in progress. Try again in a moment.',
@@ -50,6 +53,7 @@ const scratch = new Vector3()
 
 /** The pin's spot now: in its first target's own frame while that exists, else where it was planted. */
 function pinWorld(pin: PinRecord): [number, number, number] {
+  if (pin.behavior === 'persistent') return pin.anchor
   if (pin.local) {
     const object = sceneRegistry.nodes.get(pin.local.nodeId)
     if (object) {
@@ -60,6 +64,61 @@ function pinWorld(pin: PinRecord): [number, number, number] {
     }
   }
   return pin.anchor
+}
+
+let layoutFrame = -1
+let layoutPins: ReturnType<typeof usePointAsk.getState>['pins'] | null = null
+let markerPositions = new Map<string, ScreenPoint>()
+
+/** Shared by every pin and the card: only one collision layout per animation frame. */
+function persistentMarkerPositions(now: number) {
+  const state = usePointAsk.getState()
+  if (layoutFrame === now && layoutPins === state.pins) return markerPositions
+  layoutFrame = now
+  layoutPins = state.pins
+  const frame = canvasRect()
+  if (!frame) {
+    markerPositions = new Map()
+    return markerPositions
+  }
+  const levelId = useViewer.getState().selection.levelId
+  const pins = state.pinOrder.flatMap((id) => {
+    const pin = state.pins[id]
+    if (
+      pin?.behavior !== 'persistent' ||
+      pin.supersededBy ||
+      state.bubble?.changesAsk?.askId === id ||
+      (pin.levelId !== null && pin.levelId !== levelId)
+    )
+      return []
+    const at = projectWorld(pinWorld(pin))
+    return at.ok &&
+      at.x >= frame.left &&
+      at.x <= frame.right &&
+      at.y >= frame.top &&
+      at.y <= frame.bottom
+      ? [{ id, x: at.x, y: at.y }]
+      : []
+  })
+  markerPositions = spreadPinMarkers(pins, {
+    x0: frame.left + 18,
+    y0: frame.top + 40,
+    x1: Math.max(frame.left + 18, frame.right - 18),
+    y1: Math.max(frame.top + 40, frame.bottom - 4),
+  })
+  return markerPositions
+}
+
+function togglePinCard(askId: string) {
+  const state = usePointAsk.getState()
+  if (state.pins[askId]?.behavior !== 'persistent') {
+    emitter.emit('point-ask:pin', { askId, action: 'open' })
+    state.openCard(askId)
+    return
+  }
+  const closing = state.cardFor === askId
+  state.openCard(closing ? null : askId)
+  if (!closing) emitter.emit('point-ask:pin', { askId, action: 'open' })
 }
 
 const PIN_SVG = (
@@ -87,8 +146,27 @@ const PIN_SVG = (
             strokeDashoffset="-50"
           />
         </g>
-        <path className="pa-pk" d="M8 12.4l2.6 2.6 5.4-5.6" />
-        <path className="pa-sg" d="M7.5 8.5h9v6h-5l-2.5 2.2v-2.2h-1.5z" />
+        <path className="pa-pk" d="M7.8 12.3l2.8 2.8 5.6-5.8" />
+        <g className="pa-cm">
+          <path d="M8.5 10.5h7" />
+          <path d="M8.5 14h4.5" />
+        </g>
+        <path
+          className="pa-sg"
+          d="M12 6.8a5.2 5.2 0 0 1 5.2 5.2c0 2.87-2.33 5.2-5.2 5.2H7.6a.8.8 0 0 1-.8-.8V12A5.2 5.2 0 0 1 12 6.8Z"
+        />
+        <g className="pa-ic pa-ic-ask">
+          <path d="M9.6 9.3a2.5 2.5 0 0 1 4.8.9c0 1.6-2.4 2.1-2.4 3.4" />
+          <path d="M12 17h.01" />
+        </g>
+        <g className="pa-ic pa-ic-change">
+          <path d="M15.8 6.8l1.4 1.4-7.4 7.4-2.3.7.7-2.3 7.6-7.2Z" />
+          <path d="M14.5 17.5h3" />
+        </g>
+        <g className="pa-ic pa-ic-wrong">
+          <path d="M12 7.5v5.2" />
+          <path d="M12 16.5h.01" />
+        </g>
       </svg>
     </span>
   </>
@@ -96,8 +174,32 @@ const PIN_SVG = (
 
 export function PointAskPins() {
   const order = usePointAsk((s) => s.pinOrder)
+  useEffect(() => {
+    const dismiss = (event: globalThis.PointerEvent | KeyboardEvent) => {
+      const state = usePointAsk.getState()
+      if (!state.cardFor || state.pins[state.cardFor]?.behavior !== 'persistent') return
+      if (document.querySelector('[role="dialog"][aria-modal="true"]')) return
+      if (event.type === 'keydown') {
+        if ((event as KeyboardEvent).key !== 'Escape') return
+        event.preventDefault()
+        event.stopImmediatePropagation()
+      } else if (
+        event.target instanceof Element &&
+        event.target.closest('.pa-pin,.pa-cardwrap,[data-point-ask-card]')
+      )
+        return
+      state.openCard(null)
+    }
+    window.addEventListener('pointerdown', dismiss, true)
+    window.addEventListener('keydown', dismiss, true)
+    return () => {
+      window.removeEventListener('pointerdown', dismiss, true)
+      window.removeEventListener('keydown', dismiss, true)
+    }
+  }, [])
   return (
     <>
+      <PinFootprint />
       {order.map((id) => (
         <PinView askId={id} key={id} />
       ))}
@@ -116,11 +218,14 @@ function PinView({ askId }: { askId: string }) {
   const held = useRef(false)
   const el = useRef<HTMLDivElement>(null)
   const marker = useRef<HTMLButtonElement>(null)
+  const connector = useRef<SVGSVGElement>(null)
   const arcs = useRef<SVGGElement | null>(null)
   const state = useRef({ angle: 0, boost: 0, landed: 0, sentence: '' })
   const retire = useRef<ReturnType<typeof setTimeout> | null>(null)
   const prev = useRef<string | null>(null)
   const model = pin?.model
+  const persistent = pin && pin.behavior === 'persistent'
+  const cardOpen = usePointAsk((s) => s.cardFor === askId)
   const optional = useRef<Animation[]>([])
   const calm = usePointMotionCalm()
 
@@ -140,7 +245,7 @@ function PinView({ askId }: { askId: string }) {
 
   // Follows its element every frame; the arcs speed up with the agent's real progress, not a timer.
   useEffect(() => {
-    return subscribeFrame((dt) => {
+    return subscribeFrame((dt, now) => {
       const record = usePointAsk.getState().pins[askId]
       const node = el.current
       if (!(record && node)) return
@@ -173,8 +278,23 @@ function PinView({ askId }: { askId: string }) {
           if (arrow) arrow.style.transform = `rotate(${away.angle}deg)`
         }
       }
-      node.style.visibility = levelHidden || away !== null ? 'hidden' : ''
-      node.style.transform = `translate3d(${at.x}px,${at.y}px,0)`
+      node.style.visibility = levelHidden || away !== null || !at.ok ? 'hidden' : ''
+      const placed =
+        record.behavior === 'persistent' ? persistentMarkerPositions(now).get(askId) : null
+      const display = placed ?? at
+      node.style.transform = `translate3d(${display.x}px,${display.y}px,0)`
+      const link = connector.current
+      if (link) {
+        link.style.visibility = levelHidden || away !== null || !at.ok ? 'hidden' : ''
+        const line = link.querySelector('line')
+        line?.setAttribute('x1', String(at.x))
+        line?.setAttribute('y1', String(at.y))
+        line?.setAttribute('x2', String(display.x))
+        line?.setAttribute('y2', String(display.y))
+        const dot = link.querySelector('circle')
+        dot?.setAttribute('cx', String(at.x))
+        dot?.setAttribute('cy', String(at.y))
+      }
       const s = state.current
       if (pointMotionCalm()) {
         s.boost = 0
@@ -282,19 +402,28 @@ function PinView({ askId }: { askId: string }) {
       )
     }
     // The card opens by itself once, for 4 s, when a result lands and the person is idle.
-    if (SETTLED.has(state2) || state2 === 'error' || state2 === 'needs-input') {
+    if (!persistent && (SETTLED.has(state2) || state2 === 'error' || state2 === 'needs-input')) {
       setTimeout(() => {
         const s = usePointAsk.getState()
-        if (s.cardFor === null && s.bubble === null && s.pins[askId]) {
+        if (
+          s.cardFor === null &&
+          s.bubble === null &&
+          s.pins[askId] &&
+          s.pins[askId].behavior !== 'persistent'
+        ) {
           s.openCard(askId)
           setTimeout(() => {
-            if (usePointAsk.getState().cardFor === askId && !cardHeld(askId))
+            if (
+              usePointAsk.getState().cardFor === askId &&
+              usePointAsk.getState().pins[askId]?.behavior !== 'persistent' &&
+              !cardHeld(askId)
+            )
               usePointAsk.getState().openCard(null)
           }, CARD_AUTO_MS)
         }
       }, 900)
     }
-  }, [model?.state, askId, model?.targetIds])
+  }, [model?.state, askId, model?.targetIds, persistent])
 
   const hovering = useRef(false)
 
@@ -302,10 +431,11 @@ function PinView({ askId }: { askId: string }) {
   useEffect(() => {
     if (retire.current) clearTimeout(retire.current)
     retire.current = null
-    if (!model || !SETTLED.has(model.state)) return
+    if (!model || persistent || !SETTLED.has(model.state)) return
     const arm = () => {
       retire.current = setTimeout(() => {
         const s = usePointAsk.getState()
+        if (s.pins[askId]?.behavior === 'persistent') return
         if (s.cardFor === askId || hovering.current) return arm()
         el.current
           ?.animate([{ opacity: 1 }, { opacity: 0 }], {
@@ -313,7 +443,10 @@ function PinView({ askId }: { askId: string }) {
             fill: 'forwards',
           })
           .finished.then(
-            () => usePointAsk.getState().removePin(askId),
+            () => {
+              const state = usePointAsk.getState()
+              if (state.pins[askId]?.behavior !== 'persistent') state.removePin(askId)
+            },
             () => undefined,
           )
       }, PIN_RETIRE_MS)
@@ -322,7 +455,7 @@ function PinView({ askId }: { askId: string }) {
     return () => {
       if (retire.current) clearTimeout(retire.current)
     }
-  }, [model?.state, askId, model])
+  }, [model?.state, askId, model, persistent])
 
   if (!(pin && model) || gaveWay) return null
   const changes = model.changedTargetIds.length
@@ -338,6 +471,12 @@ function PinView({ askId }: { askId: string }) {
             : 'Over here'
   return (
     <>
+      {persistent ? (
+        <svg aria-hidden className="pa-pin-link" ref={connector} style={{ visibility: 'hidden' }}>
+          <line />
+          <circle r="2.5" />
+        </svg>
+      ) : null}
       <button
         className="pa-edgemark"
         onClick={() => lookAtAsk(askId)}
@@ -359,15 +498,23 @@ function PinView({ askId }: { askId: string }) {
         {overHere}
       </button>
       <div
+        aria-expanded={cardOpen}
+        aria-label={pin.label}
         className={`pa-pin ${model.state === 'sent' ? 'queued' : model.state}`}
+        data-point-ask-pin={askId}
         onClick={() => {
           // The click that ends a hold is not a click on the pin.
           if (held.current) {
             held.current = false
             return
           }
-          emitter.emit('point-ask:pin', { askId, action: 'open' })
-          usePointAsk.getState().openCard(askId)
+          togglePinCard(askId)
+        }}
+        onKeyDown={(event) => {
+          if (event.repeat || (event.key !== 'Enter' && event.key !== ' ')) return
+          event.preventDefault()
+          event.stopPropagation()
+          togglePinCard(askId)
         }}
         onLostPointerCapture={() => endCompare()}
         onPointerCancel={() => {
@@ -377,7 +524,7 @@ function PinView({ askId }: { askId: string }) {
         }}
         onPointerDown={(event) => {
           held.current = false
-          if (event.button !== 0 || model.state !== 'done') return
+          if (persistent || event.button !== 0 || model.state !== 'done') return
           const target = event.currentTarget
           const pointerId = event.pointerId
           const origin = { x: event.clientX, y: event.clientY }
@@ -398,26 +545,37 @@ function PinView({ askId }: { askId: string }) {
         }}
         onPointerEnter={() => {
           hovering.current = true
+          if (persistent) return
           pinHover.askId = askId
           emitter.emit('point-ask:pin', { askId, action: 'hover' })
           usePointAsk.getState().openCard(askId)
         }}
         onPointerLeave={() => {
           hovering.current = false
+          if (persistent) return
           if (pinHover.askId === askId) pinHover.askId = null
           if (holdTimer.current) clearTimeout(holdTimer.current)
           holdTimer.current = null
           emitter.emit('point-ask:pin', { askId, action: 'leave' })
           window.setTimeout(() => {
             const s = usePointAsk.getState()
-            if (s.cardFor === askId && !cardHeld(askId)) s.openCard(null)
+            if (s.cardFor === askId && s.pins[askId]?.behavior !== 'persistent' && !cardHeld(askId))
+              s.openCard(null)
           }, CARD_CLOSE_DELAY_MS)
         }}
         ref={(node) => {
           el.current = node
           arcs.current = node?.querySelector<SVGGElement>('.pa-parcs') ?? null
         }}
-        title={model.state === 'working' && model.sentence ? model.sentence : 'Sent to Pascal'}
+        role="button"
+        tabIndex={0}
+        title={
+          persistent
+            ? pin.label
+            : model.state === 'working' && model.sentence
+              ? model.sentence
+              : 'Sent to Pascal'
+        }
       >
         {PIN_SVG}
       </div>
@@ -481,21 +639,24 @@ function PinCard() {
 
   useEffect(() => {
     if (!askId) return
-    return subscribeFrame(() => {
+    return subscribeFrame((_dt, now) => {
       const record = usePointAsk.getState().pins[askId]
       const node = wrap.current
       const cardEl = card.current
       if (!(record && node && cardEl)) return
       const at = projectWorld(pinWorld(record))
+      const placed =
+        record.behavior === 'persistent' ? persistentMarkerPositions(now).get(askId) : null
+      const display = placed ?? at
       node.style.visibility = at.ok ? '' : 'hidden'
       // Above the pin; below it when there is no room above (clear of the top bar and camera hints).
       const view = freeViewport()
       const height = cardEl.offsetHeight
-      const above = at.y - 46 - height
-      const y = view && above < view.y0 ? at.y + 14 : above
+      const above = display.y - 46 - height
+      const y = view && above < view.y0 ? display.y + 14 : above
       const x = view
-        ? Math.min(Math.max(at.x - CARD_W / 2, view.x0), Math.max(view.x0, view.x1 - CARD_W))
-        : at.x - CARD_W / 2
+        ? Math.min(Math.max(display.x - CARD_W / 2, view.x0), Math.max(view.x0, view.x1 - CARD_W))
+        : display.x - CARD_W / 2
       node.style.transform = `translate3d(${x}px,${y}px,0)`
     })
   }, [askId])
@@ -545,6 +706,7 @@ function PinCard() {
   }
   const leave = (event: PointerEvent<HTMLDivElement>) => {
     cardHover.current = false
+    if (pin.behavior === 'persistent') return
     if (
       cardCarriedFromPointer({
         pointerType: event.pointerType,
@@ -557,13 +719,15 @@ function PinCard() {
       carriedTimer.current = setTimeout(() => {
         carriedTimer.current = null
         const s = usePointAsk.getState()
-        if (s.cardFor === askId && !cardHeld(askId)) s.openCard(null)
+        if (s.cardFor === askId && s.pins[askId]?.behavior !== 'persistent' && !cardHeld(askId))
+          s.openCard(null)
       }, CARD_CARRIED_MS)
       return
     }
     window.setTimeout(() => {
       const s = usePointAsk.getState()
-      if (s.cardFor === askId && !cardHeld(askId)) s.openCard(null)
+      if (s.cardFor === askId && s.pins[askId]?.behavior !== 'persistent' && !cardHeld(askId))
+        s.openCard(null)
     }, CARD_CLOSE_DELAY_MS)
   }
   return (
@@ -574,7 +738,6 @@ function PinCard() {
             <div className="pa-card-t">{title}</div>
             {pin.after?.dataUrl || pin.before?.dataUrl ? (
               <div className="pa-card-thumb" title="After">
-                {/* biome-ignore lint/performance/noImgElement: data URLs the capture just made */}
                 <img alt="After" src={pin.after?.dataUrl ?? pin.before?.dataUrl} />
               </div>
             ) : null}

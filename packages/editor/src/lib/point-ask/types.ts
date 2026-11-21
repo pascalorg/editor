@@ -6,6 +6,14 @@ export type ScreenPoint = { x: number; y: number }
 /** A screen rectangle by its edges. */
 export type Rect = { x0: number; y0: number; x1: number; y1: number }
 
+/** The capture rectangle projected onto the plane through its centre's surface hit, in world metres. */
+export type WorldFootprint = {
+  center: [number, number, number]
+  normal: [number, number, number]
+  /** Clockwise from the captured rectangle's top-left corner. */
+  corners: [number, number, number][]
+}
+
 /** The sides a bubble can sit on beside its target, or `dock` when the target is off screen. */
 export type BubbleSide = 'right' | 'left' | 'below' | 'above' | 'dock'
 

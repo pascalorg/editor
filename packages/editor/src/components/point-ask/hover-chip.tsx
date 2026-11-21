@@ -23,11 +23,10 @@ export function HoverChip() {
     hover
       ? s.pinOrder.some((id) => {
           const pin = s.pins[id]
-          return (
-            pin &&
-            (pin.model.state === 'queued' || pin.model.state === 'working') &&
-            pin.model.targetIds.includes(hover.target.id)
-          )
+          if (!pin?.model.targetIds.includes(hover.target.id)) return false
+          return pin.behavior === 'persistent'
+            ? pin.model.state === 'working'
+            : pin.model.state === 'queued' || pin.model.state === 'working'
         })
       : false,
   )

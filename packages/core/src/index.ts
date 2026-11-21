@@ -6,7 +6,12 @@ export type {
   PointCamera,
   PointContext,
   PointImage,
+  PointLegend,
+  PointRoom,
+  PointSegmentedImage,
   PointTarget,
+  PointVisible,
+  PointWorld,
 } from './agent-operations/point-context'
 export * from './commands/structure'
 export type {

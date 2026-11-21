@@ -2,9 +2,10 @@
 
 import type { PointAskSubmit, PointCamera } from '@pascal-app/core'
 import { create } from 'zustand'
+import type { EnrichedCapture } from '../lib/enriched-capture/enrich'
 import type { CompareRefusal } from '../lib/point-ask/compare'
 import { createPin, type PinEvent, type PinModel, reducePin } from '../lib/point-ask/pin-machine'
-import type { PointTarget, Rect, ScreenPoint } from '../lib/point-ask/types'
+import type { PointTarget, Rect, ScreenPoint, WorldFootprint } from '../lib/point-ask/types'
 
 // Point and ask's state (the owner, 8 October). Everything the overlay draws comes from here, and
 // everything that changes per frame (positions) is derived from it, not stored in it.
@@ -33,6 +34,7 @@ export type PointCrop = {
   width?: number
   height?: number
   marked?: boolean
+  enriched?: EnrichedCapture
 }
 
 /** A dragged rectangle (spec 2.3): drawn while the person drags, then settled until the ask goes or is dismissed. */
@@ -54,7 +56,7 @@ export type BubbleArea = {
 
 export type PointBubble = {
   targets: BubbleTarget[]
-  /** Where the finger landed, world metres: the bubble's tail and the pin's spot. */
+  /** The exact point hit, or a dragged region's centre surface hit, in world metres. */
   anchor: [number, number, number]
   hit: PointHit
   gesture: 'click' | 'multi' | 'region'
@@ -68,6 +70,9 @@ export type PointBubble = {
   error: string | null
   /** A region's rectangle, 0-1 of the canvas, when the gesture was a drag. */
   region?: [number, number, number, number]
+  /** Friendly room or level label when pointing freely without an element target. */
+  locationLabel?: string
+  footprint?: WorldFootprint
   /** Set when the bubble is about a region: it is a view, not a selection, so it has no targets. */
   area?: BubbleArea
   /**
@@ -79,6 +84,9 @@ export type PointBubble = {
 
 export type PinRecord = {
   model: PinModel
+  /** Persistent host comments open only by click and stay until the host removes them. */
+  behavior?: 'persistent'
+  footprint?: WorldFootprint
   /** The spot in the world at send, so the pin shows where it was planted when its target is gone. */
   anchor: [number, number, number]
   /** The same spot in the first target's own frame, so it rides along when Pascal moves the element. */
@@ -231,7 +239,11 @@ export const usePointAsk = create<PointAskState>((set) => ({
       if (!state.pins[askId]) return state
       const pins = { ...state.pins }
       delete pins[askId]
-      return { pins, pinOrder: state.pinOrder.filter((id) => id !== askId) }
+      return {
+        pins,
+        pinOrder: state.pinOrder.filter((id) => id !== askId),
+        cardFor: state.cardFor === askId ? null : state.cardFor,
+      }
     }),
   setPlayful: (playful) => set((state) => (state.playful === playful ? state : { playful })),
   setBusy: (busy) => set((state) => (state.busy === busy ? state : { busy })),
