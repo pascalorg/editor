@@ -38,7 +38,7 @@
   ],
   "scripts": {
     "build": "NODE_OPTIONS=--max-old-space-size=6144 tsc --build && bun ../../scripts/fix-node-esm-imports.ts dist",
-    "dev": "tsgo --build --watch",
+    "dev": "tsc --build --watch",
     "test": "bun test",
     "prepublishOnly": "bun run build && bun test",
     "bench:elevator": "bun test ./src/elevator/__bench__/rendering.bench.tsx && bun ./src/elevator/__bench__/runtime.ts"

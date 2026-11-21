@@ -3,8 +3,8 @@ import { cpSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:f
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { compileMessageOrThrow } from '@lingui/message-utils/compileMessage'
+import ts from '@typescript/typescript6'
 import { parsePo, stringifyPo } from 'pofile-ts'
-import ts from 'typescript'
 import {
   annotatedState,
   checkTranslationEntries,

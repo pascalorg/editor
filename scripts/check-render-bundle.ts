@@ -1,8 +1,8 @@
 import { readFileSync, realpathSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import ts from '@typescript/typescript6'
 import { build, type Plugin } from 'esbuild'
-import ts from 'typescript'
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const forbiddenSpecifier = /^(?:@pascal-app\/editor|next)(?:\/|$)/

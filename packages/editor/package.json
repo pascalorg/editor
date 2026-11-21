@@ -14,7 +14,7 @@
     "./lot-patch": "./src/lib/lot/lot-patch.ts"
   },
   "scripts": {
-    "check-types": "tsgo --noEmit",
+    "check-types": "tsc --noEmit",
     "test": "bun test src"
   },
   "peerDependencies": {
