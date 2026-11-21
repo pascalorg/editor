@@ -15,6 +15,7 @@ import {
   isNodeRevealing,
   SCENE_LAYER,
   useViewer,
+  type WallMaterialsResolver,
   type WallMode,
   xrayActive,
 } from '@pascal-app/viewer'
@@ -22,6 +23,7 @@ import { useFrame, useThree } from '@react-three/fiber'
 import { useEffect, useRef } from 'react'
 import { type Material, Matrix4, Mesh, type Object3D } from 'three'
 import { isSlotPaintPreviewActive } from '../shared/slot-paint'
+import { getWallMaterialsResolver } from './materials-resolver'
 import {
   applyWallBatchGroups,
   buildWallBatch,
@@ -50,12 +52,12 @@ type BatchRecord = {
  * node.
  *
  * A wall whose own definition changes is marked dirty and leaves its batch on
- * that signal. These four do not go through a node at all — they are viewer
- * toggles and the scene's material library — yet the cutaway pass rebuilds
- * every wall's material set from them, so a merged mesh holding the old set
- * would keep a whole floor looking the way it did before the switch. They
- * change only when someone deliberately flips a switch, so re-sewing the
- * scene on them is cheap.
+ * that signal. These do not go through a node at all — viewer toggles, the
+ * scene's material library and the host's wall materials resolver — yet the
+ * cutaway pass rebuilds every wall's material set from them, so a merged mesh
+ * holding the old set would keep a whole floor looking the way it did before
+ * the switch. They change only when someone deliberately flips a switch, so
+ * re-sewing the scene on them is cheap.
  */
 type AppearanceInputs = {
   shading: unknown
@@ -64,6 +66,7 @@ type AppearanceInputs = {
   sceneTheme: unknown
   materials: object | null
   libraryVersion: number
+  resolver: WallMaterialsResolver | null
 }
 
 const lastAppearance: AppearanceInputs = {
@@ -73,12 +76,14 @@ const lastAppearance: AppearanceInputs = {
   sceneTheme: undefined,
   materials: null,
   libraryVersion: -1,
+  resolver: null,
 }
 
 function appearanceChanged(): boolean {
   const viewer = useViewer.getState()
   const materials = useScene.getState().materials as object
   const libraryVersion = getLibraryMaterialsVersion()
+  const resolver = getWallMaterialsResolver()
 
   if (
     lastAppearance.shading === viewer.shading &&
@@ -86,7 +91,8 @@ function appearanceChanged(): boolean {
     lastAppearance.colorPreset === viewer.colorPreset &&
     lastAppearance.sceneTheme === viewer.sceneTheme &&
     lastAppearance.materials === materials &&
-    lastAppearance.libraryVersion === libraryVersion
+    lastAppearance.libraryVersion === libraryVersion &&
+    lastAppearance.resolver === resolver
   ) {
     return false
   }
@@ -97,6 +103,7 @@ function appearanceChanged(): boolean {
   lastAppearance.sceneTheme = viewer.sceneTheme
   lastAppearance.materials = materials
   lastAppearance.libraryVersion = libraryVersion
+  lastAppearance.resolver = resolver
   return true
 }
 
