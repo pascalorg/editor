@@ -22,6 +22,7 @@ import Image from 'next/image'
 import { Component, type ReactNode, useCallback, useEffect, useRef, useState } from 'react'
 import { flushSync } from 'react-dom'
 import { EmbedCameraControls } from '@/components/embed-camera-controls'
+import { useLocalArtifactStore } from '@/lib/local-artifact-store'
 import { cn } from '@/lib/utils'
 
 interface EmbedViewerProps {
@@ -49,6 +50,9 @@ export function EmbedViewer({ id, name, graph, chrome = true }: EmbedViewerProps
   const [mode, setMode] = useState<ViewerStageMode>('3d')
   const isFirstPersonMode = useEditor((s) => s.isFirstPersonMode)
   const hasFloorplan = useScene((s) => Object.values(s.nodes).some((node) => node.type === 'level'))
+  // Authored objects load their geometry and scripts from the artifact store; the
+  // artifact route serves a shared scene's artifacts without a sign-in.
+  useLocalArtifactStore()
 
   useEffect(() => {
     useScene.getState().unloadScene()
