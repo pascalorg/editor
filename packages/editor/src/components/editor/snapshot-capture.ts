@@ -7,8 +7,12 @@ import {
 } from '@pascal-app/core'
 import { MathUtils, type PerspectiveCamera } from 'three'
 
-export function isOverlaySnapshotSave(event: SnapshotSavedEvent | undefined, projectId: string) {
-  return !event?.requestId && (!event?.projectId || event.projectId === projectId)
+export function isOverlaySnapshotSave(
+  event: SnapshotSavedEvent | undefined,
+  projectId: string,
+  requestId?: string,
+) {
+  return event?.requestId === requestId && (!event?.projectId || event.projectId === projectId)
 }
 
 export function createSnapshotQueue() {
