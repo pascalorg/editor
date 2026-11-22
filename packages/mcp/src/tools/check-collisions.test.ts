@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, test } from 'bun:test'
 import { Client } from '@modelcontextprotocol/client'
 import { InMemoryTransport, McpServer } from '@modelcontextprotocol/server'
-import { ItemNode } from '@pascal-app/core/schema'
+import { CeilingNode, ItemNode, ProceduralItemNode } from '@pascal-app/core/schema'
 import { SceneBridge } from '../bridge/scene-bridge'
 import { registerCheckCollisions } from './check-collisions'
 
@@ -314,6 +314,218 @@ describe('check_collisions', () => {
       id: orphan.id,
       name: orphan.name ?? orphan.asset.name,
       reason: 'unresolved_level',
+    })
+  })
+
+  describe('procedural-item support (#1255)', () => {
+    const blockRecipe = {
+      version: 1,
+      name: 'M0 D2.5 Overlap Block',
+      description: 'A solid 2 m by 2 m by 0.9 m floor-standing test block.',
+      classification: {
+        category: 'test_furniture',
+        functionTags: ['test'],
+        tags: ['collision'],
+      },
+      parameters: [
+        {
+          id: 'width',
+          label: 'Width',
+          default: 2,
+          min: 2,
+          max: 2,
+          step: 0.1,
+          unit: 'm',
+          axis: 'x',
+        },
+        {
+          id: 'depth',
+          label: 'Depth',
+          default: 2,
+          min: 2,
+          max: 2,
+          step: 0.1,
+          unit: 'm',
+          axis: 'z',
+        },
+        {
+          id: 'height',
+          label: 'Height',
+          default: 0.9,
+          min: 0.9,
+          max: 0.9,
+          step: 0.1,
+          unit: 'm',
+          axis: 'y',
+        },
+      ],
+      slots: [{ id: 'wood', label: 'Wood', color: '#8b5a2b', finish: 'wood' }],
+      parts: [
+        {
+          id: 'block',
+          label: 'Block',
+          count: 1,
+          shapes: [
+            {
+              id: 'body',
+              primitive: 'box',
+              slot: 'wood',
+              size: ['width', 'height', 'depth'],
+              position: [0, { op: 'div', args: ['height', 2] }, 0],
+              support: true,
+            },
+          ],
+        },
+      ],
+      constraints: [],
+    }
+
+    function makeProcedural(
+      id: string,
+      position: [number, number, number],
+      extra: Record<string, unknown> = {},
+    ) {
+      return ProceduralItemNode.parse({
+        object: 'node',
+        id,
+        type: 'procedural-item',
+        name: id,
+        visible: true,
+        metadata: {},
+        recipe: blockRecipe,
+        parameters: { width: 2, depth: 2, height: 0.9 },
+        slots: {},
+        position,
+        rotation: [0, 0, 0],
+        children: [],
+        attachments: {},
+        ...extra,
+      })
+    }
+
+    test('detects overlapping floor-standing procedural-item nodes and populates checkedItems', async () => {
+      const level = Object.values(bridge.getNodes()).find((n) => n.type === 'level')!
+      const a = makeProcedural('procedural-item_m0d25_proc_a', [0, 0, 0], {
+        name: 'M0 D2.5 Procedural A',
+      })
+      const b = makeProcedural('procedural-item_m0d25_proc_b', [0, 0, 0], {
+        name: 'M0 D2.5 Procedural B',
+      })
+      bridge.createNode(a, level.id)
+      bridge.createNode(b, level.id)
+
+      const result = await client.callTool({
+        name: 'check_collisions',
+        arguments: { levelId: level.id, minimumClearance: 0, floorOnly: true },
+      })
+      const parsed = result.structuredContent as {
+        status: string
+        checkedItems: Array<{
+          id: string
+          source: { assetId: string; uri: string; catalog: string }
+          effectiveDimensionsMeters: [number, number, number]
+        }>
+        skippedItems: unknown[]
+        collisions: Array<{ aId: string; bId: string; kind: string; violation: string }>
+      }
+      expect(result.isError).toBeFalsy()
+      expect(parsed.status).toBe('checked')
+      expect(parsed.checkedItems).toHaveLength(2)
+      expect(parsed.checkedItems[0]?.source).toEqual({
+        assetId: 'M0 D2.5 Overlap Block',
+        uri: 'procedural://recipe',
+        catalog: 'procedural',
+      })
+      expect(parsed.checkedItems[0]?.effectiveDimensionsMeters).toEqual([2, 0.9, 2])
+      expect(parsed.skippedItems).toEqual([])
+      expect(parsed.collisions).toEqual([
+        expect.objectContaining({
+          aId: 'procedural-item_m0d25_proc_a',
+          bId: 'procedural-item_m0d25_proc_b',
+          kind: 'item-aabb',
+          violation: 'overlap',
+        }),
+      ])
+    })
+
+    test('detects item vs procedural-item overlap and clearance violations', async () => {
+      const level = Object.values(bridge.getNodes()).find((n) => n.type === 'level')!
+      const proc = makeProcedural('procedural-item_sofa', [0, 0, 0])
+      const nearItem = makeItem([1.55, 0, 0], [1, 0.8, 1]) // 0.05 m gap (< 0.1 m clearance)
+      bridge.createNode(proc, level.id)
+      bridge.createNode(nearItem, level.id)
+
+      const result = await client.callTool({
+        name: 'check_collisions',
+        arguments: { levelId: level.id, minimumClearance: 0.1, floorOnly: true },
+      })
+      const parsed = result.structuredContent as {
+        status: string
+        checkedItems: unknown[]
+        collisions: Array<{ aId: string; bId: string; violation: string }>
+      }
+      expect(parsed.status).toBe('checked')
+      expect(parsed.checkedItems).toHaveLength(2)
+      expect(parsed.collisions).toHaveLength(1)
+      expect(parsed.collisions[0]?.violation).toBe('clearance')
+    })
+
+    test('skips ceiling-hosted and non-planar procedural-item nodes without leaking phantom collisions', async () => {
+      const level = Object.values(bridge.getNodes()).find((n) => n.type === 'level')!
+      const ceiling = CeilingNode.parse({
+        id: 'ceiling_proc',
+        polygon: [
+          [-3, -3],
+          [3, -3],
+          [3, 3],
+          [-3, 3],
+        ],
+      })
+      bridge.createNode(ceiling, level.id)
+      const pendantRecipe = {
+        ...blockRecipe,
+        name: 'Procedural Pendant',
+        mounting: { attachTo: 'ceiling', reference: 'mount' },
+        surfaces: [
+          {
+            id: 'mount',
+            label: 'Mount',
+            position: [0, 0.9, 0],
+            size: [0.2, 0.2],
+          },
+        ],
+      }
+      const pendant = makeProcedural('procedural-item_pendant', [0, 0, 0], {
+        recipe: pendantRecipe,
+      })
+      const tilted = makeProcedural('procedural-item_tilted', [0, 0, 0], {
+        rotation: [0.2, 0, 0],
+      })
+      bridge.createNode(pendant, ceiling.id)
+      bridge.createNode(tilted, level.id)
+
+      const floorResult = await client.callTool({
+        name: 'check_collisions',
+        arguments: { levelId: level.id, floorOnly: true },
+      })
+      const floorParsed = floorResult.structuredContent as {
+        status: string
+        checkedItems: unknown[]
+        skippedItems: Array<{ id: string; reason: string }>
+        collisions: unknown[]
+      }
+      expect(floorParsed.status).toBe('insufficient_evidence')
+      expect(floorParsed.checkedItems).toHaveLength(0)
+      expect(floorParsed.collisions).toHaveLength(0)
+      expect(floorParsed.skippedItems).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            id: 'procedural-item_pendant',
+            reason: 'unsupported_attachment',
+          }),
+          expect.objectContaining({ id: 'procedural-item_tilted', reason: 'non_planar_rotation' }),
+        ]),
+      )
     })
   })
 })

@@ -6,6 +6,7 @@ import {
   DoorNode,
   ItemNode,
   LevelNode,
+  ProceduralItemNode,
   SlabNode,
   WallNode,
   WindowNode,
@@ -1097,5 +1098,218 @@ describe('layout-clearance', () => {
     })
     expect(found.candidate).toBeNull()
     expect(found.reason).toBe('blocks_door_clearance')
+  })
+
+  describe('procedural-item collision parity (#1255)', () => {
+    const overlapBlockRecipe = {
+      version: 1,
+      name: 'M0 D2.5 Overlap Block',
+      description: 'A solid 2 m by 2 m by 0.9 m floor-standing test block.',
+      classification: {
+        category: 'test_furniture',
+        functionTags: ['test'],
+        tags: ['collision'],
+      },
+      parameters: [
+        {
+          id: 'width',
+          label: 'Width',
+          default: 2,
+          min: 2,
+          max: 2,
+          step: 0.1,
+          unit: 'm',
+          axis: 'x',
+        },
+        {
+          id: 'depth',
+          label: 'Depth',
+          default: 2,
+          min: 2,
+          max: 2,
+          step: 0.1,
+          unit: 'm',
+          axis: 'z',
+        },
+        {
+          id: 'height',
+          label: 'Height',
+          default: 0.9,
+          min: 0.9,
+          max: 0.9,
+          step: 0.1,
+          unit: 'm',
+          axis: 'y',
+        },
+      ],
+      slots: [{ id: 'wood', label: 'Wood', color: '#8b5a2b', finish: 'wood' }],
+      parts: [
+        {
+          id: 'block',
+          label: 'Block',
+          count: 1,
+          shapes: [
+            {
+              id: 'body',
+              primitive: 'box',
+              slot: 'wood',
+              size: ['width', 'height', 'depth'],
+              position: [0, { op: 'div', args: ['height', 2] }, 0],
+              support: true,
+            },
+          ],
+        },
+      ],
+      constraints: [],
+    }
+
+    function makeProcedural(
+      id: string,
+      parentId: string,
+      position: [number, number, number] = [0, 0, 0],
+      rotation: [number, number, number] = [0, 0, 0],
+      recipeOverride: Record<string, unknown> = overlapBlockRecipe,
+      extra: Record<string, unknown> = {},
+    ) {
+      return ProceduralItemNode.parse({
+        object: 'node',
+        id,
+        type: 'procedural-item',
+        name: id,
+        parentId,
+        visible: true,
+        metadata: {},
+        recipe: recipeOverride,
+        parameters: {},
+        slots: {},
+        position,
+        rotation,
+        children: [],
+        attachments: {},
+        ...extra,
+      })
+    }
+
+    test('reports exact overlap between two floor procedural-item nodes in findItemItemCollisions and verifyScene', () => {
+      const level = LevelNode.parse({ id: 'level_proc', name: 'G', level: 0 })
+      const a = makeProcedural('procedural-item_a', level.id, [0, 0, 0])
+      const b = makeProcedural('procedural-item_b', level.id, [0, 0, 0])
+      const nodes = [level, a, b]
+
+      const hits = findItemItemCollisions({ nodes, levelId: level.id, gap: 0 })
+      expect(hits).toHaveLength(1)
+      expect(hits[0]).toMatchObject({
+        aId: 'procedural-item_a',
+        bId: 'procedural-item_b',
+        kind: 'item-aabb',
+        violation: 'overlap',
+      })
+
+      const verified = verifyScene(
+        Object.fromEntries(nodes.map((node) => [node.id, node])),
+        {},
+        { activeLevelId: level.id },
+      ).result
+      expect(verified.hasIssues).toBe(true)
+      expect(verified.issues).toContainEqual(
+        expect.objectContaining({
+          type: 'item_overlap',
+          nodeIds: ['procedural-item_a', 'procedural-item_b'],
+        }),
+      )
+    })
+
+    test('detects rotated off-center procedural-item footprint overlap against an item', () => {
+      const level = LevelNode.parse({ id: 'level_off', name: 'G', level: 0 })
+      // Local X in [-0.5, 0.5], local Z in [0, 1.0] (back-datum bench). Rotated +90 deg around Y:
+      // world X spans [0, 1.0], world Z spans [-0.5, 0.5].
+      const offCenterRecipe = {
+        ...overlapBlockRecipe,
+        name: 'Back-datum bench',
+        parts: [
+          {
+            id: 'bench',
+            label: 'Bench',
+            count: 1,
+            shapes: [
+              {
+                id: 'body',
+                primitive: 'box',
+                slot: 'wood',
+                size: [1, 0.5, 1],
+                position: [0, 0.25, 0.5],
+                support: true,
+              },
+            ],
+          },
+        ],
+      }
+      const bench = makeProcedural(
+        'procedural-item_bench',
+        level.id,
+        [0, 0, 0],
+        [0, Math.PI / 2, 0],
+        offCenterRecipe,
+      )
+      const overlapChair = ItemNode.parse(
+        item('item_chair', [0.8, 0, 0], [0.5, 0.8, 0.5], 'Chair', 0, level.id),
+      )
+      const clearBehind = ItemNode.parse(
+        item('item_clear', [-0.6, 0, 0], [0.5, 0.8, 0.5], 'Clear', 0, level.id),
+      )
+
+      expect(collectOccupiedFootprints([level, bench])[0]?.aabb).toEqual({
+        minX: expect.closeTo(0, 6),
+        maxX: expect.closeTo(1, 6),
+        minZ: expect.closeTo(-0.5, 6),
+        maxZ: expect.closeTo(0.5, 6),
+      })
+      const hits = findItemItemCollisions({
+        nodes: [level, bench, overlapChair, clearBehind],
+        levelId: level.id,
+        gap: 0,
+      })
+      expect(hits).toHaveLength(1)
+      expect([hits[0]!.aId, hits[0]!.bId].sort()).toEqual(['item_chair', 'procedural-item_bench'])
+    })
+
+    test('treats an item hosted on or resting atop a procedural-item surface as stacked, not colliding', () => {
+      const level = LevelNode.parse({ id: 'level_stack', name: 'G', level: 0 })
+      const tableRecipe = {
+        ...overlapBlockRecipe,
+        name: 'Procedural Table',
+        surfaces: [
+          {
+            id: 'top',
+            label: 'Tabletop',
+            position: [0, 0.9, 0],
+            size: [1.8, 1.8],
+          },
+        ],
+      }
+      const table = makeProcedural(
+        'procedural-item_table',
+        level.id,
+        [0, 0, 0],
+        [0, 0, 0],
+        tableRecipe,
+        {
+          children: ['item_hosted_lamp'],
+          attachments: { item_hosted_lamp: 'top' },
+        },
+      )
+      const hostedLamp = ItemNode.parse(
+        item('item_hosted_lamp', [0, 0, 0], [0.3, 0.4, 0.3], 'Hosted Lamp', 0, table.id),
+      )
+      const siblingVase = ItemNode.parse(
+        item('item_vase', [0.4, 0.9, 0], [0.2, 0.3, 0.2], 'Vase', 0, level.id),
+      )
+      expect(
+        findItemItemCollisions({
+          nodes: [level, table, hostedLamp, siblingVase],
+          levelId: level.id,
+        }),
+      ).toEqual([])
+    })
   })
 })

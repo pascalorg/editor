@@ -10,7 +10,7 @@ import { getDoorOpeningSize } from '../lib/door-opening'
 
 import { isVehicleDoorType } from '../lib/door-operation'
 import { area, intersection } from '../lib/polygon-boolean'
-import type { Vec3 } from '../procedural-items/recipe'
+import { evaluateRecipe, type Vec3 } from '../procedural-items/recipe'
 import { boxCorners, rotateVector } from '../procedural-items/spatial'
 import { type AnyNode, getScaledDimensions } from '../schema'
 import { DEFAULT_WALL_THICKNESS } from '../systems/wall/wall-footprint'
@@ -320,6 +320,109 @@ export function inspectItemPlanFootprint(
     aabb,
     sourceDimensions: [width, height, depth],
     effectiveDimensions,
+    rotationY,
+  }
+}
+
+export function proceduralNodePlanCorners(
+  node: Extract<AnyNode, { type: 'procedural-item' }>,
+): Vec2[] | null {
+  if (!Array.isArray(node.recipe?.parts)) return null
+  if (!Array.isArray(node.position) || !Array.isArray(node.rotation)) return null
+  const [px, py, pz] = node.position
+  const [rx, yaw, rz] = node.rotation
+  if (![px, py, pz, rx, yaw, rz].every(Number.isFinite)) return null
+  let evaluated: ReturnType<typeof evaluateRecipe>
+  try {
+    evaluated = evaluateRecipe(node.recipe, node.parameters)
+  } catch {
+    return null
+  }
+  const [width, height, depth] = evaluated.dimensions
+  if (
+    ![width, height, depth, ...evaluated.min, ...evaluated.max].every(Number.isFinite) ||
+    width <= 0 ||
+    depth <= 0
+  ) {
+    return null
+  }
+  const cos = Math.cos(yaw)
+  const sin = Math.sin(yaw)
+  const place = (lx: number, lz: number): Vec2 => [
+    px + lx * cos + lz * sin,
+    pz - lx * sin + lz * cos,
+  ]
+  return [evaluated.min[0], evaluated.max[0]].flatMap((x) =>
+    [evaluated.min[2], evaluated.max[2]].map((z) => place(x, z)),
+  )
+}
+
+export function proceduralNodePlanAabb(node: AnyNode): PlanAabb | null {
+  if (node.type !== 'procedural-item') return null
+  const corners = proceduralNodePlanCorners(node)
+  if (!corners?.every((corner) => corner.every(Number.isFinite))) return null
+  return {
+    minX: Math.min(...corners.map(([x]) => x)),
+    maxX: Math.max(...corners.map(([x]) => x)),
+    minZ: Math.min(...corners.map(([, z]) => z)),
+    maxZ: Math.max(...corners.map(([, z]) => z)),
+  }
+}
+
+export function inspectProceduralItemPlanFootprint(
+  node: Extract<AnyNode, { type: 'procedural-item' }>,
+  options?: { floorOnly?: boolean },
+): ItemFootprintInspection {
+  const attach = node.recipe?.mounting?.attachTo
+  if (options?.floorOnly && (attach === 'wall-side' || attach === 'ceiling')) {
+    return { ok: false, reason: 'unsupported_attachment' }
+  }
+
+  const position = node.position
+  if (!Array.isArray(position)) {
+    return { ok: false, reason: 'non_finite_position' }
+  }
+  const [x, y, z] = position
+  if (!(Number.isFinite(x) && Number.isFinite(y) && Number.isFinite(z))) {
+    return { ok: false, reason: 'non_finite_position' }
+  }
+
+  const rotation = Array.isArray(node.rotation) ? node.rotation : [0, 0, 0]
+  const rotationX = rotation[0] ?? Number.NaN
+  const rotationY = rotation[1] ?? Number.NaN
+  const rotationZ = rotation[2] ?? Number.NaN
+  if (!(Number.isFinite(rotationX) && Number.isFinite(rotationY) && Number.isFinite(rotationZ))) {
+    return { ok: false, reason: 'non_finite_rotation' }
+  }
+  if (Math.abs(rotationX) > 1e-6 || Math.abs(rotationZ) > 1e-6) {
+    return { ok: false, reason: 'non_planar_rotation' }
+  }
+
+  if (!Array.isArray(node.recipe?.parts)) {
+    return { ok: false, reason: 'missing_dimensions' }
+  }
+  let evaluated: ReturnType<typeof evaluateRecipe>
+  try {
+    evaluated = evaluateRecipe(node.recipe, node.parameters)
+  } catch {
+    return { ok: false, reason: 'missing_dimensions' }
+  }
+
+  const [width, height, depth] = evaluated.dimensions
+  if (![width, height, depth, ...evaluated.min, ...evaluated.max].every(Number.isFinite)) {
+    return { ok: false, reason: 'non_finite_dimensions' }
+  }
+  if (width <= 0 || depth <= 0) {
+    return { ok: false, reason: 'non_positive_plan_dimensions' }
+  }
+
+  const aabb = proceduralNodePlanAabb(node)
+  if (!aabb) return { ok: false, reason: 'non_finite_dimensions' }
+  return {
+    ok: true,
+    aabb,
+    sourceDimensions: [width, height, depth],
+    effectiveDimensions: [width, height, depth],
     rotationY,
   }
 }

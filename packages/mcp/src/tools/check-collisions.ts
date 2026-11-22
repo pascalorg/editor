@@ -2,6 +2,7 @@ import type { McpServer } from '@modelcontextprotocol/server'
 import {
   findItemItemCollisions,
   inspectItemPlanFootprint,
+  inspectProceduralItemPlanFootprint,
   resolveNodeLevelId,
 } from '@pascal-app/core/agent-operations'
 import { ItemNode } from '@pascal-app/core/schema'
@@ -213,8 +214,12 @@ export function registerCheckCollisions(server: McpServer, bridge: SceneOperatio
       const byId = new Map<string, (typeof nodes)[number]>(
         nodes.map((node) => [node.id, node] as const),
       )
+      const isCollisionTarget = (
+        node: (typeof nodes)[number],
+      ): node is Extract<(typeof nodes)[number], { type: 'item' | 'procedural-item' }> =>
+        node.type === 'item' || node.type === 'procedural-item'
       const scoped = nodes.filter((node) => {
-        if (node.type !== 'item' || !scopeLevelId) return true
+        if (!isCollisionTarget(node) || !scopeLevelId) return true
         return resolveNodeLevelId(node.id, byId) === scopeLevelId
       })
       const checkedItems: Array<{
@@ -231,29 +236,38 @@ export function registerCheckCollisions(server: McpServer, bridge: SceneOperatio
       const skippedItems: Array<{ id: string; name: string; reason: string }> = []
 
       for (const node of scoped) {
-        if (node.type !== 'item') continue
+        if (!isCollisionTarget(node)) continue
+        const name =
+          node.type === 'procedural-item'
+            ? (node.name ?? node.recipe?.name ?? node.id)
+            : (node.name ?? node.asset.name ?? node.id)
         const resolvedLevelId =
           node === candidateNode ? candidate!.levelId : bridge.resolveLevelId(node.id)
         if (!resolvedLevelId) {
           skippedItems.push({
             id: node.id,
-            name: node.name ?? node.asset.name ?? node.id,
+            name,
             reason: 'unresolved_level',
           })
           continue
         }
         const immediateParent =
           node === candidateNode ? byId.get(candidate!.levelId) : bridge.getAncestry(node.id)[1]
-        if (immediateParent && immediateParent.type !== 'level') {
+        if (
+          (immediateParent && immediateParent.type !== 'level') ||
+          (node.type === 'procedural-item' && Boolean(node.wallId))
+        ) {
           skippedItems.push({
             id: node.id,
-            name: node.name ?? node.asset.name ?? node.id,
+            name,
             reason: floorOnly ? 'unsupported_attachment' : 'parent_local_coordinates',
           })
           continue
         }
-        const inspected = inspectItemPlanFootprint(node, { floorOnly })
-        const name = node.name ?? node.asset.name ?? node.id
+        const inspected =
+          node.type === 'procedural-item'
+            ? inspectProceduralItemPlanFootprint(node, { floorOnly })
+            : inspectItemPlanFootprint(node, { floorOnly })
         if (!inspected.ok) {
           skippedItems.push({ id: node.id, name, reason: inspected.reason })
           continue
@@ -264,17 +278,24 @@ export function registerCheckCollisions(server: McpServer, bridge: SceneOperatio
           levelId: resolvedLevelId,
           positionMeters: node.position,
           rotationYRadians: inspected.rotationY,
-          source: {
-            assetId:
-              node === candidateNode
-                ? (candidate!.source?.assetId ?? 'supplied-dimensions')
-                : node.asset.id,
-            uri:
-              node === candidateNode
-                ? (candidate!.source?.uri ?? 'supplied://dimensions')
-                : node.asset.src,
-            catalog: node === candidateNode ? 'supplied' : (node.asset.source ?? 'unknown'),
-          },
+          source:
+            node.type === 'procedural-item'
+              ? {
+                  assetId: node.recipe.name || node.id,
+                  uri: 'procedural://recipe',
+                  catalog: 'procedural',
+                }
+              : {
+                  assetId:
+                    node === candidateNode
+                      ? (candidate!.source?.assetId ?? 'supplied-dimensions')
+                      : node.asset.id,
+                  uri:
+                    node === candidateNode
+                      ? (candidate!.source?.uri ?? 'supplied://dimensions')
+                      : node.asset.src,
+                  catalog: node === candidateNode ? 'supplied' : (node.asset.source ?? 'unknown'),
+                },
           sourceDimensionsMeters: inspected.sourceDimensions,
           effectiveDimensionsMeters: inspected.effectiveDimensions,
           footprintBoundsMeters: inspected.aabb,
@@ -285,7 +306,9 @@ export function registerCheckCollisions(server: McpServer, bridge: SceneOperatio
         checkedItems.map((item) => (item.id === candidate?.id ? candidateNode!.id : item.id)),
       )
       const found = findItemItemCollisions({
-        nodes: scoped.filter((node) => (node.type === 'item' ? checkedItemIds.has(node.id) : true)),
+        nodes: scoped.filter((node) =>
+          isCollisionTarget(node) ? checkedItemIds.has(node.id) : true,
+        ),
         gap: minimumClearance,
       })
       const collisions = found.map((c) => ({
