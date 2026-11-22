@@ -355,7 +355,19 @@ function viewerFrameEvent(id: string, source: ViewerSource): CameraControlFrameE
   if (!node) return null
   const saved = node.camera
   const pose =
-    saved?.position && saved.target ? { position: saved.position, target: saved.target } : null
+    saved?.position && saved.target
+      ? {
+          position: saved.position,
+          target: saved.target,
+          ...(saved.mode === undefined ? {} : { mode: saved.mode }),
+          ...(typeof saved.fov === 'number' && Number.isFinite(saved.fov) && saved.fov > 0
+            ? { fov: saved.fov }
+            : {}),
+          ...(typeof saved.zoom === 'number' && Number.isFinite(saved.zoom) && saved.zoom > 0
+            ? { zoom: saved.zoom }
+            : {}),
+        }
+      : null
   box.makeEmpty()
   if (node.type === 'zone') expandByZone(box, node, source)
   else if (node.type === 'unit') {
@@ -439,8 +451,24 @@ export function frameViewerCamera(
   )
   if (!pose) return
   const animate = framingAnimates()
+  const perspective = camera as PerspectiveCamera
+  if (
+    event.pose?.fov !== undefined &&
+    event.pose.mode !== 'orthographic' &&
+    perspective.isPerspectiveCamera
+  ) {
+    perspective.fov = Math.min(Math.max(event.pose.fov, 1), 179)
+    perspective.updateProjectionMatrix()
+  }
   control.setLookAt(...pose.position, ...pose.target, animate)
-  if ((camera as OrthographicCamera).isOrthographicCamera && event.bounds && !event.pose) {
+  const orthographic = camera as OrthographicCamera
+  if (
+    event.pose?.zoom !== undefined &&
+    event.pose.mode !== 'perspective' &&
+    orthographic.isOrthographicCamera
+  ) {
+    control.zoomTo(event.pose.zoom, animate)
+  } else if (orthographic.isOrthographicCamera && event.bounds && !event.pose) {
     box.min.set(...event.bounds.min)
     box.max.set(...event.bounds.max)
     box.getBoundingSphere(frameSphere)
