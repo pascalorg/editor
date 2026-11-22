@@ -1437,5 +1437,91 @@ describe('layout-clearance', () => {
       })
       expect(collectOccupiedFootprints([level, floorMat])).toEqual([])
     })
+
+    test('resolves mounting origin and ceiling elevation for items hosted on a hanging procedural shelf', () => {
+      const level = LevelNode.parse({ id: 'level_hang', name: 'G', level: 0, height: 2.8 })
+      const ceiling = CeilingNode.parse({
+        id: 'ceiling_hang',
+        parentId: level.id,
+        polygon: [
+          [-3, -3],
+          [3, -3],
+          [3, 3],
+          [-3, 3],
+        ],
+      })
+      const hangingShelfRecipe = {
+        ...overlapBlockRecipe,
+        name: 'Hanging Shelf',
+        mounting: { attachTo: 'ceiling', reference: 'mount' },
+        surfaces: [
+          { id: 'mount', label: 'Mount', position: [0.5, 0.8, 0], size: [0.2, 0.2] },
+          { id: 'deck', label: 'Deck', position: [0, 0.1, 0], size: [0.8, 0.4] },
+        ],
+        parameters: [
+          {
+            id: 'width',
+            label: 'Width',
+            default: 1,
+            min: 1,
+            max: 1,
+            step: 0.1,
+            unit: 'm',
+            axis: 'x',
+          },
+          {
+            id: 'depth',
+            label: 'Depth',
+            default: 0.4,
+            min: 0.4,
+            max: 0.4,
+            step: 0.1,
+            unit: 'm',
+            axis: 'z',
+          },
+          {
+            id: 'height',
+            label: 'Height',
+            default: 0.8,
+            min: 0.8,
+            max: 0.8,
+            step: 0.1,
+            unit: 'm',
+            axis: 'y',
+          },
+        ],
+      }
+      const shelf = makeProcedural(
+        'procedural-item_hanging_shelf',
+        ceiling.id,
+        [0.5, 0, 0],
+        [0, 0, 0],
+        hangingShelfRecipe,
+        {
+          children: ['item_pot'],
+          attachments: { item_pot: 'deck' },
+        },
+      )
+      const hostedPot = ItemNode.parse(
+        item('item_pot', [0, 0, 0], [0.2, 0.25, 0.2], 'Pot', 0, shelf.id),
+      )
+      const floorTable = ItemNode.parse(
+        item('item_below', [0, 0, 0], [1, 0.9, 1], 'Floor Table', 0, level.id),
+      )
+      const footprints = collectOccupiedFootprints([level, ceiling, shelf, hostedPot, floorTable])
+      const potFp = footprints.find((entry) => entry.id === 'item_pot')
+      expect(potFp?.aabb).toEqual({
+        minX: expect.closeTo(-0.1, 6),
+        maxX: expect.closeTo(0.1, 6),
+        minZ: expect.closeTo(-0.1, 6),
+        maxZ: expect.closeTo(0.1, 6),
+      })
+      expect(
+        findItemItemCollisions({
+          nodes: [level, ceiling, shelf, hostedPot, floorTable],
+          levelId: level.id,
+        }),
+      ).toEqual([])
+    })
   })
 })

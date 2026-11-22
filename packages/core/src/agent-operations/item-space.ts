@@ -14,6 +14,33 @@ function turnPlanOffset(x: number, z: number, turn: number): [number, number] {
   return [x * Math.cos(turn) + z * Math.sin(turn), -x * Math.sin(turn) + z * Math.cos(turn)]
 }
 
+function proceduralLocalOrigin(
+  node: ProceduralItemNode,
+  parent: AnyNode | undefined,
+): [number, number, number] | null {
+  if (node.wallId) return null
+  if (!Array.isArray(node.position) || !Array.isArray(node.rotation)) return null
+  const position: [number, number, number] = [node.position[0], node.position[1], node.position[2]]
+  const attach = node.recipe?.mounting?.attachTo
+  if (attach === 'wall-side') return null
+  if (attach === 'ceiling') {
+    if (parent?.type !== 'ceiling' || !Array.isArray(node.recipe?.parts)) return null
+    try {
+      const reference = evaluateRecipe(node.recipe, node.parameters).surfaces.find(
+        (entry) => entry.id === node.recipe.mounting?.reference,
+      )
+      if (!reference) return null
+      const offset = rotateVector(reference.position, node.rotation)
+      position[0] -= offset[0]
+      position[1] -= offset[1]
+      position[2] -= offset[2]
+    } catch {
+      return null
+    }
+  }
+  return position
+}
+
 function stepThroughHostChain(
   childId: string,
   initial: { position: [number, number, number]; yaw: number },
@@ -31,7 +58,9 @@ function stepThroughHostChain(
     // A wall's child is wall-local: not this frame. A ceiling's or slab's child is already in plan metres.
     if (parent.type === 'wall') return null
     if (parent.type === 'procedural-item') {
-      if (parent.wallId) return null
+      const nextParent = parent.parentId ? byId.get(parent.parentId) : undefined
+      const parentOrigin = proceduralLocalOrigin(parent, nextParent)
+      if (!parentOrigin) return null
       const surfaceId = parent.attachments?.[currentId]
       if (surfaceId !== undefined) {
         if (!Array.isArray(parent.recipe?.parts)) return null
@@ -57,12 +86,12 @@ function stepThroughHostChain(
         return null
       }
       const [rx, rz] = turnPlanOffset(x, z, parent.rotation[1])
-      x = parent.position[0] + rx
-      y = parent.position[1] + y
-      z = parent.position[2] + rz
+      x = parentOrigin[0] + rx
+      y = parentOrigin[1] + y
+      z = parentOrigin[2] + rz
       yaw += parent.rotation[1]
       currentId = parent.id
-      parent = parent.parentId ? byId.get(parent.parentId) : undefined
+      parent = nextParent
       continue
     }
     if (parent.type !== 'item') break
@@ -102,27 +131,9 @@ export function proceduralItemLevelPose(
   node: ProceduralItemNode,
   byId: Map<string, AnyNode>,
 ): { position: [number, number, number]; yawDeg: number } | null {
-  if (node.wallId) return null
-  if (!Array.isArray(node.position) || !Array.isArray(node.rotation)) return null
-  const position: [number, number, number] = [node.position[0], node.position[1], node.position[2]]
   const parent = node.parentId ? byId.get(node.parentId) : undefined
-  if (node.recipe?.mounting?.attachTo === 'ceiling') {
-    if (parent?.type !== 'ceiling' || !Array.isArray(node.recipe?.parts)) return null
-    try {
-      const reference = evaluateRecipe(node.recipe, node.parameters).surfaces.find(
-        (entry) => entry.id === node.recipe.mounting?.reference,
-      )
-      if (!reference) return null
-      const offset = rotateVector(reference.position, node.rotation)
-      position[0] -= offset[0]
-      position[1] -= offset[1]
-      position[2] -= offset[2]
-    } catch {
-      return null
-    }
-  } else if (node.recipe?.mounting?.attachTo === 'wall-side') {
-    return null
-  }
+  const position = proceduralLocalOrigin(node, parent)
+  if (!position) return null
   return stepThroughHostChain(node.id, { position, yaw: node.rotation[1] }, parent, byId)
 }
 

@@ -295,6 +295,48 @@ function proceduralFloorLift(node: ProceduralItemNode, nodes: Record<string, Any
   return electFloorPlacedLift(node, fp, nodes)
 }
 
+function resolveHostChainBaseElevation(
+  root: ItemNode | ProceduralItemNode,
+  nodes: Record<string, AnyNode>,
+): { levelId: string; baseY: number } | undefined {
+  const rootParent = root.parentId ? nodes[root.parentId] : undefined
+  if (rootParent?.type === 'level' && finiteNumbers(rootParent)) {
+    if (root.type === 'procedural-item' && (root.wallId || root.recipe?.mounting)) {
+      return undefined
+    }
+    try {
+      const baseY =
+        root.type === 'procedural-item'
+          ? proceduralFloorLift(root, nodes)
+          : itemFloorLift(root, nodes)
+      return Number.isFinite(baseY) ? { levelId: rootParent.id, baseY } : undefined
+    } catch {
+      return undefined
+    }
+  }
+  if (
+    root.type === 'procedural-item' &&
+    !root.wallId &&
+    root.recipe?.mounting?.attachTo === 'ceiling' &&
+    rootParent?.type === 'ceiling' &&
+    rootParent.parentId
+  ) {
+    const level = nodes[rootParent.parentId]
+    if (level?.type !== 'level' || !finiteNumbers(level) || !finiteNumbers(rootParent)) {
+      return undefined
+    }
+    try {
+      const evaluated = evaluateRecipe(root.recipe, root.parameters)
+      if (evaluated.motions.length > 0 && !evaluated.reach) return undefined
+      const baseY = resolveCeilingHeight(rootParent, nodes) - CEILING_DRAW_OFFSET
+      return Number.isFinite(baseY) ? { levelId: level.id, baseY } : undefined
+    } catch {
+      return undefined
+    }
+  }
+  return undefined
+}
+
 /**
  * Only script manifests supply raw bounds for the renderer's corrective asset pose.
  * Catalog dimensions describe a plan box, not proof of the raw model's Y origin.
@@ -466,11 +508,9 @@ function hostedToLevel(node: ItemNode, nodes: Record<string, AnyNode>): ToLevel 
     if (parent?.type !== 'item' && parent?.type !== 'procedural-item') break
     root = parent
   }
-  const rootParent = root.parentId ? nodes[root.parentId] : undefined
-  if (rootParent?.type !== 'level') return
-  if (root.type === 'procedural-item' && (root.wallId || root.recipe?.mounting)) return
-  const lift =
-    root.type === 'procedural-item' ? proceduralFloorLift(root, nodes) : itemFloorLift(root, nodes)
+  const resolvedRoot = resolveHostChainBaseElevation(root, nodes)
+  if (!resolvedRoot) return
+  const lift = resolvedRoot.baseY
   if (!Number.isFinite(lift)) return
   const assetScale = node.asset.scale ?? [1, 1, 1]
   const turn: [number, number, number] = [node.rotation[0], pose.yawDeg, node.rotation[2]]
@@ -540,22 +580,11 @@ export function itemHeightsInLevel(
     if (parent?.type !== 'item' && parent?.type !== 'procedural-item') break
     root = parent
   }
-  const rootParent = root.parentId ? nodes[root.parentId] : undefined
   const levelId = resolveNodeLevelId(node.id, byId)
-  if (!(range && levelId && finiteContext && rootParent?.type === 'level')) return undefined
-  if (root.type === 'procedural-item' && (root.wallId || root.recipe?.mounting)) return undefined
-  let lift: number
-  try {
-    lift =
-      root.type === 'procedural-item'
-        ? proceduralFloorLift(root, nodes)
-        : itemFloorLift(root, nodes)
-  } catch {
-    return undefined
-  }
-  return Number.isFinite(lift)
-    ? { levelId, min: range.min + lift, max: range.max + lift }
-    : undefined
+  if (!(range && levelId && finiteContext)) return undefined
+  const resolvedRoot = resolveHostChainBaseElevation(root, nodes)
+  if (!resolvedRoot || resolvedRoot.levelId !== levelId) return undefined
+  return { levelId, min: range.min + resolvedRoot.baseY, max: range.max + resolvedRoot.baseY }
 }
 
 function proceduralHeightsInLevel(
@@ -619,21 +648,13 @@ function proceduralHeightsInLevel(
     if (nextParent?.type !== 'item' && nextParent?.type !== 'procedural-item') break
     root = nextParent
   }
-  const rootParent = root.parentId ? nodes[root.parentId] : undefined
   const levelId = resolveNodeLevelId(node.id, byId)
-  if (!(levelId && rootParent?.type === 'level' && finiteNumbers(rootParent))) return undefined
-  if (root.type === 'procedural-item' && (root.wallId || root.recipe?.mounting)) return undefined
-  try {
-    const lift =
-      root.type === 'procedural-item'
-        ? proceduralFloorLift(root, nodes)
-        : itemFloorLift(root, nodes)
-    const min = lift + pose.position[1] + extent.min[1]
-    const max = lift + pose.position[1] + extent.max[1]
-    return Number.isFinite(min) && Number.isFinite(max) ? { levelId, min, max } : undefined
-  } catch {
-    return undefined
-  }
+  if (!levelId) return undefined
+  const resolvedRoot = resolveHostChainBaseElevation(root, nodes)
+  if (!resolvedRoot || resolvedRoot.levelId !== levelId) return undefined
+  const min = resolvedRoot.baseY + pose.position[1] + extent.min[1]
+  const max = resolvedRoot.baseY + pose.position[1] + extent.max[1]
+  return Number.isFinite(min) && Number.isFinite(max) ? { levelId, min, max } : undefined
 }
 
 /** How far an item may sink into what it stands on and still be resting on it, in metres. */
@@ -711,6 +732,17 @@ export function findItemItemCollisions(args: {
       const a = footprints[i]!
       const b = footprints[j]!
       if (a.levelId && b.levelId && a.levelId !== b.levelId) continue
+      const [nodeA, nodeB] = [nodes[a.id], nodes[b.id]]
+      if (
+        (nodeA?.type === 'procedural-item' &&
+          nodeB?.parentId === nodeA.id &&
+          nodeA.attachments?.[nodeB.id] !== undefined) ||
+        (nodeB?.type === 'procedural-item' &&
+          nodeA?.parentId === nodeB.id &&
+          nodeB.attachments?.[nodeA.id] !== undefined)
+      ) {
+        continue
+      }
       if (!aabbsOverlap(a.aabb, b.aabb, gap)) continue
       const aY = heights.get(a.id)
       const bY = heights.get(b.id)
