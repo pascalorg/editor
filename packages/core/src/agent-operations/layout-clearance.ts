@@ -1155,8 +1155,8 @@ export function layoutIssuesFromScene(nodes: Iterable<AnyNode>): LayoutIssue[] {
       const [a, b] = [itemById.get(c.aId), itemById.get(c.bId)]
       if (
         c.violation === 'clearance' &&
-        a?.type === 'item' &&
-        b?.type === 'item' &&
+        (a?.type === 'item' || a?.type === 'procedural-item') &&
+        (b?.type === 'item' || b?.type === 'procedural-item') &&
         designedTogether(a, b)
       )
         continue

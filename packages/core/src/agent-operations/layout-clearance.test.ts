@@ -1311,5 +1311,76 @@ describe('layout-clearance', () => {
         }),
       ).toEqual([])
     })
+
+    test('waives clearance (but not overlap) for designedTogether procedural dining pairs', () => {
+      const level = LevelNode.parse({ id: 'level_dining', name: 'G', level: 0 })
+      const diningTable = makeProcedural(
+        'procedural-item_dining_table',
+        level.id,
+        [0, 0, 0],
+        [0, 0, 0],
+        {
+          ...overlapBlockRecipe,
+          name: 'Dining table',
+          classification: { category: 'dining_table', functionTags: ['dining'], tags: [] },
+        },
+      )
+      // 0.03 m away from the 2x2 table ([1.28, 0, 0] with width 0.5 -> minX = 1.03, gap = 0.03 < 0.08)
+      const diningChair = makeProcedural(
+        'procedural-item_dining_chair',
+        level.id,
+        [1.28, 0, 0],
+        [0, 0, 0],
+        {
+          ...overlapBlockRecipe,
+          name: 'Dining chair',
+          classification: { category: 'dining_chair', functionTags: ['seating'], tags: [] },
+          parameters: [
+            {
+              id: 'width',
+              label: 'Width',
+              default: 0.5,
+              min: 0.5,
+              max: 0.5,
+              step: 0.1,
+              unit: 'm',
+              axis: 'x',
+            },
+            {
+              id: 'depth',
+              label: 'Depth',
+              default: 0.5,
+              min: 0.5,
+              max: 0.5,
+              step: 0.1,
+              unit: 'm',
+              axis: 'z',
+            },
+            {
+              id: 'height',
+              label: 'Height',
+              default: 0.85,
+              min: 0.85,
+              max: 0.85,
+              step: 0.1,
+              unit: 'm',
+              axis: 'y',
+            },
+          ],
+        },
+      )
+      const closeIssues = layoutIssuesFromScene([level, diningTable, diningChair])
+      expect(
+        closeIssues.filter((i) => i.type === 'item_too_close' || i.type === 'item_overlap'),
+      ).toEqual([])
+
+      const overlappingChair = {
+        ...diningChair,
+        id: 'procedural-item_overlap_chair' as const,
+        position: [0.9, 0, 0] as [number, number, number],
+      }
+      const overlapIssues = layoutIssuesFromScene([level, diningTable, overlappingChair])
+      expect(overlapIssues).toContainEqual(expect.objectContaining({ type: 'item_overlap' }))
+    })
   })
 })

@@ -526,6 +526,44 @@ describe('check_collisions', () => {
           expect.objectContaining({ id: 'procedural-item_tilted', reason: 'non_planar_rotation' }),
         ]),
       )
+
+      const wallSideRecipe = {
+        ...blockRecipe,
+        name: 'Wall-Side Sconce Draft',
+        mounting: { attachTo: 'wall-side', reference: 'back' },
+        surfaces: [
+          {
+            id: 'back',
+            label: 'Back',
+            position: [0, 0.45, -1],
+            rotation: [-Math.PI / 2, 0, 0],
+            size: [0.2, 0.2],
+          },
+        ],
+      }
+      const wallDraftOnLevel = makeProcedural('procedural-item_wall_draft', [0, 0, 0], {
+        recipe: wallSideRecipe,
+        metadata: { isTransient: true },
+      })
+      bridge.createNode(wallDraftOnLevel, level.id)
+
+      const defaultResult = await client.callTool({
+        name: 'check_collisions',
+        arguments: { levelId: level.id },
+      })
+      const defaultParsed = defaultResult.structuredContent as {
+        status: string
+        checkedItems: unknown[]
+        skippedItems: Array<{ id: string; reason: string }>
+      }
+      expect(defaultParsed.status).toBe('insufficient_evidence')
+      expect(defaultParsed.checkedItems).toHaveLength(0)
+      expect(defaultParsed.skippedItems).toContainEqual(
+        expect.objectContaining({
+          id: 'procedural-item_wall_draft',
+          reason: 'unsupported_attachment',
+        }),
+      )
     })
   })
 })

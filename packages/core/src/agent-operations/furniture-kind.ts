@@ -1,4 +1,5 @@
 import { foldRoomName } from '../building/room-use'
+import type { ProceduralItemNode } from '../procedural-items/node'
 import { getScaledDimensions, type ItemNode, LOW_PROFILE_ITEM_SURFACE_MAX_HEIGHT } from '../schema'
 
 /** How a piece of furniture stands in a room, read from what the catalog calls it. */
@@ -126,12 +127,20 @@ const ROLE_NOT: Partial<Record<PairRole, RegExp>> = {
 }
 const PAIR_ROLES: PairRole[] = ['bedside', 'bed', 'seat', 'sidetable', 'sofa', 'worktop']
 
-function pairRole(item: ItemNode): PairRole | null {
-  const category = foldRoomName(item.asset.category ?? '').replace(/[-_]+/g, ' ')
+function pairRole(node: ItemNode | ProceduralItemNode): PairRole | null {
+  const rawCategory =
+    node.type === 'procedural-item'
+      ? (node.recipe?.classification?.category ?? '')
+      : (node.asset.category ?? '')
+  const named: Named =
+    node.type === 'procedural-item'
+      ? { id: node.recipe?.name ?? node.id, name: node.name ?? node.recipe?.name }
+      : { id: node.asset.id, name: node.name ?? node.asset.name }
+  const category = foldRoomName(rawCategory).replace(/[-_]+/g, ' ')
   const filed = PAIR_ROLES.find((role) => ROLE_CATEGORY[role].test(category))
   if (filed) return filed
-  if (!GENERIC_CATEGORY.test(category)) return null
-  const text = foldRoomName(read(item.asset))
+  if (node.type === 'item' && !GENERIC_CATEGORY.test(category)) return null
+  const text = foldRoomName(read(named))
   if (ARMCHAIR.test(text)) return null
   return (
     PAIR_ROLES.find((role) => ROLE_WORDS[role].test(text) && !ROLE_NOT[role]?.test(text)) ?? null
@@ -150,7 +159,10 @@ const DESIGNED_PAIRS: readonly [PairRole, PairRole][] = [
  * the design, not a finding; two of them overlapping is still one. Read from what each is filed
  * under (its category), by its words only where the category says nothing.
  */
-export function designedTogether(a: ItemNode, b: ItemNode): boolean {
+export function designedTogether(
+  a: ItemNode | ProceduralItemNode,
+  b: ItemNode | ProceduralItemNode,
+): boolean {
   const roles = [pairRole(a), pairRole(b)]
   return DESIGNED_PAIRS.some(
     ([first, second]) =>

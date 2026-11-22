@@ -371,10 +371,10 @@ export function proceduralNodePlanAabb(node: AnyNode): PlanAabb | null {
 
 export function inspectProceduralItemPlanFootprint(
   node: Extract<AnyNode, { type: 'procedural-item' }>,
-  options?: { floorOnly?: boolean },
+  _options?: { floorOnly?: boolean },
 ): ItemFootprintInspection {
   const attach = node.recipe?.mounting?.attachTo
-  if (options?.floorOnly && (attach === 'wall-side' || attach === 'ceiling')) {
+  if (attach === 'wall-side' || attach === 'ceiling') {
     return { ok: false, reason: 'unsupported_attachment' }
   }
 

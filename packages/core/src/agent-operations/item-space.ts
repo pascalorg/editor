@@ -106,8 +106,8 @@ export function proceduralItemLevelPose(
   if (!Array.isArray(node.position) || !Array.isArray(node.rotation)) return null
   const position: [number, number, number] = [node.position[0], node.position[1], node.position[2]]
   const parent = node.parentId ? byId.get(node.parentId) : undefined
-  if (node.recipe?.mounting?.attachTo === 'ceiling' && parent?.type === 'ceiling') {
-    if (!Array.isArray(node.recipe?.parts)) return null
+  if (node.recipe?.mounting?.attachTo === 'ceiling') {
+    if (parent?.type !== 'ceiling' || !Array.isArray(node.recipe?.parts)) return null
     try {
       const reference = evaluateRecipe(node.recipe, node.parameters).surfaces.find(
         (entry) => entry.id === node.recipe.mounting?.reference,
