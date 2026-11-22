@@ -8,7 +8,6 @@
  * See packages/mcp/docs/layout-clearance-error-log.md for regression checklist.
  */
 
-import { foldRoomName } from '../building/room-use'
 import { floorConstructionLift, liftedManualSlab } from '../lib/floor-construction-lift'
 import { selectSlabSupportForItem } from '../lib/item-slab-support'
 import { getRenderableSlabPolygon } from '../lib/slab-polygon'
@@ -24,12 +23,7 @@ import {
   rotateVector,
   transformPoint,
 } from '../procedural-items/spatial'
-import {
-  type AnyNode,
-  getScaledDimensions,
-  type ItemNode,
-  LOW_PROFILE_ITEM_SURFACE_MAX_HEIGHT,
-} from '../schema'
+import { type AnyNode, getScaledDimensions, type ItemNode } from '../schema'
 import { resolveCeilingHeight } from '../services/level-height'
 import { CEILING_DRAW_OFFSET } from '../services/storey'
 import {
@@ -155,43 +149,6 @@ function collisionMessage(
   return `${lead} (${shapes}).${moves}`
 }
 
-const PROCEDURAL_RUG_CATEGORY = /^(?:rugs?|carpets?|tapis|(?:floor|parking)[ -]?mats?)$/
-const PROCEDURAL_RUG_WORD =
-  /(?:^|[^a-z])(?:rugs?|carpets?|tapis|(?:floor|parking)[ -]?mats?)(?![a-z])/
-
-function isProceduralFloorUnderlay(node: ProceduralItemNode): boolean {
-  if (node.recipe?.mounting || node.wallId || !Array.isArray(node.recipe?.parts)) return false
-  const category = foldRoomName(node.recipe.classification?.category ?? '')
-  const text = foldRoomName(
-    `${node.id} ${node.name ?? ''} ${node.recipe.name ?? ''}`.replace(/_+/g, ' '),
-  )
-  if (!(PROCEDURAL_RUG_CATEGORY.test(category) || PROCEDURAL_RUG_WORD.test(text))) return false
-  if (
-    !Array.isArray(node.position) ||
-    !Array.isArray(node.rotation) ||
-    ![...node.position, ...node.rotation].every(Number.isFinite) ||
-    Math.abs(node.position[1]) > 1e-6 ||
-    Math.abs(node.rotation[0]) > 1e-6 ||
-    Math.abs(node.rotation[2]) > 1e-6
-  ) {
-    return false
-  }
-  try {
-    const evaluated = evaluateRecipe(node.recipe, node.parameters)
-    return (
-      evaluated.dimensions[0] > 0 &&
-      evaluated.dimensions[2] > 0 &&
-      Number.isFinite(evaluated.min[1]) &&
-      Number.isFinite(evaluated.max[1]) &&
-      evaluated.min[1] >= -1e-6 &&
-      evaluated.max[1] >= evaluated.min[1] &&
-      evaluated.max[1] <= LOW_PROFILE_ITEM_SURFACE_MAX_HEIGHT
-    )
-  } catch {
-    return false
-  }
-}
-
 export function nodeItemAabb(node: AnyNode): PlanAabb | null {
   return node.type === 'procedural-item' ? proceduralNodePlanAabb(node) : itemNodePlanAabb(node)
 }
@@ -213,7 +170,7 @@ export function collectOccupiedFootprints(
       }
       const levelId = resolveNodeLevelId(node.id, byId)
       if (options?.levelId && levelId !== options.levelId) continue
-      if (levelId && node.parentId === levelId && isProceduralFloorUnderlay(node)) continue
+      if (levelId && node.parentId === levelId && isFloorUnderlay(node)) continue
       if (node.wallId || (node.parentId && byId.get(node.parentId)?.type === 'wall')) continue
       if (options?.floorOnly && node.parentId && levelId && node.parentId !== levelId) {
         if (attach === 'wall-side' || attach === 'ceiling') continue

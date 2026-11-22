@@ -1381,6 +1381,61 @@ describe('layout-clearance', () => {
       }
       const overlapIssues = layoutIssuesFromScene([level, diningTable, overlappingChair])
       expect(overlapIssues).toContainEqual(expect.objectContaining({ type: 'item_overlap' }))
+
+      // Non-generic category ("lighting") named "Table lamp" must not match as a worktop pair
+      const floorTableLamp = makeProcedural(
+        'procedural-item_table_lamp',
+        level.id,
+        [0, 0, 0],
+        [0, 0, 0],
+        {
+          ...overlapBlockRecipe,
+          name: 'Table lamp',
+          classification: { category: 'lighting', functionTags: ['lighting'], tags: [] },
+        },
+      )
+      const lampChairIssues = layoutIssuesFromScene([level, floorTableLamp, diningChair])
+      expect(lampChairIssues).toContainEqual(expect.objectContaining({ type: 'item_too_close' }))
+
+      // Snake-case floor_mat procedural underlay is excluded from occupied footprints
+      const floorMat = makeProcedural('procedural-item_floor_mat', level.id, [0, 0, 0], [0, 0, 0], {
+        ...overlapBlockRecipe,
+        name: 'Entry cover',
+        classification: { category: 'floor_mat', functionTags: ['decor'], tags: [] },
+        parameters: [
+          {
+            id: 'width',
+            label: 'Width',
+            default: 2,
+            min: 2,
+            max: 2,
+            step: 0.1,
+            unit: 'm',
+            axis: 'x',
+          },
+          {
+            id: 'depth',
+            label: 'Depth',
+            default: 2,
+            min: 2,
+            max: 2,
+            step: 0.1,
+            unit: 'm',
+            axis: 'z',
+          },
+          {
+            id: 'height',
+            label: 'Height',
+            default: 0.01,
+            min: 0.01,
+            max: 0.01,
+            step: 0.005,
+            unit: 'm',
+            axis: 'y',
+          },
+        ],
+      })
+      expect(collectOccupiedFootprints([level, floorMat])).toEqual([])
     })
   })
 })
