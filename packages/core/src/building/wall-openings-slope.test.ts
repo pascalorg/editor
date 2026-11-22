@@ -165,4 +165,45 @@ describe('agents refuse an opening no stretch of a sloped wall can take', () => 
     expect(refusal(() => move(withOpening(sloped, door), 'door_slope'))).toBe('wall_too_low')
     expect(refusal(() => move(withOpening({}, door), 'door_slope'))).toBeNull()
   })
+
+  test('moving a door with a transom along a sloped wall slides until the full opening fits (#1252)', () => {
+    // 1 m at start rising to 3 m at x = 4 m: a 2.1 m door with a 0.4 m transom (2.5 m cutout)
+    // needs ceiling >= 2.5 m, which starts at x = 3.0 m (opening centre >= 3.45 m).
+    const rising = { height: 1, endHeightOffset: 2 }
+    const transomDoor = DoorNode.parse({
+      ...door,
+      position: [2.6, 1.05, 0],
+      width: 0.9,
+      height: 2.1,
+      transomHeight: 0.4,
+    })
+    const moved = move(withOpening(rising, transomDoor), 'door_slope')
+    expect(moved.result.clamped).toBe(true)
+    expect(moved.result.position[0]).toBeCloseTo(3.45, 4)
+    expect(moved.result.position[1]).toBeCloseTo(1.05, 6)
+
+    // With sidelightLeft = 0.2 and transomHeight = 0.2 (1.1 m x 2.3 m cutout, leafOffsetX = +0.1 m):
+    // ceiling >= 2.3 m starts at x = 2.6 m, so cutout centre clamps to 3.15 m and leaf X lands at 3.25 m.
+    const sidelightTransomDoor = DoorNode.parse({
+      ...door,
+      position: [2.6, 1.05, 0],
+      width: 0.9,
+      height: 2.1,
+      sidelightLeft: 0.2,
+      transomHeight: 0.2,
+    })
+    const movedSidelight = move(withOpening(rising, sidelightTransomDoor), 'door_slope')
+    expect(movedSidelight.result.clamped).toBe(true)
+    expect(movedSidelight.result.position[0]).toBeCloseTo(3.25, 4)
+    expect(movedSidelight.result.position[1]).toBeCloseTo(1.05, 6)
+
+    // Refused only when no stretch of the sloped wall clears door + transom (2.7 m cutout needs x >= 3.4 m, width 0.9 m needs 3.4 + 0.9 = 4.3 m > 4 m)
+    const tooTallTransom = DoorNode.parse({
+      ...transomDoor,
+      transomHeight: 0.6,
+    })
+    expect(refusal(() => move(withOpening(rising, tooTallTransom), 'door_slope'))).toBe(
+      'wall_too_low',
+    )
+  })
 })

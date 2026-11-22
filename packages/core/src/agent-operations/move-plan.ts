@@ -239,25 +239,28 @@ function planOpeningMove(
       : target.y === undefined
         ? node.position[1]
         : target.y + node.height / 2
-  const { clampedX, clampedY, fits } =
+  const doorClamp =
     node.type === 'door'
       ? clampDoorToWall(
           wall,
           rawX,
           node.width,
-          node.height,
-          node,
+          cutout.height,
+          { ...node, transomHeight: undefined },
           nodes as Record<AnyNodeId, AnyNode>,
         )
-      : clampWindowToWall(
-          wall,
-          rawX,
-          rawY,
-          node.width,
-          node.height,
-          nodes as Record<AnyNodeId, AnyNode>,
-        )
-  if (!fits) refuseOpeningAboveSlope(wall, nodes, node.type, node.width, node.height)
+      : null
+  const { clampedX, clampedY, fits } = doorClamp
+    ? { clampedX: doorClamp.clampedX, clampedY: rawY, fits: doorClamp.fits }
+    : clampWindowToWall(
+        wall,
+        rawX,
+        rawY,
+        node.width,
+        node.height,
+        nodes as Record<AnyNodeId, AnyNode>,
+      )
+  if (!fits) refuseOpeningAboveSlope(wall, nodes, node.type, cutout.width, cutout.height)
   // Checked where the clamp put the door: under a sloped top it may have slid to the high end.
   if (node.type === 'door') {
     const wallHeight =
