@@ -207,16 +207,11 @@ function makeProjectNodes(
     children: [building.id],
     ...(siteCamera ? { camera: siteCamera } : {}),
   })
-  // Allow testing raw legacy shapes without Zod filling default mode when siteCamera omits mode.
-  const rawSite =
-    siteCamera && !('mode' in siteCamera) ? ({ ...site, camera: siteCamera } as AnyNode) : site
-  const rawZone =
-    zoneCamera && !('mode' in zoneCamera) ? ({ ...zone, camera: zoneCamera } as AnyNode) : zone
   return {
-    [site.id]: rawSite,
+    [site.id]: site,
     [building.id]: building,
     [level.id]: level,
-    [zone.id]: rawZone,
+    [zone.id]: zone,
   } as Record<string, AnyNode>
 }
 
@@ -537,9 +532,16 @@ describe('CustomCameraControls saved view round-trip (#1280)', () => {
       expect(getControls().getPosition(new THREE.Vector3(), false).x).toBeCloseTo(14, 4)
       expect(getControls().getTarget(new THREE.Vector3(), false).y).toBeCloseTo(1.1, 4)
 
-      // Legacy saved view without mode/fov/zoom keeps current projection and lens intact.
+      // Legacy saved view without mode/fov/zoom parsed through SiteNode/updateNode keeps current projection and lens intact.
       useScene.setState({
-        nodes: makeProjectNodes({ position: [10, 8, 12], target: [0, 0.5, 0] }),
+        nodes: makeProjectNodes(),
+      })
+      useScene.getState().updateNode('site_0' as never, {
+        camera: { position: [10, 8, 12], target: [0, 0.5, 0] },
+      })
+      expect(useScene.getState().nodes.site_0?.camera).toEqual({
+        position: [10, 8, 12],
+        target: [0, 0.5, 0],
       })
       await act(async () => {
         useViewer.getState().setCameraMode('orthographic')
