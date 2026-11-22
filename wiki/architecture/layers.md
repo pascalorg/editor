@@ -57,6 +57,8 @@ overlayPass.setLayers(overlayLayers) // only OVERLAY_LAYER
 
 The editor camera enables `OVERLAY_LAYER`; the thumbnail generator disables it so exports are clean.
 
+A scan's point cloud is the one overlay that is part of the picture: it draws on `OVERLAY_LAYER` so the scene's exposure, grade and bloom leave its colours alone, and a capture of the person's own view (a thumbnail, a snapshot) lifts it to `SCENE_LAYER` for the frame (`temporarilyShowScanPoints`). A view the caller poses itself (a sheet's, an agent's) leaves the scans out.
+
 ## Why the Grid is on its own Layer 3 (`GRID_LAYER`)
 
 The ground grid is a flat, depth-non-writing plane that must be **occluded by walls/objects** — which only works if it shares the scene's depth buffer. So unlike other overlays it is rendered *inside* the scene pass (`scenePass` enables `SCENE_LAYER` + `GRID_LAYER`), not the overlay pass. Being flat, it never triggers the screen-space ink. The thumbnail camera disables `GRID_LAYER` too, so it stays out of exports.
