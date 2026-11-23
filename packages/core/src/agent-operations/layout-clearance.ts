@@ -153,6 +153,25 @@ export function nodeItemAabb(node: AnyNode): PlanAabb | null {
   return node.type === 'procedural-item' ? proceduralNodePlanAabb(node) : itemNodePlanAabb(node)
 }
 
+function hasNonFloorHost(node: AnyNode, byId: Map<string, AnyNode>): boolean {
+  let current: AnyNode | undefined = node
+  const seen = new Set<string>()
+  while (current && current.type !== 'level') {
+    if (seen.has(current.id)) return true
+    seen.add(current.id)
+    if (current.type === 'ceiling' || current.type === 'wall') return true
+    if (current.type === 'procedural-item') {
+      const attach = current.recipe?.mounting?.attachTo
+      if (current.wallId || attach === 'wall-side' || attach === 'ceiling') return true
+    } else if (current.type === 'item') {
+      const attach = current.asset?.attachTo
+      if (attach === 'wall' || attach === 'wall-side' || attach === 'ceiling') return true
+    }
+    current = current.parentId ? byId.get(current.parentId) : undefined
+  }
+  return false
+}
+
 export function collectOccupiedFootprints(
   nodes: Iterable<AnyNode>,
   options?: { levelId?: string; excludeIds?: Set<string>; floorOnly?: boolean },
@@ -163,18 +182,12 @@ export function collectOccupiedFootprints(
   for (const node of list) {
     if (node.type !== 'item' && node.type !== 'procedural-item') continue
     if (options?.excludeIds?.has(node.id)) continue
+    if (options?.floorOnly && hasNonFloorHost(node, byId)) continue
     if (node.type === 'procedural-item') {
-      const attach = node.recipe?.mounting?.attachTo
-      if (options?.floorOnly && (attach === 'wall-side' || attach === 'ceiling')) {
-        continue
-      }
       const levelId = resolveNodeLevelId(node.id, byId)
       if (options?.levelId && levelId !== options.levelId) continue
       if (levelId && node.parentId === levelId && isFloorUnderlay(node)) continue
       if (node.wallId || (node.parentId && byId.get(node.parentId)?.type === 'wall')) continue
-      if (options?.floorOnly && node.parentId && levelId && node.parentId !== levelId) {
-        if (attach === 'wall-side' || attach === 'ceiling') continue
-      }
       const aabb = proceduralPlanAabbInLevel(node, byId)
       if (!aabb) continue
       const name = node.name ?? node.recipe?.name
@@ -186,22 +199,11 @@ export function collectOccupiedFootprints(
       })
       continue
     }
-    const attach = node.asset?.attachTo
-    if (
-      options?.floorOnly &&
-      (attach === 'wall' || attach === 'wall-side' || attach === 'ceiling')
-    ) {
-      continue
-    }
     const levelId = resolveNodeLevelId(node.id, byId)
     if (options?.levelId && levelId !== options.levelId) continue
     if (levelId && node.parentId === levelId && isFloorUnderlay(node)) continue
     // A wall's children keep wall-local coordinates and are read by the wall observations.
     if (node.parentId && byId.get(node.parentId)?.type === 'wall') continue
-    // Floor packing: prefer level-parented items (not ceiling-hosted children).
-    if (options?.floorOnly && node.parentId && levelId && node.parentId !== levelId) {
-      if (attach === 'wall' || attach === 'wall-side' || attach === 'ceiling') continue
-    }
     const aabb = itemPlanAabbInLevel(node, byId)
     if (!aabb) continue
     const name = node.name ?? node.asset?.name

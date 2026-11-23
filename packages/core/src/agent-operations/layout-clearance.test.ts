@@ -1498,17 +1498,63 @@ describe('layout-clearance', () => {
         [0, 0, 0],
         hangingShelfRecipe,
         {
-          children: ['item_pot'],
-          attachments: { item_pot: 'deck' },
+          children: ['item_pot', 'procedural-item_hanging_bowl'],
+          attachments: {
+            item_pot: 'deck',
+            'procedural-item_hanging_bowl': 'deck',
+          },
         },
       )
       const hostedPot = ItemNode.parse(
         item('item_pot', [0, 0, 0], [0.2, 0.25, 0.2], 'Pot', 0, shelf.id),
       )
+      const hostedBowl = makeProcedural(
+        'procedural-item_hanging_bowl',
+        shelf.id,
+        [0.3, 0, 0],
+        [0, 0, 0],
+        {
+          ...overlapBlockRecipe,
+          name: 'Hanging Bowl',
+          parameters: [
+            {
+              id: 'width',
+              label: 'Width',
+              default: 0.2,
+              min: 0.2,
+              max: 0.2,
+              step: 0.1,
+              unit: 'm',
+              axis: 'x',
+            },
+            {
+              id: 'depth',
+              label: 'Depth',
+              default: 0.2,
+              min: 0.2,
+              max: 0.2,
+              step: 0.1,
+              unit: 'm',
+              axis: 'z',
+            },
+            {
+              id: 'height',
+              label: 'Height',
+              default: 0.15,
+              min: 0.15,
+              max: 0.15,
+              step: 0.05,
+              unit: 'm',
+              axis: 'y',
+            },
+          ],
+        },
+      )
       const floorTable = ItemNode.parse(
         item('item_below', [0, 0, 0], [1, 0.9, 1], 'Floor Table', 0, level.id),
       )
-      const footprints = collectOccupiedFootprints([level, ceiling, shelf, hostedPot, floorTable])
+      const allNodes = [level, ceiling, shelf, hostedPot, hostedBowl, floorTable]
+      const footprints = collectOccupiedFootprints(allNodes)
       const potFp = footprints.find((entry) => entry.id === 'item_pot')
       expect(potFp?.aabb).toEqual({
         minX: expect.closeTo(-0.1, 6),
@@ -1517,8 +1563,13 @@ describe('layout-clearance', () => {
         maxZ: expect.closeTo(0.1, 6),
       })
       expect(
+        collectOccupiedFootprints(allNodes, { levelId: level.id, floorOnly: true }).map(
+          (entry) => entry.id,
+        ),
+      ).toEqual([floorTable.id])
+      expect(
         findItemItemCollisions({
-          nodes: [level, ceiling, shelf, hostedPot, floorTable],
+          nodes: allNodes,
           levelId: level.id,
         }),
       ).toEqual([])
