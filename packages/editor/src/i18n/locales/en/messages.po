@@ -7099,6 +7099,10 @@ msgid "editor.tools.distribution.distributionRunTool.typeALength"
 msgstr "type a length"
 
 #: packages/editor/src/components/editor/views/host-view.tsx
+msgid "editor.views.hostView.loading"
+msgstr "Loading…"
+
+#: packages/editor/src/components/editor/views/host-view.tsx
 msgid "editor.views.hostView.pluginNotInstalled"
 msgstr "Its plugin isn't installed in this project."
 

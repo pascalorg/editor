@@ -17655,6 +17655,16 @@ msgstr "Altitude cible : {elevation} m · cliquez ou appuyez sur Entrée pour pl
 msgid "editor.tools.distribution.distributionRunTool.typeALength"
 msgstr "saisir une longueur"
 
+# Source-Hash: 9e84d6d7b9885c4f
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Loading…"
+#: packages/editor/src/components/editor/views/host-view.tsx
+#, fuzzy
+msgid "editor.views.hostView.loading"
+msgstr "Chargement…"
+
 # Source-Hash: 82135a9b9cb5b990
 # Review: required
 # AI-Provider: claude-code

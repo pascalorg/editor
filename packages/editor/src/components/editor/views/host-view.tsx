@@ -45,6 +45,16 @@ function ViewMessage({
   )
 }
 
+function LoadingViewMessage() {
+  const i18n = usePascalI18n()
+  return (
+    <ViewMessage
+      body=""
+      title={i18n._({ id: 'editor.views.hostView.loading', message: 'Loading…' })}
+    />
+  )
+}
+
 function UnavailableViewMessage({ onShowScene }: { onShowScene?: () => void }) {
   const i18n = usePascalI18n()
   return (
@@ -88,7 +98,7 @@ export function HostView({
   const settled = useViewsSettled()
   if (!view?.component) {
     // Until the project's plugins have registered their views, a missing one is still loading.
-    if (!settled) return <ViewMessage body="" title="Loading…" />
+    if (!settled) return <LoadingViewMessage />
     return <UnavailableViewMessage onShowScene={onShowScene} />
   }
   const Component = resolveViewComponent(view.component)
@@ -101,7 +111,7 @@ export function HostView({
         />
       }
     >
-      <Suspense fallback={<ViewMessage body="" title="Loading…" />}>
+      <Suspense fallback={<LoadingViewMessage />}>
         <Component />
       </Suspense>
     </ErrorBoundary>

@@ -237,8 +237,7 @@
       "snapshot"
     ],
     "packages/editor/src/components/editor/views/host-view.tsx": [
-      "\"{label}\" crashed",
-      "Loading…"
+      "\"{label}\" crashed"
     ],
     "packages/editor/src/components/editor/views/plugins-view.tsx": [
       "About",
