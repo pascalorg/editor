@@ -193,9 +193,17 @@ function variableNames(tokens: CompiledToken[]): string[] {
   return [...names].sort()
 }
 
-function tags(message: string): string[] {
+function extractTags(message: string): string[] {
   const found: string[] = []
   for (let start = message.indexOf('<'); start >= 0; start = message.indexOf('<', start + 1)) {
+    const next = message[start + 1]
+    if (!next) continue
+    // Treat any `<` followed by a letter, `!`, or `/` as a tag (catches `<img/src=...>`,
+    // `<svg/onload=...>`, `<!-- -->`, and closing tags), plus Lingui numbered tags (`<0>`, `<0/>`).
+    const isStrictTagStart = /[A-Za-z!/]/.test(next)
+    const isNumericTagStart = /\d/.test(next)
+    if (!(isStrictTagStart || isNumericTagStart)) continue
+
     let quote: '"' | "'" | undefined
     let end = start + 1
     for (; end < message.length; end += 1) {
@@ -208,11 +216,44 @@ function tags(message: string): string[] {
         break
       }
     }
-    if (end >= message.length) continue
+    if (end >= message.length) {
+      if (isStrictTagStart) found.push(message.slice(start))
+      continue
+    }
     const token = message.slice(start, end + 1)
-    if (/^<\s*\/?\s*[A-Za-z][\w-]*(?:\s|\/?>)/.test(token)) found.push(token)
+    if (isStrictTagStart || /^<\d+\s*\/?>$/.test(token)) {
+      found.push(token)
+    }
   }
-  return found.sort()
+  return found
+}
+
+function tags(message: string): string[] {
+  return extractTags(message).sort()
+}
+
+function tagNestingErrors(orderedTags: readonly string[]): string[] {
+  const stack: string[] = []
+  for (const token of orderedTags) {
+    if (!token.endsWith('>')) return ['malformed rich-text tag']
+    if (token.startsWith('<!')) continue
+    if (token.endsWith('/>')) continue
+    const closeMatch = /^<\/\s*([A-Za-z0-9][\w-]*)\s*>$/.exec(token)
+    if (closeMatch) {
+      const name = closeMatch[1]!
+      if (stack.length === 0 || stack[stack.length - 1] !== name) {
+        return ['broken rich-text tag nesting']
+      }
+      stack.pop()
+      continue
+    }
+    const openMatch = /^<\s*([A-Za-z0-9][\w-]*)(?:[\s/>]|$)/.exec(token)
+    if (openMatch) {
+      stack.push(openMatch[1]!)
+    }
+  }
+  if (stack.length > 0) return ['broken rich-text tag nesting']
+  return []
 }
 
 function plurals(tokens: CompiledToken[]): Map<string, { type: string; categories: Set<string> }> {
@@ -231,6 +272,26 @@ function plurals(tokens: CompiledToken[]): Map<string, { type: string; categorie
           type,
           categories: new Set(Object.keys(choices).filter((category) => category !== 'offset')),
         })
+      }
+      if (!(choices && typeof choices === 'object')) continue
+      for (const branch of Object.values(choices)) {
+        if (Array.isArray(branch)) visit(branch as CompiledToken[])
+      }
+    }
+  }
+  visit(tokens)
+  return found
+}
+
+function selects(tokens: CompiledToken[]): Map<string, Set<string>> {
+  const found = new Map<string, Set<string>>()
+  const visit = (entries: CompiledToken[]) => {
+    for (const token of entries) {
+      if (typeof token === 'string') continue
+      const type = token[1]
+      const choices = token[2]
+      if (type === 'select' && choices && typeof choices === 'object') {
+        found.set(token[0], new Set(Object.keys(choices)))
       }
       if (!(choices && typeof choices === 'object')) continue
       for (const branch of Object.values(choices)) {
@@ -300,9 +361,11 @@ export function validateTranslation(
   ) {
     errors.push('placeholder names differ from English')
   }
-  if (JSON.stringify(tags(source)) !== JSON.stringify(tags(translation))) {
+  const translatedOrderedTags = extractTags(translation)
+  if (JSON.stringify(tags(source)) !== JSON.stringify([...translatedOrderedTags].sort())) {
     errors.push('rich-text tags differ from English')
   }
+  errors.push(...tagNestingErrors(translatedOrderedTags))
 
   const sourcePlurals = plurals(sourceTokens)
   const translatedPlurals = plurals(translatedTokens)
@@ -312,10 +375,42 @@ export function validateTranslation(
       errors.push(`plural selector "${name}" is missing or changed`)
       continue
     }
-    for (const category of requiredPluralCategories(locale, sourcePlural.type)) {
+    const required = new Set<string>([
+      ...requiredPluralCategories(locale, sourcePlural.type),
+      'other',
+    ])
+    for (const category of required) {
       if (!translatedPlural.categories.has(category)) {
         errors.push(`plural selector "${name}" is missing "${category}"`)
       }
+    }
+  }
+  for (const [name, translatedPlural] of translatedPlurals) {
+    if (!sourcePlurals.has(name) && !translatedPlural.categories.has('other')) {
+      errors.push(`plural selector "${name}" is missing "other"`)
+    }
+  }
+
+  const sourceSelects = selects(sourceTokens)
+  const translatedSelects = selects(translatedTokens)
+  for (const [name, sourceBranches] of sourceSelects) {
+    const translatedBranches = translatedSelects.get(name)
+    if (!translatedBranches) {
+      errors.push(`select selector "${name}" is missing or changed`)
+      continue
+    }
+    for (const branch of sourceBranches) {
+      if (!translatedBranches.has(branch)) {
+        errors.push(`select selector "${name}" is missing branch "${branch}"`)
+      }
+    }
+    if (!translatedBranches.has('other')) {
+      errors.push(`select selector "${name}" is missing "other"`)
+    }
+  }
+  for (const [name, translatedBranches] of translatedSelects) {
+    if (!sourceSelects.has(name) && !translatedBranches.has('other')) {
+      errors.push(`select selector "${name}" is missing "other"`)
     }
   }
   errors.push(...validateGlossary(source, translation, locale, glossary))

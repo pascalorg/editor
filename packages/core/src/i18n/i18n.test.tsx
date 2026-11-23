@@ -115,6 +115,32 @@ describe('message registry', () => {
     ).toBe('21 fallback items')
   })
 
+  test('uses the fallback catalog locale plural rules when falling back from pt-PT to pt', async () => {
+    // In CLDR, `pt` selects "one" for 0 while `pt-PT` selects "other" for 0.
+    await registerMessages('pt', 'viewer', {
+      'test.pt-fallback-plural': '{count, plural, one {# item} other {# itens}}',
+    })
+    await registerMessages('pt-PT', 'viewer', {
+      'test.pt-pt-override-plural': '{count, plural, one {# artigo} other {# artigos}}',
+    })
+    setLocale('pt-PT')
+
+    // Message came from `pt`: must use `pt`'s plural rules (0 -> "one").
+    expect(
+      translate('viewer.test.pt-fallback-plural', '{count, plural, one {# item} other {# items}}', {
+        count: 0,
+      }),
+    ).toBe('0 item')
+    // Message came from `pt-PT`: must use `pt-PT`'s plural rules (0 -> "other").
+    expect(
+      translate(
+        'viewer.test.pt-pt-override-plural',
+        '{count, plural, one {# article} other {# articles}}',
+        { count: 0 },
+      ),
+    ).toBe('0 artigos')
+  })
+
   test('notifies subscribers for locale and active-catalog changes', async () => {
     let changes = 0
     let localeChanges = 0

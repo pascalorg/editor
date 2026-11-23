@@ -9,3 +9,19 @@ export function resolveUiLocale(value: string | null | undefined): string {
     return 'en'
   }
 }
+
+/**
+ * Computes the next locale when the `?lang=` query parameter changes during a
+ * client-side navigation. Returns `null` when no change should occur.
+ */
+export function resolveClientLangNavigation(
+  previousLangParam: string | null | undefined,
+  nextLangParam: string | null,
+  defaultLocale: string,
+): string | null {
+  if (previousLangParam === undefined) {
+    return nextLangParam !== null ? resolveUiLocale(nextLangParam) : null
+  }
+  if (previousLangParam === nextLangParam) return null
+  return nextLangParam === null ? defaultLocale : resolveUiLocale(nextLangParam)
+}

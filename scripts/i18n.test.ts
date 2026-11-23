@@ -203,6 +203,75 @@ test('rich-text validation preserves attributed and self-closing tags', () => {
   )
 })
 
+test('rich-text validation catches renumbered numbered tags, broken nesting, and stricter HTML/comment tags', () => {
+  // Valid numbered tags and valid sibling reorder pass.
+  expect(validateTranslation('<0>Open</0> <1>docs</1>', '<1>docs</1> <0>Ouvrir</0>', 'fr')).toEqual(
+    [],
+  )
+  // Math comparison with space is not mistaken for a tag.
+  expect(validateTranslation('Width < 5 m', 'Largeur < 5 m', 'fr')).toEqual([])
+
+  // Renumbered tags fail.
+  expect(validateTranslation('<0>Open</0>', '<1>Ouvrir</1>', 'fr')).toContain(
+    'rich-text tags differ from English',
+  )
+
+  // Broken nesting fails even when the sorted tag set matches English.
+  expect(validateTranslation('<0><1>Open</1></0>', '<0><1>Ouvrir</0></1>', 'fr')).toContain(
+    'broken rich-text tag nesting',
+  )
+  expect(validateTranslation('<0>Open</0>', '</0>Ouvrir<0>', 'fr')).toContain(
+    'broken rich-text tag nesting',
+  )
+  expect(
+    validateTranslation(
+      '<a href="/docs"><b>Open</b></a>',
+      '<a href="/docs"><b>Ouvrir</a></b>',
+      'fr',
+    ),
+  ).toContain('broken rich-text tag nesting')
+
+  // Stricter tag check catches slash-separated HTML tags, comments, and unclosed tags.
+  for (const injected of [
+    'Ouvrir <img/src=x onerror=alert(1)>',
+    'Ouvrir <svg/onload=alert(1)>',
+    'Ouvrir <!-- injected -->',
+    'Ouvrir <img/src=x',
+  ]) {
+    expect(validateTranslation('Open', injected, 'fr')).toContain(
+      'rich-text tags differ from English',
+    )
+  }
+})
+
+test('ICU select validation catches removed branches and missing other branches', () => {
+  const english = '{gender, select, male {He} female {She} other {They}}'
+
+  expect(
+    validateTranslation(english, '{gender, select, male {Il} female {Elle} other {Ils}}', 'fr'),
+  ).toEqual([])
+  expect(validateTranslation(english, '{gender, select, male {Il} other {Ils}}', 'fr')).toContain(
+    'select selector "gender" is missing branch "female"',
+  )
+  expect(validateTranslation(english, '{gender, select, male {Il} female {Elle}}', 'fr')).toContain(
+    'select selector "gender" is missing branch "other"',
+  )
+  expect(
+    validateTranslation(
+      '{gender, select, male {He} female {She}}',
+      '{gender, select, male {Il} female {Elle}}',
+      'fr',
+    ),
+  ).toContain('select selector "gender" is missing "other"')
+  expect(
+    validateTranslation(
+      '{count, plural, one {# item} other {# items}}',
+      '{count, plural, one {# élément}}',
+      'fr',
+    ),
+  ).toContain('plural selector "count" is missing "other"')
+})
+
 test('source drift fails checking, then extraction updates English and flags translations', () => {
   const root = catalogProject()
   const sample = join(root, 'packages/editor/src/sample.tsx')

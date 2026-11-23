@@ -46,6 +46,18 @@
       "dependsOn": ["build"],
       "outputs": []
     },
+    "//#test:i18n-scripts": {
+      "dependsOn": ["@pascal-app/core#build"],
+      "inputs": [
+        "scripts/i18n*.ts",
+        "lingui.config.ts",
+        "i18n/**",
+        "packages/core/src/i18n/**",
+        "packages/editor/src/i18n/locales/**",
+        "packages/nodes/src/index.ts"
+      ],
+      "outputs": []
+    },
     "dev": {
       "dependsOn": ["^build"],
       "cache": false,

@@ -1,9 +1,10 @@
 import { afterEach, expect, test } from 'bun:test'
 import { readdirSync } from 'node:fs'
 import { unstable_doesMiddlewareMatch } from 'next/experimental/testing/server'
+import { NextRequest } from 'next/server'
 import { issueSession, SESSION_COOKIE } from './lib/self-host-auth'
-import { resolveUiLocale } from './lib/ui-locale'
-import { config, gateRequest } from './proxy'
+import { PASCAL_LOCALE_HEADER, resolveClientLangNavigation, resolveUiLocale } from './lib/ui-locale'
+import { config, gateRequest, proxy } from './proxy'
 
 const OLD_ENV = { ...process.env }
 
@@ -143,4 +144,64 @@ test('UI locale canonicalization is deterministic for server rendering', () => {
   expect(resolveUiLocale('zh-hans-cn')).toBe('zh-Hans-CN')
   expect(resolveUiLocale('')).toBe('en')
   expect(resolveUiLocale('not_a_locale')).toBe('en')
+})
+
+const nextRequest = (path: string, headers: Record<string, string> = {}) =>
+  new NextRequest(`https://pascal.example${path}`, {
+    headers: { host: 'pascal.example', ...headers },
+  })
+
+test('proxy() gates unauthorized requests before forwarding locale headers', async () => {
+  process.env.PASCAL_ADMIN_PASSWORD = 'secret'
+
+  const pageResponse = proxy(nextRequest('/project/abc?lang=fr'))
+  expect(pageResponse.status).toBe(307)
+  expect(pageResponse.headers.get('location')).toBe(
+    'https://pascal.example/login?next=%2Fproject%2Fabc%3Flang%3Dfr',
+  )
+  expect(pageResponse.headers.get(`x-middleware-request-${PASCAL_LOCALE_HEADER}`)).toBeNull()
+
+  const apiResponse = proxy(nextRequest('/api/plugins/mint/session?lang=fr'))
+  expect(apiResponse.status).toBe(401)
+  expect(await apiResponse.json()).toEqual({ error: 'unauthorized' })
+})
+
+test('proxy() forwards canonicalized ?lang= header on allowed requests and overrides spoofed headers', () => {
+  process.env.PASCAL_ADMIN_PASSWORD = 'secret'
+  const cookie = `${SESSION_COOKIE}=${issueSession()}`
+
+  const fr = proxy(nextRequest('/project/abc?lang=fr', { cookie, 'x-custom': 'keep' }))
+  expect(fr.status).toBe(200)
+  expect(fr.headers.get(`x-middleware-request-${PASCAL_LOCALE_HEADER}`)).toBe('fr')
+  expect(fr.headers.get('x-middleware-request-x-custom')).toBe('keep')
+
+  const zh = proxy(nextRequest('/embed/abc?lang=zh-hans-cn'))
+  expect(zh.status).toBe(200)
+  expect(zh.headers.get(`x-middleware-request-${PASCAL_LOCALE_HEADER}`)).toBe('zh-Hans-CN')
+
+  // Client-supplied x-pascal-locale header must be overwritten by resolved ?lang= (or default 'en').
+  const spoofed = proxy(nextRequest('/login', { [PASCAL_LOCALE_HEADER]: 'ja' }))
+  expect(spoofed.status).toBe(200)
+  expect(spoofed.headers.get(`x-middleware-request-${PASCAL_LOCALE_HEADER}`)).toBe('en')
+
+  // Query-string routes still match the middleware matcher.
+  expect(unstable_doesMiddlewareMatch({ config, url: '/project/abc?lang=fr' })).toBe(true)
+  expect(unstable_doesMiddlewareMatch({ config, url: '/embed/abc?lang=ja' })).toBe(true)
+})
+
+test('client-side ?lang= navigation updates locale without reload and preserves SSR default on back', () => {
+  // Cold load without ?lang=: stay on SSR locale.
+  expect(resolveClientLangNavigation(undefined, null, 'en')).toBeNull()
+  // Cold load with ?lang=fr: resolves to fr.
+  expect(resolveClientLangNavigation(undefined, 'fr', 'fr')).toBe('fr')
+  // Client navigate from / (null) to /settings?lang=ja -> ja.
+  expect(resolveClientLangNavigation(null, 'ja', 'en')).toBe('ja')
+  // Client navigate from ?lang=ja to ?lang=zh-hans-cn -> zh-Hans-CN.
+  expect(resolveClientLangNavigation('ja', 'zh-hans-cn', 'en')).toBe('zh-Hans-CN')
+  // Browser back from ?lang=ja to / (null) -> restores SSR default 'en'.
+  expect(resolveClientLangNavigation('ja', null, 'en')).toBe('en')
+  // Opening /?lang=fr then navigating to /project/abc (no ?lang=) -> preserves SSR default 'fr'.
+  expect(resolveClientLangNavigation('fr', null, 'fr')).toBe('fr')
+  // Unchanged ?lang= -> no-op.
+  expect(resolveClientLangNavigation('fr', 'fr', 'en')).toBeNull()
 })
