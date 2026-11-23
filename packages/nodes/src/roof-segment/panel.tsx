@@ -183,12 +183,13 @@ export default function RoofSegmentPanel() {
   })
 
   const handleUpdate = useCallback(
-    (updates: Partial<RoofSegmentNode>) => {
-      if (!selectedId) return
+    (updates: Partial<RoofSegmentNode>, deleteIds: AnyNodeId[] = []) => {
+      if (!selectedId) return null
       // Reshaped or moved onto the walls that carry it, its roof goes to the level above them.
-      commitSeatedRoofEdit(
+      return commitSeatedRoofEdit(
         [{ id: selectedId as AnyNodeId, data: updates }],
         selectedId as AnyNodeId,
+        deleteIds,
       )
     },
     [selectedId],
@@ -201,20 +202,21 @@ export default function RoofSegmentPanel() {
     const roof = current.parentId ? scene.nodes[current.parentId as AnyNodeId] : undefined
     if (roof?.type !== 'roof') return
     const patch = roofBuildUpPatch(current.buildUp)
-    scene.updateNodes(
+    commitSeatedRoofEdit(
       roofLayerPlaneIds(roof.children, scene.nodes).map((id) => ({ id, data: patch })),
+      current.id as AnyNodeId,
     )
   }, [selectedId])
 
   const handleRoofTypeChange = useCallback(
     (roofType: RoofType) => {
       if (isManagedLeanToRoofSegment(node?.metadata)) return
+      let deleteIds: AnyNodeId[] = []
       if (roofType === 'conical' && node) {
         const scene = useScene.getState()
-        const defaultVentIds = (node.children ?? []).filter((childId) =>
+        deleteIds = (node.children ?? []).filter((childId) =>
           isDefaultRidgeVentNode(scene.nodes[childId as AnyNodeId], node.id),
         ) as AnyNodeId[]
-        if (defaultVentIds.length > 0) scene.deleteNodes(defaultVentIds)
       }
       // Switching to Dutch resets the shape parameters to their defaults so the
       // gablet is well-formed regardless of the leftover values from the
@@ -243,6 +245,7 @@ export default function RoofSegmentPanel() {
                 dutchTopRakeThickness: ROOF_SHAPE_DEFAULTS.dutchTopRakeThickness,
               }
             : { roofType },
+        deleteIds,
       )
     },
     [handleUpdate, node],
@@ -369,8 +372,8 @@ export default function RoofSegmentPanel() {
 
   const handleResetTrim = useCallback(() => {
     if (!node || !hasSegmentTrim(node)) return
+    if (handleUpdate({ trim: EMPTY_TRIM })) return
     triggerSFX('sfx:item-pick')
-    handleUpdate({ trim: EMPTY_TRIM })
   }, [handleUpdate, node])
 
   if (!(node && node.type === 'roof-segment' && selectedId)) return null
@@ -906,15 +909,15 @@ export default function RoofSegmentPanel() {
               <ActionButton
                 label="-45°"
                 onClick={() => {
+                  if (handleUpdate({ rotation: node.rotation - Math.PI / 4 })) return
                   triggerSFX('sfx:item-rotate')
-                  handleUpdate({ rotation: node.rotation - Math.PI / 4 })
                 }}
               />
               <ActionButton
                 label="+45°"
                 onClick={() => {
+                  if (handleUpdate({ rotation: node.rotation + Math.PI / 4 })) return
                   triggerSFX('sfx:item-rotate')
-                  handleUpdate({ rotation: node.rotation + Math.PI / 4 })
                 }}
               />
             </div>

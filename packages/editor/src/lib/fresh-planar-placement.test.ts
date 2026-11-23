@@ -7,6 +7,7 @@ import {
   beginSceneHistoryPauseSession,
   CabinetModuleNode,
   CabinetNode,
+  DormerNode,
   findLevelAncestorId,
   getSceneHistoryPauseDepth,
   type LevelNode,
@@ -390,6 +391,120 @@ describe('commitFreshPlacementSubtree', () => {
     })
     expect((prepareFreshPlacementRootDuplicate(side) as WindowNode).corner).toBeUndefined()
     expect(side.corner?.partnerId).toBe('window_partner')
+  })
+
+  test('dormer draft and final subtree remap hosted children before publication, preserving history and external references', () => {
+    const roof = RoofNode.parse({
+      id: 'roof_dormer',
+      parentId: LEVEL_ID,
+      children: ['rseg_dormer'],
+    })
+    const segment = RoofSegmentNode.parse({
+      id: 'rseg_dormer',
+      parentId: roof.id,
+      children: ['dormer_source'],
+    })
+    const dormer = DormerNode.parse({
+      id: 'dormer_source',
+      parentId: segment.id,
+      roofSegmentId: segment.id,
+      position: [0, 4.123, 2],
+      rotation: 0.37,
+      children: ['window_source'],
+      metadata: { focusWindowId: 'window_source', externalRoofId: roof.id },
+      provenance: {
+        refs: [{ ns: 'fixture', id: 'dormer_source' }],
+        lineage: { op: 'duplicate', fromIds: ['dormer_source'] },
+      },
+    })
+    const window = WindowNode.parse({
+      id: 'window_source',
+      parentId: dormer.id,
+      dormerId: dormer.id,
+      dormerFace: 'left',
+      position: [0.13, -0.2, 0.01],
+      width: 0.54,
+      height: 0.45,
+      metadata: { owner: dormer.id, externalRoofId: roof.id },
+      provenance: { refs: [{ ns: 'fixture', id: dormer.id }] },
+    })
+    useScene.setState({
+      nodes: {
+        [LEVEL_ID]: level([roof.id]),
+        [roof.id]: roof,
+        [segment.id]: segment,
+        [dormer.id]: dormer,
+        [window.id]: window,
+      },
+      rootNodeIds: [LEVEL_ID],
+      collections: {},
+      dirtyNodes: new Set(),
+    })
+    useScene.temporal.getState().clear()
+    const before = structuredClone(useScene.getState().nodes)
+    const pair = (nodes: Record<string, AnyNode>, rootId: AnyNodeId) => {
+      const root = nodes[rootId]
+      if (root?.type !== 'dormer') throw new Error('Expected copied dormer')
+      expect(root.children).toHaveLength(1)
+      const child = nodes[root.children[0]!]
+      if (child?.type !== 'window') throw new Error('Expected copied hosted window')
+      expect(child.id).not.toBe(window.id)
+      expect(child).toMatchObject({
+        parentId: root.id,
+        dormerId: root.id,
+        dormerFace: 'left',
+        position: [0.13, -0.2, 0.01],
+        width: 0.54,
+        height: 0.45,
+        metadata: { owner: root.id, externalRoofId: roof.id },
+      })
+      expect(root).toMatchObject({
+        parentId: segment.id,
+        roofSegmentId: segment.id,
+        rotation: 0.37,
+        metadata: { focusWindowId: child.id, externalRoofId: roof.id },
+      })
+      // Provenance IDs are historical identity, not live graph links.
+      expect(root.provenance).toEqual(dormer.provenance)
+      expect(child.provenance).toEqual(window.provenance)
+      expect(nodes[dormer.id]).toEqual(dormer)
+      expect(nodes[window.id]).toEqual(window)
+      return { root, child }
+    }
+    useScene.temporal.getState().pause()
+    try {
+      const draftId = createFreshPlacementSubtree(dormer.id)
+      if (!draftId) throw new Error('Expected real subtree draft')
+      const draft = pair(useScene.getState().nodes, draftId)
+      expect(useScene.temporal.getState().pastStates).toHaveLength(0)
+      const observed: Record<string, AnyNode>[] = []
+      const unsubscribe = subscribeSceneCommits((commit) => {
+        // Capture at publication: a later repair cannot make this observation green.
+        observed.push(structuredClone(commit.current.nodes))
+      })
+      let finalId: AnyNodeId | null
+      try {
+        finalId = commitFreshPlacementSubtree(draftId, { position: [3, 4.123, 2] })
+      } finally {
+        unsubscribe()
+      }
+      if (!finalId) throw new Error('Expected committed copied subtree')
+      expect(observed).toHaveLength(1)
+      const final = pair(observed[0]!, finalId)
+      expect(final.child.id).not.toBe(draft.child.id)
+      expect(final.root.position).toEqual([3, 4.123, 2])
+      expect(observed[0]![draftId]).toBeUndefined()
+      expect(observed[0]![draft.child.id]).toBeUndefined()
+      expect(useScene.temporal.getState().pastStates).toHaveLength(1)
+      const after = structuredClone(useScene.getState().nodes)
+      useScene.temporal.getState().resume()
+      useScene.temporal.getState().undo()
+      expect(useScene.getState().nodes).toEqual(before)
+      useScene.temporal.getState().redo()
+      expect(useScene.getState().nodes).toEqual(after)
+    } finally {
+      useScene.temporal.getState().resume()
+    }
   })
 
   test('commits a duplicated cabinet draft without deleting the original modules', () => {

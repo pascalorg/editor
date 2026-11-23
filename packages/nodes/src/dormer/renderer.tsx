@@ -32,6 +32,46 @@ import {
   generateDormerGeometry,
 } from './csg-geometry'
 
+function dormerHostInputs(
+  nodes: Readonly<Record<string, AnyNode>>,
+  overrides: ReadonlyMap<string, Record<string, unknown>>,
+  segmentId: string | undefined,
+): AnyNode[] {
+  const storedHost = segmentId ? nodes[segmentId] : undefined
+  if (storedHost?.type !== 'roof-segment') return []
+  const host = { ...storedHost, ...overrides.get(storedHost.id) }
+  const inputs = new Map<string, AnyNode>([[storedHost.id, storedHost]])
+  const includeParent = (segment: RoofSegmentNode) => {
+    const parent = segment.parentId ? nodes[segment.parentId] : undefined
+    if (parent?.type === 'roof') inputs.set(parent.id, parent)
+  }
+  includeParent(host)
+  // Native pieced-shed surfaces elect neighbors by these stored ownership
+  // rules before testing their edges. Other host solids read no joint inputs.
+  if (host.roofType === 'shed') {
+    const neighbors = host.shedJointNeighborIds
+    for (const stored of Object.values(nodes)) {
+      if (stored.type !== 'roof-segment' || stored.id === host.id) continue
+      const candidate = { ...stored, ...overrides.get(stored.id) }
+      if (
+        candidate.roofType !== 'shed' ||
+        !(
+          (host.parentId && candidate.parentId === host.parentId) ||
+          (host.shedJointScopeId && candidate.shedJointScopeId === host.shedJointScopeId)
+        ) ||
+        (neighbors?.length &&
+          (candidate.shedJointOwnerId === undefined ||
+            !neighbors.includes(candidate.shedJointOwnerId)))
+      ) {
+        continue
+      }
+      inputs.set(stored.id, stored)
+      includeParent(candidate)
+    }
+  }
+  return [...inputs.values()]
+}
+
 const DormerRenderer = ({ node: storeNode }: { node: DormerNode }) => {
   const ref = useRef<THREE.Group>(null!)
   useRegistry(storeNode.id, 'dormer', ref)
@@ -78,11 +118,41 @@ const DormerRenderer = ({ node: storeNode }: { node: DormerNode }) => {
   )
   const hasLiveWindowPreview = liveWindowOverrides.some((override) => override !== undefined)
 
-  const segment = useScene((state) =>
-    node.roofSegmentId
-      ? (state.nodes[node.roofSegmentId as AnyNodeId] as RoofSegmentNode | undefined)
-      : undefined,
+  // A pieced shed can pin to neighbors across roofs through an explicit joint
+  // scope. Select effective eligibility in both stores so an entering/leaving
+  // neighbor is noticed without rebuilding for unrelated roof edits or drags.
+  const roofingNodes = useScene(
+    useShallow((state) =>
+      dormerHostInputs(state.nodes, useLiveNodeOverrides.getState().overrides, node.roofSegmentId),
+    ),
   )
+  const roofingOverrides = useLiveNodeOverrides(
+    useShallow((state) =>
+      Object.fromEntries(
+        dormerHostInputs(useScene.getState().nodes, state.overrides, node.roofSegmentId).map(
+          (candidate) => [candidate.id, state.overrides.get(candidate.id)],
+        ),
+      ),
+    ),
+  )
+  const hostNodes = useMemo(
+    () =>
+      Object.fromEntries(
+        roofingNodes.map((candidate) => [
+          candidate.id,
+          roofingOverrides[candidate.id]
+            ? { ...candidate, ...roofingOverrides[candidate.id] }
+            : candidate,
+        ]),
+      ) as Record<string, AnyNode>,
+    [roofingNodes, roofingOverrides],
+  )
+  const hasLiveHostPreview = Object.values(roofingOverrides).some(
+    (override) => override !== undefined && Object.keys(override).length > 0,
+  )
+  const segment = node.roofSegmentId
+    ? (hostNodes[node.roofSegmentId] as RoofSegmentNode | undefined)
+    : undefined
 
   const shading = useViewer((s) => s.shading)
   const textures = useViewer((s) => s.textures)
@@ -90,7 +160,7 @@ const DormerRenderer = ({ node: storeNode }: { node: DormerNode }) => {
   const sceneTheme = useViewer((s) => s.sceneTheme)
 
   // Geometry material slots: 0=Wall, 1=Deck/side, 2=Interior, 3=Roof
-  // shingle, 4=Gable wall. Walls take the 'wall' role, the deck side and
+  // shingle, 4=Gable wall, 5=Flashing. Walls take the 'wall' role, the deck side and
   // shingle take 'roof'. When textures are off, every slot snaps to its
   // role colour regardless of explicit paint (the render-modes invariant).
   // biome-ignore lint/correctness/useExhaustiveDependencies: deps deliberately list the build inputs; depending on the whole object would rebuild on unrelated field changes.
@@ -116,7 +186,28 @@ const DormerRenderer = ({ node: storeNode }: { node: DormerNode }) => {
     const w = resolve(wall, wallRole)
     const s = resolve(side, roofRole)
     const t = resolve(top, roofRole)
-    return [w, s, w, t, w] as THREE.Material[]
+    const f = resolve(
+      { material: node.sideMaterial, materialPreset: node.sideMaterialPreset },
+      () =>
+        textures
+          ? createMaterial(
+              {
+                preset: 'metal',
+                properties: {
+                  color: '#777b80',
+                  roughness: 0.65,
+                  metalness: 0.65,
+                  opacity: 1,
+                  transparent: false,
+                  side: 'double',
+                },
+              },
+              shading,
+            )
+          : roofRole(),
+    )
+    // These materials belong to the viewer's material cache, not this mesh.
+    return [w, s, w, t, w, f] as THREE.Material[]
   }, [
     textures,
     colorPreset,
@@ -135,12 +226,15 @@ const DormerRenderer = ({ node: storeNode }: { node: DormerNode }) => {
   // biome-ignore lint/correctness/useExhaustiveDependencies: deps deliberately list the build inputs; depending on the whole object would rebuild on unrelated field changes.
   const geometry = useMemo(() => {
     if (!segment) return null
-    if (isLiveDrag || hasLiveWindowPreview) return buildDormerFallbackGeometry(node)
-    return generateDormerGeometry(node, segment, hostedWindows)
+    if (isLiveDrag || hasLiveWindowPreview || hasLiveHostPreview)
+      return buildDormerFallbackGeometry(node)
+    return generateDormerGeometry(node, segment, hostedWindows, hostNodes)
   }, [
     isLiveDrag,
     hasLiveWindowPreview,
+    hasLiveHostPreview,
     segment,
+    hostNodes,
     node.id,
     node.roofType,
     node.shedHighSide,
@@ -149,6 +243,7 @@ const DormerRenderer = ({ node: storeNode }: { node: DormerNode }) => {
     node.height,
     node.roofHeight,
     node.wallSkirtHeight,
+    node.flashing,
     node.position[0],
     node.position[1],
     node.position[2],

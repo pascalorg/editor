@@ -5,6 +5,8 @@ import {
   isRoofLevel,
   type LevelNode,
   planRoofLevel,
+  type RoofHostFootprint,
+  type RoofHostRefusal,
   type RoofNode,
   type RoofSegmentNode,
   resolveRoofElevation,
@@ -64,8 +66,10 @@ export function roofLevelTarget(
   nodes: Readonly<Record<AnyNodeId, AnyNode>>,
   storeyId: LevelNode['id'],
   roofHeight: number,
-): RoofLevelTarget {
-  const plan = planRoofLevel(nodes, storeyId, roofHeight)
+  footprint?: RoofHostFootprint,
+): RoofLevelTarget | RoofHostRefusal {
+  const plan = planRoofLevel(nodes, storeyId, roofHeight, footprint)
+  if (plan.kind === 'refuse') return plan
   const create =
     plan.kind === 'roof' && plan.create
       ? [{ node: plan.create, parentId: (plan.create.parentId ?? undefined) as AnyNodeId }]
@@ -92,9 +96,10 @@ export function drawnRoofLevelTarget(
   levelId: LevelNode['id'],
   roofHeight: number,
   drawn: DrawnRoof,
-): RoofLevelTarget {
+  footprint?: RoofHostFootprint,
+): RoofLevelTarget | RoofHostRefusal {
   return overStorey(nodes, levelId, drawn)
-    ? roofLevelTarget(nodes, levelId, roofHeight)
+    ? roofLevelTarget(nodes, levelId, roofHeight, footprint)
     : { levelId, create: [], update: [], nodes }
 }
 
@@ -152,26 +157,44 @@ export function writeRoofNodes(
   for (const op of create) sceneApi.upsert(op.node, op.parentId)
 }
 
+type RoofEdit = {
+  create?: { node: AnyNode; parentId?: AnyNodeId }[]
+  update?: { id: AnyNodeId; data: Partial<AnyNode> }[]
+  delete?: AnyNodeId[]
+}
+
+/** Plan at release, before the handle dispatcher resumes history or announces a successful drop. */
+export function prepareSeatedRoofEdit(
+  sceneApi: SceneApi,
+  edit: RoofEdit,
+  selectId?: AnyNodeId,
+): (() => void) | RoofHostRefusal {
+  const seated = seatRoofs(sceneApi.nodes(), edit)
+  if ('kind' in seated) return seated
+  const { changes, notes } = seated
+  return () => {
+    if (sceneApi.applyChanges) {
+      sceneApi.applyChanges(changes)
+    } else {
+      // creates first: a roof the seat moves goes to a Roof level the seat creates
+      for (const op of changes.create ?? []) sceneApi.upsert(op.node, op.parentId)
+      for (const { id, data } of changes.update ?? []) sceneApi.update(id, data)
+      for (const id of changes.delete ?? []) sceneApi.delete(id)
+    }
+    if (selectId && notes.length) selectPlacedNode(selectId)
+  }
+}
+
 /**
  * A roof edit written through the seat every roof writer runs (`seatRoofs`): a segment added to a
  * roof held by a storey that puts it on that storey's walls takes the roof to the level above them,
  * in the same store call.
  */
-export function writeSeatedRoofEdit(
-  sceneApi: SceneApi,
-  edit: {
-    create?: { node: AnyNode; parentId?: AnyNodeId }[]
-    update?: { id: AnyNodeId; data: Partial<AnyNode> }[]
-  },
-): void {
-  const { changes } = seatRoofs(sceneApi.nodes(), edit)
-  if (sceneApi.applyChanges) {
-    sceneApi.applyChanges(changes)
-    return
-  }
-  // creates first: a roof the seat moves goes to a Roof level the seat creates
-  for (const op of changes.create ?? []) sceneApi.upsert(op.node, op.parentId)
-  for (const { id, data } of changes.update ?? []) sceneApi.update(id, data)
+export function writeSeatedRoofEdit(sceneApi: SceneApi, edit: RoofEdit): RoofHostRefusal | null {
+  const prepared = prepareSeatedRoofEdit(sceneApi, edit)
+  if (typeof prepared !== 'function') return prepared
+  prepared()
+  return null
 }
 
 /**
@@ -182,13 +205,20 @@ export function writeSeatedRoofEdit(
 export function commitSeatedRoofEdit(
   update: { id: AnyNodeId; data: Partial<AnyNode> }[],
   selectId: AnyNodeId,
-): void {
+  deleteIds: AnyNodeId[] = [],
+): RoofHostRefusal | null {
   const scene = useScene.getState()
-  const { changes, notes } = seatRoofs(scene.nodes, { update })
-  if (!notes.length) {
+  const seated = seatRoofs(scene.nodes, {
+    update,
+    ...(deleteIds.length ? { delete: deleteIds } : {}),
+  })
+  if ('kind' in seated) return seated
+  const { changes, notes } = seated
+  if (!notes.length && !deleteIds.length) {
     scene.updateNodes(update)
-    return
+    return null
   }
   scene.applyNodeChanges(changes)
-  selectPlacedNode(selectId)
+  if (notes.length) selectPlacedNode(selectId)
+  return null
 }

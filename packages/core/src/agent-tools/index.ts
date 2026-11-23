@@ -11,6 +11,7 @@ import { addCornerWindowTool } from './corner-window'
 import { createRoomTool } from './create-room'
 import { designBriefTool } from './design-brief'
 import { placeDesignTool, validateDesignTool } from './designs'
+import { addDormerTool } from './dormers'
 import { addFenceTool } from './fences'
 import { findByTypeTool } from './find-by-type'
 import { setFinishScriptTool } from './finish-script'
@@ -33,6 +34,7 @@ import { placeInRoomTool } from './place-in-room'
 import { placeItemsTool } from './place-items'
 import { addPlantingTool } from './planting'
 import { addRockTool } from './rock'
+import { addRoofElementTool } from './roof-elements'
 import { createRoofTool, moveRoofsToRoofLevelTool } from './roofs'
 import { ROOM_TOOL_CONTRACTS } from './room-structure'
 import { searchMaterialsTool } from './search-materials'
@@ -56,6 +58,7 @@ export * from './columns'
 export * from './contract'
 export * from './corner-window'
 export * from './create-room'
+export * from './dormers'
 export * from './fences'
 export * from './find-by-type'
 export * from './finish-script'
@@ -76,6 +79,7 @@ export * from './project-files'
 export * from './refusal'
 export * from './retired'
 export * from './rock'
+export * from './roof-elements'
 export * from './roofs'
 export * from './room-structure'
 export * from './search-materials'
@@ -97,6 +101,8 @@ export * from './write-target'
  * surface drifts. See wiki/architecture/agent-surfaces.md.
  */
 export const AGENT_TOOL_CONTRACTS = [
+  addDormerTool,
+  addRoofElementTool,
   addColumnTool,
   measureStairTool,
   fitStairTool,

@@ -1159,6 +1159,7 @@ msgstr "Une autre session a enregistré en premier — actualiser ?"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Build"
+#: apps/editor/app/fixtures/delivery/fixture-client.tsx
 #: apps/editor/components/scene-loader.tsx
 #, fuzzy
 msgid "app.sceneLoader.build"
@@ -5911,6 +5912,17 @@ msgstr "Épi de faîtage"
 msgid "editor.inspector.field.fittingType.18mz17s"
 msgstr "Type de raccord"
 
+# Source-Hash: 30677371ae61ba12
+# Review: required
+# AI-Provider: anthropic
+# AI-Model: claude-opus-5-5
+# Review-Notes: Offline coding-assistant draft in architectural/editor context; no translation-provider call; fluent human review required.
+# English: "Flashing"
+#: packages/nodes/src/i18n/definition-messages.ts
+#, fuzzy
+msgid "editor.inspector.field.flashing.1y1nk7r"
+msgstr "Solin"
+
 # Source-Hash: 3c1aec5e6fb180cf
 # Review: required
 # AI-Provider: claude-code
@@ -8790,6 +8802,14 @@ msgstr "Dalle béton"
 #, fuzzy
 msgid "editor.inspector.option.condenser.a74nps"
 msgstr "Condenseur"
+
+# Review: required
+# Source-Hash: 3241ecabee8221a1
+# English: "Conical"
+#: packages/nodes/src/i18n/definition-messages.ts
+#, fuzzy
+msgid "editor.inspector.option.conical.1d9dreq"
+msgstr "Conique"
 
 # Source-Hash: 81318a19591adf07
 # Review: required
@@ -31943,6 +31963,7 @@ msgstr "Version tronquée"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Conical"
+#: packages/nodes/src/dormer/panel.tsx
 #: packages/nodes/src/roof-segment/panel.tsx
 #, fuzzy
 msgid "node.roofSegment.panel.conical"

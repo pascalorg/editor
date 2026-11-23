@@ -25,7 +25,9 @@ import { useEffect, useLayoutEffect, useMemo, useRef } from 'react'
 import type * as THREE from 'three'
 import { useShallow } from 'zustand/react/shallow'
 import { createPlaceholderGeometry } from '../shared/placeholder-geometry'
+import { supportsRoofCovering } from './covering-detail'
 import { getRoofDebugMaterials, getRoofMaterials } from './roof-materials'
+import { useRoofCoveringDetail } from './use-covering-detail'
 
 export const RoofRenderer = ({ node: rawNode }: { node: RoofNode }) => {
   const ref = useRef<THREE.Group>(null!)
@@ -167,6 +169,23 @@ export const RoofRenderer = ({ node: rawNode }: { node: RoofNode }) => {
   const material = debugColors
     ? getRoofDebugMaterials(shading)
     : customMaterial || getRoofMaterials(shading, textures, colorPreset)
+  // Opt-in near covering detail on the merged shell, only when every segment supports it.
+  const coveringSupported = useScene(
+    (state) =>
+      node.children.length > 0 &&
+      node.children.every((id) => {
+        const segment = state.nodes[id as AnyNodeId]
+        return segment?.type === 'roof-segment' && supportsRoofCovering(segment)
+      }),
+  )
+  useRoofCoveringDetail(
+    ref,
+    material,
+    node.covering,
+    coveringSupported && !debugColors && textures && shading === 'rendered',
+    'merged-roof',
+    node,
+  )
   useEffect(() => {
     return () => {
       placeholderGeometry.dispose()

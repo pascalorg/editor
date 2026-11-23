@@ -37,6 +37,10 @@ export function createLinearResizeDragBinding({
 
   return {
     overrideId,
+    prepareCommit: descriptor.prepareCommit
+      ? (patch: Partial<AnyNode>) =>
+          descriptor.prepareCommit!(initialNode, patch, sceneApi, lastModifiers)
+      : undefined,
     commit: descriptor.commit
       ? (patch: Partial<AnyNode>) =>
           descriptor.commit?.(initialNode, patch, sceneApi, lastModifiers)

@@ -130,6 +130,12 @@ export function reconcileSceneStructure({
     const children = levelChildren(draft, levelId)
     const previousChildren = previousNodes ? levelChildren(previousNodes, levelId) : []
     const plates = children.filter((node) => node.type === 'slab')
+    // A retired plate may have merged into another automatic carrier without losing floor intent.
+    const carried = new Set(
+      plates.flatMap((plate) =>
+        plate.boundary === 'auto' ? surfaceIntentZoneIds(plate, plates) : [],
+      ),
+    )
     for (const surface of previousChildren) {
       if (
         (surface.type !== 'ceiling' && surface.type !== 'slab') ||
@@ -139,6 +145,7 @@ export function reconcileSceneStructure({
         continue
       // The rooms it was the floor or ceiling of: a porch on a plate of its own keeps its floor.
       for (const id of surfaceIntentZoneIds(surface, plates)) {
+        if (surface.type === 'slab' && carried.has(id)) continue
         const zone = id ? draft[id] : undefined
         if (zone?.type === 'zone')
           draft[zone.id] = {

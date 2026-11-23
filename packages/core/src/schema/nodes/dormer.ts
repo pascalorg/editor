@@ -1,5 +1,10 @@
 import dedent from 'dedent'
 import { z } from 'zod'
+import {
+  type DormerExposureContext,
+  type DormerWindowExposure,
+  dormerCoveringExposure,
+} from '../../lib/dormer-roof-context'
 import { BaseNode, nodeType, objectId } from '../base'
 import { MaterialSchema } from '../material'
 import { getRoofSegmentSurfaceY, type RoofSegmentNode, RoofType } from './roof-segment'
@@ -76,6 +81,8 @@ export const DormerNode = BaseNode.extend({
   roofType: RoofType.default('gable'),
   roofHeight: z.number().default(DORMER_DEFAULTS.ROOF_HEIGHT),
   shedHighSide: z.enum(['back', 'front']).default('back'),
+  // Roof-junction flashing. Opt-in so stored dormers keep their authored wall-to-roof finish.
+  flashing: z.boolean().optional(),
 
   // Height of the hung wall (the "skirt") that extends below the eave
   // into the host roof — this is the wall area the window opening is
@@ -238,33 +245,94 @@ export function getDormerWallHorizontalBoundsAtHeight(
   return { min: -halfWidth, max }
 }
 
-const DORMER_WINDOW_CENTER_MIN_CLEARANCE = 0.01
+export function getDormerWindowExposure(
+  dormer: DormerNode,
+  window: WindowNode,
+  hostSegment: RoofSegmentNode,
+  context?: DormerExposureContext,
+): DormerWindowExposure {
+  if (
+    window.parentId !== dormer.id ||
+    window.dormerId !== dormer.id ||
+    !DormerWallFace.options.includes(window.dormerFace as DormerWallFace) ||
+    dormer.parentId !== hostSegment.id ||
+    dormer.roofSegmentId !== hostSegment.id ||
+    ![dormer.width, dormer.depth, dormer.rotation, ...dormer.position, ...window.position].every(
+      Number.isFinite,
+    ) ||
+    dormer.width <= 0 ||
+    dormer.depth <= 0
+  )
+    return { status: 'unmeasured', reason: 'invalid-window', nodeIds: [window.id] }
+  const point = dormerWallFacePointToDormer(dormer, window.dormerFace!, window.position)
+  const cos = Math.cos(dormer.rotation)
+  const sin = Math.sin(dormer.rotation)
+  return dormerCoveringExposure(
+    [
+      dormer.position[0] + point[0] * cos + point[2] * sin,
+      dormer.position[1] + point[1],
+      dormer.position[2] - point[0] * sin + point[2] * cos,
+    ],
+    hostSegment,
+    dormer.id,
+    context,
+  )
+}
+
+type DormerLegacyExposure = Pick<
+  DormerNode,
+  'depth' | 'position' | 'rotation' | 'wallSkirtHeight' | 'windowOffsetY'
+> &
+  Partial<Pick<DormerNode, 'id' | 'windowOffsetX'>>
 
 export function getDormerExposedFaces(
-  dormer: Pick<DormerNode, 'depth' | 'position' | 'rotation' | 'wallSkirtHeight' | 'windowOffsetY'>,
+  dormer: DormerLegacyExposure,
   hostSegment: RoofSegmentNode,
+  context?: DormerExposureContext,
 ): { front: boolean; back: boolean } {
   const halfDepth = dormer.depth / 2
   const [dormerX, dormerY, dormerZ] = dormer.position
-  const faceDX = halfDepth * Math.sin(dormer.rotation)
-  const faceDZ = halfDepth * Math.cos(dormer.rotation)
   const windowCenterY = dormerY - dormer.wallSkirtHeight / 2 + dormer.windowOffsetY
-  const clears = (faceX: number, faceZ: number) =>
-    windowCenterY - getRoofSegmentSurfaceY(hostSegment, faceX, faceZ) >
-    DORMER_WINDOW_CENTER_MIN_CLEARANCE
-
-  return {
-    front: clears(dormerX + faceDX, dormerZ + faceDZ),
-    back: clears(dormerX - faceDX, dormerZ - faceDZ),
+  const cos = Math.cos(dormer.rotation)
+  const sin = Math.sin(dormer.rotation)
+  if (!context) {
+    // Preserve the legacy nominal, host-local face heuristic; it is not a global exposure
+    // certificate. New placement and migration callers supply context for finished covering.
+    const clears = (side: number) =>
+      windowCenterY -
+        getRoofSegmentSurfaceY(
+          hostSegment,
+          dormerX + side * halfDepth * sin,
+          dormerZ + side * halfDepth * cos,
+        ) >
+      0.01
+    return { front: clears(1), back: clears(-1) }
   }
+  const clears = (side: number) => {
+    const x = side * (dormer.windowOffsetX ?? 0)
+    return (
+      dormerCoveringExposure(
+        [
+          dormerX + x * cos + side * halfDepth * sin,
+          windowCenterY,
+          dormerZ - x * sin + side * halfDepth * cos,
+        ],
+        hostSegment,
+        dormer.id ?? '',
+        context,
+      ).status === 'exposed'
+    )
+  }
+  return { front: clears(1), back: clears(-1) }
 }
 
 export function getDormerDefaultWindowFace(
-  dormer: Pick<DormerNode, 'depth' | 'position' | 'rotation' | 'wallSkirtHeight' | 'windowOffsetY'>,
+  dormer: DormerLegacyExposure,
   hostSegment?: RoofSegmentNode,
+  context?: DormerExposureContext,
 ): Extract<DormerWallFace, 'front' | 'back'> {
   if (!hostSegment) return 'front'
-  const exposed = getDormerExposedFaces(dormer, hostSegment)
+  const exposed = getDormerExposedFaces(dormer, hostSegment, context)
   return !exposed.front && exposed.back ? 'back' : 'front'
 }
 

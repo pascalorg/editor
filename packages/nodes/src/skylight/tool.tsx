@@ -11,10 +11,14 @@ import {
 } from '@pascal-app/core'
 import { triggerSFX, usePlacementPreview } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import * as THREE from 'three'
 import { RoofAttachmentFallbackPreview } from '../shared/roof-attachment-fallback-preview'
-import { resolveRoofSegmentHit } from '../shared/roof-segment-hit'
+import {
+  resolveRoofSegmentHit,
+  roofElementAtClick,
+  roofEventWitness,
+} from '../shared/roof-segment-hit'
 import { getAnalyticalNormal, surfaceQuatFromNormal } from '../shared/roof-surface'
 import {
   clearRoofSurfacePlacementGuides,
@@ -46,6 +50,14 @@ const SkylightTool = () => {
     [],
   )
 
+  const clearPreview = useCallback(() => {
+    setPreviewPos(null)
+    setPreviewSurfaceQuat(null)
+    const placementPreview = usePlacementPreview.getState()
+    if (placementPreview.node?.id === previewNode.id) placementPreview.clear()
+    clearRoofSurfacePlacementGuides()
+  }, [previewNode.id])
+
   useEffect(() => {
     if (!activeBuildingId) return
 
@@ -70,8 +82,11 @@ const SkylightTool = () => {
         lastSnapRef.current = [sx, sz]
       }
 
-      const hit = resolveRoofSegmentHit(event.node as RoofNode, wx, wy, wz)
-      if (!hit) return
+      const hit = resolveRoofSegmentHit(event.node as RoofNode, wx, wy, wz, roofEventWitness(event))
+      if (!hit) {
+        clearPreview()
+        return
+      }
 
       const normal = getAnalyticalNormal(hit.localX, hit.localZ, hit.segment)
       setPreviewSurfaceQuat(surfaceQuatFromNormal(normal, new THREE.Quaternion()))
@@ -96,24 +111,22 @@ const SkylightTool = () => {
     }
 
     const onClick = (event: RoofEvent) => {
-      const hit = resolveRoofSegmentHit(
+      const placed = roofElementAtClick(
+        'skylight',
         event.node as RoofNode,
-        event.position[0],
-        event.position[1],
-        event.position[2],
+        event.position,
+        undefined,
+        roofEventWitness(event),
       )
-      if (!hit) return
+      if (!placed) {
+        clearPreview()
+        return
+      }
+      const { node: skylight, segmentId } = placed
       const state = useScene.getState()
 
-      const skylight = SkylightNode.parse({
-        ...skylightDefinition.defaults(),
-        name: 'Skylight',
-        roofSegmentId: hit.segment.id,
-        position: [hit.localX, hit.localY, hit.localZ],
-        rotation: 0,
-      })
-      state.createNode(skylight, hit.segment.id as AnyNodeId)
-      state.dirtyNodes.add(hit.segment.id as AnyNodeId)
+      state.createNode(skylight, segmentId)
+      state.dirtyNodes.add(segmentId)
       setSelection({ selectedIds: [skylight.id] })
       triggerSFX('sfx:item-place')
       const placementPreview = usePlacementPreview.getState()
@@ -134,20 +147,14 @@ const SkylightTool = () => {
       if (placementPreview.node?.id === previewNode.id) placementPreview.clear()
       clearRoofSurfacePlacementGuides()
     }
-  }, [activeBuildingId, setSelection, previewNode])
+  }, [activeBuildingId, setSelection, previewNode, clearPreview])
 
   return (
     <>
       <RoofAttachmentFallbackPreview
         activeBuildingId={activeBuildingId}
         ghost={<SkylightPreview node={previewNode} invalid />}
-        onInvalidTarget={() => {
-          setPreviewPos(null)
-          setPreviewSurfaceQuat(null)
-          const placementPreview = usePlacementPreview.getState()
-          if (placementPreview.node?.id === previewNode.id) placementPreview.clear()
-          clearRoofSurfacePlacementGuides()
-        }}
+        onInvalidTarget={clearPreview}
       />
       {activeBuildingId && previewPos && previewSurfaceQuat && (
         <group position={previewPos}>

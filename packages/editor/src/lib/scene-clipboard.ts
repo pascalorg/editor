@@ -680,7 +680,7 @@ function applyClipboardPayloadToLevel(
 
   const sourceIds = new Map([...idMap].map(([source, copy]) => [copy, source]))
   // A roof pasted onto the walls that carry it goes to the level above them, in the paste itself.
-  const { changes } = seatRoofs(scene.nodes, {
+  const seated = seatRoofs(scene.nodes, {
     create: pastedNodes.map((node) => ({
       node,
       parentId: (node.parentId as AnyNodeId | null) ?? undefined,
@@ -690,6 +690,8 @@ function applyClipboardPayloadToLevel(
       }),
     })),
   })
+  if ('kind' in seated) return null
+  const { changes } = seated
   runAsSingleSceneHistoryStep(useScene, () => {
     for (const material of materialsToCreate) scene.addSceneMaterial(material)
     scene.applyNodeChanges(changes)

@@ -3,6 +3,7 @@ import { getLevelDisplayName } from '../lib/level-name'
 import type { LevelNode } from '../schema'
 import { planRoofsOffStorey } from '../services/roof-move'
 import { requireLevel } from './level-target'
+import { refuseRoofHost } from './roof-writes'
 import type { AgentOperation } from './types'
 
 /**
@@ -12,6 +13,7 @@ import type { AgentOperation } from './types'
 export const moveRoofsToRoofLevel: AgentOperation<{ levelId: string }> = (nodes, input) => {
   const storey = requireLevel(nodes, input.levelId)
   const move = planRoofsOffStorey(nodes, storey.id)
+  if (move && 'kind' in move) refuseRoofHost(move)
   const name = `${getLevelDisplayName(storey)} (${storey.id})`
   if (!move)
     refuse(

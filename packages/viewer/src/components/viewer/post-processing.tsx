@@ -1014,18 +1014,25 @@ export default PostProcessingPasses
  * then overlays (selection highlights, room assemblies) draw over it with no scene-depth test,
  * like the composite, whether or not the camera already enables that layer.
  */
-function renderDirect(renderer: any, scene: Scene, camera: Camera) {
+export function renderDirect(renderer: any, scene: Scene, camera: Camera) {
   const mask = camera.layers.mask
   const autoClear = renderer.autoClear
+  const background = scene.background
+  const backgroundNode = scene.backgroundNode
   try {
     camera.layers.disable(OVERLAY_LAYER)
     renderer.render(scene, camera)
     camera.layers.set(OVERLAY_LAYER)
     renderer.autoClear = false
+    // Backgrounds can clear or draw over the scene even with autoClear disabled.
+    scene.background = null
+    scene.backgroundNode = null
     renderer.clearDepth()
     renderer.render(scene, camera)
   } finally {
     camera.layers.mask = mask
     renderer.autoClear = autoClear
+    scene.background = background
+    scene.backgroundNode = backgroundNode
   }
 }

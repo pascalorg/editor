@@ -12,6 +12,7 @@ import {
   useLiveNodeOverrides,
   usePascalI18n,
   useScene,
+  validateDormerPlacement,
   WindowNode,
 } from '@pascal-app/core'
 import {
@@ -43,6 +44,10 @@ const ROOF_TYPE_OPTIONS: Array<{ label: MessageDescriptor; value: RoofType }> = 
   { label: /* i18n */ { id: 'node.dormer.panel.dutch', message: 'Dutch' }, value: 'dutch' },
   { label: /* i18n */ { id: 'node.dormer.panel.mansard', message: 'Mansard' }, value: 'mansard' },
   { label: /* i18n */ { id: 'node.dormer.panel.flat', message: 'Flat' }, value: 'flat' },
+  {
+    label: /* i18n */ { id: 'node.roofSegment.panel.conical', message: 'Conical' },
+    value: 'conical',
+  },
 ]
 
 const SHED_HIGH_SIDE_OPTIONS: Array<{ label: MessageDescriptor; value: ShedHighSide }> = [
@@ -63,7 +68,6 @@ export default function DormerPanel() {
   const [section, setSection] = useState<DormerSection>('dormer')
   const selectedId = useViewer((s) => s.selection.selectedIds[0])
   const setSelection = useViewer((s) => s.setSelection)
-  const updateNode = useScene((s) => s.updateNode)
   const deleteNode = useScene((s) => s.deleteNode)
   const setMovingNode = useEditor((s) => s.setMovingNode)
 
@@ -85,37 +89,57 @@ export default function DormerPanel() {
     }),
   )
 
-  const handleUpdate = useCallback(
-    (updates: Partial<DormerNode>) => {
-      if (!selectedId) return
-      updateNode(selectedId as AnyNode['id'], updates)
-    },
-    [selectedId, updateNode],
-  )
-
   // Slider drag → write live override; release → commit.
   const previewProp = useCallback(
     (updates: Partial<DormerNode>) => {
       if (!selectedId) return
-      useLiveNodeOverrides.getState().set(selectedId as AnyNodeId, updates)
+      const state = useScene.getState()
+      const current = state.nodes[selectedId as AnyNodeId]
+      const live = useLiveNodeOverrides.getState()
+      if (state.readOnly || current?.type !== 'dormer') return
+      const candidate = { ...current, ...live.get(current.id), ...updates } as DormerNode
+      const host = candidate.roofSegmentId
+        ? state.nodes[candidate.roofSegmentId as AnyNodeId]
+        : undefined
+      if (
+        host?.type !== 'roof-segment' ||
+        !validateDormerPlacement(state.nodes, host, candidate).ok
+      ) {
+        live.clear(current.id)
+        return
+      }
+      live.set(current.id, updates)
     },
     [selectedId],
   )
   const commitProp = useCallback(
     (updates: Partial<DormerNode>) => {
       if (!selectedId) return
-      updateNode(selectedId as AnyNode['id'], updates)
-      if (updates.roofSegmentId !== undefined) {
-        const state = useScene.getState()
-        const prev = node?.roofSegmentId
-        if (prev) state.dirtyNodes.add(prev as AnyNodeId)
-        state.dirtyNodes.add(updates.roofSegmentId as AnyNodeId)
-        state.dirtyNodes.add(selectedId as AnyNodeId)
+      const state = useScene.getState()
+      const current = state.nodes[selectedId as AnyNodeId]
+      try {
+        if (state.readOnly || current?.type !== 'dormer') return
+        const candidate = { ...current, ...updates }
+        const host = candidate.roofSegmentId
+          ? state.nodes[candidate.roofSegmentId as AnyNodeId]
+          : undefined
+        if (
+          host?.type !== 'roof-segment' ||
+          !validateDormerPlacement(state.nodes, host, candidate).ok
+        ) {
+          return
+        }
+        state.applyNodeChanges({ update: [{ id: current.id, data: updates }] })
+        if (current.roofSegmentId) state.dirtyNodes.add(current.roofSegmentId as AnyNodeId)
+        state.dirtyNodes.add(host.id)
+        state.dirtyNodes.add(current.id)
+      } finally {
+        useLiveNodeOverrides.getState().clear(selectedId as AnyNodeId)
       }
-      useLiveNodeOverrides.getState().clear(selectedId as AnyNodeId)
     },
-    [node, selectedId, updateNode],
+    [selectedId],
   )
+  const handleUpdate = commitProp
 
   const handleClose = useCallback(() => {
     setSelection({ selectedIds: [] })

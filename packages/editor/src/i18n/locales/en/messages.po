@@ -6,6 +6,12 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "X-Generator: @lingui/cli\n"
 "Language: en\n"
+"Project-Id-Version: \n"
+"Report-Msgid-Bugs-To: \n"
+"PO-Revision-Date: \n"
+"Last-Translator: \n"
+"Language-Team: \n"
+"Plural-Forms: \n"
 
 #: apps/editor/components/app-home-link.tsx
 msgid "app.appShell.pascalHome"
@@ -463,6 +469,7 @@ msgstr "Wall"
 msgid "app.sceneLoader.anotherSessionSavedFirstRefresh"
 msgstr "Another session saved first — refresh?"
 
+#: apps/editor/app/fixtures/delivery/fixture-client.tsx
 #: apps/editor/components/scene-loader.tsx
 msgid "app.sceneLoader.build"
 msgstr "Build"
@@ -2390,6 +2397,10 @@ msgid "editor.inspector.field.fittingType.18mz17s"
 msgstr "Fitting type"
 
 #: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.flashing.1y1nk7r"
+msgstr "Flashing"
+
+#: packages/nodes/src/i18n/definition-messages.ts
 msgid "editor.inspector.field.flashingHeight.3e8nn6"
 msgstr "Flashing height"
 
@@ -3536,6 +3547,10 @@ msgstr "Concrete pad"
 #: packages/nodes/src/i18n/definition-messages.ts
 msgid "editor.inspector.option.condenser.a74nps"
 msgstr "Condenser"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.option.conical.1d9dreq"
+msgstr "Conical"
 
 #: packages/nodes/src/i18n/definition-messages.ts
 msgid "editor.inspector.option.conifer.12sy81j"
@@ -12804,6 +12819,7 @@ msgstr "Barrel"
 msgid "node.roofSegment.panel.clippedVersion"
 msgstr "Clipped version"
 
+#: packages/nodes/src/dormer/panel.tsx
 #: packages/nodes/src/roof-segment/panel.tsx
 msgid "node.roofSegment.panel.conical"
 msgstr "Conical"
