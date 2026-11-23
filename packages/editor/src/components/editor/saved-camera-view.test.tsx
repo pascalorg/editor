@@ -22,6 +22,7 @@ import {
   applySavedCameraView,
   captureSavedCameraView,
   readSavedCameraView,
+  readSettledOrthographicZoom,
 } from './saved-camera-view'
 
 extend({
@@ -266,6 +267,12 @@ describe('saved camera view helpers', () => {
     try {
       orthoControls.setLookAt(16, 12, 20, 3, 1.5, -2, true)
       orthoControls.zoomTo(42, true)
+      // Guard against camera-controls renaming or removing the private `_zoomEnd` field
+      // that `readSettledOrthographicZoom` relies on while a damped zoom is in flight.
+      expect('_zoomEnd' in orthoControls).toBe(true)
+      expect((orthoControls as unknown as { _zoomEnd?: unknown })._zoomEnd).toBe(42)
+      expect(orthoCamera.zoom).toBe(20)
+      expect(readSettledOrthographicZoom(orthoControls, orthoCamera)).toBe(42)
       // Capture before damping finishes: settled destination zoom (42) must still be saved.
       const capturedOrtho = captureSavedCameraView(orthoControls, orthoCamera, 'orthographic')
       expect(capturedOrtho.mode).toBe('orthographic')

@@ -1,9 +1,8 @@
 import type { AnyNode } from '@pascal-app/core'
-
-type SavedCameraData = NonNullable<AnyNode['camera']>
-
 import type { CameraControlsImpl } from '@react-three/drei'
 import { type Camera, type OrthographicCamera, type PerspectiveCamera, Vector3 } from 'three'
+
+type SavedCameraData = NonNullable<AnyNode['camera']>
 
 export type SavedCameraMode = 'perspective' | 'orthographic'
 
@@ -82,6 +81,21 @@ export function savedCameraMatchesInstance(camera: Camera, mode: SavedCameraMode
 }
 
 /**
+ * Reads the settled orthographic zoom destination from `camera-controls`.
+ * `CameraControlsImpl` stores a pending damped `zoomTo(...)` target on the
+ * private `_zoomEnd` field (there is no public target-zoom getter), so reading
+ * `_zoomEnd` avoids capturing a mid-transition `camera.zoom`. Falls back to
+ * `camera.zoom` if `_zoomEnd` is unavailable.
+ */
+export function readSettledOrthographicZoom(
+  control: CameraControlsImpl,
+  camera: OrthographicCamera,
+): number | undefined {
+  const endZoom = finitePositive((control as unknown as { _zoomEnd?: unknown })._zoomEnd)
+  return endZoom ?? finitePositive(camera.zoom)
+}
+
+/**
  * Captures the current orbit pose together with the active projection and lens
  * (fov in perspective, settled zoom in orthographic).
  */
@@ -100,10 +114,9 @@ export function captureSavedCameraView(
 
   const fov =
     mode === 'perspective' && isPerspective(camera) ? finitePositive(camera.fov) : undefined
-  const endZoom = finitePositive((control as unknown as { _zoomEnd?: unknown })._zoomEnd)
   const zoom =
     mode === 'orthographic' && isOrthographic(camera)
-      ? (endZoom ?? finitePositive(camera.zoom))
+      ? readSettledOrthographicZoom(control, camera)
       : undefined
 
   return {
