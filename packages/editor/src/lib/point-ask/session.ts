@@ -454,7 +454,10 @@ function onPointerDown(event: PointerEvent) {
   // This capture listener may run before the pin layer's outside-dismiss listener.
   if (state.cardFor && state.pins[state.cardFor]?.behavior === 'persistent') {
     if (document.querySelector('[role="dialog"][aria-modal="true"]')) return
+    event.preventDefault()
+    event.stopImmediatePropagation()
     state.openCard(null)
+    return
   }
   event.preventDefault()
   event.stopImmediatePropagation()

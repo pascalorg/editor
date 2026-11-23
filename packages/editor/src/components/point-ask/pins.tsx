@@ -493,6 +493,11 @@ function PinView({ askId }: { askId: string }) {
         aria-expanded={cardOpen}
         aria-label={pin.label}
         className={`pa-pin ${model.state === 'sent' ? 'queued' : model.state}`}
+        data-comment-glyph={
+          persistent && (model.state === 'queued' || model.state === 'answered')
+            ? 'lines'
+            : undefined
+        }
         data-point-ask-pin={askId}
         onClick={() => {
           // The click that ends a hold is not a click on the pin.

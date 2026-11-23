@@ -842,4 +842,112 @@ describe('pending ordinary crops and session option updates', () => {
       usePointAsk.setState(previousPoint, true)
     }
   })
+
+  test('dismissing an open persistent comment card by clicking the canvas does not plant a new bubble', () => {
+    const previousThree = getEditorThreeContext()
+    const previousPoint = usePointAsk.getState()
+    const listeners = new Map<string, Set<EventListener>>()
+    stopSession()
+    try {
+      globalThis.window = {
+        innerWidth: 100,
+        innerHeight: 100,
+        addEventListener(type: string, listener: EventListener) {
+          if (!listeners.has(type)) listeners.set(type, new Set())
+          listeners.get(type)!.add(listener)
+        },
+        removeEventListener(type: string, listener: EventListener) {
+          listeners.get(type)?.delete(listener)
+        },
+      } as never
+      globalThis.document = {
+        ...globalThis.document,
+        querySelector: () => null,
+      } as never
+      const canvas = {
+        style: {},
+        getBoundingClientRect: () => ({
+          left: 0,
+          top: 0,
+          right: 100,
+          bottom: 100,
+          width: 100,
+          height: 100,
+        }),
+      } as unknown as HTMLCanvasElement
+      const camera = new PerspectiveCamera(60, 1, 0.1, 100)
+      camera.position.set(2, 3, 7)
+      camera.lookAt(2, 1, 0)
+      camera.updateMatrixWorld(true)
+      setEditorThreeContext({ camera, raycaster: new Raycaster(), domElement: canvas })
+      stopSession = startPointAskSession({ freeClick: true })
+
+      usePointAsk.getState().addPin({
+        model: {
+          askId: 'pin_persistent',
+          state: 'queued',
+          targetIds: [wall.id],
+          changedTargetIds: [],
+          alsoChangedIds: [],
+          landed: 0,
+          committed: false,
+          ended: false,
+          undone: false,
+          kept: false,
+          text: 'Check this wall',
+          sentence: '',
+        },
+        behavior: 'persistent',
+        anchor: [2, 1, 0],
+        local: null,
+        label: 'Wall',
+        levelId: level.id,
+        retireAt: null,
+        createdAt: 0,
+      })
+      usePointAsk.setState({
+        active: true,
+        playful: false,
+        hover: null,
+        bubble: null,
+        cardFor: 'pin_persistent',
+      })
+
+      let prevented = false
+      let stopped = false
+      const pointer = (type: string, x: number, y: number) => {
+        const event = {
+          target: canvas,
+          button: 0,
+          pointerType: 'mouse',
+          clientX: x,
+          clientY: y,
+          shiftKey: false,
+          timeStamp: 0,
+          preventDefault() {
+            prevented = true
+          },
+          stopImmediatePropagation() {
+            stopped = true
+          },
+        } as unknown as Event
+        for (const listener of listeners.get(type) ?? []) listener(event)
+      }
+
+      pointer('pointerdown', 50, 50)
+      pointer('pointerup', 50, 50)
+      expect(prevented).toBe(true)
+      expect(stopped).toBe(true)
+      expect(usePointAsk.getState().cardFor).toBeNull()
+      expect(usePointAsk.getState().bubble).toBeNull()
+
+      pointer('pointerdown', 50, 50)
+      pointer('pointerup', 50, 50)
+      expect(usePointAsk.getState().bubble).not.toBeNull()
+    } finally {
+      stopSession()
+      setEditorThreeContext(previousThree)
+      usePointAsk.setState(previousPoint, true)
+    }
+  })
 })
