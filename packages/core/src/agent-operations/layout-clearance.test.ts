@@ -1523,5 +1523,134 @@ describe('layout-clearance', () => {
         }),
       ).toEqual([])
     })
+
+    test('resolves swept heights for non-recessed ceiling procedural items with motions', () => {
+      const level = LevelNode.parse({ id: 'level_fan', name: 'G', level: 0, height: 2.8 })
+      const ceiling = CeilingNode.parse({
+        id: 'ceiling_fan',
+        parentId: level.id,
+        polygon: [
+          [-3, -3],
+          [3, -3],
+          [3, 3],
+          [-3, 3],
+        ],
+      })
+      const ceilingFanRecipe = {
+        ...overlapBlockRecipe,
+        version: 2,
+        name: 'Ceiling Fan',
+        description: 'Surface-mounted ceiling fan with spinning blades',
+        mounting: { attachTo: 'ceiling', reference: 'canopy' },
+        surfaces: [{ id: 'canopy', label: 'Canopy', position: [0, 0.4, 0], size: [0.2, 0.2] }],
+        parts: [
+          {
+            id: 'rod',
+            label: 'Downrod',
+            count: 1,
+            shapes: [
+              {
+                id: 'shaft',
+                primitive: 'cylinder',
+                slot: 'wood',
+                size: [0.08, 0.4, 0.08],
+                position: [0, 0.2, 0],
+              },
+            ],
+          },
+          {
+            id: 'blades',
+            label: 'Blades',
+            count: 1,
+            motion: {
+              kind: 'spin',
+              pivot: [0, 0.05, 0],
+              axis: 'y',
+              radiansPerSecond: 4,
+            },
+            shapes: [
+              {
+                id: 'blade_x',
+                primitive: 'box',
+                slot: 'wood',
+                size: [1.2, 0.04, 0.14],
+                position: [0, 0.05, 0],
+              },
+            ],
+          },
+        ],
+      }
+      const fan = makeProcedural(
+        'procedural-item_ceiling_fan',
+        ceiling.id,
+        [0, 0, 0],
+        [0, 0, 0],
+        ceilingFanRecipe,
+      )
+      const floorTable = ItemNode.parse(
+        item('item_under_fan', [0, 0, 0], [1.2, 0.8, 1.2], 'Dining Table', 0, level.id),
+      )
+
+      // Fan hangs at ~2.4..2.8 m, well above the 0..0.8 m table: must not collide.
+      expect(
+        findItemItemCollisions({
+          nodes: [level, ceiling, fan, floorTable],
+          levelId: level.id,
+        }),
+      ).toEqual([])
+      expect(
+        layoutIssuesFromScene([level, ceiling, fan, floorTable]).filter(
+          (issue) => issue.type === 'item_overlap' || issue.type === 'item_too_close',
+        ),
+      ).toEqual([])
+
+      // A ceiling fixture whose vertical motion sweeps down into the table must still collide.
+      const dropFixtureRecipe = {
+        ...ceilingFanRecipe,
+        name: 'Drop Pendant',
+        parts: [
+          ceilingFanRecipe.parts[0]!,
+          {
+            id: 'drop',
+            label: 'Drop Body',
+            count: 1,
+            motion: {
+              kind: 'slide',
+              axis: 'y',
+              distance: -2.0,
+              duration: 1,
+            },
+            shapes: [
+              {
+                id: 'pendant',
+                primitive: 'box',
+                slot: 'wood',
+                size: [0.5, 0.2, 0.5],
+                position: [0, 0.1, 0],
+              },
+            ],
+          },
+        ],
+      }
+      const dropFixture = makeProcedural(
+        'procedural-item_drop_fixture',
+        ceiling.id,
+        [0, 0, 0],
+        [0, 0, 0],
+        dropFixtureRecipe,
+      )
+      expect(
+        findItemItemCollisions({
+          nodes: [level, ceiling, dropFixture, floorTable],
+          levelId: level.id,
+        }),
+      ).toContainEqual(
+        expect.objectContaining({
+          aId: dropFixture.id,
+          bId: floorTable.id,
+          violation: 'overlap',
+        }),
+      )
+    })
   })
 })

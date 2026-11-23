@@ -326,8 +326,7 @@ function resolveHostChainBaseElevation(
       return undefined
     }
     try {
-      const evaluated = evaluateRecipe(root.recipe, root.parameters)
-      if (evaluated.motions.length > 0 && !evaluated.reach) return undefined
+      evaluateRecipe(root.recipe, root.parameters)
       const baseY = resolveCeilingHeight(rootParent, nodes) - CEILING_DRAW_OFFSET
       return Number.isFinite(baseY) ? { levelId: level.id, baseY } : undefined
     } catch {
@@ -620,7 +619,6 @@ function proceduralHeightsInLevel(
   }
   const parent = node.parentId ? nodes[node.parentId] : undefined
   if (node.recipe.mounting?.attachTo === 'ceiling') {
-    if (evaluated.motions.length > 0 && !evaluated.reach) return undefined
     if (parent?.type !== 'ceiling' || !parent.parentId) return undefined
     const level = nodes[parent.parentId]
     if (level?.type !== 'level' || !finiteNumbers(level) || !finiteNumbers(parent)) return undefined
