@@ -1,4 +1,5 @@
 import type { McpServer } from '@modelcontextprotocol/server'
+import type { FinishScriptInputs } from '@pascal-app/core'
 import {
   achievedChanges,
   type FinishScriptCompile,
@@ -12,6 +13,7 @@ import {
   setFinishScriptTool,
   surfaceDescription,
 } from '@pascal-app/core/agent-tools'
+import type { CompiledGeometryScript } from '@pascal-app/core/schema'
 import { z } from 'zod'
 import type { SceneOperations } from '../operations'
 import { compileAndStore, type GeometryScriptHost } from './add-object'
@@ -28,14 +30,42 @@ function textResult<T extends Record<string, unknown>>(payload: T) {
   }
 }
 
+/** Compiles and stores a finish module for one surface: a server's script host, or a page's sandbox. */
+export type FinishScriptCompiler = {
+  compile(input: {
+    sceneId: string
+    nodeId: string
+    face?: 'a' | 'b'
+    code: string
+    inputs: FinishScriptInputs
+  }): Promise<CompiledGeometryScript>
+  /** Rechecks the caller's authority after the compiles and before the write. */
+  assertActive?(): Promise<void>
+}
+
+/** A server's script host as a finish compiler. */
+export function hostFinishCompiler(host: GeometryScriptHost): FinishScriptCompiler {
+  return {
+    compile: ({ sceneId, nodeId, face, code, inputs }) =>
+      compileAndStore(
+        host,
+        sceneId,
+        { code, language: 'three', params: undefined, inputs },
+        face ? 'wall-face' : 'floor',
+        { nodeId },
+      ),
+    assertActive: host.assertActive ? () => host.assertActive!() : undefined,
+  }
+}
+
 /**
- * `set_finish_script` on the MCP: core plans what the module builds on, the host compiles it once
- * for each surface, and the shared operation writes the results in one patch.
+ * `set_finish_script` on the MCP: core plans what the module builds on, the compiler builds it
+ * once for each surface, and the shared operation writes the results in one patch.
  */
 export function registerSetFinishScript(
   server: McpServer,
   bridge: SceneOperations,
-  host: GeometryScriptHost | undefined,
+  compiler: FinishScriptCompiler | undefined,
 ): void {
   server.registerTool(
     setFinishScriptTool.name,
@@ -54,22 +84,22 @@ export function registerSetFinishScript(
         const plan = planFinishScript(before, input)
         const compiled: Record<string, FinishScriptCompile> = {}
         if (!input.remove) {
-          if (!host)
+          if (!compiler)
             return toolError('This Pascal server cannot run geometry scripts.', {
               code: 'scripts_unavailable',
             })
           for (const build of plan.builds)
             compiled[build.key] = {
               inputs: build.inputs,
-              script: await compileAndStore(
-                host,
-                scene.id,
-                { code: input.code!, language: 'three', params: undefined, inputs: build.inputs },
-                build.face ? 'wall-face' : 'floor',
-                { nodeId: build.nodeId },
-              ),
+              script: await compiler.compile({
+                sceneId: scene.id,
+                nodeId: build.nodeId,
+                face: build.face,
+                code: input.code!,
+                inputs: build.inputs,
+              }),
             }
-          await host.assertActive?.()
+          await compiler.assertActive?.()
         }
         // Planned again after the compiles were awaited, on the scene as it now stands.
         const outcome = inScene(bridge, () =>

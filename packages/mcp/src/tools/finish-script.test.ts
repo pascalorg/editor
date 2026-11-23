@@ -4,7 +4,7 @@ import { InMemoryTransport, McpServer } from '@modelcontextprotocol/server'
 import { GeometryArtifactManifest, type WallNode } from '@pascal-app/core/schema'
 import { SceneBridge } from '../bridge/scene-bridge'
 import type { GeometryScriptHost } from './add-object'
-import { registerSetFinishScript } from './finish-script'
+import { hostFinishCompiler, registerSetFinishScript } from './finish-script'
 import { registerSharedTools } from './shared-tools'
 
 describe('set_finish_script', () => {
@@ -40,7 +40,7 @@ describe('set_finish_script', () => {
     bridge.setActiveScene({ id: 'scene_finish', name: 'Finish' } as never)
     const server = new McpServer({ name: 'test', version: '0.0.0' })
     registerSharedTools(server, bridge)
-    registerSetFinishScript(server, bridge, host)
+    registerSetFinishScript(server, bridge, hostFinishCompiler(host))
     const [srvT, cliT] = InMemoryTransport.createLinkedPair()
     client = new Client({ name: 'test-client', version: '0.0.0' })
     await Promise.all([server.connect(srvT), client.connect(cliT)])
