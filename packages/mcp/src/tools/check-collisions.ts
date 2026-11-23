@@ -239,7 +239,7 @@ export function registerCheckCollisions(server: McpServer, bridge: SceneOperatio
         if (!isCollisionTarget(node)) continue
         const name =
           node.type === 'procedural-item'
-            ? (node.name ?? node.recipe?.name ?? node.id)
+            ? (node.name ?? node.recipe.name ?? node.id)
             : (node.name ?? node.asset.name ?? node.id)
         const resolvedLevelId =
           node === candidateNode ? candidate!.levelId : bridge.resolveLevelId(node.id)
@@ -251,12 +251,17 @@ export function registerCheckCollisions(server: McpServer, bridge: SceneOperatio
           })
           continue
         }
+        if (node.type === 'procedural-item' && node.wallId) {
+          skippedItems.push({
+            id: node.id,
+            name,
+            reason: 'unsupported_attachment',
+          })
+          continue
+        }
         const immediateParent =
           node === candidateNode ? byId.get(candidate!.levelId) : bridge.getAncestry(node.id)[1]
-        if (
-          (immediateParent && immediateParent.type !== 'level') ||
-          (node.type === 'procedural-item' && Boolean(node.wallId))
-        ) {
+        if (immediateParent && immediateParent.type !== 'level') {
           skippedItems.push({
             id: node.id,
             name,

@@ -545,7 +545,25 @@ describe('check_collisions', () => {
         recipe: wallSideRecipe,
         metadata: { isTransient: true },
       })
+      const wallHosted = makeProcedural('procedural-item_wall_hosted', [0, 0, 0], {
+        wallId: 'wall_host',
+      })
       bridge.createNode(wallDraftOnLevel, level.id)
+      bridge.createNode(wallHosted, level.id)
+
+      const floorWithWallHostedResult = await client.callTool({
+        name: 'check_collisions',
+        arguments: { levelId: level.id, floorOnly: true },
+      })
+      const floorWithWallHosted = floorWithWallHostedResult.structuredContent as {
+        skippedItems: Array<{ id: string; reason: string }>
+      }
+      expect(floorWithWallHosted.skippedItems).toContainEqual(
+        expect.objectContaining({
+          id: 'procedural-item_wall_hosted',
+          reason: 'unsupported_attachment',
+        }),
+      )
 
       const defaultResult = await client.callTool({
         name: 'check_collisions',
@@ -558,11 +576,17 @@ describe('check_collisions', () => {
       }
       expect(defaultParsed.status).toBe('insufficient_evidence')
       expect(defaultParsed.checkedItems).toHaveLength(0)
-      expect(defaultParsed.skippedItems).toContainEqual(
-        expect.objectContaining({
-          id: 'procedural-item_wall_draft',
-          reason: 'unsupported_attachment',
-        }),
+      expect(defaultParsed.skippedItems).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            id: 'procedural-item_wall_draft',
+            reason: 'unsupported_attachment',
+          }),
+          expect.objectContaining({
+            id: 'procedural-item_wall_hosted',
+            reason: 'unsupported_attachment',
+          }),
+        ]),
       )
     })
   })
