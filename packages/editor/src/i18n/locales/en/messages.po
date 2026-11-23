@@ -11453,6 +11453,10 @@ msgid "node.item.panel.delete"
 msgstr "Delete"
 
 #: packages/nodes/src/item/panel.tsx
+msgid "node.item.panel.depth"
+msgstr "Depth"
+
+#: packages/nodes/src/item/panel.tsx
 msgid "node.item.panel.dimensions"
 msgstr "Dimensions"
 
@@ -11461,8 +11465,12 @@ msgid "node.item.panel.duplicate"
 msgstr "Duplicate"
 
 #: packages/nodes/src/item/panel.tsx
-msgid "node.item.panel.info"
-msgstr "Info"
+msgid "node.item.panel.height"
+msgstr "Height"
+
+#: packages/nodes/src/item/panel.tsx
+msgid "node.item.panel.lockAspectRatio"
+msgstr "Lock Aspect Ratio"
 
 #: packages/nodes/src/item/panel.tsx
 msgid "node.item.panel.move"
@@ -11495,6 +11503,10 @@ msgstr "scale"
 #: packages/nodes/src/item/panel.tsx
 msgid "node.item.panel.uniformScale"
 msgstr "Uniform Scale"
+
+#: packages/nodes/src/item/panel.tsx
+msgid "node.item.panel.width"
+msgstr "Width"
 
 #: packages/nodes/src/item/panel.tsx
 msgid "node.item.panel.xyz"

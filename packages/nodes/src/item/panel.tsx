@@ -23,6 +23,13 @@ import { useViewer } from '@pascal-app/viewer'
 import { Copy, Link, Link2Off, Move, Trash2 } from 'lucide-react'
 import { useCallback, useRef, useState } from 'react'
 import { AuthoredParams } from './authored-params'
+import {
+  computeScaleForDimension,
+  type DimensionAxis,
+  editableDimensionAxes,
+  MIN_ITEM_SCALE,
+  type Vec3Tuple,
+} from './dimensions'
 
 /**
  * Stage E inspector for item. 1:1 port of the legacy
@@ -51,6 +58,12 @@ export default function ItemPanel() {
   const [uniformScale, setUniformScale] = useState(true)
   const nodeRef = useRef(node)
   nodeRef.current = node
+  const dragOriginScaleRef = useRef<Vec3Tuple | null>(null)
+  const lastSelectedIdRef = useRef(selectedId)
+  if (lastSelectedIdRef.current !== selectedId) {
+    lastSelectedIdRef.current = selectedId
+    dragOriginScaleRef.current = null
+  }
 
   const handleUpdate = useCallback(
     (updates: Partial<ItemNode>) => {
@@ -69,6 +82,74 @@ export default function ItemPanel() {
     },
     [selectedId],
   )
+
+  const handleDimensionChange = useCallback(
+    (axis: DimensionAxis, requestedDimension: number) => {
+      const n = nodeRef.current
+      if (!n) return
+      const isDragging = !useScene.temporal.getState().isTracking
+      if (isDragging && !dragOriginScaleRef.current) {
+        dragOriginScaleRef.current = [n.scale[0], n.scale[1], n.scale[2]]
+      }
+      const baseScale =
+        isDragging && dragOriginScaleRef.current ? dragOriginScaleRef.current : n.scale
+      const nextScale = computeScaleForDimension(
+        n.asset.dimensions,
+        baseScale,
+        axis,
+        requestedDimension,
+        uniformScale,
+      )
+      if (
+        !nextScale ||
+        (nextScale[0] === n.scale[0] && nextScale[1] === n.scale[1] && nextScale[2] === n.scale[2])
+      ) {
+        return
+      }
+      handleUpdate({ scale: nextScale })
+    },
+    [handleUpdate, uniformScale],
+  )
+
+  const handleDimensionCommit = useCallback(
+    (axis: DimensionAxis, finalDimension: number) => {
+      const origin = dragOriginScaleRef.current
+      dragOriginScaleRef.current = null
+      if (!origin) return
+      const n = nodeRef.current
+      if (!n) return
+      const nextScale = computeScaleForDimension(
+        n.asset.dimensions,
+        origin,
+        axis,
+        finalDimension,
+        uniformScale,
+      )
+      if (!nextScale) return
+      if (nextScale[0] === origin[0] && nextScale[1] === origin[1] && nextScale[2] === origin[2]) {
+        useScene.temporal.getState().pause()
+        handleUpdate({ scale: origin })
+        useScene.temporal.getState().resume()
+        return
+      }
+      // Restore the exact pre-drag scale while history tracking is paused so
+      // the final write records a single undo entry back to `origin`.
+      useScene.temporal.getState().pause()
+      handleUpdate({ scale: origin })
+      useScene.temporal.getState().resume()
+      handleUpdate({ scale: nextScale })
+    },
+    [handleUpdate, uniformScale],
+  )
+
+  const handleDimensionCancel = useCallback(() => {
+    const origin = dragOriginScaleRef.current
+    dragOriginScaleRef.current = null
+    if (!origin) return
+    useScene.temporal.getState().pause()
+    handleUpdate({ scale: origin })
+    useScene.temporal.getState().resume()
+  }, [handleUpdate])
 
   const handleClose = useCallback(() => {
     setSelection({ selectedIds: [] })
@@ -226,6 +307,8 @@ export default function ItemPanel() {
             {i18n._({ id: 'node.item.panel.uniformScale', message: 'Uniform Scale' })}
           </span>
           <button
+            aria-label={i18n._({ id: 'node.item.panel.uniformScale', message: 'Uniform Scale' })}
+            aria-pressed={uniformScale}
             className={
               uniformScale
                 ? 'flex h-6 w-6 items-center justify-center rounded-md bg-black/8 dark:bg-[#3e3e3e] text-muted-foreground transition-colors hover:text-foreground'
@@ -318,19 +401,60 @@ export default function ItemPanel() {
         )}
       </PanelSection>
 
-      <PanelSection title={i18n._({ id: 'node.item.panel.info', message: 'Info' })}>
-        <div className="flex items-center justify-between px-2 py-1 text-muted-foreground text-sm">
-          <span>{i18n._({ id: 'node.item.panel.dimensions', message: 'Dimensions' })}</span>
-          {(() => {
-            const [w, h, d] = getScaledDimensions(node)
-            return (
-              <span className="font-mono text-foreground dark:text-white">
-                {Math.round(w * 100) / 100}×{Math.round(h * 100) / 100}×{Math.round(d * 100) / 100}
+      {(() => {
+        const editableAxes = editableDimensionAxes(node.asset.dimensions)
+        if (editableAxes.length === 0) return null
+        const scaled = getScaledDimensions(node)
+        const axisLabels: Record<DimensionAxis, string> = {
+          0: i18n._({ id: 'node.item.panel.width', message: 'Width' }),
+          1: i18n._({ id: 'node.item.panel.height', message: 'Height' }),
+          2: i18n._({ id: 'node.item.panel.depth', message: 'Depth' }),
+        }
+        return (
+          <PanelSection title={i18n._({ id: 'node.item.panel.dimensions', message: 'Dimensions' })}>
+            <div className="flex items-center justify-between px-2 pb-2">
+              <span className="font-medium text-[10px] text-muted-foreground/80 uppercase tracking-wider">
+                {i18n._({ id: 'node.item.panel.lockAspectRatio', message: 'Lock Aspect Ratio' })}
               </span>
-            )
-          })()}
-        </div>
-      </PanelSection>
+              <button
+                aria-label={i18n._({
+                  id: 'node.item.panel.lockAspectRatio',
+                  message: 'Lock Aspect Ratio',
+                })}
+                aria-pressed={uniformScale}
+                className={
+                  uniformScale
+                    ? 'flex h-6 w-6 items-center justify-center rounded-md bg-black/8 dark:bg-[#3e3e3e] text-muted-foreground transition-colors hover:text-foreground'
+                    : 'flex h-6 w-6 items-center justify-center rounded-md bg-black/4 dark:bg-[#2C2C2E] text-muted-foreground transition-colors hover:bg-black/8 dark:hover:bg-[#3e3e3e] hover:text-foreground'
+                }
+                onClick={() => setUniformScale((v) => !v)}
+                type="button"
+              >
+                {uniformScale ? (
+                  <Link className="h-3.5 w-3.5" />
+                ) : (
+                  <Link2Off className="h-3.5 w-3.5" />
+                )}
+              </button>
+            </div>
+            {editableAxes.map((axis) => (
+              <SliderControl
+                key={axis}
+                label={axisLabels[axis]}
+                min={node.asset.dimensions[axis] * MIN_ITEM_SCALE}
+                onCancel={handleDimensionCancel}
+                onChange={(value) => handleDimensionChange(axis, value)}
+                onCommit={(value) => handleDimensionCommit(axis, value)}
+                precision={2}
+                restoreOnCommit={false}
+                step={0.01}
+                unit="m"
+                value={Math.abs(scaled[axis])}
+              />
+            ))}
+          </PanelSection>
+        )
+      })()}
 
       <PanelSection title={i18n._({ id: 'node.item.panel.actions', message: 'Actions' })}>
         <ActionGroup>
