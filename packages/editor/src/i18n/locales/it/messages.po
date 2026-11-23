@@ -2444,12 +2444,9 @@ msgid "editor.actionMenu.structureTools.lineset"
 msgstr "Lineset"
 
 # Source-Hash: c34c9b36492c6e21
-# Review: required
-# AI-Provider: claude-code
-# AI-Model: claude-opus-5-5
+# Review: human
 # English: "Liquid Line"
 #: packages/editor/src/components/ui/action-menu/structure-tools.tsx
-#, fuzzy
 msgid "editor.actionMenu.structureTools.liquidLine"
 msgstr "Linea del liquido"
 
@@ -3312,12 +3309,9 @@ msgid "editor.buildPanel.wallTypeEditorDialog.fiberCement"
 msgstr "Fibrocemento"
 
 # Source-Hash: b3907da0ad234f10
-# Review: required
-# AI-Provider: claude-code
-# AI-Model: claude-opus-5-5
+# Review: human
 # English: "Finish"
 #: packages/editor/src/components/ui/wall-type/wall-type-editor-dialog.tsx
-#, fuzzy
 msgid "editor.buildPanel.wallTypeEditorDialog.finish"
 msgstr "Finitura"
 
