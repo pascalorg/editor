@@ -1,6 +1,7 @@
 import type { McpServer } from '@modelcontextprotocol/server'
 import {
   achievedChanges,
+  type FinishScriptCompile,
   planFinishScript,
   type SceneNodes,
   type SetFinishScriptInput,
@@ -11,7 +12,6 @@ import {
   setFinishScriptTool,
   surfaceDescription,
 } from '@pascal-app/core/agent-tools'
-import type { CompiledGeometryScript } from '@pascal-app/core/schema'
 import { z } from 'zod'
 import type { SceneOperations } from '../operations'
 import { compileAndStore, type GeometryScriptHost } from './add-object'
@@ -52,20 +52,23 @@ export function registerSetFinishScript(
       try {
         const before = bridge.getNodes() as SceneNodes
         const plan = planFinishScript(before, input)
-        const compiled: Record<string, CompiledGeometryScript> = {}
+        const compiled: Record<string, FinishScriptCompile> = {}
         if (!input.remove) {
           if (!host)
             return toolError('This Pascal server cannot run geometry scripts.', {
               code: 'scripts_unavailable',
             })
           for (const build of plan.builds)
-            compiled[build.key] = await compileAndStore(
-              host,
-              scene.id,
-              { code: input.code!, language: 'three', params: undefined, inputs: build.inputs },
-              build.face ? 'wall-face' : 'floor',
-              { nodeId: build.nodeId },
-            )
+            compiled[build.key] = {
+              inputs: build.inputs,
+              script: await compileAndStore(
+                host,
+                scene.id,
+                { code: input.code!, language: 'three', params: undefined, inputs: build.inputs },
+                build.face ? 'wall-face' : 'floor',
+                { nodeId: build.nodeId },
+              ),
+            }
           await host.assertActive?.()
         }
         // Planned again after the compiles were awaited, on the scene as it now stands.

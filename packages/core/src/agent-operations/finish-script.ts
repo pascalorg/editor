@@ -31,6 +31,9 @@ export type FinishScriptBuild = {
   extent?: WallFaceScriptExtent
 }
 
+/** A module compiled for one build, with the inputs it was compiled for. */
+export type FinishScriptCompile = { script: CompiledGeometryScript; inputs: FinishScriptInputs }
+
 /** A wall face the call could not build on, and why. */
 export type FinishScriptSkip = { wallId: string; face: WallFace; code: string; message: string }
 
@@ -234,13 +237,15 @@ function merged(
 
 /**
  * `set_finish_script`: the finish its plan names, built from the modules the host compiled (one per
- * build, by key, compiled for the build's `inputs`), or taken off with `remove`. Not in
+ * build, by key, with the inputs each was compiled for), or taken off with `remove`. A surface that
+ * changed while its module compiled (a wall moved, a door added) is refused as `scene_changed`:
+ * a build for the old surface would land on the new one. Not in
  * AGENT_OPERATIONS: each surface compiles the module first (the chat in the editor tab's sandbox,
  * the MCP through its script host), as for add_object.
  */
 export function setFinishScript(
   nodes: SceneNodes,
-  input: SetFinishScriptInput & { compiled?: Readonly<Record<string, CompiledGeometryScript>> },
+  input: SetFinishScriptInput & { compiled?: Readonly<Record<string, FinishScriptCompile>> },
 ): AgentOperationOutcome {
   const plan = planFinishScript(nodes, input)
   const target = input.targetId
@@ -285,7 +290,12 @@ export function setFinishScript(
     const compiled = input.compiled?.[build.key]
     if (!compiled)
       refuse('not_compiled', `The module was not compiled for ${build.key}: nothing was changed.`)
-    return compiled
+    if (JSON.stringify(compiled.inputs) !== JSON.stringify(build.inputs))
+      refuse(
+        'scene_changed',
+        `${build.key} changed while its finish compiled: nothing was changed. Call again to build it for the surface as it now stands.`,
+      )
+    return compiled.script
   }
   const steps = plan.builds.map((build) => (current: SceneNodes) => {
     const compiled = compiledFor(build)

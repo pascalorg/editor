@@ -12,7 +12,12 @@ import {
   type ZoneNode,
 } from '../schema'
 import { applySceneChanges } from './apply-changes'
-import { planFinishScript, type SetFinishScriptInput, setFinishScript } from './finish-script'
+import {
+  type FinishScriptCompile,
+  planFinishScript,
+  type SetFinishScriptInput,
+  setFinishScript,
+} from './finish-script'
 
 const LEVEL = 'level_fs'
 const SOUTH = 'wall_fs_0'
@@ -65,10 +70,10 @@ function flat(): { nodes: SceneNodes; bathroom: string; bedroom: string } {
 
 /** What a host would compile for each build: a GLB the size of what it was given. */
 function compileAll(nodes: SceneNodes, input: SetFinishScriptInput) {
-  const compiled: Record<string, CompiledGeometryScript> = {}
+  const compiled: Record<string, FinishScriptCompile> = {}
   for (const build of planFinishScript(nodes, input).builds) {
     const outline = (build.inputs as WallFaceScriptInputs).outline ?? { x0: 0, y0: 0, x1: 1, y1: 1 }
-    compiled[build.key] = {
+    const script = {
       sha256: 'a'.repeat(64),
       script: 'b'.repeat(64),
       language: 'three',
@@ -80,6 +85,7 @@ function compileAll(nodes: SceneNodes, input: SetFinishScriptInput) {
         triangles: 12,
       }),
     } as CompiledGeometryScript
+    compiled[build.key] = { script, inputs: build.inputs }
   }
   return compiled
 }
@@ -186,5 +192,17 @@ describe('set_finish_script', () => {
     expect(refusal(() => setFinishScript(nodes, { targetId: SOUTH, face: 'a', code: tile }))).toBe(
       'not_compiled',
     )
+  })
+
+  test('a surface that changed while its module compiled is refused, not built stale', () => {
+    const { nodes, bathroom } = flat()
+    const input = { targetId: bathroom, surface: 'walls' as const, code: tile }
+    const compiled = compileAll(nodes, input)
+    // The south wall is lengthened while the compile runs: its stretch is no longer what was built.
+    const moved = {
+      ...nodes,
+      [SOUTH]: { ...(nodes[SOUTH] as WallNode), start: [-1, 0] as [number, number] },
+    } as SceneNodes
+    expect(refusal(() => setFinishScript(moved, { ...input, compiled }))).toBe('scene_changed')
   })
 })
