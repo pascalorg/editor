@@ -843,6 +843,137 @@ describe('pending ordinary crops and session option updates', () => {
     }
   })
 
+  test('enriched region center shifts both bubble and pin footprints onto the new center plane', async () => {
+    const previousThree = getEditorThreeContext()
+    const previousPoint = usePointAsk.getState()
+    const listeners = new Map<string, Set<EventListener>>()
+    let resolveEnriched: ((value: enrichedCapture.EnrichedCapture) => void) | undefined
+    const makeEnriched = (center: [number, number, number]): enrichedCapture.EnrichedCapture => ({
+      crop: { dataUrl: 'data:image/jpeg;base64,ENRICHED', width: 200, height: 200 },
+      camera: {
+        position: [2, 3, 7],
+        target: [2, 1, 0],
+        fov: 60,
+        aspect: 1,
+        projection: 'perspective',
+      },
+      region: {
+        canvasRect: { x0: 10, y0: 10, x1: 60, y1: 60 },
+        cropRect: { x0: 0, y0: 0, x1: 200, y1: 200 },
+      },
+      world: {
+        center,
+        topLeft: null,
+        topRight: null,
+        bottomLeft: null,
+        bottomRight: null,
+      },
+      visible: [{ id: wall.id, share: 0.45 }],
+      legend: [],
+      legendText: '',
+      rooms: [],
+      segmented: { dataUrl: 'data:image/png;base64,MAP', width: 200, height: 200 },
+    })
+    const enrichedSpy = spyOn(enrichedCapture, 'captureEnrichedRegion').mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveEnriched = resolve
+        }),
+    )
+    const received: PointAskSubmit[] = []
+    unregisterHandler()
+    unregisterHandler = registerPointAskHandler(async (submit) => {
+      received.push(submit)
+      return { ok: true }
+    })
+    stopSession()
+    try {
+      globalThis.window = {
+        innerWidth: 100,
+        innerHeight: 100,
+        addEventListener(type: string, listener: EventListener) {
+          if (!listeners.has(type)) listeners.set(type, new Set())
+          listeners.get(type)!.add(listener)
+        },
+        removeEventListener(type: string, listener: EventListener) {
+          listeners.get(type)?.delete(listener)
+        },
+      } as never
+      const canvas = {
+        style: {},
+        getBoundingClientRect: () => ({
+          left: 0,
+          top: 0,
+          right: 100,
+          bottom: 100,
+          width: 100,
+          height: 100,
+        }),
+      } as unknown as HTMLCanvasElement
+      const camera = new PerspectiveCamera(60, 1, 0.1, 100)
+      camera.position.set(2, 8, 6)
+      camera.lookAt(2, 0, 0)
+      camera.updateMatrixWorld(true)
+      setEditorThreeContext({ camera, raycaster: new Raycaster(), domElement: canvas })
+      stopSession = startPointAskSession({ enrichedRegions: true, freeClick: true })
+
+      usePointAsk.setState({ active: true, playful: false, hover: null })
+      const pointer = (type: string, x: number, y: number) => {
+        const event = {
+          target: canvas,
+          button: 0,
+          pointerType: 'mouse',
+          clientX: x,
+          clientY: y,
+          shiftKey: false,
+          timeStamp: type === 'pointerdown' ? 0 : 100,
+          preventDefault() {},
+          stopImmediatePropagation() {},
+        } as unknown as Event
+        for (const listener of listeners.get(type) ?? []) listener(event)
+      }
+
+      // Case 1: enriched capture resolves while bubble is open.
+      pointer('pointerdown', 25, 25)
+      pointer('pointermove', 75, 75)
+      pointer('pointerup', 75, 75)
+      const shiftedBubbleCenter: [number, number, number] = [2, 1.5, -1]
+      resolveEnriched?.(makeEnriched(shiftedBubbleCenter))
+      await new Promise((resolve) => setTimeout(resolve, 10))
+      const bubble = usePointAsk.getState().bubble
+      expect(bubble?.anchor).toEqual(shiftedBubbleCenter)
+      expect(bubble?.footprint?.center).toEqual(shiftedBubbleCenter)
+      expect(bubble?.footprint?.corners).toHaveLength(4)
+      for (const corner of bubble?.footprint?.corners ?? []) {
+        expect(corner[1]).toBeCloseTo(shiftedBubbleCenter[1], 5)
+      }
+
+      // Case 2: sendBubble awaits pending enrichment and updates planted pin footprint together with anchor.
+      usePointAsk.getState().closeBubble('dismiss')
+      pointer('pointerdown', 25, 25)
+      pointer('pointermove', 75, 75)
+      pointer('pointerup', 75, 75)
+      const sending = sendBubble('Inspect shifted region', { x: 0, y: 0, width: 10, height: 10 })
+      const shiftedPinCenter: [number, number, number] = [1, 2.25, -0.5]
+      resolveEnriched?.(makeEnriched(shiftedPinCenter))
+      await sending
+      expect(received).toHaveLength(1)
+      const askId = usePointAsk.getState().pinOrder.at(-1)!
+      const pin = usePointAsk.getState().pins[askId]
+      expect(pin?.anchor).toEqual(shiftedPinCenter)
+      expect(pin?.footprint?.center).toEqual(shiftedPinCenter)
+      expect(pin?.footprint?.corners).toHaveLength(4)
+      for (const corner of pin?.footprint?.corners ?? []) {
+        expect(corner[1]).toBeCloseTo(shiftedPinCenter[1], 5)
+      }
+    } finally {
+      enrichedSpy.mockRestore()
+      stopSession()
+      setEditorThreeContext(previousThree)
+      usePointAsk.setState(previousPoint, true)
+    }
+  })
+
   test('dismissing an open persistent comment card by clicking the canvas does not plant a new bubble', () => {
     const previousThree = getEditorThreeContext()
     const previousPoint = usePointAsk.getState()

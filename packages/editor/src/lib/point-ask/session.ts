@@ -19,7 +19,7 @@ import {
 import { sceneViewBounds, sceneViewPose } from '@pascal-app/core/agent-operations'
 import { retractNodes, useViewer } from '@pascal-app/viewer'
 import { cameraPoseStore, useFollowPascal } from '@pascal-app/viewer/ui'
-import { Matrix3, type Object3D, Vector2, Vector3 } from 'three'
+import { type Camera, Matrix3, type Object3D, Raycaster, Vector2, Vector3 } from 'three'
 import {
   resolveRoofSegmentSelectionTarget,
   roomForEvent,
@@ -75,7 +75,7 @@ import {
 } from './region'
 import { planRetry } from './retry'
 import { pointCommitEvent } from './scene-commit'
-import type { Rect } from './types'
+import type { Rect, WorldFootprint } from './types'
 
 // Point and ask's session (the owner, 8 October): the mode's entry and exit, what the pointer
 // picks, the bubble's lifecycle, the send, and the pins' link to the chat and the scene. It owns
@@ -341,11 +341,23 @@ function openBubble(
               }
             : { state: 'failed' },
           ...(value?.enriched && current.area
-            ? {
-                area: { ...current.area, ids: visibleNodeIds(value.enriched), more: 0 },
-                camera: value.enriched.camera,
-                ...(value.enriched.world.center ? { anchor: value.enriched.world.center } : {}),
-              }
+            ? (() => {
+                const nextAnchor = value.enriched.world.center
+                const nextFootprint = nextAnchor
+                  ? alignFootprintToCenter(
+                      nextAnchor,
+                      current.footprint,
+                      current.hit.normal,
+                      regionFootprintBuilders.get(opened.capturedAt),
+                    )
+                  : undefined
+                return {
+                  area: { ...current.area, ids: visibleNodeIds(value.enriched), more: 0 },
+                  camera: value.enriched.camera,
+                  ...(nextAnchor ? { anchor: nextAnchor } : {}),
+                  ...(nextFootprint ? { footprint: nextFootprint } : {}),
+                }
+              })()
             : value?.enriched
               ? { camera: value.enriched.camera }
               : {}),
@@ -363,6 +375,51 @@ function openBubble(
 
 /** The pending crop of each bubble, kept so a send can wait for it. */
 const downCrops = new Map<string, Promise<SessionCrop | null>>()
+const regionFootprintBuilders = new Map<
+  string,
+  (point: [number, number, number], normal: [number, number, number]) => WorldFootprint | null
+>()
+
+function makeCameraRay(
+  camera: Camera,
+  rect: { left: number; top: number; width: number; height: number },
+) {
+  const raycaster = new Raycaster()
+  return (x: number, y: number) => {
+    raycaster.setFromCamera(
+      new Vector2(((x - rect.left) / rect.width) * 2 - 1, -((y - rect.top) / rect.height) * 2 + 1),
+      camera,
+    )
+    const { origin, direction } = raycaster.ray
+    return {
+      origin: [origin.x, origin.y, origin.z] as [number, number, number],
+      direction: [direction.x, direction.y, direction.z] as [number, number, number],
+    }
+  }
+}
+
+function alignFootprintToCenter(
+  center: [number, number, number],
+  fallback: WorldFootprint | undefined,
+  hitNormal: [number, number, number],
+  build?: (
+    point: [number, number, number],
+    normal: [number, number, number],
+  ) => WorldFootprint | null,
+): WorldFootprint | undefined {
+  const normal = fallback?.normal ?? hitNormal
+  const recomputed = build?.(center, normal)
+  if (recomputed) return recomputed
+  if (!fallback) return undefined
+  const dx = center[0] - fallback.center[0]
+  const dy = center[1] - fallback.center[1]
+  const dz = center[2] - fallback.center[2]
+  return {
+    center,
+    normal: fallback.normal,
+    corners: fallback.corners.map(([x, y, z]) => [x + dx, y + dy, z + dz]),
+  }
+}
 
 function visibleNodeIds(capture: EnrichedCapture): string[] {
   return [...new Set(capture.visible.flatMap((entry) => (entry.id ? [entry.id] : [])))]
@@ -375,6 +432,7 @@ export function closeBubble(kind: 'send' | 'dismiss' = 'dismiss') {
   // Words that were not sent are kept for the next time the same element is pointed at.
   if (kind === 'dismiss') state.rememberDraft(bubble.targets[0]?.id ?? '', bubble.draft)
   downCrops.delete(bubble.capturedAt)
+  regionFootprintBuilders.delete(bubble.capturedAt)
   if (bubble.area) state.setRegion(null)
   state.closeBubble(kind)
   useViewer.getState().setPointedIds(null)
@@ -643,9 +701,25 @@ function finishRegion(press: Down, event: PointerEvent) {
   const release = { x: event.clientX, y: event.clientY }
   const click = nearestEdgePoint(rect, release)
   const hit = regionCenterHit(rect)
-  const footprint = regionFootprint(rect, cameraRay, hit)
+  const three = getEditorThreeContext()
+  const bounds = canvasRect()
+  const rayFn =
+    three && bounds
+      ? (() => {
+          const camera = three.camera.clone()
+          camera.updateMatrixWorld(true)
+          return makeCameraRay(camera, bounds)
+        })()
+      : cameraRay
+  const footprint = regionFootprint(rect, rayFn, hit)
   openBubble([], hit, 'region', { ...press, crop }, { rect, click, ids, more })
-  if (footprint) state.patchBubble({ footprint })
+  const opened = usePointAsk.getState().bubble
+  if (opened) {
+    regionFootprintBuilders.set(opened.capturedAt, (point, normal) =>
+      regionFootprint(rect, rayFn, { point, normal }),
+    )
+    if (footprint) state.patchBubble({ footprint })
+  }
 }
 
 function onPointerMove(event: PointerEvent) {
@@ -1003,6 +1077,7 @@ export async function sendBubble(
   const freeEnriched = !area && freeClick && bubble.targets.length === 0 && enrichedRegions
   const waitEnriched = (Boolean(area) && enrichedRegions) || freeEnriched
   const pendingCrop = downCrops.get(bubble.capturedAt)
+  const buildFootprint = regionFootprintBuilders.get(bubble.capturedAt)
   const object = first ? sceneRegistry.nodes.get(first.id) : undefined
   let local: PinRecord['local'] = null
   if (object && first) {
@@ -1072,6 +1147,16 @@ export async function sendBubble(
     usePointAsk.setState((state) => {
       const pin = state.pins[askId]
       if (!pin) return state
+      const nextAnchor = area ? (enriched.world.center ?? pin.anchor) : pin.anchor
+      const nextFootprint =
+        area && enriched.world.center
+          ? alignFootprintToCenter(
+              enriched.world.center,
+              pin.footprint,
+              restore.hit.normal,
+              buildFootprint,
+            )
+          : undefined
       return {
         pins: {
           ...state.pins,
@@ -1080,7 +1165,8 @@ export async function sendBubble(
             model: { ...pin.model, targetIds: ids },
             ...(area
               ? {
-                  anchor: enriched.world.center ?? pin.anchor,
+                  anchor: nextAnchor,
+                  ...(nextFootprint ? { footprint: nextFootprint } : {}),
                   label: regionLabel(ids.length),
                 }
               : {}),
@@ -1608,6 +1694,8 @@ export function startPointAskSession(
     endCompare()
     for (const off of offs) off()
     leavePointMode()
+    downCrops.clear()
+    regionFootprintBuilders.clear()
     runningAskId = null
     enrichedRegions = false
     freeClick = false
