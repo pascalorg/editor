@@ -119,8 +119,8 @@ function layersOf(
   const script = wall.finishScripts?.[face]
   if (script)
     layers.push({
-      u0: 0,
-      u1: length,
+      u0: script.u0 ?? 0,
+      u1: script.u1 ?? length,
       v0: 0,
       v1: Math.min(height, script.toHeight ?? height),
       state: 'unknown',

@@ -17655,6 +17655,36 @@ msgstr "目标标高：{elevation} m · 单击或按 Enter 放置"
 msgid "editor.tools.distribution.distributionRunTool.typeALength"
 msgstr "输入长度"
 
+# Source-Hash: 9e84d6d7b9885c4f
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Loading…"
+#: packages/editor/src/components/editor/views/host-view.tsx
+#, fuzzy
+msgid "editor.views.hostView.loading"
+msgstr "加载中…"
+
+# Source-Hash: 82135a9b9cb5b990
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Its plugin isn't installed in this project."
+#: packages/editor/src/components/editor/views/host-view.tsx
+#, fuzzy
+msgid "editor.views.hostView.pluginNotInstalled"
+msgstr "此项目未安装其插件。"
+
+# Source-Hash: 28c0cec10097d476
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "This view isn't available"
+#: packages/editor/src/components/editor/views/host-view.tsx
+#, fuzzy
+msgid "editor.views.hostView.viewUnavailable"
+msgstr "此视图不可用"
+
 # Source-Hash: 9fc7a39bc32f287a
 # Review: required
 # AI-Provider: claude-code
@@ -17724,6 +17754,17 @@ msgstr "关闭{label}"
 #, fuzzy
 msgid "editor.views.viewBar.closeSplit"
 msgstr "关闭分屏 (\\)"
+
+# Source-Hash: cfde21b205adf4e2
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Close this view"
+#: packages/editor/src/components/editor/views/host-view.tsx
+#: packages/editor/src/components/editor/views/view-bar.tsx
+#, fuzzy
+msgid "editor.views.viewBar.closeUnavailableView"
+msgstr "关闭此视图"
 
 # Source-Hash: 94cc8e9f1ee16edb
 # Review: required
@@ -17844,6 +17885,26 @@ msgstr "分屏"
 #, fuzzy
 msgid "editor.views.viewBar.swapPanes"
 msgstr "交换窗格"
+
+# Source-Hash: 4f9e7d62de22491d
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Unavailable view"
+#: packages/editor/src/components/editor/views/view-bar.tsx
+#, fuzzy
+msgid "editor.views.viewBar.unavailableView"
+msgstr "不可用的视图"
+
+# Source-Hash: ff96a36780310b0b
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "{label} isn't available in this project"
+#: packages/editor/src/components/editor/views/view-bar.tsx
+#, fuzzy
+msgid "editor.views.viewBar.unavailableViewTitle"
+msgstr "{label} 在此项目中不可用"
 
 # Source-Hash: 9781bcdb7a8549e2
 # Review: required
@@ -39372,17 +39433,17 @@ msgstr "漫游：{state}"
 msgid "viewer.walkthrough.shutters"
 msgstr "护窗板"
 
-# English: "Close"
 # Source-Hash: d7cf5045c01b2eb9
 # Review: required
+# English: "Close"
 #: packages/viewer/src/ui/components/walkthrough-touch-controls.tsx
 #, fuzzy
 msgid "viewer.walkthroughTouch.close"
 msgstr "关闭"
 
-# English: "Crouch"
 # Source-Hash: f6bb8786828d83ab
 # Review: required
+# English: "Crouch"
 #: packages/viewer/src/ui/components/walkthrough-touch-controls.tsx
 #, fuzzy
 msgid "viewer.walkthroughTouch.crouch"

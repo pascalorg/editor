@@ -17,6 +17,7 @@ import { registerClearScene } from './clear-scene'
 import { registerConstructionTools } from './construction-tools'
 import { registerExportGlb } from './export-glb'
 import { registerExportJson } from './export-json'
+import { hostFinishCompiler, registerSetFinishScript } from './finish-script'
 import { registerGetScene } from './get-scene'
 import { registerMeasure } from './measure'
 import { registerPhotoToSceneTool } from './photo-to-scene'
@@ -71,6 +72,11 @@ export function registerTools(
   registerAddColumn(server, operations, geometryScripts)
   registerAddObject(server, operations, geometryScripts, objectMakers)
   registerAuthorScene(server, operations, geometryScripts, objectMakers, readFile, betweenSteps)
+  registerSetFinishScript(
+    server,
+    operations,
+    geometryScripts && hostFinishCompiler(geometryScripts),
+  )
   registerGetSource(server, operations, geometryScripts)
   registerMeasure(server, operations)
   registerViewScene(server, operations, sceneViews)

@@ -178,7 +178,7 @@ function readWalls(
   let faces = 0
   let withSkirting = 0
   const seen = new Set<string>()
-  for (const { wallId, face } of roomWallFaces(nodes, zone)) {
+  for (const { wallId, face, u0, u1 } of roomWallFaces(nodes, zone)) {
     if (seen.has(`${wallId}/${face}`)) continue
     seen.add(`${wallId}/${face}`)
     const wall = nodes[wallId] as WallNode
@@ -192,7 +192,9 @@ function readWalls(
       facts.set(finishWord(fact), fact)
       tiled.push(finishTiled(fact, materials))
     }
-    if (wall.finishScripts?.[face]) tiled.push('unknown')
+    const script = wall.finishScripts?.[face]
+    if (script && (script.u0 ?? 0) < u1 && (script.u1 ?? Number.POSITIVE_INFINITY) > u0)
+      tiled.push('unknown')
   }
   return {
     walls: {

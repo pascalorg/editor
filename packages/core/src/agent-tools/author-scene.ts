@@ -259,7 +259,7 @@ export const authorSceneRoom = z.object({
     .max(48_000)
     .optional()
     .describe(
-      `The finish of every wall face that looks into this room (the faces its floor meets, where the skirting runs), each built by ${WALL_FACE_MODULE}. A wall's own faceLeft / faceRight wins over it. The report warns when the build leaves part of a face uncovered.`,
+      `The finish of every wall face that looks into this room (the faces its floor meets, where the skirting runs), each built by ${WALL_FACE_MODULE}. On a wall that runs on past the room only the room's stretch is built (params.outline is that stretch), so a bathroom's tile stops where the bathroom does; two rooms with different wallCodes on one face: the first room's is built, the other's stretch keeps its paint. A wall's own faceLeft / faceRight wins over it. The report warns when the build leaves part of a face uncovered.`,
     ),
   wallToHeight: faceToHeight("the room's wallCode"),
   unit: z

@@ -1882,7 +1882,7 @@ describe('author_scene', () => {
     ])
   })
 
-  test("two rooms on one face: the first room's wallCode builds it and the other is warned", () => {
+  test("two rooms on one face: each room's wallCode builds only its own stretch", () => {
     const [west, east] = ['export default () => 1', 'export default () => 2']
     const payload = authorScenePayload.parse({
       ...bedroom,
@@ -1910,13 +1910,64 @@ describe('author_scene', () => {
       ['south/a', 'face_shared'],
     ])
     const listed = authorSceneFaceScripts(payload, outcome.result, sceneOf(outcome))
-    expect(listed.map((f) => [f.wallId, f.face, f.code])).toEqual([
-      ['north', 'a', west],
-      ['south', 'a', west],
-      ['west', 'a', west],
-      ['middle', 'a', west],
-      ['east', 'a', east],
-      ['middle', 'b', east],
+    // One face takes one module: the Study's tile stops at the partition, never running on
+    // into the Nursery, whose stretch keeps its paint.
+    expect(listed.map((f) => [f.wallId, f.face, f.code, f.u0, f.u1])).toEqual([
+      ['north', 'a', west, undefined, 2],
+      ['south', 'a', west, 2, undefined],
+      ['west', 'a', west, undefined, undefined],
+      ['middle', 'a', west, undefined, undefined],
+      ['east', 'a', east, undefined, undefined],
+      ['middle', 'b', east, undefined, undefined],
+    ])
+
+    // A wallCode in one room only (a bathroom beside a bedroom) is built on that room's stretch,
+    // and nothing is shared, so nothing is warned.
+    const bathroom = authorScenePayload.parse({
+      ...payload,
+      levels: [
+        {
+          ...payload.levels[0],
+          rooms: [
+            { name: 'Bathroom', seed: [-1, 0], wallCode: west },
+            { name: 'Bedroom', seed: [1, 0] },
+          ],
+        },
+      ],
+    })
+    const alone = run(bathroom, {})
+    expect(alone.result.warnings).toEqual([])
+    expect(
+      authorSceneFaceScripts(bathroom, alone.result, sceneOf(alone))
+        .filter((f) => f.wallId === 'north' || f.wallId === 'south')
+        .map((f) => [f.wallId, f.u0, f.u1]),
+    ).toEqual([
+      ['north', undefined, 2],
+      ['south', 2, undefined],
+    ])
+
+    // Rooms with the same wallCode share one build across both their stretches.
+    const same = authorScenePayload.parse({
+      ...payload,
+      levels: [
+        {
+          ...payload.levels[0],
+          rooms: [
+            { name: 'Study', seed: [-1, 0], wallCode: west },
+            { name: 'Nursery', seed: [1, 0], wallCode: west },
+          ],
+        },
+      ],
+    })
+    const shared = run(same, {})
+    expect(shared.result.warnings).toEqual([])
+    expect(
+      authorSceneFaceScripts(same, shared.result, sceneOf(shared))
+        .filter((f) => f.wallId === 'north' || f.wallId === 'south')
+        .map((f) => [f.wallId, f.u0, f.u1]),
+    ).toEqual([
+      ['north', undefined, undefined],
+      ['south', undefined, undefined],
     ])
   })
 

@@ -1,6 +1,7 @@
 import { refuse } from '../agent-tools/refusal'
 import { scriptedSize } from '../lib/geometry-script-node'
 import {
+  type WallFaceScriptExtent,
   type WallFaceScriptInputs,
   wallFaceScriptInputs,
   wallFaceScriptRecord,
@@ -10,15 +11,13 @@ import type { WallFace } from '../schema/nodes/wall'
 import type { AgentOperation } from './types'
 
 export type SetWallFaceScriptInput =
-  | {
+  | ({
       wallId: string
       face: WallFace
       /** The module compiled for `inputs` (`wallFaceScriptInputs` of the face, read before compiling). */
       compiled: CompiledGeometryScript
       inputs: WallFaceScriptInputs
-      /** Metres above the face's base the script stops at; absent, it covers the whole face. */
-      toHeight?: number
-    }
+    } & WallFaceScriptExtent)
   | { wallId: string; face: WallFace; remove: true }
 
 const round = (value: number) => Math.round(value * 1000) / 1000
@@ -52,7 +51,8 @@ export const setWallFaceScript: AgentOperation<SetWallFaceScriptInput> = (nodes,
     }
   }
 
-  const { compiled, toHeight } = input
+  const { compiled, toHeight, u0, u1 } = input
+  const extent = { toHeight, u0, u1 }
   if (compiled.language !== 'three')
     refuse(
       'three_only',
@@ -67,7 +67,7 @@ export const setWallFaceScript: AgentOperation<SetWallFaceScriptInput> = (nodes,
         target: wall.id,
       },
     )
-  if (!wallFaceScriptInputs(nodes, wall.id, face, toHeight))
+  if (!wallFaceScriptInputs(nodes, wall.id, face, extent))
     refuse(
       'no_face',
       `${name}'s face ${face} has nothing a script can build on (a curved or curtain wall, or no height): nothing was changed.`,
@@ -81,7 +81,7 @@ export const setWallFaceScript: AgentOperation<SetWallFaceScriptInput> = (nodes,
       { target: wall.id },
     )
   const script = WallFaceScript.parse(
-    wallFaceScriptRecord(compiled, input.inputs, toHeight, wall.finishScripts?.[face]),
+    wallFaceScriptRecord(compiled, input.inputs, extent, wall.finishScripts?.[face]),
   )
   return {
     result: {
@@ -92,9 +92,11 @@ export const setWallFaceScript: AgentOperation<SetWallFaceScriptInput> = (nodes,
       slots: compiled.manifest.slots.map((slot) => slot.id),
       triangles: compiled.manifest.triangles,
       note:
-        toHeight === undefined
-          ? `The script owns the colours of ${name}'s face ${face}: painting that face is refused until the script is removed. It runs again whenever the wall or its openings change.`
-          : `The script builds ${name}'s face ${face} up to ${round(toHeight)} m; the face above stays paintable. It runs again whenever the wall or its openings change.`,
+        u0 !== undefined || u1 !== undefined
+          ? `The script builds ${name}'s face ${face} from ${round(u0 ?? 0)} m to ${u1 === undefined ? 'its end' : `${round(u1)} m`} along the wall${toHeight === undefined ? '' : `, up to ${round(toHeight)} m`}; the rest of the face stays paintable. It runs again whenever the wall or its openings change.`
+          : toHeight === undefined
+            ? `The script owns the colours of ${name}'s face ${face}: painting that face is refused until the script is removed. It runs again whenever the wall or its openings change.`
+            : `The script builds ${name}'s face ${face} up to ${round(toHeight)} m; the face above stays paintable. It runs again whenever the wall or its openings change.`,
     },
     changes: {
       update: [{ id: wall.id, data: { finishScripts: { ...wall.finishScripts, [face]: script } } }],

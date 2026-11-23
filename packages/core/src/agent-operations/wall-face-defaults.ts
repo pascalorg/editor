@@ -233,16 +233,20 @@ export function readWallFaces(nodes: SceneNodes): WallFaceReading {
         if (seen < MIN_STRETCH_M) continue
         reading.faces += 1
         reading.metres += seen
+        const script = wall.finishScripts?.[face]
         const written =
-          wall.finishScripts?.[face] !== undefined ||
+          (script !== undefined && script.u0 === undefined && script.u1 === undefined) ||
           (clad && exteriorSide !== null && (exteriorSide === 1 ? 'a' : 'b') === face)
         if (written) continue
         const own = finishes[face].stretches
           .filter((stretch) => stretch.source === 'wall_face' && stretch.chain === 'default')
           .map((stretch): Interval => [stretch.u0, stretch.u1])
-        const painted = finishes[face].paintRegions.map(
-          (region): Interval => [region.u0 ?? 0, region.u1 ?? run],
-        )
+        const painted = [
+          ...finishes[face].paintRegions.map(
+            (region): Interval => [region.u0 ?? 0, region.u1 ?? run],
+          ),
+          ...(script ? [[script.u0 ?? 0, script.u1 ?? run] as Interval] : []),
+        ]
         const stretches = subtract(subtract(own, painted), buried)
         if (!stretches.length) continue
         const first = stretches[0]![0]

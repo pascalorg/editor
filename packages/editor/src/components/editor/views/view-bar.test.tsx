@@ -1,7 +1,11 @@
 import { afterEach, expect, test } from 'bun:test'
+import { useScene } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
+import useEditor from '../../../store/use-editor'
+import { activeViewLayout, VIEW_3D } from '../../../store/view-layout'
 import { renderCurrentMarkup } from '../../../test-utils/render-current-markup'
-import { GroundModeToggle } from './view-bar'
+import { useViewSettle } from './use-editor-views'
+import { GroundModeToggle, leaveUnavailableView, ViewTabs } from './view-bar'
 
 const saved = useViewer.getState()
 
@@ -51,4 +55,25 @@ test("a hillside in the eye's way over a level at grade says only that the groun
   expect(renderCurrentMarkup(<GroundModeToggle />)).toContain('Ground veiled')
   useViewer.setState({ groundMode: 'solid' })
   expect(renderCurrentMarkup(<GroundModeToggle />)).toContain('Ground solid')
+})
+
+test('a view this project cannot show gets a flagged tab once its plugins have had time to load', () => {
+  const editor = useEditor.getState()
+  editor.setPaneView(0, 'plugin-gone:board')
+  const saved = useScene.getState().hydrationId
+  const hydration = {}
+  try {
+    useScene.setState({ hydrationId: hydration })
+    // Just loaded: the view's plugin may still register it, so nothing is flagged yet.
+    expect(renderCurrentMarkup(<ViewTabs pane={0} />)).not.toContain('Unavailable view')
+    useViewSettle.setState({ settled: hydration })
+    const bar = renderCurrentMarkup(<ViewTabs pane={0} />)
+    expect(bar).toContain('Unavailable view')
+    expect(bar).toContain('aria-label="Close this view"')
+    leaveUnavailableView(0)
+    expect(activeViewLayout(useEditor.getState()).panes[0]).toBe(VIEW_3D)
+  } finally {
+    useScene.setState({ hydrationId: saved })
+    editor.setPaneView(0, VIEW_3D)
+  }
 })
