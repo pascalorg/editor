@@ -43,7 +43,7 @@ import { useCallback, useEffect, useRef } from 'react'
 import * as THREE from 'three'
 import { CanvasTarget, ClippingGroup, type WebGPURenderer } from 'three/webgpu'
 import { EDITOR_LAYER } from '../../lib/constants'
-import { takeIdPass } from '../../lib/enriched-capture/requests'
+import { isIdPassCancelled, takeIdPass } from '../../lib/enriched-capture/requests'
 import {
   applySnapshotCapturePose,
   captureSnapshotScene,
@@ -1132,6 +1132,7 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
               return
             }
 
+            if (isIdPassCancelled(requestId)) return
             const idPass = takeIdPass(requestId)
             const runIdPass = () => {
               if (!idPass) return

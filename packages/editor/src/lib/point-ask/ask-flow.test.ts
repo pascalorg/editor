@@ -19,9 +19,10 @@ import {
 } from '../../components/editor/three-context-bridge'
 import { asksWait, type BubbleTarget, usePointAsk } from '../../store/use-point-ask'
 import * as enrichedCapture from '../enriched-capture/enrich'
+import * as enrichedRequests from '../enriched-capture/requests'
 import * as captureCrop from './capture-crop'
 import { setPointAskBehindQueue, setPointAskBusy } from './host-api'
-import { endCompare, sendBubble, startCompare, startPointAskSession } from './session'
+import { closeBubble, endCompare, sendBubble, startCompare, startPointAskSession } from './session'
 
 // The whole ask path with the real stores (hold to see before; an ask while Pascal is working): the session listening to the chat's
 // statuses, a turn writing the scene through the store's own actions (each a history step), the pin
@@ -1077,6 +1078,108 @@ describe('pending ordinary crops and session option updates', () => {
       expect(usePointAsk.getState().bubble).not.toBeNull()
     } finally {
       stopSession()
+      setEditorThreeContext(previousThree)
+      usePointAsk.setState(previousPoint, true)
+    }
+  })
+
+  test('dismissing an enriched region aborts capture and cancels its id pass immediately', async () => {
+    const previousThree = getEditorThreeContext()
+    const previousPoint = usePointAsk.getState()
+    const previousProjectId = useViewer.getState().projectId
+    const listeners = new Map<string, Set<EventListener>>()
+    let capturedSignal: AbortSignal | undefined
+    const enrichedSpy = spyOn(enrichedCapture, 'captureEnrichedRegion').mockImplementation(
+      (_rect, options) => {
+        capturedSignal = options?.signal
+        return new Promise(() => {})
+      },
+    )
+    stopSession()
+    try {
+      globalThis.window = {
+        innerWidth: 100,
+        innerHeight: 100,
+        addEventListener(type: string, listener: EventListener) {
+          if (!listeners.has(type)) listeners.set(type, new Set())
+          listeners.get(type)!.add(listener)
+        },
+        removeEventListener(type: string, listener: EventListener) {
+          listeners.get(type)?.delete(listener)
+        },
+      } as never
+      const canvas = {
+        style: {},
+        getBoundingClientRect: () => ({
+          left: 0,
+          top: 0,
+          right: 100,
+          bottom: 100,
+          width: 100,
+          height: 100,
+        }),
+      } as unknown as HTMLCanvasElement
+      const camera = new PerspectiveCamera(60, 1, 0.1, 100)
+      camera.position.set(2, 3, 7)
+      camera.lookAt(2, 1, 0)
+      camera.updateMatrixWorld(true)
+      setEditorThreeContext({ camera, raycaster: new Raycaster(), domElement: canvas })
+      useViewer.setState({ projectId: 'proj_dismiss_cancel' })
+      stopSession = startPointAskSession({ enrichedRegions: true, freeClick: false })
+      usePointAsk.setState({ active: true, playful: false, hover: null })
+
+      const pointer = (type: string, x: number, y: number) => {
+        const event = {
+          target: canvas,
+          button: 0,
+          pointerType: 'mouse',
+          clientX: x,
+          clientY: y,
+          shiftKey: false,
+          timeStamp: 0,
+          preventDefault() {},
+          stopImmediatePropagation() {},
+        } as unknown as Event
+        for (const listener of listeners.get(type) ?? []) listener(event)
+      }
+
+      pointer('pointerdown', 20, 20)
+      pointer('pointermove', 80, 80)
+      pointer('pointerup', 80, 80)
+      expect(usePointAsk.getState().bubble?.crop.state).toBe('pending')
+      expect(capturedSignal?.aborted).toBe(false)
+
+      closeBubble('dismiss')
+      expect(capturedSignal?.aborted).toBe(true)
+      expect(usePointAsk.getState().bubble).toBeNull()
+
+      // Directly exercise captureViewCrop + expectIdPass cancellation: aborting clears pending idPass
+      // without issuing a delayed busy retry.
+      const emittedIds: string[] = []
+      const onGenerate = (event: { requestId?: string }) => {
+        if (event.requestId) emittedIds.push(event.requestId)
+      }
+      emitter.on('camera-controls:generate-thumbnail', onGenerate as never)
+      const controller = new AbortController()
+      try {
+        const pending = captureCrop.captureViewCrop(
+          { x0: 10, y0: 10, x1: 60, y1: 60 },
+          { pad: 0, idPass: true, signal: controller.signal },
+        )
+        expect(emittedIds).toHaveLength(1)
+        const requestId = emittedIds[0]!
+        controller.abort()
+        await expect(pending).rejects.toThrow('Capture cancelled')
+        expect(enrichedRequests.isIdPassCancelled(requestId)).toBe(true)
+        expect(enrichedRequests.takeIdPass(requestId)).toBeNull()
+        expect(emittedIds).toHaveLength(1)
+      } finally {
+        emitter.off('camera-controls:generate-thumbnail', onGenerate as never)
+      }
+    } finally {
+      enrichedSpy.mockRestore()
+      stopSession()
+      useViewer.setState({ projectId: previousProjectId })
       setEditorThreeContext(previousThree)
       usePointAsk.setState(previousPoint, true)
     }

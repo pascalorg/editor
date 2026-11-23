@@ -80,21 +80,34 @@ const BUSY_RETRY_MS = 1_500
  */
 export async function captureViewCrop(
   screenRect: Rect,
-  options: { pad?: number; idPass?: boolean } = {},
+  options: { pad?: number; idPass?: boolean; signal?: AbortSignal } = {},
 ): Promise<CapturedCrop> {
+  if (options.signal?.aborted) throw new Error('Capture cancelled')
   try {
     return await captureOnce(screenRect, options)
   } catch (error) {
     if (!(error instanceof Error && error.message.startsWith(BUSY))) throw error
-    await new Promise((resolve) => setTimeout(resolve, BUSY_RETRY_MS))
+    if (options.signal?.aborted) throw new Error('Capture cancelled')
+    await new Promise<void>((resolve, reject) => {
+      const onAbort = () => {
+        clearTimeout(timer)
+        reject(new Error('Capture cancelled'))
+      }
+      const timer = setTimeout(() => {
+        options.signal?.removeEventListener('abort', onAbort)
+        resolve()
+      }, BUSY_RETRY_MS)
+      options.signal?.addEventListener('abort', onAbort, { once: true })
+    })
     return captureOnce(screenRect, options)
   }
 }
 
 function captureOnce(
   screenRect: Rect,
-  options: { pad?: number; idPass?: boolean },
+  options: { pad?: number; idPass?: boolean; signal?: AbortSignal },
 ): Promise<CapturedCrop> {
+  if (options.signal?.aborted) return Promise.reject(new Error('Capture cancelled'))
   const rect = canvasRect()
   const projectId = useViewer.getState().projectId
   if (!rect || !projectId) return Promise.reject(new Error('The 3D view is not ready'))
@@ -113,8 +126,14 @@ function captureOnce(
   const picture = new Promise<CapturedCrop>((resolve, reject) => {
     const stop = () => {
       clearTimeout(timer)
+      options.signal?.removeEventListener('abort', onAbort)
       emitter.off('snapshot:captured', onCaptured)
       emitter.off('snapshot:capture-failed', onFailed)
+    }
+    const onAbort = () => {
+      stop()
+      if (options.idPass) cancelIdPass(requestId, 'Capture cancelled')
+      reject(new Error('Capture cancelled'))
     }
     const onCaptured = (event: SnapshotCapturedEvent) => {
       if (event.requestId !== requestId) return
@@ -130,6 +149,7 @@ function captureOnce(
       stop()
       reject(new Error('No picture came back from the 3D view'))
     }, CAPTURE_TIMEOUT_MS)
+    options.signal?.addEventListener('abort', onAbort, { once: true })
     emitter.on('snapshot:captured', onCaptured)
     emitter.on('snapshot:capture-failed', onFailed)
     emitter.emit('camera-controls:generate-thumbnail', {
@@ -143,8 +163,19 @@ function captureOnce(
   if (!idPass) return picture
   return picture.then(
     async (crop) => {
-      const resolvedIdPass = await idPass.catch(() => undefined)
-      return { ...crop, ...(resolvedIdPass ? { idPass: resolvedIdPass } : {}), cropRect }
+      if (options.signal?.aborted) {
+        cancelIdPass(requestId, 'Capture cancelled')
+        throw new Error('Capture cancelled')
+      }
+      const onAbort = () => cancelIdPass(requestId, 'Capture cancelled')
+      options.signal?.addEventListener('abort', onAbort, { once: true })
+      try {
+        const resolvedIdPass = await idPass.catch(() => undefined)
+        if (options.signal?.aborted) throw new Error('Capture cancelled')
+        return { ...crop, ...(resolvedIdPass ? { idPass: resolvedIdPass } : {}), cropRect }
+      } finally {
+        options.signal?.removeEventListener('abort', onAbort)
+      }
     },
     (error) => {
       cancelIdPass(requestId, 'The picture failed')

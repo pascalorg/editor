@@ -134,7 +134,12 @@ function defaultDescribe(nodes: Readonly<Record<string, AnyNode>>) {
  */
 export async function captureEnrichedRegion(
   screenRect: Rect,
-  options: { pad?: number; describe?: (share: VisibleShare) => string; tint?: number } = {},
+  options: {
+    pad?: number
+    describe?: (share: VisibleShare) => string
+    tint?: number
+    signal?: AbortSignal
+  } = {},
 ): Promise<EnrichedCapture> {
   if (
     ![screenRect.x0, screenRect.y0, screenRect.x1, screenRect.y1].every(Number.isFinite) ||
@@ -142,7 +147,12 @@ export async function captureEnrichedRegion(
     screenRect.y1 <= screenRect.y0
   )
     throw new Error('An enriched capture needs a non-empty finite rectangle')
-  const crop = await captureViewCrop(screenRect, { pad: options.pad ?? 0, idPass: true })
+  const crop = await captureViewCrop(screenRect, {
+    pad: options.pad ?? 0,
+    idPass: true,
+    signal: options.signal,
+  })
+  if (options.signal?.aborted) throw new Error('Capture cancelled')
   try {
     if (!crop.idPass || !crop.cropRect) {
       throw new Error('The capture came back without its id buffer')

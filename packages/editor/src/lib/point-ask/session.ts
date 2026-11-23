@@ -95,6 +95,7 @@ type Down = {
   capturedAt: string
   camera: PointCamera | null
   crop: Promise<SessionCrop | null>
+  cropController?: AbortController
   shift: boolean
 }
 
@@ -288,12 +289,17 @@ function openBubble(
   targets: BubbleTarget[],
   hit: PointHit,
   gesture: PointBubble['gesture'],
-  down: Pick<Down, 'crop' | 'capturedAt' | 'camera'> | null,
+  down: Pick<Down, 'crop' | 'cropController' | 'capturedAt' | 'camera'> | null,
   area?: PointBubble['area'],
   changesAsk?: PointBubble['changesAsk'],
   extra?: { locationLabel?: string; region?: [number, number, number, number] },
 ) {
   const state = usePointAsk.getState()
+  if (state.bubble && state.bubble.capturedAt !== (down?.capturedAt ?? '')) {
+    cancelCrop(state.bubble.capturedAt)
+    downCrops.delete(state.bubble.capturedAt)
+    regionFootprintBuilders.delete(state.bubble.capturedAt)
+  }
   // Asking for more starts from an empty field; the words just sent are not a draft to come back to.
   const draft = changesAsk
     ? ''
@@ -325,60 +331,75 @@ function openBubble(
     )
   if (crop) {
     const opened = bubble
-    crop.then(
-      (value) => {
-        const current = usePointAsk.getState().bubble
-        if (!(current && current.capturedAt === opened.capturedAt)) return
-        usePointAsk.getState().patchBubble({
-          crop: value
-            ? {
-                state: 'ready',
-                dataUrl: value.dataUrl,
-                width: value.width,
-                height: value.height,
-                marked: false,
-                ...(value.enriched ? { enriched: value.enriched } : {}),
-              }
-            : { state: 'failed' },
-          ...(value?.enriched && current.area
-            ? (() => {
-                const nextAnchor = value.enriched.world.center
-                const nextFootprint = nextAnchor
-                  ? alignFootprintToCenter(
-                      nextAnchor,
-                      current.footprint,
-                      current.hit.normal,
-                      regionFootprintBuilders.get(opened.capturedAt),
-                    )
-                  : undefined
-                return {
-                  area: { ...current.area, ids: visibleNodeIds(value.enriched), more: 0 },
-                  camera: value.enriched.camera,
-                  ...(nextAnchor ? { anchor: nextAnchor } : {}),
-                  ...(nextFootprint ? { footprint: nextFootprint } : {}),
+    if (down?.cropController) cropControllers.set(opened.capturedAt, down.cropController)
+    crop
+      .then(
+        (value) => {
+          const current = usePointAsk.getState().bubble
+          if (!(current && current.capturedAt === opened.capturedAt)) return
+          usePointAsk.getState().patchBubble({
+            crop: value
+              ? {
+                  state: 'ready',
+                  dataUrl: value.dataUrl,
+                  width: value.width,
+                  height: value.height,
+                  marked: false,
+                  ...(value.enriched ? { enriched: value.enriched } : {}),
                 }
-              })()
-            : value?.enriched
-              ? { camera: value.enriched.camera }
-              : {}),
-        })
-        if (value?.enriched && current.area) {
-          const ids = visibleNodeIds(value.enriched)
-          useViewer.getState().setPointedIds(ids.length ? (ids as never) : null)
+              : { state: 'failed' },
+            ...(value?.enriched && current.area
+              ? (() => {
+                  const nextAnchor = value.enriched.world.center
+                  const nextFootprint = nextAnchor
+                    ? alignFootprintToCenter(
+                        nextAnchor,
+                        current.footprint,
+                        current.hit.normal,
+                        regionFootprintBuilders.get(opened.capturedAt),
+                      )
+                    : undefined
+                  return {
+                    area: { ...current.area, ids: visibleNodeIds(value.enriched), more: 0 },
+                    camera: value.enriched.camera,
+                    ...(nextAnchor ? { anchor: nextAnchor } : {}),
+                    ...(nextFootprint ? { footprint: nextFootprint } : {}),
+                  }
+                })()
+              : value?.enriched
+                ? { camera: value.enriched.camera }
+                : {}),
+          })
+          if (value?.enriched && current.area) {
+            const ids = visibleNodeIds(value.enriched)
+            useViewer.getState().setPointedIds(ids.length ? (ids as never) : null)
+          }
+        },
+        () => undefined,
+      )
+      .finally(() => {
+        if (cropControllers.get(opened.capturedAt) === down?.cropController) {
+          cropControllers.delete(opened.capturedAt)
         }
-      },
-      () => undefined,
-    )
+      })
   }
   downCrops.set(bubble.capturedAt, crop ?? Promise.resolve(null))
 }
 
 /** The pending crop of each bubble, kept so a send can wait for it. */
 const downCrops = new Map<string, Promise<SessionCrop | null>>()
+const cropControllers = new Map<string, AbortController>()
 const regionFootprintBuilders = new Map<
   string,
   (point: [number, number, number], normal: [number, number, number]) => WorldFootprint | null
 >()
+
+function cancelCrop(capturedAt: string) {
+  const controller = cropControllers.get(capturedAt)
+  if (!controller) return
+  cropControllers.delete(capturedAt)
+  controller.abort()
+}
 
 function makeCameraRay(
   camera: Camera,
@@ -430,7 +451,12 @@ export function closeBubble(kind: 'send' | 'dismiss' = 'dismiss') {
   const bubble = state.bubble
   if (!bubble) return
   // Words that were not sent are kept for the next time the same element is pointed at.
-  if (kind === 'dismiss') state.rememberDraft(bubble.targets[0]?.id ?? '', bubble.draft)
+  if (kind === 'dismiss') {
+    cancelCrop(bubble.capturedAt)
+    state.rememberDraft(bubble.targets[0]?.id ?? '', bubble.draft)
+  } else {
+    cropControllers.delete(bubble.capturedAt)
+  }
   downCrops.delete(bubble.capturedAt)
   regionFootprintBuilders.delete(bubble.capturedAt)
   if (bubble.area) state.setRegion(null)
@@ -442,11 +468,11 @@ export function closeBubble(kind: 'send' | 'dismiss' = 'dismiss') {
   }
 }
 
-function startCrop(hover: PointHover | null): Promise<CapturedCrop | null> {
+function startCrop(hover: PointHover | null, signal?: AbortSignal): Promise<CapturedCrop | null> {
   if (!hover?.target.box) return Promise.resolve(null)
   const rect = projectBox(hover.target.box)
   if (!rect) return Promise.resolve(null)
-  return captureViewCrop(rect).then(
+  return captureViewCrop(rect, { signal }).then(
     (crop) => crop,
     (error) => {
       console.debug('[point-ask] no picture:', error instanceof Error ? error.message : error)
@@ -528,6 +554,7 @@ function onPointerDown(event: PointerEvent) {
     state.setHover(hover)
     useViewer.getState().setHoveredId(hover.target.id as AnyNodeId)
   }
+  const cropController = new AbortController()
   down = {
     x: event.clientX,
     y: event.clientY,
@@ -535,7 +562,8 @@ function onPointerDown(event: PointerEvent) {
     hover,
     capturedAt: new Date().toISOString(),
     camera: currentCamera(),
-    crop: startCrop(hover),
+    crop: startCrop(hover, cropController.signal),
+    cropController,
     shift: event.shiftKey,
   }
 }
@@ -660,9 +688,9 @@ function regionCenterHit(rect: Rect): PointHit {
   return { point, normal: [0, 1, 0] }
 }
 
-function captureRegionCrop(rect: Rect): Promise<SessionCrop> {
-  if (!enrichedRegions) return captureViewCrop(rect, { pad: 0 })
-  return captureEnrichedRegion(rect, { pad: 0 }).then(
+function captureRegionCrop(rect: Rect, signal?: AbortSignal): Promise<SessionCrop> {
+  if (!enrichedRegions) return captureViewCrop(rect, { pad: 0, signal })
+  return captureEnrichedRegion(rect, { pad: 0, signal }).then(
     (enriched) => ({ ...enriched.crop, enriched }),
     (error) => {
       if (error instanceof EnrichmentFallbackError) {
@@ -676,6 +704,7 @@ function captureRegionCrop(rect: Rect): Promise<SessionCrop> {
 
 /** The press became a drag and was let go: the shutter fires and a bubble opens on the rectangle. */
 function finishRegion(press: Down, event: PointerEvent) {
+  press.cropController?.abort()
   const state = usePointAsk.getState()
   const region = state.region
   regionCandidates = null
@@ -687,7 +716,8 @@ function finishRegion(press: Down, event: PointerEvent) {
   const rect = region.rect
   state.setRegion({ ...region, settled: true, flashKey: region.flashKey + 1 })
   if (state.playful) triggerSFX('sfx:snapshot-capture')
-  const crop = captureRegionCrop(rect).then(
+  const cropController = new AbortController()
+  const crop = captureRegionCrop(rect, cropController.signal).then(
     (value) => value,
     (error) => {
       console.debug(
@@ -712,7 +742,7 @@ function finishRegion(press: Down, event: PointerEvent) {
         })()
       : cameraRay
   const footprint = regionFootprint(rect, rayFn, hit)
-  openBubble([], hit, 'region', { ...press, crop }, { rect, click, ids, more })
+  openBubble([], hit, 'region', { ...press, crop, cropController }, { rect, click, ids, more })
   const opened = usePointAsk.getState().bubble
   if (opened) {
     regionFootprintBuilders.set(opened.capturedAt, (point, normal) =>
@@ -737,6 +767,7 @@ function onPointerMove(event: PointerEvent) {
   if (!down) return
   if (!down.moved && Math.hypot(event.clientX - down.x, event.clientY - down.y) > CLICK_SLOP_PX) {
     down.moved = true
+    down.cropController?.abort()
     // A drag begun while composing re-points: the open bubble goes, its words are kept.
     if (usePointAsk.getState().bubble) closeBubble('dismiss')
   }
@@ -842,6 +873,7 @@ function handleClick(press: Down, shift: boolean) {
   const state = usePointAsk.getState()
   const hover = press.hover
   if (!hover) {
+    press.cropController?.abort()
     if (!freeClick) {
       if (state.bubble) closeBubble('dismiss')
       return
@@ -850,8 +882,9 @@ function handleClick(press: Down, shift: boolean) {
     const locationLabel = freeLocationLabel(hit)
     const frame = canvasRect()
     const rect = localClickRect(press.x, press.y)
+    const cropController = rect ? new AbortController() : undefined
     const capture: Promise<SessionCrop | null> = rect
-      ? captureRegionCrop(rect)
+      ? captureRegionCrop(rect, cropController?.signal)
       : Promise.resolve(null)
     const crop = capture.then(
       (value) => value,
@@ -860,7 +893,7 @@ function handleClick(press: Down, shift: boolean) {
         return null
       },
     )
-    openBubble([], hit, 'click', { ...press, crop }, undefined, undefined, {
+    openBubble([], hit, 'click', { ...press, crop, cropController }, undefined, undefined, {
       locationLabel,
       ...(rect && frame ? { region: regionFractions(rect, frame) } : {}),
     })
@@ -868,6 +901,7 @@ function handleClick(press: Down, shift: boolean) {
   }
   const bubble = state.bubble
   if (bubble && shift) {
+    press.cropController?.abort()
     const has = bubble.targets.some((t) => t.id === hover.target.id)
     const targets = has
       ? bubble.targets.filter((t) => t.id !== hover.target.id)
@@ -1077,6 +1111,7 @@ export async function sendBubble(
   const freeEnriched = !area && freeClick && bubble.targets.length === 0 && enrichedRegions
   const waitEnriched = (Boolean(area) && enrichedRegions) || freeEnriched
   const pendingCrop = downCrops.get(bubble.capturedAt)
+  const pendingController = cropControllers.get(bubble.capturedAt)
   const buildFootprint = regionFootprintBuilders.get(bubble.capturedAt)
   const object = first ? sceneRegistry.nodes.get(first.id) : undefined
   let local: PinRecord['local'] = null
@@ -1124,7 +1159,10 @@ export async function sendBubble(
           pendingCrop,
           new Promise<null>((resolve) => {
             timer = setTimeout(
-              () => resolve(null),
+              () => {
+                pendingController?.abort()
+                resolve(null)
+              },
               waitEnriched ? ENRICHED_CROP_WAIT_MS : CROP_WAIT_MS,
             )
           }),
@@ -1693,6 +1731,10 @@ export function startPointAskSession(
   stopSession = () => {
     endCompare()
     for (const off of offs) off()
+    down?.cropController?.abort()
+    down = null
+    for (const controller of cropControllers.values()) controller.abort()
+    cropControllers.clear()
     leavePointMode()
     downCrops.clear()
     regionFootprintBuilders.clear()

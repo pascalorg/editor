@@ -21,9 +21,16 @@ type Pending = {
   taken: boolean
 }
 const pending = new Map<string, Pending>()
+const cancelled = new Set<string>()
 const ID_PASS_TIMEOUT_MS = 12_000
+const CANCELLED_LIMIT = 64
+
+export function isIdPassCancelled(requestId: string | undefined): boolean {
+  return Boolean(requestId && cancelled.has(requestId))
+}
 
 export function expectIdPass(requestId: string): Promise<EnrichedIdPass> {
+  cancelled.delete(requestId)
   return new Promise((resolve, reject) => {
     const timer = setTimeout(
       () => cancelIdPass(requestId, 'No id buffer came back from the 3D view'),
@@ -34,6 +41,12 @@ export function expectIdPass(requestId: string): Promise<EnrichedIdPass> {
 }
 
 export function cancelIdPass(requestId: string, reason: string) {
+  cancelled.delete(requestId)
+  cancelled.add(requestId)
+  if (cancelled.size > CANCELLED_LIMIT) {
+    const oldest = cancelled.values().next().value
+    if (oldest !== undefined) cancelled.delete(oldest)
+  }
   const waiting = pending.get(requestId)
   if (!waiting) return
   clearTimeout(waiting.timer)
