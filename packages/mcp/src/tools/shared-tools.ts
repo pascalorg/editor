@@ -25,8 +25,14 @@ import {
   type AgentToolContract,
   addCornerWindowTool,
   addFenceTool,
+  addHedgeTool,
   addLevelTool,
   addObjectTool,
+  addPlantingTool,
+  addRockTool,
+  addSiteSurfaceTool,
+  addStepsTool,
+  addTreeTool,
   addWallTool,
   createRoofTool,
   createRoomTool,
@@ -380,6 +386,36 @@ const SHARED_TOOLS: SharedTool[] = [
   {
     contract: addFenceTool,
     operation: AGENT_OPERATIONS.add_fence,
+    annotations: ADDITIVE_TOOL_ANNOTATIONS,
+  },
+  {
+    contract: addHedgeTool,
+    operation: AGENT_OPERATIONS.add_hedge,
+    annotations: DESTRUCTIVE_TOOL_ANNOTATIONS,
+  },
+  {
+    contract: addPlantingTool,
+    operation: AGENT_OPERATIONS.add_planting,
+    annotations: DESTRUCTIVE_TOOL_ANNOTATIONS,
+  },
+  {
+    contract: addTreeTool,
+    operation: AGENT_OPERATIONS.add_tree,
+    annotations: ADDITIVE_TOOL_ANNOTATIONS,
+  },
+  {
+    contract: addRockTool,
+    operation: AGENT_OPERATIONS.add_rock,
+    annotations: DESTRUCTIVE_TOOL_ANNOTATIONS,
+  },
+  {
+    contract: addSiteSurfaceTool,
+    operation: AGENT_OPERATIONS.add_site_surface,
+    annotations: ADDITIVE_TOOL_ANNOTATIONS,
+  },
+  {
+    contract: addStepsTool,
+    operation: AGENT_OPERATIONS.add_steps,
     annotations: ADDITIVE_TOOL_ANNOTATIONS,
   },
   {

@@ -47,7 +47,9 @@ export function RegisteredToolHelper({
         return {
           keys: [hint.key],
           label: shiftPressed && isBypassHint ? i18n._({ id: 'editor.helpers.registeredToolHelper.guidedConstraintsBypassed', message: 'Guided constraints bypassed' }) : hint.label,
-          active: shiftPressed && isBypassHint,
+          // A hint that only appears once the draft can be finished ("Enter: Finish slab") is the
+          // news of the moment: it is shown without unfolding the card, like the other live rows.
+          active: (shiftPressed && isBypassHint) || hint.minDraftVertices != null,
         }
       })}
       continuationContext={continuationContext}

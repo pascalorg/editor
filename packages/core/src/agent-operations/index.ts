@@ -19,6 +19,7 @@ import { duplicateNode } from './duplicate-node'
 import { findByType } from './find-by-type'
 import { furnishRoom } from './furnish-room'
 import { getNode } from './get-node'
+import { addHedge } from './hedge'
 import { getLevelSummary, getWalls, getZones } from './level-reads'
 import { listLevels } from './list-levels'
 import { mergeWindowsOperation } from './merge-windows'
@@ -27,17 +28,22 @@ import { moveRoofsToRoofLevel } from './move-roofs'
 import { paint } from './paint'
 import { placeInRoom } from './place-in-room'
 import { placeItems } from './place-items'
+import { addPlanting } from './planting'
+import { addRock } from './rock'
 import { ROOM_OPERATIONS } from './room-structure'
 import { searchAssets } from './search-assets'
 import { searchMaterials } from './search-materials'
 import { setCheckpoint } from './set-checkpoint'
 import { setGroundLevel } from './set-ground-level'
 import { getSite, placeBuilding } from './site'
+import { addSiteSurface, addSteps } from './site-works'
 import { fitStair, measureStairOperation } from './stairs'
+import { addTree } from './tree'
 import type { AgentOperation, AgentOperationSteps, AgentOperations } from './types'
 import { createUnit, listUnits, setUnitMembers } from './units'
 import { verifyScene, verifySceneSteps } from './verify-scene'
 import { setWallType } from './wall-type'
+import './rock-checks'
 import './room-checks'
 import './unreachable-rooms-check'
 import './usage-checks'
@@ -71,6 +77,7 @@ export * from './find-by-type'
 export * from './finish-script'
 export * from './furnish-room'
 export * from './get-node'
+export * from './hedge'
 export * from './hosted-services'
 export * from './layout-clearance'
 // The door check that reads an item's real shape, not the plain one of door-clearance.
@@ -89,8 +96,10 @@ export * from './node-patch'
 export * from './paint'
 export * from './place-items'
 export * from './plan-geometry'
+export * from './planting'
 export * from './point-context'
 export * from './project-files'
+export * from './rock'
 export * from './roof-writes'
 export { ROOM_CHECK_CODES } from './room-checks'
 export * from './room-floor-script'
@@ -103,8 +112,10 @@ export * from './scene-view'
 export * from './search-assets'
 export * from './search-materials'
 export * from './site'
+export * from './site-works'
 export * from './slab-surface-script'
 export * from './stairs'
+export * from './tree'
 export * from './types'
 export * from './units'
 export * from './verify-scene'
@@ -132,6 +143,12 @@ const SINGLE_OPERATIONS = {
   add_wall: addWall,
   set_wall_type: setWallType,
   add_fence: addFence,
+  add_hedge: addHedge,
+  add_planting: addPlanting,
+  add_tree: addTree,
+  add_rock: addRock,
+  add_site_surface: addSiteSurface,
+  add_steps: addSteps,
   add_corner_window: addCornerWindow,
   merge_windows: mergeWindowsOperation,
   add_level: addLevel,
