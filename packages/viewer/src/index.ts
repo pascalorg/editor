@@ -573,10 +573,12 @@ export {
   generateExtrudedWall,
   getPendingWallRebuildCount,
   isWallInitialBuildActive,
+  repairDeferredWallTJunctions,
   runWallBuildFrame,
   type WallGeometryAdapter,
   type WallGeometryAdapterContext,
   WallSystem,
+  type WallTJunctionMode,
 } from './systems/wall/wall-system'
 export {
   advanceWindowAnimations,
