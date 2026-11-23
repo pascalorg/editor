@@ -361,15 +361,17 @@ export function commentToolHints({
   composing,
   enrichedRegions = false,
   freeClick = false,
+  noteComposer = false,
 }: {
   altPressed: boolean
   shiftPressed: boolean
   composing: boolean
   enrichedRegions?: boolean
   freeClick?: boolean
+  noteComposer?: boolean
 }): ContextualShortcutHint[] {
   if (composing) {
-    if (freeClick) {
+    if (noteComposer) {
       return [
         {
           keys: ['Enter'],
@@ -477,7 +479,7 @@ export function commentToolHints({
 export function HelperManager({
   pointAsk,
 }: {
-  pointAsk?: { enrichedRegions?: boolean; freeClick?: boolean }
+  pointAsk?: { enrichedRegions?: boolean; freeClick?: boolean; noteComposer?: boolean }
 } = {}) {
   const i18n = usePascalI18n()
   const pointAskActive = usePointAsk((s) => s.active)
@@ -602,6 +604,7 @@ export function HelperManager({
           composing: pointAskComposing,
           enrichedRegions: pointAsk?.enrichedRegions === true,
           freeClick: pointAsk?.freeClick === true,
+          noteComposer: pointAsk?.noteComposer === true,
         })}
         title={COMMENT_HUD_TITLE}
       />

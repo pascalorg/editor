@@ -19,6 +19,7 @@ import {
 } from '../../components/editor/three-context-bridge'
 import { asksWait, type BubbleTarget, usePointAsk } from '../../store/use-point-ask'
 import * as enrichedCapture from '../enriched-capture/enrich'
+import * as captureCrop from './capture-crop'
 import { setPointAskBehindQueue, setPointAskBusy } from './host-api'
 import { endCompare, sendBubble, startCompare, startPointAskSession } from './session'
 
@@ -601,5 +602,171 @@ describe('messages already queued or held', () => {
     status(askId, { status: 'ended', outcome: 'completed', asked: false, wroteScene: true })
     setPointAskBehindQueue(true)
     expect(startCompare(askId)).toBe(true)
+  })
+})
+
+describe('pending ordinary crops and session option updates', () => {
+  test('sending an ordinary click while its crop is still pending retains the picture', async () => {
+    const received: PointAskSubmit[] = []
+    const previousThree = getEditorThreeContext()
+    const previousPoint = usePointAsk.getState()
+    const listeners = new Map<string, Set<EventListener>>()
+    let fulfill!: (crop: captureCrop.CapturedCrop) => void
+    const deferred = new Promise<captureCrop.CapturedCrop>((resolve) => {
+      fulfill = resolve
+    })
+    const cropSpy = spyOn(captureCrop, 'captureViewCrop').mockReturnValue(deferred)
+    stopSession()
+    unregisterHandler()
+    unregisterHandler = registerPointAskHandler(async (submit) => {
+      received.push(submit)
+      return { ok: true }
+    })
+    try {
+      globalThis.window = {
+        innerWidth: 100,
+        innerHeight: 100,
+        addEventListener(type: string, listener: EventListener) {
+          if (!listeners.has(type)) listeners.set(type, new Set())
+          listeners.get(type)!.add(listener)
+        },
+        removeEventListener(type: string, listener: EventListener) {
+          listeners.get(type)?.delete(listener)
+        },
+      } as never
+      const canvas = {
+        style: {},
+        getBoundingClientRect: () => ({
+          left: 0,
+          top: 0,
+          right: 100,
+          bottom: 100,
+          width: 100,
+          height: 100,
+        }),
+      } as unknown as HTMLCanvasElement
+      const camera = new PerspectiveCamera(60, 1, 0.1, 100)
+      camera.position.set(2, 3, 7)
+      camera.lookAt(2, 1, 0)
+      camera.updateMatrixWorld(true)
+      setEditorThreeContext({ camera, raycaster: new Raycaster(), domElement: canvas })
+      stopSession = startPointAskSession({ enrichedRegions: false, freeClick: false })
+      usePointAsk.setState({
+        active: true,
+        playful: false,
+        hover: {
+          kind: 'wall',
+          target,
+          hit: { point: [2, 1, 0], normal: [0, 0, 1] },
+          label: 'Wall',
+          size: '4 m',
+          position: 'on Level',
+        } as never,
+      })
+      const pointer = (type: string, x: number, y: number) => {
+        const event = {
+          target: canvas,
+          button: 0,
+          pointerType: 'mouse',
+          clientX: x,
+          clientY: y,
+          shiftKey: false,
+          timeStamp: 0,
+          preventDefault() {},
+          stopImmediatePropagation() {},
+        } as unknown as Event
+        for (const listener of listeners.get(type) ?? []) listener(event)
+      }
+      pointer('pointerdown', 50, 50)
+      pointer('pointerup', 50, 50)
+      expect(cropSpy).toHaveBeenCalledTimes(1)
+      expect(usePointAsk.getState().bubble?.crop.state).toBe('pending')
+
+      const sending = sendBubble('what is this?', { x: 0, y: 0, width: 10, height: 10 })
+      expect(usePointAsk.getState().bubble).toBeNull()
+      fulfill({ dataUrl: 'data:image/jpeg;base64,ORDINARY', width: 512, height: 512 })
+      await sending
+
+      expect(received).toHaveLength(1)
+      expect(received[0]!.context.image).toEqual({
+        dataUrl: 'data:image/jpeg;base64,ORDINARY',
+        width: 512,
+        height: 512,
+        marked: false,
+      })
+    } finally {
+      cropSpy.mockRestore()
+      stopSession()
+      setEditorThreeContext(previousThree)
+      usePointAsk.setState(previousPoint, true)
+    }
+  })
+
+  test('calling startPointAskSession while already active updates enrichedRegions and freeClick', () => {
+    const previousThree = getEditorThreeContext()
+    const previousPoint = usePointAsk.getState()
+    const listeners = new Map<string, Set<EventListener>>()
+    const enrichedSpy = spyOn(enrichedCapture, 'captureEnrichedRegion').mockReturnValue(
+      new Promise(() => {}),
+    )
+    stopSession()
+    try {
+      globalThis.window = {
+        innerWidth: 100,
+        innerHeight: 100,
+        addEventListener(type: string, listener: EventListener) {
+          if (!listeners.has(type)) listeners.set(type, new Set())
+          listeners.get(type)!.add(listener)
+        },
+        removeEventListener(type: string, listener: EventListener) {
+          listeners.get(type)?.delete(listener)
+        },
+      } as never
+      const canvas = {
+        style: {},
+        getBoundingClientRect: () => ({
+          left: 0,
+          top: 0,
+          right: 100,
+          bottom: 100,
+          width: 100,
+          height: 100,
+        }),
+      } as unknown as HTMLCanvasElement
+      const camera = new PerspectiveCamera(60, 1, 0.1, 100)
+      camera.position.set(2, 3, 7)
+      camera.lookAt(2, 1, 0)
+      camera.updateMatrixWorld(true)
+      setEditorThreeContext({ camera, raycaster: new Raycaster(), domElement: canvas })
+      const firstStop = startPointAskSession({ enrichedRegions: false, freeClick: false })
+      const secondStop = startPointAskSession({ enrichedRegions: true, freeClick: true })
+      expect(secondStop).toBe(firstStop)
+      stopSession = secondStop
+
+      usePointAsk.setState({ active: true, playful: false, hover: null })
+      const pointer = (type: string, x: number, y: number) => {
+        const event = {
+          target: canvas,
+          button: 0,
+          pointerType: 'mouse',
+          clientX: x,
+          clientY: y,
+          shiftKey: false,
+          timeStamp: 0,
+          preventDefault() {},
+          stopImmediatePropagation() {},
+        } as unknown as Event
+        for (const listener of listeners.get(type) ?? []) listener(event)
+      }
+      pointer('pointerdown', 50, 50)
+      pointer('pointerup', 50, 50)
+      expect(usePointAsk.getState().bubble?.targets).toEqual([])
+      expect(enrichedSpy).toHaveBeenCalledTimes(1)
+    } finally {
+      enrichedSpy.mockRestore()
+      stopSession()
+      setEditorThreeContext(previousThree)
+      usePointAsk.setState(previousPoint, true)
+    }
   })
 })

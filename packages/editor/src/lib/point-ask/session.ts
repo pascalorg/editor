@@ -986,10 +986,10 @@ export async function sendBubble(
   const nodes = useScene.getState().nodes as Record<string, AnyNode>
   const first = bubble.targets[0]
   const area = bubble.area
-  // closeBubble releases its pending crop; retain this enriched region's promise for the handoff.
+  // closeBubble removes downCrops[capturedAt]; retain the pending crop promise for every send.
   const freeEnriched = !area && freeClick && bubble.targets.length === 0 && enrichedRegions
-  const regionCrop =
-    (area && enrichedRegions) || freeEnriched ? downCrops.get(bubble.capturedAt) : undefined
+  const waitEnriched = (Boolean(area) && enrichedRegions) || freeEnriched
+  const pendingCrop = downCrops.get(bubble.capturedAt)
   const object = first ? sceneRegistry.nodes.get(first.id) : undefined
   let local: PinRecord['local'] = null
   if (object && first) {
@@ -1030,15 +1030,14 @@ export async function sendBubble(
   // Ordinary crops wait briefly; enriched regions allow their full correlated capture budget.
   let crop = bubble.crop
   if (crop.state === 'pending') {
-    const pending = regionCrop ?? downCrops.get(bubble.capturedAt)
     let timer: ReturnType<typeof setTimeout> | undefined
-    const waited = pending
+    const waited = pendingCrop
       ? await Promise.race([
-          pending,
+          pendingCrop,
           new Promise<null>((resolve) => {
             timer = setTimeout(
               () => resolve(null),
-              regionCrop ? ENRICHED_CROP_WAIT_MS : CROP_WAIT_MS,
+              waitEnriched ? ENRICHED_CROP_WAIT_MS : CROP_WAIT_MS,
             )
           }),
         ]).finally(() => clearTimeout(timer))
@@ -1516,9 +1515,11 @@ export function handEditsSince(askId: string): number {
 export function startPointAskSession(
   options: { enrichedRegions?: boolean; freeClick?: boolean } = {},
 ): () => void {
-  if (stopSession) return stopSession
+  // PointAskLayer is single-instance in the editor; still copy updated flags before returning
+  // the existing teardown so remounts or duplicate callers never keep stale options.
   enrichedRegions = options.enrichedRegions === true
   freeClick = options.freeClick === true
+  if (stopSession) return stopSession
   const offs: (() => void)[] = []
   const listen = <K extends keyof WindowEventMap>(
     type: K,

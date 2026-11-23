@@ -272,13 +272,14 @@ describe('Comment tool HUD', () => {
     expect(activeAltHints.find((hint) => hint.keys.includes('Alt'))?.active).toBe(true)
   })
 
-  test('composing mode renders save, Ask Architect, multi-select, and dismiss rows and marks Shift active', () => {
+  test('composing mode renders save, Ask Architect, multi-select, and dismiss rows when noteComposer is enabled and marks Shift active', () => {
     const hints = commentToolHints({
       altPressed: false,
       shiftPressed: true,
       composing: true,
       enrichedRegions: true,
       freeClick: true,
+      noteComposer: true,
     })
     const html = renderToStaticMarkup(
       <TooltipProvider>
@@ -297,6 +298,22 @@ describe('Comment tool HUD', () => {
     }
     expect(html).not.toContain('More shortcuts')
     expect(hints.find((hint) => hint.keys.includes('Shift'))?.active).toBe(true)
+
+    const nativeBubbleHints = commentToolHints({
+      altPressed: false,
+      shiftPressed: false,
+      composing: true,
+      enrichedRegions: true,
+      freeClick: true,
+    })
+    const nativeHtml = renderToStaticMarkup(
+      <TooltipProvider>
+        <ContextualHelperPanel hints={nativeBubbleHints} title={COMMENT_HUD_TITLE} />
+      </TooltipProvider>,
+    )
+    expect(nativeHtml).toContain('Send')
+    expect(nativeHtml).not.toContain('Save comment')
+    expect(nativeHtml).not.toContain('Ask Architect')
   })
 
   test('commentToolHints defaults fall back to generic capture descriptions when flags are omitted', () => {
