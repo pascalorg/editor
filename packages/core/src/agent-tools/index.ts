@@ -13,6 +13,7 @@ import { designBriefTool } from './design-brief'
 import { placeDesignTool, validateDesignTool } from './designs'
 import { addFenceTool } from './fences'
 import { findByTypeTool } from './find-by-type'
+import { setFinishScriptTool } from './finish-script'
 import { furnishRoomTool } from './furnish-room'
 import {
   addLevelTool,
@@ -52,6 +53,7 @@ export * from './corner-window'
 export * from './create-room'
 export * from './fences'
 export * from './find-by-type'
+export * from './finish-script'
 export * from './furnish-room'
 export * from './hosted-services'
 export * from './levels'
@@ -118,6 +120,7 @@ export const AGENT_TOOL_CONTRACTS = [
   duplicateNodeTool,
   addObjectTool,
   authorSceneTool,
+  setFinishScriptTool,
   getSourceTool,
   findByTypeTool,
   editCollectionTool,
