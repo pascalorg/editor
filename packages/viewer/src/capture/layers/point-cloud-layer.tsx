@@ -6,6 +6,7 @@ import { useMemo } from 'react'
 import type { BufferGeometry } from 'three'
 import { PLYLoader } from 'three/addons/loaders/PLYLoader.js'
 import { OVERLAY_LAYER } from '../../lib/layers'
+import { SCAN_POINT_CLOUD_NAME } from '../../lib/scan-points'
 import { rewriteLoopbackAssetUrl } from '../asset-url'
 import { POINT_DISC_SIZE, PointDiscCloud } from './point-disc-cloud'
 
@@ -66,7 +67,7 @@ function PointCloudDataLayer({ data, pointSize }: { data: PointCloudData; pointS
       // As the phone streams it while scanning: flat colours over the image, untouched by the
       // scene's exposure, grade and bloom, which turned light points into a warm glowing haze.
       layer={OVERLAY_LAYER}
-      name="capture-point-cloud"
+      name={SCAN_POINT_CLOUD_NAME}
       positions={data.positions}
       size={pointSize}
     />

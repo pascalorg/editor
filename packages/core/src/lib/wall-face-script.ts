@@ -43,6 +43,9 @@ export type WallFaceScriptInputs = {
   thickness: number
 }
 
+/** The part of a face a script builds: `u0`–`u1` along the wall, up to `toHeight` (each absent: to that edge). */
+export type WallFaceScriptExtent = { toHeight?: number; u0?: number; u1?: number }
+
 const EPS = 1e-6
 const round = (value: number) => Math.round(value * 1e4) / 1e4
 
@@ -200,10 +203,17 @@ export function wallFaceScriptInputs(
   nodes: SceneNodes,
   wallId: string,
   face: WallFace,
-  toHeight?: number,
+  extent: WallFaceScriptExtent = {},
 ): WallFaceScriptInputs | null {
-  const frame = faceFrame(nodes, wallId, face)
-  if (!frame) return null
+  const whole = faceFrame(nodes, wallId, face)
+  if (!whole) return null
+  const { toHeight, u0, u1 } = extent
+  const frame = {
+    ...whole,
+    x0: Math.max(whole.x0, u0 ?? whole.x0),
+    x1: Math.min(whole.x1, u1 ?? whole.x1),
+  }
+  if (frame.x1 - frame.x0 <= EPS) return null
   const { wall, support, offset, x0, x1, top } = frame
   const outline = {
     x0: round(x0),
@@ -242,18 +252,25 @@ export function wallFaceScriptInputsKey(inputs: WallFaceScriptInputs): string {
   )
 }
 
-/** A compile as the wall keeps it on a face: its script source, its face's key, its `toHeight`. */
+/** A compile as the wall keeps it on a face: its script source, its face's key, its extent. */
 export function wallFaceScriptRecord(
   compiled: CompiledGeometryScript,
   inputs: WallFaceScriptInputs,
-  toHeight: number | undefined,
+  { toHeight, u0, u1 }: WallFaceScriptExtent,
   previous?: WallFaceScript,
 ): WallFaceScript {
   return {
     ...scriptSource(compiled, {}, previous),
     inputs: wallFaceScriptInputsKey(inputs),
     ...(toHeight === undefined ? {} : { toHeight }),
+    ...(u0 === undefined ? {} : { u0 }),
+    ...(u1 === undefined ? {} : { u1 }),
   }
+}
+
+/** Whether a face script builds only part of its face along the wall (a room's stretch). */
+export function isPartialWallFaceScript(script: WallFaceScript): boolean {
+  return script.u0 !== undefined || script.u1 !== undefined
 }
 
 /** Over the face, so the face's own finish never shows through the tiles. */
@@ -294,7 +311,11 @@ export function wallFaceScriptSkirtingGap(
   bandTop: number,
 ): [number, number] | null {
   const { min, max } = script.manifest.bounds
-  return min[1] < bandTop - EPS ? [min[0], max[0]] : null
+  if (min[1] >= bandTop - EPS) return null
+  return [
+    Math.max(min[0], script.u0 ?? Number.NEGATIVE_INFINITY),
+    Math.min(max[0], script.u1 ?? Number.POSITIVE_INFINITY),
+  ]
 }
 
 export type WallFacePaintRefusal = {
@@ -306,7 +327,8 @@ export type WallFacePaintRefusal = {
 /**
  * Why a paint on a wall's `role` is refused: it lands on a face (the face itself, a region of it,
  * the room's finish on it) that a script builds to the top, and the script owns its colours. A
- * script stopping at `toHeight` leaves its face paintable, since the paint shows above it.
+ * script stopping at `toHeight`, or building one stretch of its face, leaves the face paintable:
+ * the paint shows above it or beside it.
  */
 export function wallFaceScriptPaintRefusal(
   wall: AnyNode | undefined,
@@ -323,7 +345,7 @@ export function wallFaceScriptPaintRefusal(
           ? wall.faceRegions?.find((region) => region.id === parsed.regionId)?.face
           : undefined
   const script = face && wall.finishScripts?.[face]
-  if (!face || !script || script.toHeight !== undefined) return
+  if (!face || !script || script.toHeight !== undefined || isPartialWallFaceScript(script)) return
   return {
     status: 'refused',
     code: 'wall-face-built-by-script',

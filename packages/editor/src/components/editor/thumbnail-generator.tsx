@@ -30,6 +30,7 @@ import {
   temporarilyGroundWindowForCapture,
   temporarilyHideNodeTypes,
   temporarilyShowPresentation,
+  temporarilyShowScanPoints,
   temporarilyShowShadowOnly,
   temporarilyVeilGround,
   temporarilyWithoutAmbiance,
@@ -634,6 +635,26 @@ export function capturesOrthographically(
   return !event.perspective && mainCamera instanceof THREE.OrthographicCamera
 }
 
+/**
+ * Whether a capture shows the scans. A scan is what was captured on site: a
+ * picture of the person's own view (a thumbnail, a snapshot) shows it as that
+ * view does, so a project that holds only a scan is not an empty frame, and it
+ * stays out only where the person hid it. A view the caller poses itself (a
+ * sheet's, an agent's, an authored shot's) is of the built house alone.
+ */
+export function capturesScans(
+  event: Pick<ThumbnailGenerateEvent, 'cameraPose' | 'ortho' | 'perspective'>,
+): boolean {
+  return !(event.cameraPose || event.ortho || event.perspective)
+}
+
+/** The node types a capture leaves out: the editor's aids always, the scans unless it shows them. */
+export function captureHiddenTypes(
+  event: Pick<ThumbnailGenerateEvent, 'cameraPose' | 'ortho' | 'perspective' | 'hideTypes'>,
+): string[] {
+  return ['guide', 'spawn', ...(capturesScans(event) ? [] : ['scan']), ...(event.hideTypes ?? [])]
+}
+
 export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorProps) => {
   const gl = useThree((state) => state.gl)
   const scene = useThree((state) => state.scene)
@@ -737,7 +758,8 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
       // frame rendered at print scale.
       const edgesOverride = event.edges
       const ortho = event.ortho
-      const hideTypes = event.hideTypes ?? []
+      const hiddenTypes = captureHiddenTypes(event)
+      const showsScans = capturesScans(event)
       const perspective = event.perspective
       const lightFace = event.lightFace === true
       const clip = event.clip ?? []
@@ -948,10 +970,8 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
                 }
                 restore(snapLevelsToTruePositions())
               }
-              // Hide scan, guide, and spawn nodes (and what the caller asks) so
-              // they are excluded from the thumbnail regardless of whether the
-              // system listeners are registered.
-              restore(temporarilyHideNodeTypes(['scan', 'guide', 'spawn', ...hideTypes]))
+              // Hidden here, whether or not the system listeners are registered.
+              restore(temporarilyHideNodeTypes(hiddenTypes))
               // a sheet's picture is of the house: what a renderer excluded
               // from captures stays out of it, and every storey stands at its
               // true height
@@ -1008,6 +1028,8 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
               // those meshes before either snapshot render path submits them,
               // and restore fog afterwards so the atmosphere never leaks in.
               restore(refreshIsolation(scene))
+              // After isolation, which holds a cloud back by its layers: one it holds stays out.
+              if (showsScans) restore(temporarilyShowScanPoints())
               if (event.presentation) {
                 restore(presentLevelsForCapture(event.presentation))
                 cameraData.presentation = event.presentation

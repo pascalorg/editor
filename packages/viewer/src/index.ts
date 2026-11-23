@@ -305,6 +305,7 @@ export {
   revealTimingAt,
 } from './lib/reveal-schedule'
 export { planRevealWindows, type RevealWindow } from './lib/reveal-windows'
+export { temporarilyShowScanPoints } from './lib/scan-points'
 export {
   familyForNode,
   sceneFamilies,

@@ -1,8 +1,8 @@
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import ts from '@typescript/typescript6'
 import { parsePo } from 'pofile-ts'
-import ts from 'typescript'
 import {
   ASCII_EDGE_WHITESPACE,
   attributeText,

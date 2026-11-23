@@ -1,8 +1,8 @@
 import { readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join, relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import ts from '@typescript/typescript6'
 import { decodeHTMLStrict } from 'entities'
-import ts from 'typescript'
 import { baseRevision, readAtRevision } from './i18n-git'
 
 /**

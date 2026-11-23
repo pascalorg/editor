@@ -128,6 +128,7 @@ const TOOL_POLICIES = [
       'merge_zones',
       'move_roofs_to_roof_level',
       'paint',
+      'set_finish_script',
       'delete_scene',
       'get_project_status',
       'load_scene',

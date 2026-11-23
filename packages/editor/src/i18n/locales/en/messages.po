@@ -7174,6 +7174,18 @@ msgstr "Target elevation: {elevation} m · click or Enter to place"
 msgid "editor.tools.distribution.distributionRunTool.typeALength"
 msgstr "type a length"
 
+#: packages/editor/src/components/editor/views/host-view.tsx
+msgid "editor.views.hostView.loading"
+msgstr "Loading…"
+
+#: packages/editor/src/components/editor/views/host-view.tsx
+msgid "editor.views.hostView.pluginNotInstalled"
+msgstr "Its plugin isn't installed in this project."
+
+#: packages/editor/src/components/editor/views/host-view.tsx
+msgid "editor.views.hostView.viewUnavailable"
+msgstr "This view isn't available"
+
 #: packages/editor/src/components/editor/views/view-bar.tsx
 msgid "editor.views.plugins"
 msgstr "Plugins"
@@ -7201,6 +7213,11 @@ msgstr "Close {label}"
 #: packages/editor/src/components/editor/views/view-bar.tsx
 msgid "editor.views.viewBar.closeSplit"
 msgstr "Close split (\\)"
+
+#: packages/editor/src/components/editor/views/host-view.tsx
+#: packages/editor/src/components/editor/views/view-bar.tsx
+msgid "editor.views.viewBar.closeUnavailableView"
+msgstr "Close this view"
 
 #: packages/editor/src/components/editor/views/view-bar.tsx
 msgid "editor.views.viewBar.ground"
@@ -7249,6 +7266,14 @@ msgstr "Split"
 #: packages/editor/src/components/editor/views/view-bar.tsx
 msgid "editor.views.viewBar.swapPanes"
 msgstr "Swap panes"
+
+#: packages/editor/src/components/editor/views/view-bar.tsx
+msgid "editor.views.viewBar.unavailableView"
+msgstr "Unavailable view"
+
+#: packages/editor/src/components/editor/views/view-bar.tsx
+msgid "editor.views.viewBar.unavailableViewTitle"
+msgstr "{label} isn't available in this project"
 
 #: packages/editor/src/components/editor/views/view-bar.tsx
 msgid "editor.views.viewBar.unpinFromTheViewBar"

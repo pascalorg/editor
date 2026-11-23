@@ -1008,6 +1008,19 @@
       }
     },
     {
+      "name": "set_finish_script",
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": true,
+        "openWorldHint": false
+      },
+      "justifications": {
+        "readOnlyHint": "It is not read-only because it builds a finish from a three.js module onto rooms' walls and floors, wall faces and slabs of the connected Pascal scene, and stores its artifacts.",
+        "destructiveHint": "It replaces the finish script a surface had, and remove takes it off.",
+        "openWorldHint": "It operates on the connected Pascal scene and its own geometry sandbox without accessing the public internet."
+      }
+    },
+    {
       "name": "set_floor_foundation",
       "annotations": {
         "readOnlyHint": false,

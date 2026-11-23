@@ -789,6 +789,7 @@ export {
 export {
   type WallFacePaintRefusal,
   type WallFaceRect,
+  type WallFaceScriptExtent,
   type WallFaceScriptInputs,
   wallFaceBaseOffset,
   wallFaceScriptInputs,
