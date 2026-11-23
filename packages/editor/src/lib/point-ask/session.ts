@@ -39,7 +39,11 @@ import {
 } from '../../store/use-point-ask'
 import { isViewVisible, VIEW_3D } from '../../store/view-layout'
 import { keyCyclableContinuationContext } from '../continuation'
-import { captureEnrichedRegion, type EnrichedCapture } from '../enriched-capture/enrich'
+import {
+  captureEnrichedRegion,
+  type EnrichedCapture,
+  EnrichmentFallbackError,
+} from '../enriched-capture/enrich'
 import { resolveCanvasSelectionNode } from '../selection-routing'
 import { triggerSFX } from '../sfx-bus'
 import { buildPointContext } from './build-context'
@@ -595,6 +599,20 @@ function regionCenterHit(rect: Rect): PointHit {
   return { point, normal: [0, 1, 0] }
 }
 
+function captureRegionCrop(rect: Rect): Promise<SessionCrop> {
+  if (!enrichedRegions) return captureViewCrop(rect, { pad: 0 })
+  return captureEnrichedRegion(rect, { pad: 0 }).then(
+    (enriched) => ({ ...enriched.crop, enriched }),
+    (error) => {
+      if (error instanceof EnrichmentFallbackError) {
+        console.debug('[point-ask] enriched map unavailable, keeping photo:', error.message)
+        return error.crop
+      }
+      throw error
+    },
+  )
+}
+
 /** The press became a drag and was let go: the shutter fires and a bubble opens on the rectangle. */
 function finishRegion(press: Down, event: PointerEvent) {
   const state = usePointAsk.getState()
@@ -608,10 +626,7 @@ function finishRegion(press: Down, event: PointerEvent) {
   const rect = region.rect
   state.setRegion({ ...region, settled: true, flashKey: region.flashKey + 1 })
   if (state.playful) triggerSFX('sfx:snapshot-capture')
-  const capture: Promise<SessionCrop> = enrichedRegions
-    ? captureEnrichedRegion(rect, { pad: 0 }).then((enriched) => ({ ...enriched.crop, enriched }))
-    : captureViewCrop(rect, { pad: 0 })
-  const crop = capture.then(
+  const crop = captureRegionCrop(rect).then(
     (value) => value,
     (error) => {
       console.debug(
@@ -759,12 +774,7 @@ function handleClick(press: Down, shift: boolean) {
     const frame = canvasRect()
     const rect = localClickRect(press.x, press.y)
     const capture: Promise<SessionCrop | null> = rect
-      ? enrichedRegions
-        ? captureEnrichedRegion(rect, { pad: 0 }).then((enriched) => ({
-            ...enriched.crop,
-            enriched,
-          }))
-        : captureViewCrop(rect, { pad: 0 })
+      ? captureRegionCrop(rect)
       : Promise.resolve(null)
     const crop = capture.then(
       (value) => value,

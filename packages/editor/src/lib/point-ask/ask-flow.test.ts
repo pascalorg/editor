@@ -769,4 +769,77 @@ describe('pending ordinary crops and session option updates', () => {
       usePointAsk.setState(previousPoint, true)
     }
   })
+
+  test('enriched region keeps the ordinary photo when ID-pass enrichment fails', async () => {
+    const previousThree = getEditorThreeContext()
+    const previousPoint = usePointAsk.getState()
+    const listeners = new Map<string, Set<EventListener>>()
+    const enrichedSpy = spyOn(enrichedCapture, 'captureEnrichedRegion').mockRejectedValue(
+      new enrichedCapture.EnrichmentFallbackError('id pass timed out', {
+        dataUrl: 'data:image/jpeg;base64,FALLBACK',
+        width: 512,
+        height: 384,
+      }),
+    )
+    stopSession()
+    try {
+      globalThis.window = {
+        innerWidth: 100,
+        innerHeight: 100,
+        addEventListener(type: string, listener: EventListener) {
+          if (!listeners.has(type)) listeners.set(type, new Set())
+          listeners.get(type)!.add(listener)
+        },
+        removeEventListener(type: string, listener: EventListener) {
+          listeners.get(type)?.delete(listener)
+        },
+      } as never
+      const canvas = {
+        style: {},
+        getBoundingClientRect: () => ({
+          left: 0,
+          top: 0,
+          right: 100,
+          bottom: 100,
+          width: 100,
+          height: 100,
+        }),
+      } as unknown as HTMLCanvasElement
+      const camera = new PerspectiveCamera(60, 1, 0.1, 100)
+      camera.position.set(2, 3, 7)
+      camera.lookAt(2, 1, 0)
+      camera.updateMatrixWorld(true)
+      setEditorThreeContext({ camera, raycaster: new Raycaster(), domElement: canvas })
+      stopSession = startPointAskSession({ enrichedRegions: true, freeClick: true })
+
+      usePointAsk.setState({ active: true, playful: false, hover: null })
+      const pointer = (type: string, x: number, y: number) => {
+        const event = {
+          target: canvas,
+          button: 0,
+          pointerType: 'mouse',
+          clientX: x,
+          clientY: y,
+          shiftKey: false,
+          timeStamp: type === 'pointerdown' ? 0 : 100,
+          preventDefault() {},
+          stopImmediatePropagation() {},
+        } as unknown as Event
+        for (const listener of listeners.get(type) ?? []) listener(event)
+      }
+      pointer('pointerdown', 10, 10)
+      pointer('pointermove', 60, 60)
+      pointer('pointerup', 60, 60)
+      await new Promise((resolve) => setTimeout(resolve, 10))
+      const crop = usePointAsk.getState().bubble?.crop
+      expect(crop?.state).toBe('ready')
+      expect(crop?.dataUrl).toBe('data:image/jpeg;base64,FALLBACK')
+      expect(crop?.enriched).toBeUndefined()
+    } finally {
+      enrichedSpy.mockRestore()
+      stopSession()
+      setEditorThreeContext(previousThree)
+      usePointAsk.setState(previousPoint, true)
+    }
+  })
 })

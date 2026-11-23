@@ -21,9 +21,20 @@ import {
   type ZoneFootprint,
   zoneShares,
 } from '@pascal-app/viewer'
-import { captureViewCrop } from '../point-ask/capture-crop'
+import { type CapturedCrop, captureViewCrop } from '../point-ask/capture-crop'
 import type { Rect } from '../point-ask/types'
 import type { EnrichedIdPass } from './requests'
+
+/** Raised when ID-pass enrichment fails after the ordinary crop photo already succeeded. */
+export class EnrichmentFallbackError extends Error {
+  constructor(
+    message: string,
+    readonly crop: CapturedCrop,
+  ) {
+    super(message)
+    this.name = 'EnrichmentFallbackError'
+  }
+}
 
 export type EnrichedCapture = {
   crop: { dataUrl: string; width: number; height: number }
@@ -132,62 +143,72 @@ export async function captureEnrichedRegion(
   )
     throw new Error('An enriched capture needs a non-empty finite rectangle')
   const crop = await captureViewCrop(screenRect, { pad: options.pad ?? 0, idPass: true })
-  if (!crop.idPass || !crop.cropRect) throw new Error('The capture came back without its id buffer')
-  const { buffer, camera, nodes, canvasRect } = crop.idPass
-  if (buffer.width !== crop.width || buffer.height !== crop.height)
-    throw new Error('The segmentation map and picture dimensions do not match')
-  const sx = buffer.width / Math.max(1, crop.cropRect.x1 - crop.cropRect.x0)
-  const sy = buffer.height / Math.max(1, crop.cropRect.y1 - crop.cropRect.y0)
-  const cropRect: PixelRect = {
-    x0: Math.max(0, Math.round((screenRect.x0 - canvasRect.left - crop.cropRect.x0) * sx)),
-    y0: Math.max(0, Math.round((screenRect.y0 - canvasRect.top - crop.cropRect.y0) * sy)),
-    x1: Math.min(
-      buffer.width,
-      Math.round((screenRect.x1 - canvasRect.left - crop.cropRect.x0) * sx),
-    ),
-    y1: Math.min(
-      buffer.height,
-      Math.round((screenRect.y1 - canvasRect.top - crop.cropRect.y0) * sy),
-    ),
-  }
-  const shares = visibleShares(buffer, cropRect)
-  const colours = assignColours(shares)
-  const legend = buildLegend(
-    buffer,
-    shares,
-    colours,
-    options.describe ?? defaultDescribe(nodes),
-    labelAnchors(buffer, cropRect),
-  )
-  const visible: PointVisible[] = shares.map((share) =>
-    share.nodeId && (share.kind === 'node' || share.kind === 'glass')
-      ? {
-          id: share.nodeId,
-          ...(share.kind === 'glass' ? { class: 'glass' as const } : {}),
-          share: share.share,
-        }
-      : { class: share.kind === 'node' ? 'unknown' : share.kind, share: share.share },
-  )
-  const rooms = zoneShares(buffer, zoneFootprints(crop.idPass), cropRect).map((room) => ({
-    ...room,
-    name: nodes[room.id]?.name?.trim() || 'Room',
-  }))
-  const segmented = await segmentationImage(buffer, colours, legend, shares, {
-    crop: crop.dataUrl,
-    tint: options.tint ?? 0.6,
-    rect: cropRect,
-  })
-  return {
-    crop: { dataUrl: crop.dataUrl, width: crop.width, height: crop.height },
-    camera,
-    region: { canvasRect: { ...screenRect }, cropRect },
-    world: regionWorldPoints(buffer, cropRect),
-    visible,
-    legend,
-    rooms,
-    segmented,
-    legendText: legend
-      .map((row) => `${row.n} ${row.colourName} ${row.label} ${row.percent.toFixed(1)} %`)
-      .join(' · '),
+  try {
+    if (!crop.idPass || !crop.cropRect) {
+      throw new Error('The capture came back without its id buffer')
+    }
+    const { buffer, camera, nodes, canvasRect } = crop.idPass
+    if (buffer.width !== crop.width || buffer.height !== crop.height) {
+      throw new Error('The segmentation map and picture dimensions do not match')
+    }
+    const sx = buffer.width / Math.max(1, crop.cropRect.x1 - crop.cropRect.x0)
+    const sy = buffer.height / Math.max(1, crop.cropRect.y1 - crop.cropRect.y0)
+    const cropRect: PixelRect = {
+      x0: Math.max(0, Math.round((screenRect.x0 - canvasRect.left - crop.cropRect.x0) * sx)),
+      y0: Math.max(0, Math.round((screenRect.y0 - canvasRect.top - crop.cropRect.y0) * sy)),
+      x1: Math.min(
+        buffer.width,
+        Math.round((screenRect.x1 - canvasRect.left - crop.cropRect.x0) * sx),
+      ),
+      y1: Math.min(
+        buffer.height,
+        Math.round((screenRect.y1 - canvasRect.top - crop.cropRect.y0) * sy),
+      ),
+    }
+    const shares = visibleShares(buffer, cropRect)
+    const colours = assignColours(shares)
+    const legend = buildLegend(
+      buffer,
+      shares,
+      colours,
+      options.describe ?? defaultDescribe(nodes),
+      labelAnchors(buffer, cropRect),
+    )
+    const visible: PointVisible[] = shares.map((share) =>
+      share.nodeId && (share.kind === 'node' || share.kind === 'glass')
+        ? {
+            id: share.nodeId,
+            ...(share.kind === 'glass' ? { class: 'glass' as const } : {}),
+            share: share.share,
+          }
+        : { class: share.kind === 'node' ? 'unknown' : share.kind, share: share.share },
+    )
+    const rooms = zoneShares(buffer, zoneFootprints(crop.idPass), cropRect).map((room) => ({
+      ...room,
+      name: nodes[room.id]?.name?.trim() || 'Room',
+    }))
+    const segmented = await segmentationImage(buffer, colours, legend, shares, {
+      crop: crop.dataUrl,
+      tint: options.tint ?? 0.6,
+      rect: cropRect,
+    })
+    return {
+      crop: { dataUrl: crop.dataUrl, width: crop.width, height: crop.height },
+      camera,
+      region: { canvasRect: { ...screenRect }, cropRect },
+      world: regionWorldPoints(buffer, cropRect),
+      visible,
+      legend,
+      rooms,
+      segmented,
+      legendText: legend
+        .map((row) => `${row.n} ${row.colourName} ${row.label} ${row.percent.toFixed(1)} %`)
+        .join(' · '),
+    }
+  } catch (error) {
+    throw new EnrichmentFallbackError(
+      error instanceof Error ? error.message : 'Enriched capture failed',
+      { dataUrl: crop.dataUrl, width: crop.width, height: crop.height },
+    )
   }
 }

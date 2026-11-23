@@ -142,7 +142,10 @@ function captureOnce(
   })
   if (!idPass) return picture
   return picture.then(
-    async (crop) => ({ ...crop, idPass: await idPass, cropRect }),
+    async (crop) => {
+      const resolvedIdPass = await idPass.catch(() => undefined)
+      return { ...crop, ...(resolvedIdPass ? { idPass: resolvedIdPass } : {}), cropRect }
+    },
     (error) => {
       cancelIdPass(requestId, 'The picture failed')
       throw error

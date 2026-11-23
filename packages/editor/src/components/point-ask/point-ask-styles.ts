@@ -70,6 +70,7 @@ export const POINT_ASK_CSS = `
 .pa-pdisc{width:28px;height:28px;border-radius:50% 50% 50% 4px;background:rgba(20,21,26,.94);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);box-shadow:inset 0 0 0 1.5px rgba(169,155,255,.92),0 8px 18px -6px rgba(0,0,0,.72);display:grid;place-items:center;transition:box-shadow 220ms ease,transform 180ms var(--pa-ease)}
 .pa-pdisc svg{width:15px;height:15px;overflow:visible}
 .pa-cm{fill:none;stroke:var(--pa-tx);stroke-width:1.85;stroke-linecap:round;opacity:0;transition:opacity 160ms ease}
+.pa-pin[data-zone-comment-status="queued"] .pa-cm,.pa-pin[data-zone-comment-status="answered"] .pa-cm{opacity:1}
 .pa-pq,.pa-pa{fill:none;stroke:#a99bff;stroke-width:1.8;opacity:0;transition:opacity 160ms ease}
 .pa-pq{stroke-dasharray:2.4 2.4}
 .pa-pa{stroke-width:2;stroke-linecap:round}
@@ -86,6 +87,7 @@ export const POINT_ASK_CSS = `
 .pa-pin.no-change .pa-pk{stroke:var(--pa-tx3);stroke-dashoffset:0;opacity:.8}
 .pa-pin.no-change::after{background:var(--pa-tx3)}
 .pa-pin.error .pa-pdisc{box-shadow:inset 0 0 0 1.5px rgba(255,138,128,.95),0 6px 16px -6px rgba(0,0,0,.7)}
+.pa-pin.error .pa-ic-wrong{opacity:1;stroke:var(--pa-bad)}
 .pa-pin.error::after{background:var(--pa-bad)}
 .pa-pin.undone .pa-pq{opacity:.7;stroke:var(--pa-tx3)}
 .pa-pin.undone .pa-pdisc{box-shadow:inset 0 0 0 1.5px rgba(255,255,255,.25),0 6px 16px -6px rgba(0,0,0,.7)}

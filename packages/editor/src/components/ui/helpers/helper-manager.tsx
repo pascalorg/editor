@@ -484,7 +484,12 @@ export function HelperManager({
   const i18n = usePascalI18n()
   const pointAskActive = usePointAsk((s) => s.active)
   const pointAskComposing = usePointAsk((s) => Boolean(s.bubble))
-  const pointAskCardOpen = usePointAsk((s) => Boolean(s.cardFor))
+  const pointAskCardOpen = usePointAsk((s) => {
+    if (!s.cardFor) return false
+    const pin = s.pins[s.cardFor]
+    // Ephemeral pins open on hover; only a persistent thread card (or a synthetic card without a pin record) hides the Comment HUD.
+    return !pin || pin.behavior === 'persistent'
+  })
   const mode = useEditor((s) => s.mode)
   const tool = useEditor((s) => s.tool)
   const terrainVerb = useEditor((s) => s.terrainVerb)
@@ -595,7 +600,7 @@ export function HelperManager({
   if (workspaceMode === 'studio') return null
 
   if (pointAskActive) {
-    if (pointAskCardOpen) return null
+    if (pointAskCardOpen && !pointAskComposing) return null
     return (
       <ContextualHelperPanel
         hints={commentToolHints({
