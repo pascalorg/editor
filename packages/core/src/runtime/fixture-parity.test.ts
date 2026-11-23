@@ -148,35 +148,29 @@ describe('detached and live give the same complete patch', () => {
   afterAll(closeLiveScene)
 
   for (const c of CASES) {
-    test.skipIf(c.label in EXCEPTIONS)(
-      c.label,
-      async () => {
-        const snapshot = await canonicalSnapshot(c.scene())
-        expect(await openLiveScene(snapshot)).toEqual(snapshot)
-        const detached = runDetached(c, snapshot)
-        const live = await runLive(c, snapshot)
-        expect(live.deferredCommits).toBe(0)
-        expect(getSceneDocument()).toEqual(live.document)
-        expect(live.outcome).toEqual(detached)
-        if ('refusal' in detached) return
+    test.skipIf(c.label in EXCEPTIONS)(c.label, async () => {
+      const snapshot = await canonicalSnapshot(c.scene())
+      expect(await openLiveScene(snapshot)).toEqual(snapshot)
+      const detached = runDetached(c, snapshot)
+      const live = await runLive(c, snapshot)
+      expect(live.deferredCommits).toBe(0)
+      expect(getSceneDocument()).toEqual(live.document)
+      expect(live.outcome).toEqual(detached)
+      if ('refusal' in detached) return
 
-        await openLiveScene(snapshot)
-        const commits: SceneCommit[] = []
-        const stop = subscribeSceneCommits((commit) => commits.push(commit))
-        try {
-          applySceneOperationPatch(detached.patch, { undoable: true })
-          const applied = getSceneDocument()
-          await settle()
-          expect(commits).toHaveLength(isEmptyScenePatch(detached.patch) ? 0 : 1)
-          expect(getSceneDocument()).toEqual(applied)
-          expect(applied).toEqual(live.document)
-        } finally {
-          stop()
-        }
-        // A large case runs each operation twice and settles the live scene: under a second here,
-        // past bun's 5 s default on a loaded CI runner.
-      },
-      30_000,
-    )
+      await openLiveScene(snapshot)
+      const commits: SceneCommit[] = []
+      const stop = subscribeSceneCommits((commit) => commits.push(commit))
+      try {
+        applySceneOperationPatch(detached.patch, { undoable: true })
+        const applied = getSceneDocument()
+        await settle()
+        expect(commits).toHaveLength(isEmptyScenePatch(detached.patch) ? 0 : 1)
+        expect(getSceneDocument()).toEqual(applied)
+        expect(applied).toEqual(live.document)
+      } finally {
+        stop()
+      }
+    })
   }
 })
