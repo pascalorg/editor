@@ -770,6 +770,13 @@ export const CustomCameraControls = ({
       }
       return
     }
+    if (pendingAppliedPose.current || activePoseInterpolation.current) {
+      firstLoad.current = false
+      previousLevelIdRef.current = currentLevelId
+      previousLevelModeRef.current = levelMode
+      previousCameraRef.current = camera
+      return
+    }
     if (isPreviewMode) return
     // Analytic destination, not `sceneRegistry` mesh position: a level created
     // this frame still sits at y=0 (LevelSystem lerps it later), and a mode

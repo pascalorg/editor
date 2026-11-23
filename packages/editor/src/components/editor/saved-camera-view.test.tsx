@@ -11,7 +11,7 @@ import {
 import { useViewer } from '@pascal-app/viewer'
 import { frameViewerNode } from '@pascal-app/viewer/ui'
 import { CameraControlsImpl } from '@react-three/drei'
-import { _roots, act, createRoot, extend, useThree } from '@react-three/fiber'
+import { _roots, act, advance, createRoot, extend, useThree } from '@react-three/fiber'
 import { type ReactNode, useLayoutEffect, useMemo } from 'react'
 import * as THREE from 'three'
 import useEditor, { takePreviewCameraRestore } from '../../store/use-editor'
@@ -77,6 +77,7 @@ async function withCameraStage(
     render: (node: ReactNode) => Promise<void>
     getCamera: () => THREE.PerspectiveCamera | THREE.OrthographicCamera
     getControls: () => CameraControlsImpl
+    stepFrames: (count?: number, stepMs?: number) => void
   }) => Promise<void>,
 ) {
   const previousScene = useScene.getState()
@@ -147,6 +148,7 @@ async function withCameraStage(
     })
 
     const getStore = () => _roots.get(canvas)!.store
+    let frameClockMs = 0
     await run({
       render: async (node) => {
         await act(async () => {
@@ -156,6 +158,12 @@ async function withCameraStage(
       getCamera: () =>
         getStore().getState().camera as THREE.PerspectiveCamera | THREE.OrthographicCamera,
       getControls: () => getStore().getState().controls as unknown as CameraControlsImpl,
+      stepFrames: (count = 120, stepMs = 16) => {
+        for (let i = 0; i < count; i++) {
+          frameClockMs += stepMs
+          advance(frameClockMs, true, getStore().getState())
+        }
+      },
     })
   } finally {
     await act(async () => {
@@ -570,6 +578,141 @@ describe('CustomCameraControls saved view round-trip (#1280)', () => {
       expect(useViewer.getState().cameraMode).toBe('orthographic')
       expect((getCamera() as THREE.OrthographicCamera).zoom).toBeCloseTo(28, 5)
       expect(getControls().getPosition(new THREE.Vector3(), false).z).toBeCloseTo(12, 4)
+    })
+  })
+
+  test('preview exit after a projection-switching saved preview view restores the editor pose without level-follow rest-pivot', async () => {
+    await withCameraStage(async ({ render, getCamera, getControls, stepFrames }) => {
+      const level0 = LevelNode.parse({
+        id: 'level_0',
+        parentId: 'building_0',
+        level: 0,
+        children: [],
+      })
+      const level1 = LevelNode.parse({
+        id: 'level_1',
+        parentId: 'building_0',
+        level: 1,
+        children: [],
+        camera: {
+          position: [18, 16, 22],
+          target: [2, 2.5, -1],
+          mode: 'orthographic',
+          zoom: 38,
+        },
+      })
+      const building = BuildingNode.parse({
+        id: 'building_0',
+        parentId: 'site_0',
+        children: [level0.id, level1.id],
+      })
+      const site = SiteNode.parse({
+        id: 'site_0',
+        children: [building.id],
+      })
+
+      useScene.setState({
+        nodes: {
+          [site.id]: site,
+          [building.id]: building,
+          [level0.id]: level0,
+          [level1.id]: level1,
+        } as Record<string, AnyNode>,
+        readOnly: false,
+      })
+      useViewer.setState({
+        cameraMode: 'perspective',
+        levelMode: 'stacked',
+        selection: {
+          buildingId: building.id,
+          levelId: level1.id,
+          zoneId: null,
+          selectedIds: [],
+        },
+      })
+      useEditor.setState({
+        isFirstPersonMode: false,
+        isPreviewMode: false,
+        openingCameraSettled: true,
+      })
+
+      await render(
+        <>
+          <StageCamera />
+          <CustomCameraControls sceneReady />
+        </>,
+      )
+
+      const editorCam = getCamera() as THREE.PerspectiveCamera
+      expect(editorCam.isPerspectiveCamera).toBe(true)
+      editorCam.fov = 38
+      editorCam.updateProjectionMatrix()
+      getControls().setLookAt(12, 9, 14, 2, 4.5, -1, false)
+      getControls().update(0)
+
+      // Enter preview: level_1's saved orthographic view switches cameraMode to orthographic.
+      await act(async () => {
+        useEditor.getState().setPreviewMode(true)
+      })
+      await render(
+        <>
+          <StageCamera />
+          <CustomCameraControls sceneReady />
+        </>,
+      )
+      await render(
+        <>
+          <StageCamera />
+          <CustomCameraControls sceneReady />
+        </>,
+      )
+      settleControls(getControls())
+      expect(useViewer.getState().cameraMode).toBe('orthographic')
+      expect((getCamera() as THREE.OrthographicCamera).isOrthographicCamera).toBe(true)
+      expect((getCamera() as THREE.OrthographicCamera).zoom).toBeCloseTo(38, 5)
+
+      // Track whether level-follow issues a rest-pivot moveTo/setLookAt during preview exit.
+      const moveToCalls: Array<[number, number, number, boolean | undefined]> = []
+      const originalMoveTo = CameraControlsImpl.prototype.moveTo
+      CameraControlsImpl.prototype.moveTo = function (x, y, z, enableTransition) {
+        moveToCalls.push([x, y, z, enableTransition])
+        return originalMoveTo.call(this, x, y, z, enableTransition)
+      }
+      try {
+        await act(async () => {
+          useEditor.getState().setPreviewMode(false)
+        })
+        await render(
+          <>
+            <StageCamera />
+            <CustomCameraControls sceneReady />
+          </>,
+        )
+        await render(
+          <>
+            <StageCamera />
+            <CustomCameraControls sceneReady />
+          </>,
+        )
+      } finally {
+        CameraControlsImpl.prototype.moveTo = originalMoveTo
+      }
+
+      expect(moveToCalls).toEqual([])
+      stepFrames(180)
+      settleControls(getControls())
+
+      expect(useViewer.getState().cameraMode).toBe('perspective')
+      expect((getCamera() as THREE.PerspectiveCamera).isPerspectiveCamera).toBe(true)
+      expect((getCamera() as THREE.PerspectiveCamera).fov).toBeCloseTo(38, 4)
+      const restoredPos = getControls().getPosition(new THREE.Vector3(), false)
+      const restoredTarget = getControls().getTarget(new THREE.Vector3(), false)
+      expect(restoredPos.x).toBeCloseTo(12, 2)
+      expect(restoredPos.y).toBeCloseTo(9, 2)
+      expect(restoredPos.z).toBeCloseTo(14, 2)
+      expect(restoredTarget.x).toBeCloseTo(2, 2)
+      expect(restoredTarget.y).toBeCloseTo(4.5, 2)
+      expect(restoredTarget.z).toBeCloseTo(-1, 2)
     })
   })
 })
