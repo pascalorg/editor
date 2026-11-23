@@ -1,7 +1,12 @@
 import { afterEach, expect, test } from 'bun:test'
 import { createI18n, setLocale, translate } from '@pascal-app/core'
 import { authoredLevelName, localizedLevelName } from '@pascal-app/viewer/ui'
-import { loadBundledLocale, registerBundledLocales, resolveBundledLocale } from './locales'
+import {
+  isBundledLocaleLoaded,
+  loadBundledLocale,
+  registerBundledLocales,
+  resolveBundledLocale,
+} from './locales'
 import { locale as frenchLocale, registerLocale as registerFrenchLocale } from './locales/fr'
 
 afterEach(() => setLocale('en'))
@@ -23,12 +28,16 @@ test('resolveBundledLocale maps exact, script, and base locales without crossing
 
 test('per-locale entry point and loadBundledLocale register only the requested locale', async () => {
   expect(frenchLocale).toBe('fr')
+  expect(isBundledLocaleLoaded('de')).toBe(true)
+  expect(isBundledLocaleLoaded('en-XA')).toBe(true)
+  expect(isBundledLocaleLoaded('ja-JP')).toBe(false)
   registerFrenchLocale()
   setLocale('fr')
   expect(translate('viewer.display.title', 'Display settings')).toBe('Paramètres d’affichage')
 
   const loadedJa = await loadBundledLocale('ja-JP')
   expect(loadedJa?.locale).toBe('ja')
+  expect(isBundledLocaleLoaded('ja-JP')).toBe(true)
   setLocale('ja')
   expect(translate('viewer.display.title', 'Display settings')).toBe('表示設定')
 

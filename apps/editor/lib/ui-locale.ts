@@ -25,3 +25,43 @@ export function resolveClientLangNavigation(
   if (previousLangParam === nextLangParam) return null
   return nextLangParam === null ? defaultLocale : resolveUiLocale(nextLangParam)
 }
+
+/**
+ * Coordinates locale switches so bundled catalogs finish loading before the
+ * active i18n locale flips, stale in-flight switches are ignored, and rejected
+ * loads leave the active locale untouched.
+ */
+export function createLocaleApplier({
+  isLoaded,
+  isActive = () => true,
+  loadLocale,
+  setLocale,
+}: {
+  isLoaded?: (locale: string) => boolean
+  isActive?: () => boolean
+  loadLocale: (locale: string) => Promise<unknown>
+  setLocale: (locale: string) => void
+}): {
+  apply: (nextLocale: string) => Promise<boolean>
+} {
+  let requestId = 0
+
+  return {
+    async apply(nextLocale: string): Promise<boolean> {
+      const currentRequest = ++requestId
+      if (isLoaded?.(nextLocale)) {
+        if (!isActive()) return false
+        setLocale(nextLocale)
+        return true
+      }
+      try {
+        await loadLocale(nextLocale)
+      } catch {
+        return false
+      }
+      if (currentRequest !== requestId || !isActive()) return false
+      setLocale(nextLocale)
+      return true
+    },
+  }
+}

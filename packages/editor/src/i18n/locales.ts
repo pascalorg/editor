@@ -43,6 +43,15 @@ export function resolveBundledLocale(locale: string | null | undefined): Bundled
 }
 
 /**
+ * Returns whether the locale either has no bundled catalog to load (such as
+ * `en-XA` or `de`) or already has its bundled catalog registered synchronously.
+ */
+export function isBundledLocaleLoaded(locale: string | null | undefined): boolean {
+  const resolved = resolveBundledLocale(locale)
+  return resolved === null || registeredLocales.has(resolved)
+}
+
+/**
  * Synchronously registers a preloaded locale catalog (such as one handed from
  * an async Server Component to client hydration) at most once per locale.
  */

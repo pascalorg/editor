@@ -11,6 +11,7 @@
 import '../lib/bootstrap'
 import { createI18n, defaultI18n, PascalI18nProvider } from '@pascal-app/core'
 import {
+  isBundledLocaleLoaded,
   type LocaleCatalog,
   loadBundledLocale,
   registerBundledCatalog,
@@ -18,7 +19,7 @@ import {
 import { useSearchParams } from 'next/navigation'
 import { type ReactNode, Suspense, useCallback, useEffect, useMemo, useRef } from 'react'
 import { registerDevLocales } from '@/lib/dev-locales'
-import { resolveClientLangNavigation } from '@/lib/ui-locale'
+import { createLocaleApplier, resolveClientLangNavigation } from '@/lib/ui-locale'
 
 registerDevLocales()
 
@@ -65,12 +66,34 @@ export function ClientBootstrap({
     return createI18n({ locale })
   }, [locale])
 
+  const activeI18nRef = useRef<typeof i18n | null>(i18n)
+  activeI18nRef.current = i18n
+
+  useEffect(() => {
+    activeI18nRef.current = i18n
+    return () => {
+      if (activeI18nRef.current === i18n) {
+        activeI18nRef.current = null
+      }
+    }
+  }, [i18n])
+
+  const localeApplier = useMemo(
+    () =>
+      createLocaleApplier({
+        isLoaded: isBundledLocaleLoaded,
+        isActive: () => activeI18nRef.current === i18n,
+        loadLocale: loadBundledLocale,
+        setLocale: (nextLocale) => i18n.setLocale(nextLocale),
+      }),
+    [i18n],
+  )
+
   const applyLocale = useCallback(
     (nextLocale: string) => {
-      i18n.setLocale(nextLocale)
-      void loadBundledLocale(nextLocale)
+      void localeApplier.apply(nextLocale)
     },
-    [i18n],
+    [localeApplier],
   )
 
   useEffect(() => {
