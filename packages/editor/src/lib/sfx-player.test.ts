@@ -1,5 +1,6 @@
 import { afterAll, beforeEach, describe, expect, mock, test } from 'bun:test'
-import useAudio from '../store/use-audio'
+import { emitter } from '@pascal-app/core'
+import { configureViewer } from '@pascal-app/viewer'
 
 type FakeContext = { id: string }
 
@@ -93,12 +94,18 @@ const fakeHowler = {
 
 mock.module('howler', () => ({ Howl: FakeHowl, Howler: fakeHowler }))
 
+const sharedSounds = await import('@pascal-app/viewer/sfx')
+const howlsOnImport = instances.length
+
+const { useAudioSettings: useAudio } = sharedSounds
+
 const { disposeSFX, playSFX, preloadSFX, startLoopSFX, stopLoopSFX, updateSFXVolumes } =
   await import('./sfx-player')
 const { disposeSFXBus, initSFXBus, sfxEmitter, triggerSFX } = await import('./sfx-bus')
 
 beforeEach(() => {
   disposeSFXBus()
+  configureViewer({ sfxBaseUrl: '/audios/sfx' })
   activeContext = { id: 'first' }
   initialState = 'loaded'
   useAudio.setState({ masterVolume: 100, muted: false, sfxVolume: 100 })
@@ -108,6 +115,7 @@ beforeEach(() => {
 
 afterAll(() => {
   disposeSFXBus()
+  configureViewer({})
   mock.restore()
 })
 
@@ -323,5 +331,68 @@ describe('SFX audio context lifecycle', () => {
     for (const sound of played) {
       expect(sound.volumeCalls.find(([, id]) => id === 1)?.[0]).toBeCloseTo(0.2)
     }
+  })
+})
+
+describe('public viewer SFX entry', () => {
+  test('importing the public entry creates no Howl instances', () => {
+    expect(howlsOnImport).toBe(0)
+  })
+
+  test('resolves the default and configured SFX origins at playback time', () => {
+    configureViewer({})
+    sharedSounds.playSound('menuClick')
+    expect(
+      instances.some((s) => s.src === 'https://editor.pascal.app/audios/sfx/menu_click.mp3'),
+    ).toBe(true)
+    const previous = [...instances]
+    configureViewer({ sfxBaseUrl: 'https://sounds.example/custom/' })
+    sharedSounds.playSound('switchOn')
+    expect(previous.every((s) => s.unloadCount === 1)).toBe(true)
+    expect(instances.find((s) => s.playCount === 1 && s.src?.endsWith('switch_on.mp3'))?.src).toBe(
+      'https://sounds.example/custom/switch_on.mp3',
+    )
+    configureViewer({ sfxBaseUrl: '/audios/sfx' })
+    sharedSounds.playSound('switchOff')
+    expect(
+      instances.find((s) => s.playCount === 1 && s.src === '/audios/sfx/switch_off.mp3'),
+    ).toBeDefined()
+  })
+
+  test('interaction subscriptions share delivery and detach independently and idempotently', () => {
+    const first = sharedSounds.initInteractionSounds()
+    const second = sharedSounds.initInteractionSounds()
+    emitter.emit('interaction:sound', 'switch-on')
+    expect(instances.filter((s) => s.playCount === 1)).toHaveLength(1)
+    first()
+    first()
+    emitter.emit('interaction:sound', 'switch-off')
+    expect(instances.filter((s) => s.playCount === 1)).toHaveLength(2)
+    second()
+    emitter.emit('interaction:sound', 'garage')
+    expect(instances.filter((s) => s.playCount === 1)).toHaveLength(2)
+  })
+
+  test('interaction playback uses window and panel gains and the shared mute', () => {
+    const stop = sharedSounds.initInteractionSounds()
+    emitter.emit('interaction:sound', 'window-swing')
+    const swing = instances.find((s) => s.src === '/audios/sfx/door_swing.mp3')
+    expect(swing?.volumeCalls.find(([, id]) => id === 1)?.[0]).toBeCloseTo(0.6)
+    emitter.emit('interaction:sound', 'panel-open')
+    const panel = instances.find((s) => s.src === '/audios/sfx/shutters_open.mp3')
+    expect(panel?.volumeCalls.find(([, id]) => id === 1)?.[0]).toBeCloseTo(0.75)
+    useAudio.getState().setMuted(true)
+    emitter.emit('interaction:sound', 'switch-on')
+    expect(instances.find((s) => s.src === '/audios/sfx/switch_on.mp3')?.playCount).toBe(0)
+    stop()
+  })
+
+  test('viewer and editor UI cues reuse the same Howl cache and settings store', () => {
+    preloadSFX()
+    const count = instances.length
+    sharedSounds.playSound('menuHover')
+    playSFX('menuHover')
+    expect(instances).toHaveLength(count)
+    expect(instances.find((s) => s.src === '/audios/sfx/menu_hover.mp3')?.playCount).toBe(2)
   })
 })

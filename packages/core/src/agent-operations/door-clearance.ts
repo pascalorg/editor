@@ -1,3 +1,4 @@
+import { getDoorOpeningSize } from '../lib/door-opening'
 /**
  * Door access keep-outs for MCP layout tools.
  *
@@ -7,11 +8,24 @@
  * See docs/layout-clearance-error-log.md for pitfalls (levels, gap sign, scale).
  */
 
+import { isVehicleDoorType } from '../lib/door-operation'
+import { area, intersection } from '../lib/polygon-boolean'
 import type { Vec3 } from '../procedural-items/recipe'
 import { boxCorners, rotateVector } from '../procedural-items/spatial'
 import { type AnyNode, getScaledDimensions } from '../schema'
-import { isFloorUnderlay } from './furniture-kind'
+import { DEFAULT_WALL_THICKNESS } from '../systems/wall/wall-footprint'
+import { isFloorUnderlay, isVehicle } from './furniture-kind'
+import type { ItemSolid } from './item-solids'
 import { itemLevelHeightRange, itemPlanAabbInLevel } from './item-space'
+import {
+  axisOverlap,
+  type ClearMove,
+  clearingMoves,
+  describeMoves,
+  metres,
+  roundBox,
+  roundMm,
+} from './plan-clearance'
 import { type Vec2, wallLength } from './plan-geometry'
 
 export type PlanAabb = {
@@ -52,6 +66,20 @@ export type DoorKeepout = {
   localX: number
   /** The door's height: an item whose bottom is above it does not block the door. */
   height: number
+  doorType?: string
+  /** Where the door stands on its wall's centre line, and the wall's normal there: 'inward' is the +normal side. */
+  centre: Vec2
+  normal: Vec2
+  /** The zone along the wall: the door's width and a pad either side. */
+  alongM: number
+  /** The zone's depth from the wall's centre line, on each side. */
+  depthM: { inward: number; outward: number }
+  /**
+   * A vehicle door only: the opening itself, the thickness of its wall. A garage door rolls up and
+   * leaves no leaf on the floor, and a car parked inside is meant to drive out through it, so a car
+   * blocks it only by standing in the opening.
+   */
+  vehicleAperture?: DoorKeepout
 }
 
 /**
@@ -60,7 +88,7 @@ export type DoorKeepout = {
  * segments for room edges that do not have a wall node yet, so the id cannot
  * be the branded `wall_${string}`.
  */
-export type WallSegmentLike = { id: string; start: Vec2; end: Vec2 }
+export type WallSegmentLike = { id: string; start: Vec2; end: Vec2; thickness?: number }
 
 /**
  * Door shape these helpers accept — a real `DoorNode` or a planned opening.
@@ -74,6 +102,11 @@ export type DoorOpeningLike = {
   height?: number
   /** Which face the leaf swings towards: 'inward' is the wall's +normal side, as the door plan draws it. */
   swingDirection?: 'inward' | 'outward'
+  doorType?: string
+  sidelightLeft?: number
+  sidelightRight?: number
+  transomHeight?: number
+  rotation?: readonly number[]
 }
 
 /** Plan depth (m) cleared on each side of the wall face through the opening. */
@@ -305,8 +338,15 @@ export function doorKeepoutFromWall(
   const length = wallLength(wall)
   if (length <= 1e-6) return null
 
-  const width = typeof door.width === 'number' && door.width > 0 ? door.width : 0.9
-  const localX = Array.isArray(door.position) ? (door.position[0] ?? length / 2) : length / 2
+  const size = getDoorOpeningSize({
+    ...door,
+    width: typeof door.width === 'number' && door.width > 0 ? door.width : 0.9,
+    height: typeof door.height === 'number' && door.height > 0 ? door.height : DEFAULT_DOOR_HEIGHT,
+  })
+  const width = size.width
+  const localX =
+    (Array.isArray(door.position) ? (door.position[0] ?? length / 2) : length / 2) -
+    size.leafOffsetX * (Math.cos(door.rotation?.[1] ?? 0) >= 0 ? 1 : -1)
 
   const [sx, sz] = wall.start
   const [ex, ez] = wall.end
@@ -336,13 +376,32 @@ export function doorKeepoutFromWall(
 
   const xs = corners.map((c) => c[0])
   const zs = corners.map((c) => c[1])
+  const vehicleAperture = isVehicleDoorType(door.doorType)
+    ? doorKeepoutFromWall(
+        wall,
+        { ...door, doorType: undefined },
+        {
+          clearDepth: (wall.thickness ?? DEFAULT_WALL_THICKNESS) / 2,
+          sidePad,
+          levelId: options?.levelId,
+        },
+      )
+    : null
   return {
+    ...(vehicleAperture
+      ? { vehicleAperture: { ...vehicleAperture, doorType: door.doorType } }
+      : {}),
     doorId: door.id,
     wallId: wall.id,
     levelId: options?.levelId ?? null,
     width,
     localX,
-    height: typeof door.height === 'number' && door.height > 0 ? door.height : DEFAULT_DOOR_HEIGHT,
+    doorType: door.doorType,
+    centre: [sx + dx * localX, sz + dz * localX],
+    normal: [nx, nz],
+    alongM: 2 * half,
+    depthM: { inward: front, outward: -back },
+    height: size.height,
     aabb: {
       minX: Math.min(...xs),
       maxX: Math.max(...xs),
@@ -378,9 +437,33 @@ export function collectDoorKeepouts(
   return keepouts
 }
 
+/** How near a door's keep-out an item may stand before it is read as in it (m): a leaf's play, not a measure of the house. */
+export const DOOR_KEEPOUT_MARGIN = 0.02
+
 export function itemBlocksDoorKeepout(itemAabb: PlanAabb, keepout: DoorKeepout): boolean {
-  return aabbsOverlap(itemAabb, keepout.aabb, 0.02)
+  return aabbsOverlap(itemAabb, keepout.aabb, DOOR_KEEPOUT_MARGIN)
 }
+
+/** The side of its wall an item stands on: 'inward' is the wall's +normal side, as the door plan draws it. */
+export type DoorSide = 'inward' | 'outward'
+
+export type DoorClearZone = {
+  /** The box the check reads: the zone's bounding box in plan. */
+  box: PlanAabb
+  alongWallM: number
+  /** Depth from the wall's centre line, on each side. */
+  depthM: { inward: number; outward: number }
+}
+
+/** How far an item stands in a door's zone: a box by its depth and the ways out of it, a real shape by its area. */
+export type DoorBlockReading =
+  | {
+      /** Along the shallower axis; 0 where the box is only within the margin of the zone. */
+      overlapM: number
+      /** The moves of the item that leave it clear of the zone, nearest first. */
+      clearBy: ClearMove[]
+    }
+  | { overlapAreaM2: number }
 
 export type BlockedDoorIssue = {
   doorId: string
@@ -389,6 +472,108 @@ export type BlockedDoorIssue = {
   levelId?: string | null
   itemName?: string
   message: string
+  footprint: PlanAabb
+  side: DoorSide
+  clearZone: DoorClearZone
+  reading: DoorBlockReading
+}
+
+/** How much of a keep-out an item's real shape must stand in to block it (m²): a touching edge is not. */
+export const DOOR_KEEPOUT_MIN_AREA = 1e-4
+
+/**
+ * The area (m²) of an item's solids that reach below the door's head and stand in the keep-out,
+ * grown by the same margin the box is read with; 0 when none does.
+ */
+function solidsKeepoutArea(solids: readonly ItemSolid[], keepout: DoorKeepout): number {
+  const { minX, maxX, minZ, maxZ } = keepout.aabb
+  const m = DOOR_KEEPOUT_MARGIN
+  const zone: [number, number][] = [
+    [minX - m, minZ - m],
+    [maxX + m, minZ - m],
+    [maxX + m, maxZ + m],
+    [minX - m, maxZ + m],
+  ]
+  return solids.reduce((total, solid) => {
+    // A pendant over the doorway is above the leaf.
+    if (solid.y0 >= keepout.height - 0.05) return total
+    const shared = area(intersection(solid.polygons, zone))
+    return shared >= DOOR_KEEPOUT_MIN_AREA ? total + shared : total
+  }, 0)
+}
+
+function clearZoneOf(keepout: DoorKeepout): DoorClearZone {
+  return {
+    box: roundBox(keepout.aabb),
+    alongWallM: roundMm(keepout.alongM),
+    depthM: { inward: roundMm(keepout.depthM.inward), outward: roundMm(keepout.depthM.outward) },
+  }
+}
+
+function sideOfWall(keepout: DoorKeepout, footprint: PlanAabb): DoorSide {
+  const across =
+    ((footprint.minX + footprint.maxX) / 2 - keepout.centre[0]) * keepout.normal[0] +
+    ((footprint.minZ + footprint.maxZ) / 2 - keepout.centre[1]) * keepout.normal[1]
+  return across >= 0 ? 'inward' : 'outward'
+}
+
+function blockedDoorMessage(
+  keepout: DoorKeepout,
+  item: { name: string; id: string },
+  facts: Pick<BlockedDoorIssue, 'side' | 'clearZone' | 'reading'>,
+): string {
+  const { side, clearZone, reading } = facts
+  const standing =
+    'overlapAreaM2' in reading
+      ? `its shape covers ${metres(reading.overlapAreaM2)} m² of the door's clear zone`
+      : reading.overlapM > 0
+        ? `its footprint stands ${metres(reading.overlapM)} m into the door's clear zone`
+        : `its footprint stands within the ${DOOR_KEEPOUT_MARGIN.toFixed(2)} m the check keeps clear of the door's clear zone`
+  const { box, alongWallM, depthM } = clearZone
+  const zone = `Clear zone: x ${metres(box.minX)}…${metres(box.maxX)}, z ${metres(box.minZ)}…${metres(box.maxZ)} (${alongWallM.toFixed(2)} m along the wall, ${depthM.inward.toFixed(2)} m deep inward and ${depthM.outward.toFixed(2)} m outward of the wall's centre line).`
+  const clear = 'clearBy' in reading ? ` Clear of it: ${describeMoves(reading.clearBy)}.` : ''
+  const kind = keepout.doorType ? `${keepout.doorType}, ` : ''
+  return `Door ${keepout.doorId} (${kind}${keepout.width.toFixed(2)} m wide) on wall ${keepout.wallId} is blocked by item ${item.name} (${item.id}): ${standing}, on the ${side} side of the wall. ${zone}${clear}`
+}
+
+function doorBlockReading(
+  keepout: DoorKeepout,
+  footprint: PlanAabb,
+  solidsAreaM2?: number,
+): DoorBlockReading {
+  if (solidsAreaM2 !== undefined) return { overlapAreaM2: roundMm(solidsAreaM2) }
+  const shared = axisOverlap(footprint, keepout.aabb)
+  return {
+    overlapM: Math.max(0, roundMm(Math.min(shared.x, shared.z))),
+    clearBy: clearingMoves(footprint, keepout.aabb, DOOR_KEEPOUT_MARGIN),
+  }
+}
+
+/** A blocked door as the agent reads it: the item, how far it stands in the zone, the ways out, the zone. */
+function blockedDoorIssue(
+  keepout: DoorKeepout,
+  node: Extract<AnyNode, { type: 'item' }>,
+  footprint: PlanAabb,
+  levelId: string | null,
+  solidsAreaM2?: number,
+): BlockedDoorIssue {
+  const name = node.name ?? node.asset?.name ?? node.id
+  const item = { name: typeof name === 'string' ? name : node.id, id: node.id }
+  const facts = {
+    side: sideOfWall(keepout, footprint),
+    clearZone: clearZoneOf(keepout),
+    reading: doorBlockReading(keepout, footprint, solidsAreaM2),
+  }
+  return {
+    doorId: keepout.doorId,
+    wallId: keepout.wallId,
+    itemId: node.id,
+    levelId,
+    itemName: item.name,
+    footprint: roundBox(footprint),
+    message: blockedDoorMessage(keepout, item, facts),
+    ...facts,
+  }
 }
 
 export function findBlockedDoors(args: {
@@ -397,6 +582,13 @@ export function findBlockedDoors(args: {
   sidePad?: number
   /** When set, only doors and items on this level are considered. */
   levelId?: string
+  /**
+   * An item's real shape, where the host chooses to read it (wall panelling): an item that has one
+   * blocks a door by what it is made of, not by the box round it. Items without it are read by their box.
+   */
+  solidsOf?: (node: Extract<AnyNode, { type: 'item' }>) => readonly ItemSolid[] | null
+  /** An item's bottom and top in its level, where the host can read them better than the pose alone does. */
+  heightsOf?: (node: Extract<AnyNode, { type: 'item' }>) => { min: number; max: number } | null
 }): BlockedDoorIssue[] {
   const nodes = [...args.nodes]
   const byId = new Map(nodes.map((n) => [n.id, n] as const))
@@ -418,24 +610,25 @@ export function findBlockedDoors(args: {
 
     const aabb = itemPlanAabbInLevel(node, byId)
     if (!aabb) continue
-    const heights = itemLevelHeightRange(node, byId)
+    const heights = args.heightsOf?.(node) ?? itemLevelHeightRange(node, byId)
+    const solids = args.solidsOf?.(node) ?? null
 
-    for (const keepout of keepouts) {
+    const vehicle = isVehicle(node)
+    for (const full of keepouts) {
       // Same-level only (multi-story safety).
-      if (keepout.levelId && itemLevel && keepout.levelId !== itemLevel) continue
-      if (args.levelId && keepout.levelId && keepout.levelId !== args.levelId) continue
+      if (full.levelId && itemLevel && full.levelId !== itemLevel) continue
+      if (args.levelId && full.levelId && full.levelId !== args.levelId) continue
+      const keepout = (vehicle && full.vehicleAperture) || full
       if (!itemBlocksDoorKeepout(aabb, keepout)) continue
-      // A pendant over the doorway is above the leaf.
-      if (heights && heights.min >= keepout.height - 0.05) continue
-      const itemName = node.name ?? node.asset?.name ?? node.id
-      issues.push({
-        doorId: keepout.doorId,
-        wallId: keepout.wallId,
-        itemId: node.id,
-        levelId: itemLevel,
-        itemName: typeof itemName === 'string' ? itemName : undefined,
-        message: `Door ${keepout.doorId} on wall ${keepout.wallId} is blocked by item ${itemName} (${node.id})`,
-      })
+      let solidsAreaM2: number | undefined
+      if (solids) {
+        solidsAreaM2 = solidsKeepoutArea(solids, keepout)
+        if (solidsAreaM2 === 0) continue
+      } else if (heights && heights.min >= keepout.height - 0.05) {
+        // A pendant over the doorway is above the leaf.
+        continue
+      }
+      issues.push(blockedDoorIssue(keepout, node, aabb, itemLevel, solidsAreaM2))
     }
   }
   return issues

@@ -6,6 +6,7 @@ import {
   generateSceneMaterialId,
   getArtifactStore,
   isDerivedNode,
+  isNodeDuplicable,
   isStoreyContent,
   type LevelNode,
   nodeRegistry,
@@ -156,7 +157,7 @@ function isClipboardRoot(
 }
 
 function isCopyableRootType(node: AnyNode) {
-  if (isDerivedNode(node)) return false
+  if (isDerivedNode(node) || !isNodeDuplicable(node)) return false
   if (COPYABLE_ROOT_TYPES.has(node.type)) return true
   const definition = nodeRegistry.get(node.type)
   return !!definition && definition.capabilities?.duplicable !== false

@@ -4,8 +4,8 @@ import { emitter, usePascalI18n } from '@pascal-app/core'
 import Image from 'next/image'
 import useEditor from '../../../store/use-editor'
 import { visibleScene } from '../../../store/view-layout'
-import { ActionButton } from './action-button'
-import { FollowPascalToggle } from './follow-pascal-toggle'
+import { ActionButton } from '@pascal-app/viewer/ui'
+import { FollowPascalToggle } from '@pascal-app/viewer/ui'
 
 export function CameraActions({ hideOrbit = false }: { hideOrbit?: boolean }) {
   const i18n = usePascalI18n()

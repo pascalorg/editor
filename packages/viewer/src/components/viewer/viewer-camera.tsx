@@ -2,9 +2,14 @@ import { OrthographicCamera, PerspectiveCamera } from '@react-three/drei'
 import { useThree } from '@react-three/fiber'
 import { useEffect } from 'react'
 import type { Layers } from 'three'
+import { isDaylightAtmosphere } from '../../lib/daylight/look'
 import { GRID_LAYER, OVERLAY_LAYER, ZONE_LAYER } from '../../lib/layers'
 import useViewer from '../../store/use-viewer'
+import { useSceneAtmosphere } from './scene-atmosphere'
 import { useSceneGroundReplacement } from './scene-ground-replacement'
+
+/** Far plane of the daylight look (its ground fades into the sky by 2.6 km). */
+const DAYLIGHT_FAR = 6000
 
 const IMMERSIVE_XR_VISIBLE_LAYERS = [OVERLAY_LAYER, ZONE_LAYER, GRID_LAYER] as const
 
@@ -68,7 +73,14 @@ export function viewerUsesPerspectiveCamera(cameraMode: string, immersiveXR: boo
 export const ViewerCamera = ({ immersiveXR = false }: { immersiveXR?: boolean }) => {
   const cameraMode = useViewer((state) => state.cameraMode)
   const clipping = viewerCameraClipping(immersiveXR)
-  const far = useSceneGroundReplacement() ? 20_000 : clipping.far
+  const groundReplaced = useSceneGroundReplacement()
+  // The daylight look's ground runs to the horizon: see it out to where it meets the sky.
+  const daylight = isDaylightAtmosphere(useSceneAtmosphere())
+  const far = groundReplaced
+    ? 20_000
+    : daylight
+      ? Math.max(clipping.far, DAYLIGHT_FAR)
+      : clipping.far
 
   return (
     <>

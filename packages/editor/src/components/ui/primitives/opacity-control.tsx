@@ -2,8 +2,8 @@
 
 import { Eye, EyeOff } from 'lucide-react'
 import { useState } from 'react'
-import { Button } from '../../../components/ui/primitives/button'
-import { Popover, PopoverContent, PopoverTrigger } from '../../../components/ui/primitives/popover'
+import { Button } from '@pascal-app/viewer/ui'
+import { Popover, PopoverContent, PopoverTrigger } from '@pascal-app/viewer/ui'
 import { Slider } from '../../../components/ui/primitives/slider'
 import { cn } from '../../../lib/utils'
 

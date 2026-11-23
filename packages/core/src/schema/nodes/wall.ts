@@ -326,6 +326,11 @@ export const WallNode = BaseNode.extend({
   // Absent centers the body; a/b place it left/right of the stored start → end line.
   justification: z.enum(['a', 'b']).optional(),
   height: z.number().optional(),
+  // Added to the wall's top only at its `end` point (`start` is unaffected),
+  // tilting the top edge along the wall's length so one side is taller than
+  // the other — e.g. a knee wall following a single-pitch roof slope.
+  /** Height offset at the end point (default 0). */
+  endHeightOffset: z.number().optional(),
   curveOffset: z.number().optional(),
   // Persisted slab-support host — see ItemNode.supportSlabId for the rules.
   supportSlabId: z.string().optional(),
@@ -360,6 +365,7 @@ export const WallNode = BaseNode.extend({
   - assembly: optional layered construction stack; when present it is the single
     source of truth and thickness is re-derived from it on every edit
   - height: height in meters
+  - endHeightOffset: added to the top only at the wall's end point, tilting the top edge so one side is taller than the other
   - fillToTerrain: extends the wall downward to the terrain without changing its authored height
   - underpinning: { rim, stem } — the finish carried rim metres below the base over the floor
     platform's edge, then stem metres of concrete stemwall to the ground (the foundation slot)

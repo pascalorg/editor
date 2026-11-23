@@ -14,6 +14,7 @@ import {
   getWallThickness,
   isCurvedWall,
   isDerivedNode,
+  isNodeDuplicable,
   isRegistryMovable,
   isRegistrySelectable,
   isSplineFence,
@@ -29,6 +30,7 @@ import {
   type WallNode,
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
+import { LocalizedHtml as Html } from '@pascal-app/viewer/ui'
 import { useFrame } from '@react-three/fiber'
 import { useCallback, useMemo, useRef } from 'react'
 import * as THREE from 'three'
@@ -53,7 +55,6 @@ import useInteractionScope, {
 } from '../../store/use-interaction-scope'
 import { IconRefGlyph } from '../ui/icon-ref'
 import { duplicateNodeAndPickUp } from './duplicate-node'
-import { Html } from './localized-html'
 import { formatMeasurement, MeasurementPill } from './measurement-pill'
 import { NodeActionMenu } from './node-action-menu'
 import { startZoneRoomTransform } from './room-controls'
@@ -284,7 +285,7 @@ function getHeightPillDimensions(node: WallNode | FenceNode): {
 } {
   if (node.type === 'wall') {
     return {
-      height: getWallEffectiveHeightForNodes(node, useScene.getState().nodes),
+      height: getWallEffectiveHeightForNodes(node, useScene.getState().nodes, 0),
       length: getWallCurveLength(node),
       thickness: getWallThickness(node),
     }
@@ -423,7 +424,7 @@ export function FloatingActionMenu() {
         | undefined
       const fallbackHeight =
         node.type === 'wall'
-          ? getWallEffectiveHeightForNodes(node, useScene.getState().nodes)
+          ? getWallEffectiveHeightForNodes(node, useScene.getState().nodes, 0)
           : FENCE_DEFAULT_HEIGHT
       const liveHeight = override?.height ?? node.height ?? fallbackHeight
       pillHeightRef.current.textContent = `H ${formatMeasurement(liveHeight, unit, metricNotation)}`
@@ -681,6 +682,7 @@ export function FloatingActionMenu() {
                 onDelete={handleDelete}
                 onDuplicate={
                   node &&
+                  isNodeDuplicable(node as AnyNode) &&
                   node.type !== 'spawn' &&
                   !DELETE_ONLY_TYPES.includes(node.type) &&
                   !HOLE_TYPES.includes(node.type)

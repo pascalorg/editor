@@ -3,6 +3,7 @@ import {
   type AnyNode,
   type AnyNodeId,
   BuildingNode,
+  ElevatorNode,
   LevelNode,
   RoofNode,
   useScene,
@@ -27,10 +28,14 @@ beforeEach(() => {
     metadata: { role: 'roof' },
   })
   const roof = RoofNode.parse({ id: 'roof_main', parentId: roofLevel.id })
-  const building = BuildingNode.parse({ id: BUILDING, children: [GROUND, roofLevel.id] })
+  const elevator = ElevatorNode.parse({ id: 'elevator_lift', parentId: BUILDING })
+  const building = BuildingNode.parse({
+    id: BUILDING,
+    children: [GROUND, roofLevel.id, elevator.id],
+  })
   useScene.setState({
     nodes: Object.fromEntries(
-      [building, ground, wall, roofLevel, roof].map((node) => [node.id, node as AnyNode]),
+      [building, ground, wall, roofLevel, roof, elevator].map((node) => [node.id, node as AnyNode]),
     ),
     rootNodeIds: [BUILDING],
   } as never)
@@ -52,6 +57,17 @@ describe('selectPlacedNode', () => {
     expect(useViewer.getState().selection).toMatchObject({
       levelId: GROUND,
       selectedIds: ['wall_a'],
+    })
+  })
+
+  test('a building-parented node keeps the floor in view and adopts its building', () => {
+    useViewer.getState().resetSelection()
+    useViewer.getState().setSelection({ levelId: GROUND })
+    selectPlacedNode('elevator_lift' as AnyNodeId)
+    expect(useViewer.getState().selection).toMatchObject({
+      buildingId: BUILDING,
+      levelId: GROUND,
+      selectedIds: ['elevator_lift'],
     })
   })
 })

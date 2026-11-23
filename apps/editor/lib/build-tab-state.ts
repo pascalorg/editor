@@ -48,6 +48,10 @@ export const ROOF_TYPE_OPTIONS: ReadonlyArray<{ label: MessageDescriptor; value:
     label: /* i18n */ { id: 'app.lib.buildTabState.conical', message: 'Conical' },
     value: 'conical',
   },
+  {
+    label: /* i18n */ { id: 'app.lib.buildTabState.barrel', message: 'Barrel' },
+    value: 'barrel',
+  },
 ]
 
 export function getActiveRoofFeatureId(

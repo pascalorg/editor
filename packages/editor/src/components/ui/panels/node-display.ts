@@ -1,5 +1,5 @@
 import { type AnyNode, type MessageDescriptor, type PascalI18n, scriptImages } from '@pascal-app/core'
-import { displayRoomName } from '../../../lib/room-name-messages'
+import { displayRoomName } from '@pascal-app/viewer/ui'
 
 export type NodeDisplay = {
   icon: string

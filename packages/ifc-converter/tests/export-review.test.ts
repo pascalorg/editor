@@ -9,6 +9,7 @@ import {
   SiteNode,
   SlabNode,
   WallNode,
+  WindowNode,
   ZoneNode,
 } from '@pascal-app/core'
 import * as WebIFC from 'web-ifc'
@@ -240,6 +241,44 @@ describe('stepped wall base', () => {
       expect(Math.max(...mesh.vertices.map(([, , z]) => z!))).toBeCloseTo(2.9, 3)
       // 4 m × 0.2 m, 2.5 m tall on the deck half and 2.85 m on the floor half.
       expect(volume(mesh)).toBeCloseTo(2 * 0.2 * 2.5 + 2 * 0.2 * 2.85, 3)
+    })
+  })
+})
+
+describe('sloped wall top', () => {
+  // 3 m at the start falling to 2 m at the end, with a 1 × 1 m window under the high half.
+  const wall = WallNode.parse({
+    id: 'wall_slope',
+    parentId: 'level_r',
+    start: [0, 0],
+    end: [4, 0],
+    thickness: 0.2,
+    height: 3,
+    endHeightOffset: -1,
+    children: ['window_slope'],
+  })
+  const window = WindowNode.parse({
+    id: 'window_slope',
+    parentId: wall.id,
+    wallId: wall.id,
+    position: [1, 1.2, 0],
+    width: 1,
+    height: 1,
+  })
+  const ifc = exportSceneToIfc({ nodes: levelNodes(wall, window), timestamp: EPOCH })
+
+  test('exports the sloped body, not a box at the higher end', () => {
+    expectWellFormedStep(ifc)
+    expect(ifc).toContain("'Body','Clipping'")
+    withModel(ifc, (modelID) => {
+      const [wallId] = idsOf(modelID, WebIFC.IFCWALL)
+      const mesh = elementMesh(modelID, wallId!)
+      const topNear = (at: number) =>
+        Math.max(...mesh.vertices.filter(([x]) => Math.abs(x! - at) < 0.15).map(([, , z]) => z!))
+      expect(topNear(0)).toBeCloseTo(3, 2)
+      expect(topNear(4)).toBeCloseTo(2, 2)
+      // 4 m × 0.2 m at a mean 2.5 m, less the window's 1 × 1 × 0.2 m void.
+      expect(volume(mesh)).toBeCloseTo(4 * 0.2 * 2.5 - 0.2, 2)
     })
   })
 })

@@ -43,7 +43,7 @@ export function createConicalRoofSectorAboveWall(
   )
   if (existingRoof) {
     const existingSegment = existingRoof.children
-      .map((childId) => nodes[childId])
+      .map((childId) => nodes[childId as AnyNodeId])
       .find((node): node is RoofSegmentNode => node?.type === 'roof-segment')
     if (existingSegment) return existingSegment.id
   }

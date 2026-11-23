@@ -18,6 +18,7 @@ import {
   subscribeRevealEvents,
   useViewer,
 } from '@pascal-app/viewer'
+import { useFollowPascal } from '@pascal-app/viewer/ui'
 import { useFrame, useThree } from '@react-three/fiber'
 import { useEffect, useMemo, useRef } from 'react'
 import { Vector3 } from 'three'
@@ -34,7 +35,6 @@ import { FollowPresentation, type PresentationPort } from '../../lib/follow-pasc
 import { FollowSight } from '../../lib/follow-pascal-sight'
 import { stayOnLevel, wantFromEvent } from '../../lib/follow-pascal-targets'
 import useEditor from '../../store/use-editor'
-import useFollowPascal from '../../store/use-follow-pascal'
 import { usePointAsk } from '../../store/use-point-ask'
 
 /**

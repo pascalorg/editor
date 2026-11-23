@@ -95,6 +95,8 @@ export class ProceduralMotionController {
     fractions: Record<string, number>
     spins: Record<string, { phase: number; speed: number }>
     pending: boolean
+    /** Every opening and sliding part has come to rest; spinning ones may still run. */
+    settled: boolean
   } {
     const step = Math.max(0, dt)
     if (this.collective) {
@@ -146,6 +148,8 @@ export class ProceduralMotionController {
       state.speed = next
       if (next !== target || next > 0) pending = true
     }
-    return { times, fractions, spins: Object.fromEntries(this.spins), pending }
+    const settled =
+      !this.collective && [...this.parts.values()].every((cursor) => cursor.direction === 0)
+    return { times, fractions, spins: Object.fromEntries(this.spins), pending, settled }
   }
 }

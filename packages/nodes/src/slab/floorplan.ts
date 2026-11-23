@@ -6,10 +6,10 @@ import {
   getRenderableSlabPolygon,
   hostedCutterHoles,
   isDerivedNode,
+  readFloorplanContext,
   type SlabNode,
   slabPolygonContextFromGeometry,
 } from '@pascal-app/core'
-import { readFloorplanContext } from '@pascal-app/editor'
 
 /**
  * Whether the plan offers the slab's outline and hole handles: only a slab the

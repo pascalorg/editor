@@ -9,6 +9,7 @@ import {
   createAngleAccumulator,
   createSceneApi,
   DEFAULT_ANGLE_STEP,
+  formatAngleRadians,
   type HandleDescriptor,
   type HandlePortal,
   type LatchHandle,
@@ -21,6 +22,7 @@ import {
   useScene,
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
+import { LocalizedHtml as Html } from '@pascal-app/viewer/ui'
 import { createPortal, type ThreeEvent, useFrame, useThree } from '@react-three/fiber'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
@@ -59,7 +61,6 @@ import useInteractionScope, {
   useMovingNode,
 } from '../../store/use-interaction-scope'
 import useOpeningGuides from '../../store/use-opening-guides'
-import { formatAngleRadians } from '../tools/shared/segment-angle'
 import {
   ARROW_COLOR,
   ARROW_HOVER_COLOR,
@@ -76,7 +77,6 @@ import {
 import { createLinearResizeDragBinding, linearResizeFactor } from './handles/linear-resize-drag'
 import { resolveResizeSnapValue } from './handles/resize-snap'
 import { type HandleDragControls, useHandleDrag } from './handles/use-handle-drag'
-import { Html } from './localized-html'
 
 // Pooled scratch for the handle rig's world-relative pose mapping.
 const _rigRelative = new Matrix4()

@@ -60,7 +60,11 @@ describe('wall reference frame', () => {
           },
         },
       })
-      for (const original of [wall, { ...wall, curveOffset: 0.4 }]) {
+      for (const original of [
+        wall,
+        { ...wall, curveOffset: 0.4 },
+        { ...wall, height: 3, endHeightOffset: -1 },
+      ]) {
         const reversed = { ...original, ...reverseWallDirection(original) }
         expect({ ...reversed, ...reverseWallDirection(reversed) }).toEqual(original)
         // Face-keyed data follows the faces; stations are re-measured from the new start.
@@ -95,6 +99,15 @@ describe('wall reference frame', () => {
       }
     })
   }
+
+  test('reversal turns a sloped top around: the old end height is the new start', () => {
+    const wall = WallNode.parse({ start: [0, 0], end: [4, 0], height: 3, endHeightOffset: -1 })
+    expect(reverseWallDirection(wall)).toMatchObject({ height: 2, endHeightOffset: 1 })
+    const storeyBound = WallNode.parse({ start: [0, 0], end: [4, 0], endHeightOffset: 0.5 })
+    const reversed = reverseWallDirection(storeyBound)
+    expect(reversed.endHeightOffset).toBe(-0.5)
+    expect('height' in reversed).toBe(false)
+  })
 
   test('local face z matches the viewer world-to-local rotation', () => {
     for (const end of [

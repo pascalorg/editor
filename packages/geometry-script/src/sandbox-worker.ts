@@ -49,12 +49,13 @@ type Request = {
   code: string
   params?: Record<string, string | number | boolean>
   inputs?: Record<string, unknown>
+  usageShape?: boolean
 }
 
 self.addEventListener('message', async (event: MessageEvent<Request>) => {
-  const { id, code, params, inputs } = event.data
+  const { id, code, params, inputs, usageShape } = event.data
   try {
-    const output = await compileGeometryScript({ code, params, inputs })
+    const output = await compileGeometryScript({ code, params, inputs, usageShape })
     post({ id, ok: true, output }, [output.glb])
   } catch (error) {
     post({ id, ok: false, error: error instanceof Error ? error.message : String(error) })

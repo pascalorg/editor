@@ -239,3 +239,55 @@ test('choosing a round transition inlet automatically selects a rectangular outl
   expect(defaults.inletShape).toBe('round')
   expect(defaults.outletShape).toBe('rect')
 })
+
+test('run options retain independent settings and discard consumed continuation context', async () => {
+  const { ductSegmentDefinition, pipeSegmentDefinition } = await import('../index')
+  const { clearRunContinuation } = await import('./run-tool-options')
+  const previous = useEditor.getState().toolDefaults
+  try {
+    useEditor.setState({ toolDefaults: {} })
+    const duct = ductSegmentDefinition.toolOptions!
+    const pipe = pipeSegmentDefinition.toolOptions!
+    duct.find((option) => option.id === 'shape')!.set('round')
+    duct.find((option) => option.id === 'diameter')!.set('10')
+    pipe.find((option) => option.id === 'diameter')!.set('4')
+    pipe.find((option) => option.id === 'fall')!.set('sloped')
+    useEditor.getState().setToolDefaults('duct-segment', {
+      ...useEditor.getState().toolDefaults['duct-segment'],
+      continuation: { nodeId: 'duct-segment_old', endpoint: 'end' },
+    })
+    clearRunContinuation('duct-segment')
+    expect(duct.find((option) => option.id === 'diameter')!.value()).toBe('10')
+    expect(pipe.find((option) => option.id === 'diameter')!.value()).toBe('4')
+    expect(pipe.find((option) => option.id === 'fall')!.value()).toBe('sloped')
+    expect(useEditor.getState().toolDefaults['duct-segment']?.continuation).toBeUndefined()
+    duct.find((option) => option.id === 'diameter')!.set('NaN')
+    duct.find((option) => option.id === 'diameter')!.set('100')
+    expect(duct.find((option) => option.id === 'diameter')!.value()).toBe('10')
+  } finally {
+    useEditor.setState({ toolDefaults: previous })
+  }
+})
+
+test('duct presets apply a complete profile without resetting route preferences', async () => {
+  const { ductRunToolOptions } = await import('./run-tool-options')
+  useEditor.getState().setToolDefaults('duct-segment', {
+    routingMode: 'horizontal',
+    elevation: 2.4,
+    crossingMode: 'cross',
+  })
+  const preset = ductRunToolOptions.find((option) => option.id === 'preset')!
+  preset.set('return')
+  expect(useEditor.getState().toolDefaults['duct-segment']).toMatchObject({
+    shape: 'rect',
+    width: 20,
+    height: 10,
+    system: 'return',
+    ductMaterial: 'sheet-metal',
+    elevation: 2.4,
+    crossingMode: 'cross',
+  })
+  expect(preset.value()).toBe('return')
+  ductRunToolOptions.find((option) => option.id === 'width')!.set('22')
+  expect(preset.value()).toBe('custom')
+})

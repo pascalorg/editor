@@ -32,6 +32,7 @@ you're in.
 
 Open the scene in Pascal (or render it from the JSON) and you can read
 each claim directly off the geometry:
+
 1. **`[x, z] → world (x, 0, z)` is exact, no sign flip.** Demo A and
    Demo B both sit flat on the floor at Y = 0; their polygon vertices
    round-trip through `save_scene` / `get_scene` byte-identical to what

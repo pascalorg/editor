@@ -365,8 +365,9 @@ describe('wall cutter union', () => {
           ...(includeSmallGroups ? [ADDITION, SUBTRACTION] : []),
           ...Array.from({ length: 6 }, () => SUBTRACTION),
         ])
-        expect(disposed.get(actual)).toBe(0)
-        disposed.delete(actual)
+        // The T-junction repair replaces the boolean result, so every CSG
+        // geometry, the result included, is disposed exactly once.
+        expect(disposed.has(actual)).toBe(false)
         expect([...disposed.values()].every((count) => count === 1)).toBe(true)
         spy.mockRestore()
         const reference = generateChainedReference(wall, openings)

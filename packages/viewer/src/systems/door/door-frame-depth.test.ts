@@ -52,6 +52,7 @@ function frameExtent(mesh: THREE.Mesh): { min: number; max: number } {
       !part.isMesh ||
       part === mesh ||
       part.name === 'cutout' ||
+      part.name === 'door-jamb-stop' ||
       part.name === OPENING_CASING_MESH_NAME ||
       part.userData.slotId !== 'frame'
     )

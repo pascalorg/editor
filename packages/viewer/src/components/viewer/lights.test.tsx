@@ -147,3 +147,68 @@ test('an atmosphere owns the light while mounted and releases back to the author
     await renderer.unmount()
   }
 })
+
+test.each(['full', 'cut'] as const)(
+  'daylight %s shadows coalesce clipped changes and reuse the whole-building map',
+  async (mode) => {
+    useViewer.getState().setSectionShadows(mode)
+    const source = {
+      skyRadiance: () => vec3(1),
+      reflectionRadiance: () => vec3(1),
+      fogRadiance: () => vec3(1),
+      environmentNode: vec3(1),
+      sunDirection: new Vector3(0, 1, 0),
+      sunColor: new Color('#ffffff'),
+      sunIntensity: 2,
+      moonDirection: new Vector3(0, -1, 0),
+      moonColor: new Color('#ffffff'),
+      moonIntensity: 0,
+      skyColor: new Color('#ffffff'),
+      groundColor: new Color('#ffffff'),
+      hemisphereIntensity: 1,
+      ambientIntensity: 0,
+      exposure: 1,
+      fogStart: 50,
+      fogEnd: 100,
+      whiteBalance: new Vector3(1, 1, 1),
+      elevation: 90,
+      shadow: { mapSize: 1024, bias: -0.0005, normalBias: 0.08, radius: 2 },
+    }
+    const renderer = await create(
+      <>
+        <SceneAtmosphere source={source} />
+        <Lights />
+      </>,
+    )
+    try {
+      await renderer.advanceFrames(3, 0.016)
+      const light = renderer.scene.findAllByType('DirectionalLight')[0]!
+        .instance as DirectionalLight
+      light.shadow.needsUpdate = false
+      await renderer.advanceFrames(1, 0.016)
+      expect(light.shadow.needsUpdate).toBe(false)
+      for (const change of [
+        () => useViewer.getState().setSectionEnabled(true),
+        () => useViewer.getState().setSectionAxis('x'),
+        () => useViewer.getState().setSectionPosition(3),
+        () => useViewer.getState().setSectionFlipped(true),
+        () => useViewer.getState().setWalkthroughMode(true),
+        () => useViewer.getState().setWalkthroughMode(false),
+      ]) {
+        change()
+        expect(light.shadow.needsUpdate).toBe(false)
+        await renderer.advanceFrames(1, 0.016)
+        expect(light.shadow.needsUpdate).toBe(mode === 'cut')
+        light.shadow.needsUpdate = false
+        await renderer.advanceFrames(1, 0.016)
+        expect(light.shadow.needsUpdate).toBe(false)
+      }
+      for (let i = 0; i < 20; i++) useViewer.getState().setSectionPosition(i)
+      expect(light.shadow.needsUpdate).toBe(false)
+      await renderer.advanceFrames(1, 0.016)
+      expect(light.shadow.needsUpdate).toBe(mode === 'cut')
+    } finally {
+      await renderer.unmount()
+    }
+  },
+)

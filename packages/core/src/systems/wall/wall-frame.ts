@@ -153,6 +153,14 @@ export function reverseWallDirection(wall: WallNode): Partial<WallNode> {
       ? {}
       : { justification: wall.justification === 'a' ? 'b' : 'a' }),
     ...(wall.curveOffset === undefined ? {} : { curveOffset: -wall.curveOffset }),
+    // The old end's top becomes the start. A storey-bound start has no stored height to lift, so
+    // only the slope turns; readers that need its heights resolve them (`mergedWallTop`).
+    ...(wall.endHeightOffset
+      ? {
+          endHeightOffset: -wall.endHeightOffset,
+          ...(wall.height === undefined ? {} : { height: wall.height + wall.endHeightOffset }),
+        }
+      : {}),
     ...(wall.slots === undefined
       ? {}
       : {

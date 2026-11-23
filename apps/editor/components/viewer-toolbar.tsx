@@ -3,6 +3,7 @@
 import { Icon as IconifyIcon } from '@iconify/react'
 import { type MessageDescriptor, usePascalI18n } from '@pascal-app/core'
 import {
+  DaylightMenu,
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuGroup,
@@ -13,7 +14,9 @@ import {
   DropdownMenuSubContent,
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
+  EdgesToggleItem,
   type FloorplanWallDimensionFaces,
+  QualityMenu,
   sceneThemeName,
   useCeilingsSetting,
   useEditor,
@@ -23,17 +26,10 @@ import {
   useWallsBelowSetting,
   visibleScene,
 } from '@pascal-app/editor'
-import {
-  CLAY_PALETTE,
-  type EdgeMode,
-  getSceneTheme,
-  SCENE_THEMES,
-  useViewer,
-} from '@pascal-app/viewer'
+import { CLAY_PALETTE, getSceneTheme, SCENE_THEMES, useViewer } from '@pascal-app/viewer'
 import {
   ArrowDown,
   ArrowUp,
-  Box,
   BrickWall,
   Check,
   ChevronsLeft,
@@ -48,12 +44,12 @@ import {
   Layers3,
   Link2,
   Magnet,
-  PenLine,
+  Palette,
   Ruler,
   RulerDimensionLine,
   ScanLine,
   SlidersHorizontal,
-  Sparkles,
+  Square,
   SquareUserRound,
   SwatchBook,
   Tag,
@@ -125,27 +121,6 @@ const wallModeConfig: Record<string, { icon: string; label: MessageDescriptor }>
     label: /* i18n */ { id: 'app.viewerToolbar.translucent', message: 'Translucent' },
   },
 }
-
-const SHADING_OPTIONS = [
-  {
-    id: 'solid',
-    name: /* i18n */ { id: 'app.viewerToolbar.solid', message: 'Solid' },
-    detail: /* i18n */ {
-      id: 'app.viewerToolbar.flatAndFastNoAmbientOcclusion',
-      message: 'Flat and fast — no ambient occlusion',
-    },
-    icon: Box,
-  },
-  {
-    id: 'rendered',
-    name: /* i18n */ { id: 'app.viewerToolbar.rendered', message: 'Rendered' },
-    detail: /* i18n */ {
-      id: 'app.viewerToolbar.fullAmbientOcclusion',
-      message: 'Full ambient occlusion',
-    },
-    icon: Sparkles,
-  },
-] as const
 
 const FLOORPLAN_ANNOTATION_OPTIONS = [
   {
@@ -342,30 +317,6 @@ function WallModeToggle() {
 // One dropdown that gathers every "how the views look" control, grouped by what
 // it changes: both views (Show, Dimensions, Editing), the plan, or the 3D scene.
 
-const EDGE_OPTIONS = [
-  {
-    id: 'off',
-    name: /* i18n */ { id: 'app.viewerToolbar.off', message: 'Off' },
-    detail: /* i18n */ { id: 'app.viewerToolbar.noEdgeLines', message: 'No edge lines' },
-  },
-  {
-    id: 'soft',
-    name: /* i18n */ { id: 'app.viewerToolbar.soft', message: 'Soft' },
-    detail: /* i18n */ {
-      id: 'app.viewerToolbar.faintOutlineOfMajorCreases',
-      message: 'Faint outline of major creases',
-    },
-  },
-  {
-    id: 'strong',
-    name: /* i18n */ { id: 'app.viewerToolbar.strong', message: 'Strong' },
-    detail: /* i18n */ {
-      id: 'app.viewerToolbar.crispOpaqueEdgeLines',
-      message: 'Crisp, opaque edge lines',
-    },
-  },
-] as const satisfies readonly { id: EdgeMode; name: MessageDescriptor; detail: MessageDescriptor }[]
-
 const SUBMENU_CONTENT_CLASS = 'min-w-56 rounded-xl border-border/45 bg-popover/95 backdrop-blur-xl'
 
 /** Display → Measure walls: the faces wall dimensions measure to, with the line that explains each. */
@@ -474,12 +425,10 @@ function DisplayMenu() {
   const setMetricNotation = useViewer((state) => state.setMetricNotation)
   const cameraMode = useViewer((state) => state.cameraMode)
   const setCameraMode = useViewer((state) => state.setCameraMode)
-  const shading = useViewer((state) => state.shading)
-  const setShading = useViewer((state) => state.setShading)
   const sceneTheme = useViewer((state) => state.sceneTheme)
   const setSceneTheme = useViewer((state) => state.setSceneTheme)
-  const edges = useViewer((state) => state.edges)
-  const setEdges = useViewer((state) => state.setEdges)
+  const textures = useViewer((state) => state.textures)
+  const setTextures = useViewer((state) => state.setTextures)
   const shadows = useViewer((state) => state.shadows)
   const setShadows = useViewer((state) => state.setShadows)
   const magneticSnap = useEditor((state) => state.magneticSnap)
@@ -495,9 +444,6 @@ function DisplayMenu() {
   const floorplanMode = useFloorplanMode((state) => state.mode)
   const setFloorplanMode = useFloorplanMode((state) => state.setMode)
 
-  const activeShading =
-    SHADING_OPTIONS.find((option) => option.id === shading) ?? SHADING_OPTIONS[0]
-  const activeEdges = EDGE_OPTIONS.find((option) => option.id === edges) ?? EDGE_OPTIONS[0]
   const activeTheme = getSceneTheme(sceneTheme)
   const activeMeasureWalls =
     MEASURE_WALLS_OPTIONS.find((option) => option.id === wallDimensionFaces) ??
@@ -802,58 +748,7 @@ function DisplayMenu() {
                 </span>
                 <ShownIcon shown={showMeasurements} />
               </DropdownMenuItem>
-              <DropdownMenuSub>
-                <DropdownMenuSubTrigger>
-                  <activeShading.icon className="h-4 w-4" />
-                  <span>{i18n._({ id: 'app.viewerToolbar.render', message: 'Render' })}</span>
-                  <span className="ml-auto text-muted-foreground text-xs">
-                    {i18n._(activeShading.name)}
-                  </span>
-                </DropdownMenuSubTrigger>
-                <DropdownMenuSubContent className={SUBMENU_CONTENT_CLASS}>
-                  {SHADING_OPTIONS.map((option) => {
-                    const OptionIcon = option.icon
-                    return (
-                      <DropdownMenuItem key={option.id} onSelect={() => setShading(option.id)}>
-                        <OptionIcon className="h-4 w-4" />
-                        <div className="flex flex-col">
-                          <span className="text-foreground">{i18n._(option.name)}</span>
-                          <span className="text-muted-foreground text-xs">
-                            {i18n._(option.detail)}
-                          </span>
-                        </div>
-                        {shading === option.id ? (
-                          <Check className="ml-auto h-4 w-4 text-foreground" />
-                        ) : null}
-                      </DropdownMenuItem>
-                    )
-                  })}
-                </DropdownMenuSubContent>
-              </DropdownMenuSub>
-              <DropdownMenuSub>
-                <DropdownMenuSubTrigger>
-                  <PenLine className="h-4 w-4" />
-                  <span>{i18n._({ id: 'app.viewerToolbar.edges', message: 'Edges' })}</span>
-                  <span className="ml-auto text-muted-foreground text-xs">
-                    {i18n._(activeEdges.name)}
-                  </span>
-                </DropdownMenuSubTrigger>
-                <DropdownMenuSubContent className={SUBMENU_CONTENT_CLASS}>
-                  {EDGE_OPTIONS.map((option) => (
-                    <DropdownMenuItem key={option.id} onSelect={() => setEdges(option.id)}>
-                      <div className="flex flex-col">
-                        <span className="text-foreground">{i18n._(option.name)}</span>
-                        <span className="text-muted-foreground text-xs">
-                          {i18n._(option.detail)}
-                        </span>
-                      </div>
-                      {edges === option.id ? (
-                        <Check className="ml-auto h-4 w-4 text-foreground" />
-                      ) : null}
-                    </DropdownMenuItem>
-                  ))}
-                </DropdownMenuSubContent>
-              </DropdownMenuSub>
+              <QualityMenu subContentClassName={SUBMENU_CONTENT_CLASS} />
               <DropdownMenuItem onSelect={(e) => keepOpen(e, () => setShadows(!shadows))}>
                 <Contrast className="h-4 w-4" />
                 <span>{i18n._({ id: 'app.viewerToolbar.shadows', message: 'Shadows' })}</span>
@@ -882,42 +777,61 @@ function DisplayMenu() {
                     : i18n._({ id: 'app.viewerToolbar.orthographic', message: 'Orthographic' })}
                 </span>
               </DropdownMenuItem>
-              <DropdownMenuSub>
-                <DropdownMenuSubTrigger>
-                  <SwatchBook className="h-4 w-4" />
-                  <span>
-                    {i18n._({ id: 'app.viewerToolbar.sceneTheme', message: 'Scene theme' })}
-                  </span>
-                  <span className="ml-auto truncate text-muted-foreground text-xs">
-                    {sceneThemeName(activeTheme.id, activeTheme.name, i18n)}
-                  </span>
-                </DropdownMenuSubTrigger>
-                <DropdownMenuSubContent className="min-w-48 rounded-xl border-border/45 bg-popover/95 backdrop-blur-xl">
-                  {SCENE_THEMES.map((theme) => {
-                    const swatches = (['wall', 'roof', 'floor', 'glazing'] as const).map(
-                      (role) => theme.clayTints?.[role] ?? CLAY_PALETTE[role],
-                    )
-                    return (
-                      <DropdownMenuItem key={theme.id} onSelect={() => setSceneTheme(theme.id)}>
-                        <span
-                          className="grid h-5 w-5 shrink-0 grid-cols-2 overflow-hidden rounded-sm border border-black/10"
-                          style={{ backgroundColor: theme.background }}
-                        >
-                          {swatches.map((color, index) => (
-                            <span key={`${theme.id}-${index}`} style={{ backgroundColor: color }} />
-                          ))}
-                        </span>
-                        <span className="text-foreground">
-                          {sceneThemeName(theme.id, theme.name, i18n)}
-                        </span>
-                        {sceneTheme === theme.id ? (
-                          <Check className="ml-auto h-4 w-4 text-foreground" />
-                        ) : null}
-                      </DropdownMenuItem>
-                    )
-                  })}
-                </DropdownMenuSubContent>
-              </DropdownMenuSub>
+              <DropdownMenuItem onSelect={(e) => keepOpen(e, () => setTextures(!textures))}>
+                {textures ? <Palette className="h-4 w-4" /> : <Square className="h-4 w-4" />}
+                <span>{i18n._({ id: 'app.viewerToolbar.colors', message: 'Colors' })}</span>
+                <span className="ml-auto text-muted-foreground text-xs">
+                  {textures
+                    ? i18n._({ id: 'app.viewerToolbar.colored', message: 'Colored' })
+                    : i18n._({ id: 'app.viewerToolbar.monochrome', message: 'Monochrome' })}
+                </span>
+              </DropdownMenuItem>
+              {textures ? (
+                <DaylightMenu subContentClassName={SUBMENU_CONTENT_CLASS} />
+              ) : (
+                <>
+                  <DropdownMenuSub>
+                    <DropdownMenuSubTrigger>
+                      <SwatchBook className="h-4 w-4" />
+                      <span>
+                        {i18n._({ id: 'app.viewerToolbar.sceneTheme', message: 'Scene theme' })}
+                      </span>
+                      <span className="ml-auto truncate text-muted-foreground text-xs">
+                        {sceneThemeName(activeTheme.id, activeTheme.name, i18n)}
+                      </span>
+                    </DropdownMenuSubTrigger>
+                    <DropdownMenuSubContent className="min-w-48 rounded-xl border-border/45 bg-popover/95 backdrop-blur-xl">
+                      {SCENE_THEMES.map((theme) => {
+                        const swatches = (['wall', 'roof', 'floor', 'glazing'] as const).map(
+                          (role) => theme.clayTints?.[role] ?? CLAY_PALETTE[role],
+                        )
+                        return (
+                          <DropdownMenuItem key={theme.id} onSelect={() => setSceneTheme(theme.id)}>
+                            <span
+                              className="grid h-5 w-5 shrink-0 grid-cols-2 overflow-hidden rounded-sm border border-black/10"
+                              style={{ backgroundColor: theme.background }}
+                            >
+                              {swatches.map((color, index) => (
+                                <span
+                                  key={`${theme.id}-${index}`}
+                                  style={{ backgroundColor: color }}
+                                />
+                              ))}
+                            </span>
+                            <span className="text-foreground">
+                              {sceneThemeName(theme.id, theme.name, i18n)}
+                            </span>
+                            {sceneTheme === theme.id ? (
+                              <Check className="ml-auto h-4 w-4 text-foreground" />
+                            ) : null}
+                          </DropdownMenuItem>
+                        )
+                      })}
+                    </DropdownMenuSubContent>
+                  </DropdownMenuSub>
+                  <EdgesToggleItem />
+                </>
+              )}
             </DisplayGroup>
           </>
         ) : null}

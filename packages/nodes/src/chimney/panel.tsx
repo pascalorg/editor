@@ -254,8 +254,8 @@ export default function ChimneyPanel() {
     let lo_z = Number.POSITIVE_INFINITY
     let hi_z = Number.NEGATIVE_INFINITY
     for (const childId of roof.children ?? []) {
-      const seg = scenestate.nodes[childId as AnyNodeId] as RoofSegmentNode | undefined
-      if (!seg) continue
+      const seg = scenestate.nodes[childId as AnyNodeId]
+      if (seg?.type !== 'roof-segment') continue
       const segObj = sceneRegistry.nodes.get(seg.id)
       if (!segObj) continue
       segObj.updateWorldMatrix(true, false)

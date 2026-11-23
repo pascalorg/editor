@@ -17,10 +17,8 @@ import {
 import { MeshLambertNodeMaterial } from 'three/webgpu'
 
 /**
- * How bare structure looks: courses of block, and cast concrete. The generic foundation under a
- * building draws them (nodes `generic-foundation.tsx`), and a wall whose assembly has no cladding
- * over a masonry or concrete core shows the same on its exterior face (`wall-materials.ts`), so a
- * basement's walls above grade read as the foundation under them.
+ * How bare structure looks: courses of block, and cast concrete. A wall whose assembly has no
+ * cladding over a masonry or concrete core shows it on its exterior face (`wall-materials.ts`).
  */
 const INCH = 0.0254
 /** A nominal 8 × 8 × 16 in block: the course is 8 in with its joint, a block 16 in long. */

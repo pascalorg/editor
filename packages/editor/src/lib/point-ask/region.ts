@@ -1,4 +1,4 @@
-import { formatLinearMeasurement } from '../measurements'
+import { formatLinearMeasurement } from '@pascal-app/core'
 import type { Rect, ScreenPoint } from './types'
 
 // A region is a view, not a selection (spec 2.3, "A region is a view, not a selection"): a

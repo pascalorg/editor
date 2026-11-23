@@ -1,8 +1,9 @@
+import type { FloorplanAnnotationRole } from '@pascal-app/core'
 import {
   type FloorplanAnnotationVisibility,
   revealFloorplanAnnotationRole,
 } from './annotation-visibility'
-import type { FloorplanAnnotationRole, FloorplanToolMode } from './floorplan-extension'
+import type { FloorplanToolMode } from './floorplan-extension'
 
 export const FLOORPLAN_MODES = ['default', 'expert'] as const
 

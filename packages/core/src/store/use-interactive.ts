@@ -28,6 +28,8 @@ export type DoorAnimationState = {
 }
 
 export type WindowInteractiveState = {
+  shutterOpen?: number
+  rollerShutterOpen?: number
   operationState?: number
 }
 
@@ -71,7 +73,10 @@ type InteractiveStore = {
   doors: Record<AnyNodeId, DoorInteractiveState>
   doorAnimations: Record<AnyNodeId, DoorAnimationState>
   windows: Record<AnyNodeId, WindowInteractiveState>
-  windowAnimations: Record<AnyNodeId, WindowAnimationState>
+  windowAnimations: Record<
+    AnyNodeId,
+    Partial<Record<keyof WindowInteractiveState, WindowAnimationState>>
+  >
   skylights: Record<AnyNodeId, SkylightInteractiveState>
   skylightAnimations: Record<AnyNodeId, SkylightAnimationState>
   elevators: Record<AnyNodeId, ElevatorInteractiveState>
@@ -81,10 +86,14 @@ type InteractiveStore = {
   >
   /** On/off of kinds whose mechanism is one switch (`capabilities.mechanism`). */
   mechanisms: Record<AnyNodeId, boolean>
+  mechanismParts: Record<`${AnyNodeId}:${string}`, boolean>
   lampDefault: boolean
   lampItems: Record<AnyNodeId, number[]>
   setMechanism: (nodeId: AnyNodeId, on: boolean) => void
   removeMechanism: (nodeId: AnyNodeId) => void
+  setMechanismPart: (nodeId: AnyNodeId, partId: string, on: boolean) => void
+  removeMechanismPart: (nodeId: AnyNodeId, partId: string) => void
+  removeMechanismParts: (nodeId: AnyNodeId) => void
   setLampDefault: (on: boolean, resetOverrides?: boolean) => void
   initProcedural: (nodeId: AnyNodeId, partIds: string[], spinPartIds?: string[]) => void
   toggleProceduralPart: (nodeId: AnyNodeId, partId: string) => void
@@ -119,13 +128,13 @@ type InteractiveStore = {
   setWindowOpenState: (windowId: AnyNodeId, value: WindowInteractiveState) => void
 
   /** Clear transient window open state */
-  removeWindowOpenState: (windowId: AnyNodeId) => void
+  removeWindowOpenState: (windowId: AnyNodeId, field?: keyof WindowInteractiveState) => void
 
   /** Queue a window animation for the viewer frame loop */
   startWindowAnimation: (windowId: AnyNodeId, value: WindowAnimationState) => void
 
   /** Cancel a queued window animation */
-  cancelWindowAnimation: (windowId: AnyNodeId) => void
+  cancelWindowAnimation: (windowId: AnyNodeId, field?: keyof WindowInteractiveState) => void
 
   /** Set transient skylight open state without committing it to the scene node */
   setSkylightOpenState: (skylightId: AnyNodeId, value: SkylightInteractiveState) => void
@@ -187,6 +196,7 @@ export const useInteractive = create<InteractiveStore>((set, get) => ({
   elevators: {},
   procedural: {},
   mechanisms: {},
+  mechanismParts: {},
   lampDefault: false,
   lampItems: {},
   setMechanism: (nodeId, on) =>
@@ -195,11 +205,35 @@ export const useInteractive = create<InteractiveStore>((set, get) => ({
         ? state
         : { mechanisms: { ...state.mechanisms, [nodeId]: on } },
     ),
-  removeMechanism: (nodeId) =>
+  removeMechanism: (nodeId) => {
+    get().removeMechanismParts(nodeId)
     set((state) => {
       if (!(nodeId in state.mechanisms)) return state
       const { [nodeId]: _, ...rest } = state.mechanisms
       return { mechanisms: rest }
+    })
+  },
+  setMechanismPart: (nodeId, partId, on) =>
+    set((state) => {
+      const key = `${nodeId}:${partId}` as const
+      return state.mechanismParts[key] === on
+        ? state
+        : { mechanismParts: { ...state.mechanismParts, [key]: on } }
+    }),
+  removeMechanismPart: (nodeId, partId) =>
+    set((state) => {
+      const key = `${nodeId}:${partId}` as const
+      if (!(key in state.mechanismParts)) return state
+      const { [key]: _, ...rest } = state.mechanismParts
+      return { mechanismParts: rest }
+    }),
+  removeMechanismParts: (nodeId) =>
+    set((state) => {
+      const entries = Object.entries(state.mechanismParts)
+      const remaining = entries.filter(([key]) => !key.startsWith(`${nodeId}:`))
+      return remaining.length === entries.length
+        ? state
+        : { mechanismParts: Object.fromEntries(remaining) }
     }),
   setLampDefault: (on, resetOverrides = false) =>
     set((state) => {
@@ -399,10 +433,12 @@ export const useInteractive = create<InteractiveStore>((set, get) => ({
     }))
   },
 
-  removeWindowOpenState: (windowId) => {
+  removeWindowOpenState: (windowId, field) => {
     set((state) => {
-      const { [windowId]: _, ...rest } = state.windows
-      return { windows: rest }
+      const { [windowId]: current, ...rest } = state.windows
+      if (!field) return { windows: rest }
+      const { [field]: _, ...remaining } = current ?? {}
+      return { windows: Object.keys(remaining).length ? { ...rest, [windowId]: remaining } : rest }
     })
   },
 
@@ -410,15 +446,19 @@ export const useInteractive = create<InteractiveStore>((set, get) => ({
     set((state) => ({
       windowAnimations: {
         ...state.windowAnimations,
-        [windowId]: value,
+        [windowId]: { ...state.windowAnimations[windowId], [value.field]: value },
       },
     }))
   },
 
-  cancelWindowAnimation: (windowId) => {
+  cancelWindowAnimation: (windowId, field) => {
     set((state) => {
-      const { [windowId]: _, ...rest } = state.windowAnimations
-      return { windowAnimations: rest }
+      const { [windowId]: current, ...rest } = state.windowAnimations
+      if (!field) return { windowAnimations: rest }
+      const { [field]: _, ...remaining } = current ?? {}
+      return {
+        windowAnimations: Object.keys(remaining).length ? { ...rest, [windowId]: remaining } : rest,
+      }
     })
   },
 

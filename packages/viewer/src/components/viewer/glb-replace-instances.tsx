@@ -1,19 +1,29 @@
 'use client'
 
-import { type AnyNode, type BakeReplaceRenderer, nodeRegistry } from '@pascal-app/core'
+import {
+  type AnyNode,
+  type BakeReplaceRenderer,
+  type GeometryContext,
+  nodeRegistry,
+} from '@pascal-app/core'
 import { createPortal } from '@react-three/fiber'
 import { type ComponentType, Fragment, lazy, memo, type ReactNode, Suspense, useMemo } from 'react'
 import type { Object3D } from 'three'
+import { familyForNode } from '../../lib/scene-families'
+import { xrayActive } from '../../lib/xray'
+import useViewer from '../../store/use-viewer'
+
+type ReplaceRendererProps = { nodes: AnyNode[]; resolve?: GeometryContext['resolve'] }
 
 // Lazy components cached by their source so React.lazy isn't re-invoked per render.
-const lazyCache = new WeakMap<BakeReplaceRenderer<AnyNode>, ComponentType<{ nodes: AnyNode[] }>>()
+const lazyCache = new WeakMap<BakeReplaceRenderer<AnyNode>, ComponentType<ReplaceRendererProps>>()
 
 function getReplaceRenderer(
   source: BakeReplaceRenderer<AnyNode>,
-): ComponentType<{ nodes: AnyNode[] }> {
+): ComponentType<ReplaceRendererProps> {
   const cached = lazyCache.get(source)
   if (cached) return cached
-  const Comp = lazy(source.module) as unknown as ComponentType<{ nodes: AnyNode[] }>
+  const Comp = lazy(source.module) as unknown as ComponentType<ReplaceRendererProps>
   lazyCache.set(source, Comp)
   return Comp
 }
@@ -27,18 +37,25 @@ function getReplaceRenderer(
  * free, and a forest stays a few instanced draw calls.
  *
  * Memoized: `GlbScene` re-renders each frame on camera move; `nodes` and
- * `identity` are stable refs, so this whole subtree short-circuits.
+ * `identity` are stable refs, so this whole subtree short-circuits; `resolve`
+ * must be stable too.
  */
 export const GlbReplaceInstances = memo(function GlbReplaceInstances({
   nodes,
   identity,
+  resolve,
 }: {
   nodes: AnyNode[]
   identity: Map<string, Object3D>
+  /** Looks up nodes of the published scene graph; handed to every renderer. */
+  resolve?: GeometryContext['resolve']
 }) {
+  const family = useViewer((state) => (xrayActive(state) ? state.xrayFamily : null))
   const byLevel = useMemo(() => {
     const levels = new Map<string, Map<string, AnyNode[]>>()
     for (const node of nodes) {
+      const classification = family !== null ? familyForNode(node) : undefined
+      if (classification !== undefined && classification !== family) continue
       const parentId = node.parentId
       if (!parentId) continue
       let byKind = levels.get(parentId)
@@ -51,7 +68,7 @@ export const GlbReplaceInstances = memo(function GlbReplaceInstances({
       else byKind.set(node.type, [node])
     }
     return levels
-  }, [nodes])
+  }, [nodes, family])
 
   const portals: ReactNode[] = []
   byLevel.forEach((byKind, parentId) => {
@@ -67,7 +84,7 @@ export const GlbReplaceInstances = memo(function GlbReplaceInstances({
         <Fragment key={`${parentId}:${kind}`}>
           {createPortal(
             <Suspense fallback={null}>
-              <Renderer nodes={kindNodes} />
+              <Renderer nodes={kindNodes} resolve={resolve} />
             </Suspense>,
             anchor,
           )}

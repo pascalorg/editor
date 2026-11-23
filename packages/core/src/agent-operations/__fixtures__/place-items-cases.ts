@@ -45,6 +45,7 @@ const CATALOG = [
   item('palm', 'Palm', 'outdoor', ['tree', 'garden']),
 ]
 const library = { activeLevelId: null, catalog: CATALOG }
+const SCRIPTED_SOFA = compiledSolid([2, 0.8, 0.9])
 
 const hosted = (
   id: string,
@@ -333,6 +334,33 @@ export const PLACE_ITEMS_CASES: AgentToolCase[] = [
         ],
       },
       mentions: ['search_assets', '1 of 2'],
+    },
+  },
+  {
+    name: 'a library item built from a script is placed with it, so its params stay editable',
+    tool: 'place_items',
+    scene: storeysScene,
+    input: { levelId: 'level_ground', items: [{ assetId: 'scripted-sofa', x: 2, z: 2 }] },
+    context: {
+      activeLevelId: null,
+      catalog: [
+        {
+          ...item('scripted-sofa', 'Scripted Sofa', 'furniture'),
+          src: artifactUrl(SCRIPTED_SOFA.sha256),
+          script: scriptSource(SCRIPTED_SOFA),
+        },
+      ],
+    },
+    expect: {
+      result: { ok: true },
+      check: (_result, nodes) => {
+        const sofa = placed(nodes, 'scripted-sofa') as (Placed & ItemNode) | undefined
+        return sofa?.source?.script === SCRIPTED_SOFA.script &&
+          sofa.asset.src === artifactUrl(SCRIPTED_SOFA.sha256) &&
+          !('script' in sofa.asset)
+          ? []
+          : [`placed without its script: ${JSON.stringify(sofa?.source)}`]
+      },
     },
   },
   {

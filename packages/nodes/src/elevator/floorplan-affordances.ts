@@ -1,14 +1,17 @@
 import {
   type AnyNodeId,
+  ELEVATOR_MIN_CAB_DIMENSION,
   type ElevatorNode,
   type FloorplanAffordance,
+  normalizeElevatorDimensions,
+  resolveElevatorDimensions,
   useLiveNodeOverrides,
   useScene,
 } from '@pascal-app/core'
 import { isAngleSnapActive } from '@pascal-app/editor'
 import { rotateAffordanceDelta } from '../shared/rotate-affordance'
 
-const MIN_ELEVATOR_DIM = 0.6
+const MIN_ELEVATOR_DIM = ELEVATOR_MIN_CAB_DIMENSION
 
 type ElevatorResizePayload = { axis: 'x' | 'z'; side: 1 | -1 }
 
@@ -23,7 +26,8 @@ export const elevatorResizeAffordance: FloorplanAffordance<ElevatorNode> = {
   start({ node, payload, initialPlanPoint }) {
     const { axis, side } = payload as ElevatorResizePayload
     const elevatorId = node.id as AnyNodeId
-    const initialValue = axis === 'x' ? node.width : node.depth
+    const initialValue =
+      axis === 'x' ? resolveElevatorDimensions(node).width : resolveElevatorDimensions(node).depth
     const cx = node.position[0]
     const cz = node.position[2]
     const rotation = node.rotation ?? 0
@@ -49,9 +53,13 @@ export const elevatorResizeAffordance: FloorplanAffordance<ElevatorNode> = {
         const delta = (currentLocal - initialLocal) * side
         const newValue = Math.max(MIN_ELEVATOR_DIM, initialValue + 2 * delta)
         lastValue = newValue
-        useLiveNodeOverrides
-          .getState()
-          .set(elevatorId, axis === 'x' ? { width: newValue } : { depth: newValue })
+        useLiveNodeOverrides.getState().set(
+          elevatorId,
+          normalizeElevatorDimensions({
+            ...node,
+            ...(axis === 'x' ? { width: newValue } : { depth: newValue }),
+          }),
+        )
         useScene.getState().markDirty(elevatorId)
       },
       canCommit() {
@@ -59,9 +67,13 @@ export const elevatorResizeAffordance: FloorplanAffordance<ElevatorNode> = {
       },
       commit() {
         useLiveNodeOverrides.getState().clear(elevatorId)
-        useScene
-          .getState()
-          .updateNode(elevatorId, axis === 'x' ? { width: lastValue } : { depth: lastValue })
+        useScene.getState().updateNode(
+          elevatorId,
+          normalizeElevatorDimensions({
+            ...node,
+            ...(axis === 'x' ? { width: lastValue } : { depth: lastValue }),
+          }),
+        )
       },
     }
   },

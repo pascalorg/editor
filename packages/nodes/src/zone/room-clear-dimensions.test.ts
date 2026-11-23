@@ -1,12 +1,12 @@
 import { describe, expect, test } from 'bun:test'
 import {
   type AnyNode,
+  createFloorplanContextExtensions,
   type FloorplanGeometry,
   type GeometryContext,
   WallNode,
   ZoneNode,
 } from '@pascal-app/core'
-import { createFloorplanContextExtensions } from '@pascal-app/editor'
 import { buildRoomClearDimensions } from './room-clear-dimensions'
 
 function enclosure(points: Array<[number, number]>) {

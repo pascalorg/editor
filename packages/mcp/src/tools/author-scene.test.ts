@@ -260,18 +260,48 @@ describe('author_scene (MCP)', () => {
     readArtifact: async ({ sha256 }) => artifacts.get(sha256) ?? null,
   }
 
-  beforeEach(async () => {
-    commitAllowed = true
-    stored.length = 0
+  /** A client on a server with a scene of its own; `betweenSteps` is the host's pause, if any. */
+  const connect = async (betweenSteps?: () => Promise<void>) => {
     const bridge = new SceneBridge()
     bridge.setScene({}, [], { materials: {} })
     const operations = createSceneOperations({ bridge })
     operations.loadDefault()
     bridge.setActiveScene({ id: 'scene_test', name: 'Test' } as never)
-    const server = createPascalMcpServer({ operations, geometryScripts: host })
+    const server = createPascalMcpServer({ operations, geometryScripts: host, betweenSteps })
     const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair()
-    client = new Client({ name: 'test', version: '0' })
-    await Promise.all([server.connect(serverTransport), client.connect(clientTransport)])
+    const connected = new Client({ name: 'test', version: '0' })
+    await Promise.all([server.connect(serverTransport), connected.connect(clientTransport)])
+    return connected
+  }
+
+  beforeEach(async () => {
+    commitAllowed = true
+    stored.length = 0
+    client = await connect()
+  })
+
+  test('on a host that pauses between steps, its closing checks pause and report the same', async () => {
+    let pauses = 0
+    const paused = await connect(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0))
+      pauses++
+    })
+    // The servers of this file share one scene, so each writes over the last conversion.
+    const gate = async (on: Client) => {
+      const result = await on.callTool({
+        name: 'author_scene',
+        arguments: { payload, replace: true },
+      })
+      const { verify, checks, complete, green, walls, rooms } = result.structuredContent as Record<
+        string,
+        unknown
+      >
+      return { verify, checks, complete, green, walls, rooms }
+    }
+    const direct = await gate(client)
+    expect(pauses).toBe(0)
+    expect(await gate(paused)).toEqual(direct)
+    expect(pauses).toBeGreaterThan(1)
   })
 
   test('a stopped invocation never commits its compiled candidate', async () => {

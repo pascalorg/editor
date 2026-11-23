@@ -18,13 +18,12 @@ import {
   boundaryReshapeScope,
   EDITOR_LAYER,
   isAlignmentGuideActive,
-  MEASUREMENT_ACTIVE_COLOR,
   type MeasurementAxis,
   type MeasurementAxisGuide,
   swallowNextClick,
   useInteractionScope,
 } from '@pascal-app/editor'
-import { useViewer } from '@pascal-app/viewer'
+import { MEASUREMENT_ACTIVE_COLOR, useViewer } from '@pascal-app/viewer'
 import { Html } from '@react-three/drei'
 import { createPortal, type ThreeEvent, useFrame, useThree } from '@react-three/fiber'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'

@@ -2,6 +2,11 @@
 
 import {
   type AnyNode,
+  buildMeasurementAngleArcPoints,
+  formatAngleRadians,
+  formatAreaLabel,
+  formatLinearMeasurement,
+  formatVolumeLabel,
   type MeasurementNode,
   type MeasurementPoint,
   measurementAngle,
@@ -15,16 +20,13 @@ import {
   useScene,
 } from '@pascal-app/core'
 import {
-  buildMeasurementAngleArcPoints,
-  formatAngleRadians,
-  formatAreaLabel,
-  formatLinearMeasurement,
-  formatVolumeLabel,
   measurementPolygonLabelAnchor,
   measurementPresentationColor,
+  OVERLAY_LAYER,
   triangulateMeasurementPolygon,
-} from '@pascal-app/editor'
-import { OVERLAY_LAYER, useNodeEvents, useViewer } from '@pascal-app/viewer'
+  useNodeEvents,
+  useViewer,
+} from '@pascal-app/viewer'
 import { Html } from '@react-three/drei'
 import { useFrame } from '@react-three/fiber'
 import { useEffect, useMemo, useRef, useState } from 'react'

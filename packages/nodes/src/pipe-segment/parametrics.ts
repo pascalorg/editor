@@ -22,7 +22,7 @@ export const pipeSegmentParametrics: ParametricDescriptor<PipeSegmentNode> = {
       plan.deleteFitting ? [plan.fittingId, ...plan.cascadeDeleteIds] : [],
     ),
   ],
-  trailingSection: () => import('../shared/run-hanger-inspector'),
+  trailingSection: () => import('./grade-inspector'),
   groups: [
     {
       label: 'Hangers',
@@ -66,14 +66,6 @@ export const pipeSegmentParametrics: ParametricDescriptor<PipeSegmentNode> = {
           kind: 'enum',
           options: ['waste', 'vent'],
           display: 'segmented',
-        },
-        {
-          key: 'diameter',
-          kind: 'number',
-          unit: 'in',
-          min: 1.25,
-          max: 6,
-          step: 0.25,
         },
       ],
     },

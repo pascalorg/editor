@@ -4,6 +4,7 @@ import {
   BuildingNode,
   createTerrainField,
   encodeTerrainField,
+  FLAT_GROUND_Y,
   type GeometryContext,
   getRenderableSlabPolygon,
   LevelNode,
@@ -229,7 +230,7 @@ describe('buildSlabGeometry', () => {
     expect(fill.geometry.boundingBox?.max.y).toBeCloseTo(0.6)
   })
 
-  test('follows the flat datum before the site has a persisted terrain field', () => {
+  test('follows the flat ground before the site has a persisted terrain field', () => {
     const site = SiteNode.parse({ id: 'site_test', children: ['building_test'] })
     const slab = SlabNode.parse({
       elevation: 0.4,
@@ -246,7 +247,8 @@ describe('buildSlabGeometry', () => {
     const group = buildSlabGeometry(slab, geometryContext(site), 'solid', false)
     const fill = group.children.filter((child): child is Mesh => child instanceof Mesh)[2]!
     fill.geometry.computeBoundingBox()
-    expect(fill.geometry.boundingBox?.min.y).toBeCloseTo(0)
+    // Down to the ground as the site draws it, a hand under the datum.
+    expect(fill.geometry.boundingBox?.min.y).toBeCloseTo(FLAT_GROUND_Y)
     expect(fill.geometry.boundingBox?.max.y).toBeCloseTo(0.3)
   })
 
@@ -276,7 +278,8 @@ describe('buildSlabGeometry', () => {
     ).find((mesh) => mesh.userData.slotId === 'foundation')!
     expect(skirt).toBeDefined()
     skirt.geometry.computeBoundingBox()
-    expect(skirt.geometry.boundingBox?.min.y).toBeCloseTo(0)
+    // Down to the ground as the site draws it, a hand under the datum.
+    expect(skirt.geometry.boundingBox?.min.y).toBeCloseTo(FLAT_GROUND_Y)
     expect(skirt.geometry.boundingBox?.max.y).toBeCloseTo(0.3)
     // A plate a step down inside the house stays as it is.
     const sunken = { ...porch, metadata: { floor: 'porch-slab' } }

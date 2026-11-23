@@ -1,6 +1,6 @@
+import { isTypingTarget } from '@pascal-app/viewer'
 import { create } from 'zustand'
 import type { ActivePaintMaterial } from './material-paint'
-import { isTypingTarget } from './typing-target'
 
 /**
  * What a paint click does: paint the whole surface under it, draw part of a

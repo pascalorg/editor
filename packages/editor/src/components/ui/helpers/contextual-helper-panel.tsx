@@ -23,7 +23,7 @@ import useEditor, { type GridSnapStep } from '../../../store/use-editor'
 import useFenceCurveDraft from '../../../store/use-fence-curve-draft'
 import { IconRefGlyph } from '../icon-ref'
 import { ShortcutToken } from '../primitives/shortcut-token'
-import { Tooltip, TooltipContent, TooltipTrigger } from '../primitives/tooltip'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@pascal-app/viewer/ui'
 import { useInRightStack } from '../right-stack'
 
 // One muted container holds every row — passive key hints and interactive chips

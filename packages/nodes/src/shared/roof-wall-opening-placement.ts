@@ -1,6 +1,8 @@
 import {
   type AnyNodeId,
   clampRectToRoofWallFace,
+  type DoorNode,
+  getDoorOpeningSize,
   type RoofEvent,
   type RoofNode,
   type RoofSegmentNode,
@@ -45,16 +47,19 @@ export function resolveRoofWallOpeningTarget(args: {
   width: number
   height: number
   ignoreId?: string
+  opening?: Partial<DoorNode>
   vertical: RoofWallOpeningVertical
 }): RoofWallOpeningTarget | null {
-  const { event, width, height, ignoreId, vertical } = args
+  const { event, ignoreId, vertical } = args
+  const size = getDoorOpeningSize({ ...args.opening, width: args.width, height: args.height })
+  const { width, height } = size
   const hit = resolveRoofWallHit(event.node as RoofNode, event.position, event.normal, event.object)
   if (!hit) return null
 
   const centerV = vertical.kind === 'bottom-locked' ? height / 2 : (vertical.snap?.(hit.v) ?? hit.v)
   const clamped = clampRectToRoofWallFace(
     hit.face,
-    hit.u,
+    hit.u - size.leafOffsetX,
     centerV,
     width,
     height,
@@ -74,7 +79,7 @@ export function resolveRoofWallOpeningTarget(args: {
   return {
     segment: hit.segment,
     face: hit.face,
-    position: [clamped.u, clamped.v, 0],
+    position: [clamped.u + size.leafOffsetX, clamped.v - (height - args.height) / 2, 0],
     valid,
   }
 }

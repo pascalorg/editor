@@ -22,7 +22,7 @@ import {
 import RenderObject from 'three/src/renderers/common/RenderObject.js'
 import RenderObjects from 'three/src/renderers/common/RenderObjects.js'
 import { pass } from 'three/tsl'
-import { NodeFrame } from 'three/webgpu'
+import { ClippingGroup, NodeFrame } from 'three/webgpu'
 import { mergedOutline } from './merged-outline-node'
 
 describe('merged outline rendering', () => {
@@ -277,6 +277,26 @@ describe('merged outline proxy bookkeeping', () => {
     f.dispose()
   })
 
+  test('disabled clipping keeps the proxy fast path; enabled clipping uses the model context', () => {
+    const f = makeOutlineFixture()
+    const clipping = new ClippingGroup()
+    f.scene.add(clipping)
+    clipping.add(f.root)
+    clipping.enabled = false
+    f.tick()
+    expect(f.renderer.renders).toContain(f.internals._maskSceneB)
+    clipping.enabled = true
+    f.renderer.renders.length = 0
+    f.tick()
+    expect(f.renderer.renders).not.toContain(f.internals._maskSceneB)
+    expect(f.renderer.renders.filter((root) => root === f.scene)).toHaveLength(2)
+    clipping.enabled = false
+    f.renderer.renders.length = 0
+    f.tick()
+    expect(f.renderer.renders).toContain(f.internals._maskSceneB)
+    f.dispose()
+  })
+
   test('allocates no proxies for mixed fallback groups across five frames', () => {
     const f = makeOutlineFixture()
     f.root.add(new SkinnedMesh(f.geometry, f.material))
@@ -298,13 +318,17 @@ describe('merged outline proxy bookkeeping', () => {
     }
     const renderObjects = new RenderObjects(
       renderer as any,
-      { getCacheKey: () => 0, delete: () => {} } as any,
-      {} as any,
+      {
+        getCacheKey: () => 0,
+        getCustomProgramCacheKey: (material: any) => material.customProgramCacheKey(),
+        delete: () => {},
+      } as any,
+      { deleteVertexState: () => {} } as any,
       { delete: () => disposed++ } as any,
       { deleteForRender: () => {} } as any,
       {} as any,
     )
-    const lights = {} as any
+    const lights = { addEventListener: () => {}, removeEventListener: () => {} } as any
     const context = {} as any
     const listeners = (object: any) => object._listeners?.dispose?.length ?? 0
     const initialGeometryListeners = listeners(f.geometry)

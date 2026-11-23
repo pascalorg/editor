@@ -1,6 +1,8 @@
 import { planWallDeletion } from '../../commands/structure/plan-wall-deletion'
 import type { StructurePlan } from '../../commands/structure/shared'
+import { getWallEffectiveHeightForNodes } from '../../hooks/spatial-grid/spatial-grid-manager'
 import { withoutFloorStepOverrideKeys } from '../../lib/floor-step-finish'
+import { wouldCreateHierarchyCycle } from '../../lib/hierarchy'
 import { isSpaceDetectionPaused } from '../../lib/space-detection'
 import { deletedSurfaceSupportPatch } from '../../lib/surface-support-references'
 import { nodeRegistry } from '../../registry/registry'
@@ -38,6 +40,7 @@ import {
   areWallsCollinearAcrossPoint,
   buildMergedWallAttachmentUpdates,
   getWallEndpointAtPoint,
+  mergedWallTop,
   mergeWallFaceRegions,
   planMergedZoneReferences,
   resolveMergedWallEndpoints,
@@ -96,6 +99,7 @@ type WallMergePlan = {
   mergedStart: [number, number]
   mergedEnd: [number, number]
   mergedChildren: WallNode['children']
+  mergedTop: Pick<WallNode, 'height' | 'endHeightOffset'>
   mergedFaceRegions: WallNode['faceRegions']
   attachmentUpdates: WallAttachmentUpdate[]
   zoneUpdates: Array<{ id: AnyNodeId; data: Partial<AnyNode> }>
@@ -1152,10 +1156,14 @@ function buildWallMergePlans(
       }
 
       const { start, end } = resolveMergedWallEndpoints(primary, secondary, junction)
-      // A heal that would repaint a room or overflow a side's regions leaves the walls split.
+      // A heal that would repaint a room, overflow a side's regions or kink a slope leaves the
+      // walls split.
+      const mergedTop = mergedWallTop(primary, secondary, junction, (wall, t) =>
+        getWallEffectiveHeightForNodes(wall, nodes, t),
+      )
       const mergedFaceRegions = mergeWallFaceRegions([primary, secondary], start, end)
       const zoneUpdates = planMergedZoneReferences(nodes, primary, secondary, start, end)
-      if (!(mergedFaceRegions && zoneUpdates)) continue
+      if (!(mergedTop && mergedFaceRegions && zoneUpdates)) continue
       const mergedChildren = Array.from(
         new Set([...(primary.children ?? []), ...(secondary.children ?? [])]),
       ) as WallNode['children']
@@ -1174,6 +1182,7 @@ function buildWallMergePlans(
         mergedStart: start,
         mergedEnd: end,
         mergedChildren,
+        mergedTop,
         mergedFaceRegions: mergedFaceRegions.length > 0 ? mergedFaceRegions : undefined,
         attachmentUpdates,
         zoneUpdates,
@@ -1212,6 +1221,11 @@ const createNodesActionImpl = (
         parseCreatedNode(node, effectiveParentId),
         collectionIds,
       )
+      if (wouldCreateHierarchyCycle(newNode.id, effectiveParentId, nextNodes)) {
+        throw new Error(
+          `invalid hierarchy: placing "${newNode.id}" under "${effectiveParentId}" would create a cycle`,
+        )
+      }
 
       nextNodes[newNode.id] = newNode
 
@@ -1372,6 +1386,12 @@ const applyNodeChangesActionImpl = (
       addLeanToHostRoofId(updatedNode, nextNodes, roofsToRefresh)
 
       if (data.parentId !== undefined && data.parentId !== currentNode.parentId) {
+        const newParentId = data.parentId as AnyNodeId | null
+        if (wouldCreateHierarchyCycle(id, newParentId, nextNodes)) {
+          throw new Error(
+            `invalid hierarchy: placing "${id}" under "${newParentId}" would create a cycle`,
+          )
+        }
         const oldParentId = currentNode.parentId as AnyNodeId | null
         if (oldParentId && nextNodes[oldParentId]) {
           const oldParent = nextNodes[oldParentId] as AnyContainerNode
@@ -1382,7 +1402,6 @@ const applyNodeChangesActionImpl = (
           parentsToMarkDirty.add(oldParent.id)
         }
 
-        const newParentId = data.parentId as AnyNodeId | null
         if (newParentId && nextNodes[newParentId]) {
           const newParent = nextNodes[newParentId] as AnyContainerNode
           nextNodes[newParent.id] = {
@@ -1413,6 +1432,11 @@ const applyNodeChangesActionImpl = (
         parseCreatedNode(node, effectiveParentId),
         collectionIds,
       )
+      if (wouldCreateHierarchyCycle(newNode.id, effectiveParentId, nextNodes)) {
+        throw new Error(
+          `invalid hierarchy: placing "${newNode.id}" under "${effectiveParentId}" would create a cycle`,
+        )
+      }
 
       nextNodes[newNode.id as AnyNodeId] = newNode
       nodesToMarkDirty.add(newNode.id as AnyNodeId)
@@ -1566,6 +1590,12 @@ const updateNodesActionImpl = (
 
       // Handle Reparenting Logic
       if (data.parentId !== undefined && data.parentId !== currentNode.parentId) {
+        const newParentId = data.parentId as AnyNodeId | null
+        if (wouldCreateHierarchyCycle(id, newParentId, nextNodes)) {
+          throw new Error(
+            `invalid hierarchy: placing "${id}" under "${newParentId}" would create a cycle`,
+          )
+        }
         // 1. Remove from old parent
         const oldParentId = currentNode.parentId as AnyNodeId | null
         if (oldParentId && nextNodes[oldParentId]) {
@@ -1586,7 +1616,6 @@ const updateNodesActionImpl = (
         // and a spread of `undefined` here throws and aborts the entire
         // `set` callback. Initialising to `[]` matches what the schema's
         // default would have produced.
-        const newParentId = data.parentId as AnyNodeId | null
         if (newParentId && nextNodes[newParentId]) {
           const newParent = nextNodes[newParentId] as AnyContainerNode
           const newChildren = Array.isArray((newParent as { children?: unknown }).children)
@@ -1832,6 +1861,7 @@ export function planNodeDeletion(
     const { faceRegions: _regions, ...keptWall } = primaryWall
     nextNodes[plan.primaryWallId] = {
       ...keptWall,
+      ...plan.mergedTop,
       ...(plan.mergedFaceRegions ? { faceRegions: plan.mergedFaceRegions } : {}),
       start: plan.mergedStart,
       end: plan.mergedEnd,

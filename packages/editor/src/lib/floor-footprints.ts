@@ -10,6 +10,7 @@ import {
   getRoomBaseElevation,
   groundFloorConstruction,
   intersection,
+  levelFootprints,
   roomDrawnFloor,
   type SlabNode,
   setFloorFoundation,
@@ -38,15 +39,6 @@ const ON_GROUND = 0.0005
 
 const isBase = (node: AnyNode | undefined): node is SlabNode =>
   node?.type === 'slab' && node.plateRole === 'base'
-
-const footprintArea = (plate: SlabNode) => area([{ outer: plate.polygon, holes: plate.holes }])
-
-/** The level's footprints, largest first (ties by id, so the order is stable). */
-export function levelFootprints(nodes: Record<string, AnyNode>, levelId: string): SlabNode[] {
-  return Object.values(nodes)
-    .filter((node): node is SlabNode => isBase(node) && node.parentId === levelId)
-    .sort((a, b) => footprintArea(b) - footprintArea(a) || a.id.localeCompare(b.id))
-}
 
 /**
  * The drawn slab a room's floor is: the one it visibly stands on (a legacy

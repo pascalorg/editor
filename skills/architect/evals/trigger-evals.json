@@ -1,0 +1,45 @@
+{
+  "skill_name": "architect",
+  "evals": [
+    {
+      "query": "Use Architect to generate a two-bedroom apartment layout on this site.",
+      "should_trigger": true
+    },
+    {
+      "query": "Run an Architect BIM study for my office building.",
+      "should_trigger": true
+    },
+    {
+      "query": "Ask Architect to design a mixed-use building — retail ground floor, four residential floors above.",
+      "should_trigger": true
+    },
+    {
+      "query": "Start an Architect massing study for a hotel on a constrained urban site.",
+      "should_trigger": true
+    },
+    {
+      "query": "Generate multiple floor-plan options for a school using Architect.",
+      "should_trigger": true
+    },
+    {
+      "query": "I want Architect to do a generative spatial analysis of my warehouse project.",
+      "should_trigger": true
+    },
+    {
+      "query": "Optimize my Three.js particle demo's frame rate.",
+      "should_trigger": false
+    },
+    {
+      "query": "Add a window to the west wall of my Pascal scene.",
+      "should_trigger": false
+    },
+    {
+      "query": "Check whether a 2.1 m sofa fits in my living room.",
+      "should_trigger": false
+    },
+    {
+      "query": "What is the net zero energy standard for commercial buildings?",
+      "should_trigger": false
+    }
+  ]
+}

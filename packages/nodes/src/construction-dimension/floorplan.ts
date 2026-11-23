@@ -15,12 +15,10 @@ import {
   getWallArcData,
   getWallCurveFrameAt,
   getWallLocalFaceZ,
-} from '@pascal-app/core'
-import {
   readFloorplanContext,
   readFloorplanMetricNotationOverride,
   withFloorplanGeometryMetadata,
-} from '@pascal-app/editor'
+} from '@pascal-app/core'
 import { resolveMeasurementAnchor } from '../measurement/resolve'
 import {
   type ConstructionLengthFormatOptions,

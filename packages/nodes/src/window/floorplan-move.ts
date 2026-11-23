@@ -102,6 +102,7 @@ export const windowFloorplanMoveTarget: FloorplanMoveTarget<WindowNode> = ({ nod
   // See `doorFloorplanMoveTarget`: off-wall the window free-follows the cursor
   // as a ghost and isn't committable (it needs a wall). Starts true.
   let onWall = true
+  let lastFits = true
   // Alt force-place (last apply's modifier) — lets `canCommit` allow an
   // overlapping placement, matching the 3D move.
   let forcePlace = false
@@ -213,6 +214,7 @@ export const windowFloorplanMoveTarget: FloorplanMoveTarget<WindowNode> = ({ nod
       const slid = clampToWall(hit.wall, snappedLocalX, startLocalY, node.width, node.height, nodes)
       const { clampedY } = slid
       let clampedX = slid.clampedX
+      lastFits = slid.fits
       // Alt, or snapping off, drops the window where it is.
       const corner =
         forcePlace || snappingTurnedOff()
@@ -240,7 +242,10 @@ export const windowFloorplanMoveTarget: FloorplanMoveTarget<WindowNode> = ({ nod
         if (Math.abs(settled.clampedX - cornerSnap.centreX) > 1e-6) {
           corner.block = { reason: 'curtain', end: cornerSnap.end }
           cornerSnap = null
-        } else clampedX = cornerSnap.centreX
+        } else {
+          clampedX = cornerSnap.centreX
+          lastFits = settled.fits
+        }
       }
       showCornerCue(cornerSnap, corner.block)
 
@@ -294,17 +299,17 @@ export const windowFloorplanMoveTarget: FloorplanMoveTarget<WindowNode> = ({ nod
       if (!onWall || !lastValid) return false
       const live = useScene.getState().nodes[nodeId] as WindowNode | undefined
       if (live?.type !== 'window') return false
-      // Block on overlap UNLESS Alt force-places — same `placeable` rule as
-      // the 3D move + the shared `resolveOpeningPlacement`.
-      const collides = hasWallChildOverlap(
-        lastValid.parentId,
-        useScene.getState().nodes,
-        lastValid.position[0],
-        lastValid.position[1],
-        live.width,
-        live.height,
-        live.id,
-      )
+      const collides =
+        !lastFits ||
+        hasWallChildOverlap(
+          lastValid.parentId,
+          useScene.getState().nodes,
+          lastValid.position[0],
+          lastValid.position[1],
+          live.width,
+          live.height,
+          live.id,
+        )
       return resolveOpeningPlacement({ collides, forcePlace }).placeable
     },
     commit() {

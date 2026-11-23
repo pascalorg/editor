@@ -1,10 +1,15 @@
 'use client'
-import { type AnyNode, getWallThickness, sceneRegistry, useScene } from '@pascal-app/core'
+import {
+  type AnyNode,
+  formatLinearMeasurement,
+  getWallThickness,
+  sceneRegistry,
+  useScene,
+} from '@pascal-app/core'
 import {
   DRAFT_LABEL_Y_OFFSET,
   DraftMeasurementLabel,
   EDITOR_LAYER,
-  formatLinearMeasurement,
   NO_RAYCAST,
 } from '@pascal-app/editor'
 import { BATCHED_LAYER, getSceneTheme, SCENE_LAYER, useViewer } from '@pascal-app/viewer'

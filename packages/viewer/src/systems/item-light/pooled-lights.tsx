@@ -2,7 +2,7 @@
 
 import type { LightSpot } from '@pascal-app/core'
 import { useFrame, useThree } from '@react-three/fiber'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import {
   float,
   instancedDynamicBufferAttribute,
@@ -30,6 +30,8 @@ import {
   Vector3,
 } from 'three/webgpu'
 import { useSceneAtmosphere } from '../../components/viewer/scene-atmosphere'
+import { isDaylightAtmosphere } from '../../lib/daylight/look'
+import { type LampFeedLight, lampFeeds } from '../../lib/daylight/room-scene'
 import useViewer from '../../store/use-viewer'
 
 /** A light an item holds, as the pools drive it. */
@@ -329,6 +331,30 @@ export function itemLightsForCapture(scene: Object3D, camera: Camera): () => voi
  * and stay. Glows are one instanced sprite for every glowing lamp, pooled or not.
  */
 export function PooledLights<T extends PooledLight>(props: Props<T>) {
+  // The daylight look lights rooms analytically (room lamps, window spill, exterior lamps): the
+  // pool hands its lamps over instead of mounting point lights and glows.
+  const daylight = isDaylightAtmosphere(useSceneAtmosphere())
+  return daylight ? <DaylightLampFeed {...props} /> : <PooledLightPool {...props} />
+}
+
+function DaylightLampFeed<T extends PooledLight>(props: Props<T>) {
+  const propsRef = useRef(props)
+  propsRef.current = props
+  useLayoutEffect(() => {
+    const feed = {
+      lights: () => propsRef.current.getLights(),
+      // The feed hands back the pool's own lights.
+      intensity: (light: LampFeedLight) => propsRef.current.intensity(light as unknown as T),
+    }
+    lampFeeds.add(feed)
+    return () => {
+      lampFeeds.delete(feed)
+    }
+  }, [])
+  return null
+}
+
+function PooledLightPool<T extends PooledLight>(props: Props<T>) {
   const propsRef = useRef(props)
   propsRef.current = props
   const scene = useThree((state) => state.scene)
@@ -424,8 +450,11 @@ export function PooledLights<T extends PooledLight>(props: Props<T>) {
     drivePool(pools.current.shadow, shadowRefs.current, byKey, intensity, dt)
   }
 
-  /** The glows, each drawn its radius nearer `eye` so the fixture around the bulb does not hide it. */
-  const placeGlows = (byKey: Map<string, T>, eye: Vector3) => {
+  /**
+   * The glows, each at its bulb and depth-tested: the fixture's opaque housing hides what lies
+   * behind it and its glass shows it. Drawn nearer the eye, a glow covered the fixture's own body.
+   */
+  const placeGlows = (byKey: Map<string, T>) => {
     if (!needsRef.current.glows) return
     const { intensity } = propsRef.current
     const darkness = glowDarkness(
@@ -437,11 +466,6 @@ export function PooledLights<T extends PooledLight>(props: Props<T>) {
       if (!light.glow || count >= GLOW_CAPACITY) continue
       const now = intensity(light)
       if (now <= 0 || !light.getWorldPosition(_pos)) continue
-      _dir.subVectors(eye, _pos)
-      _pos.addScaledVector(
-        _dir,
-        Math.min(light.glow.size / 2, _dir.length() / 2) / (_dir.length() || 1),
-      )
       const level = light.peak ? Math.min(1, now / light.peak) : 1
       _color
         .set(light.color)
@@ -469,8 +493,7 @@ export function PooledLights<T extends PooledLight>(props: Props<T>) {
       rank(camera, byKey)
       for (const pool of Object.values(pools.current)) settle(pool)
       drive(byKey, Number.POSITIVE_INFINITY)
-      camera.getWorldPosition(_camPos)
-      placeGlows(byKey, _camPos)
+      placeGlows(byKey)
       return () => {
         Object.values(pools.current).forEach((pool, i) => {
           pool.forEach((slot, j) => {
@@ -510,8 +533,7 @@ export function PooledLights<T extends PooledLight>(props: Props<T>) {
       rank(camera, byKey)
     }
     drive(byKey, Math.min(delta, 0.1))
-    camera.getWorldPosition(_camPos)
-    placeGlows(byKey, _camPos)
+    placeGlows(byKey)
   }, 6)
 
   return (

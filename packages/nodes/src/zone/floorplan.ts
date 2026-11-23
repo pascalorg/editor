@@ -2,12 +2,13 @@ import {
   type AnyNodeId,
   type FloorplanGeometry,
   type FloorplanPoint,
+  floorplanGeometryMetadata,
   type GeometryContext,
   polygonInteriorPoint,
+  readFloorplanContext,
   type SlabNode,
   type ZoneNode,
 } from '@pascal-app/core'
-import { floorplanGeometryMetadata, readFloorplanContext } from '@pascal-app/editor'
 import {
   type ConstructionLengthProfile,
   formatConstructionLength,

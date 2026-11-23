@@ -7,9 +7,9 @@ import type {
   WindowNode,
 } from '../schema'
 import type { WallFace } from '../schema/nodes/wall'
-import { getWallTop } from '../services/storey'
+import { getWallTopOver } from '../services/storey'
 import type { WallSlabSupport } from '../systems/slab/slab-support'
-import { isCurvedWall } from '../systems/wall/wall-curve'
+import { getWallCurveLength, isCurvedWall } from '../systems/wall/wall-curve'
 import { parseWallPaintRole } from '../systems/wall/wall-finish'
 import { getWallThickness } from '../systems/wall/wall-footprint'
 import { getWallLocalFaceZ } from '../systems/wall/wall-frame'
@@ -108,7 +108,14 @@ function faceFrame(nodes: SceneNodes, wallId: string, face: WallFace): FaceFrame
   const support = wallSupportForNodes(wall, nodes)
   const offset = wallFaceBaseOffset(support, face)
   const top =
-    getWallTop(wall, wall.parentId, nodes as Record<string, AnyNode>, support.elevation) -
+    getWallTopOver(
+      wall,
+      wall.parentId,
+      nodes as Record<string, AnyNode>,
+      support.elevation,
+      0,
+      getWallCurveLength(wall),
+    ) -
     support.elevation -
     offset
   const station = (point: { x: number; y: number }) =>

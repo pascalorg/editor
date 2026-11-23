@@ -1,6 +1,7 @@
 'use client'
 import {
   emitter,
+  formatLinearMeasurement,
   type GridEvent,
   useScene,
   type WallNode,
@@ -13,7 +14,6 @@ import {
   DRAFT_LABEL_Y_OFFSET,
   DraftMeasurementLabel,
   EDITOR_LAYER,
-  formatLinearMeasurement,
   isMagneticSnapActive,
   markToolCancelConsumed,
   NO_RAYCAST,

@@ -3,12 +3,12 @@ import { type AnyNode, DuctFittingNode, nodeRegistry, registerNode } from '@pasc
 import { ductFittingDefinition } from '../duct-fitting/definition'
 import { getDuctFittingPorts } from '../duct-fitting/ports'
 import { createDuctRunEndCap } from '../shared/automatic-run-end-cap'
+import { resolveDuctContinuationSeed } from './continuation'
 import {
   ductContinuationHandlePlan,
   ductContinuationHandlePoint,
   ductEndpointPort,
-  resolveDuctContinuationSeed,
-} from './continuation'
+} from './continuation-handle'
 import { ductSegmentDefinition } from './definition'
 import { buildDuctSegmentFloorplan } from './floorplan'
 import { DuctSegmentNode } from './schema'
@@ -227,4 +227,32 @@ describe('duct continuation', () => {
     expect(points[1]?.[0]).toBeCloseTo(4.4086)
     expect(points[1]?.[1]).toBeCloseTo(2)
   })
+})
+
+test('drafting from an equipment collar inherits its section and system', async () => {
+  const { hvacEquipmentDefinition } = await import('@pascal-app/nodes')
+  const { HvacEquipmentNode } = await import('@pascal-app/core')
+  const restore = nodeRegistry._snapshot()
+  try {
+    registerNode(hvacEquipmentDefinition)
+    const equipment = HvacEquipmentNode.parse({
+      equipmentType: 'air-handler',
+      returnShape: 'rect',
+      returnWidth: 20,
+      returnHeight: 10,
+    })
+    const port = hvacEquipmentDefinition.ports!(equipment).find((port) => port.system === 'return')!
+    const seed = resolveDuctContinuationSeed(
+      { continuation: { nodeId: equipment.id, portId: port.id } },
+      { [equipment.id]: equipment },
+    )
+    expect(seed?.port?.position).toEqual(port.position)
+    expect(seed?.port?.nodeId).toBe(equipment.id)
+    expect(seed?.duct.shape).toBe('rect')
+    expect(seed?.duct.width).toBe(20)
+    expect(seed?.duct.height).toBe(10)
+    expect(seed?.duct.system).toBe('return')
+  } finally {
+    restore()
+  }
 })

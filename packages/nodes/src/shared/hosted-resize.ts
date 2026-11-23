@@ -23,6 +23,8 @@ export type HostedEditPolicy = {
   host: (node: AnyNode) => boolean
   child: (node: AnyNode) => boolean
   provider?: SurfaceProvider
+  /** Surfaces depend only on the edited host, not other scene nodes. */
+  localSurfaces?: boolean
 }
 
 type Nodes = Record<AnyNodeId, AnyNode>
@@ -39,9 +41,10 @@ export function hostedChildUpdates(
   before: Nodes,
   after: Nodes,
   policy: HostedEditPolicy,
+  hostIds?: Iterable<AnyNodeId>,
 ): HostedUpdate[] | null {
   const updates: HostedUpdate[] = []
-  for (const host of Object.values(before)) {
+  for (const host of hostIds ? Array.from(hostIds, (id) => before[id]!) : Object.values(before)) {
     if (!policy.host(host)) continue
     const children = ((host as AnyNode & { children?: string[] }).children ?? [])
       .map((id) => before[id as AnyNodeId])
@@ -133,7 +136,7 @@ export function planHostedEdit(
   policy: HostedEditPolicy,
 ): HostedUpdate[] | null {
   const before = sceneApi.nodes()
-  const after = { ...before }
+  const after: Nodes = policy.localSurfaces ? Object.create(before) : { ...before }
   const updates = new Map<AnyNodeId, Partial<AnyNode>>()
   let supported = true
   const staged: SceneApi = {
@@ -157,7 +160,12 @@ export function planHostedEdit(
   }
   apply(staged)
   if (!supported) return null
-  const children = hostedChildUpdates(before, after, policy)
+  const children = hostedChildUpdates(
+    before,
+    after,
+    policy,
+    policy.localSurfaces ? updates.keys() : undefined,
+  )
   if (!children) return null
   for (const [id, data] of children) updates.set(id, data)
   return [...updates] as HostedUpdate[]
@@ -188,8 +196,11 @@ export function withHostedChildren<N extends AnyNode>(
       },
       policy,
     )
-  const hasHostedChildren = (scene: SceneApi) =>
-    Object.values(scene?.nodes() ?? {}).some(
+  const hasHostedChildren = (scene: SceneApi, edited: N) =>
+    (policy.localSurfaces
+      ? [scene.get(edited.id) ?? edited]
+      : Object.values(scene?.nodes() ?? {})
+    ).some(
       (node) =>
         policy.host(node) &&
         ((node as AnyNode & { children?: string[] }).children ?? []).some((id) => {
@@ -201,20 +212,20 @@ export function withHostedChildren<N extends AnyNode>(
     ...descriptor,
     apply(node: N, value: number, sceneApi: SceneApi, modifiers?: HandleDragModifiers) {
       const patch = descriptor.apply(node, value, sceneApi, modifiers)
-      if (!hasHostedChildren(sceneApi) || plan(node, patch, sceneApi, modifiers)) return patch
+      if (!hasHostedChildren(sceneApi, node) || plan(node, patch, sceneApi, modifiers)) return patch
       const target = sceneApi.get(descriptor.overrideTarget?.(node, sceneApi) ?? node.id) ?? node
       return Object.fromEntries(
         Object.keys(patch).map((key) => [key, (target as Record<string, unknown>)[key]]),
       ) as Partial<N>
     },
     previewOverrides(node, value, sceneApi, modifiers) {
-      if (!hasHostedChildren(sceneApi))
+      if (!hasHostedChildren(sceneApi, node))
         return descriptor.previewOverrides?.(node, value, sceneApi, modifiers) ?? []
       const patch = descriptor.apply(node, value, sceneApi, modifiers)
       return plan(node, patch, sceneApi, modifiers) ?? []
     },
     commit(node, patch, sceneApi, modifiers) {
-      if (!hasHostedChildren(sceneApi)) {
+      if (!hasHostedChildren(sceneApi, node)) {
         if (descriptor.commit) descriptor.commit(node, patch, sceneApi, modifiers)
         else sceneApi.update(descriptor.overrideTarget?.(node, sceneApi) ?? node.id, patch)
         return

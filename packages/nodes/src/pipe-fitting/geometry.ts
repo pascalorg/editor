@@ -11,7 +11,7 @@ import {
   TubeGeometry,
   Vector3,
 } from 'three'
-import { INCHES_TO_METERS } from '../duct-segment/geometry'
+import { INCHES_TO_METERS } from '../duct-segment/profile'
 import { createPipeMaterial } from '../pipe-segment/geometry'
 import { addPlug, addProfile } from '../shared/accessory-geometry'
 import { localPipeFittingPorts } from './ports'

@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import { FURNISH_ROOM_SETS, FURNISHED_ROOM_TYPES } from '../agent-tools/furnish-room'
 import { type AssetInput, BuildingNode, LevelNode, ZoneNode } from '../schema'
-import { furnishRoom } from './furnish-room'
+import { FURNISH_ROOM_ASSETS, furnishRoom } from './furnish-room'
 import type { SceneNodes } from './types'
 
 const IDS = [
@@ -95,5 +95,7 @@ describe('the set furnish_room says it places is the set its layout places', () 
       ].flatMap(([width, depth]) => placedIn(roomType, width!, depth!)),
     )
     expect([...placed].sort()).toEqual(namedIn(roomType).sort())
+    // What a host reads of its library before the call.
+    expect([...placed].sort()).toEqual([...FURNISH_ROOM_ASSETS[roomType]].sort())
   })
 })

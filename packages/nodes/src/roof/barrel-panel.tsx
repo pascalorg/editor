@@ -3,17 +3,14 @@
 import {
   getActiveRoofHeight,
   getEffectiveNode,
+  getLinearUnitLabel,
+  linearControlValueToMeters,
+  metersToLinearUnit,
   type RoofSegmentNode,
   useLiveNodeOverrides,
   usePascalI18n,
 } from '@pascal-app/core'
-import {
-  getLinearUnitLabel,
-  linearControlValueToMeters,
-  metersToLinearUnit,
-  PanelSection,
-  SliderControl,
-} from '@pascal-app/editor'
+import { PanelSection, SliderControl } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { useEffect, useMemo } from 'react'
 import { createRoofGlazingPreview } from './glazing-preview'

@@ -53,10 +53,10 @@ export function wallSpans(nodes: Nodes, levelId: string): Map<string, WallSpan> 
         0,
         nodes,
       )
-      const top = resolveWallTop(
-        wall,
-        getWallPlaneTop(wall, levelId, nodes as Record<AnyNodeId, AnyNode>),
-        support.elevation,
+      const planeTop = getWallPlaneTop(wall, levelId, nodes as Record<AnyNodeId, AnyNode>)
+      const top = Math.max(
+        resolveWallTop(wall, planeTop, support.elevation, planeTop, 0),
+        resolveWallTop(wall, planeTop, support.elevation, planeTop, 1),
       )
       return [wall.id, { base: support.elevation, top }]
     }),

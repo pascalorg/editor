@@ -1,0 +1,65 @@
+{
+  "skill_name": "architect",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Use Architect to generate a two-storey house with three bedrooms on a 10 m × 15 m site. Return the editor link.",
+      "expected_output": "Calls ask_architect with the brief, polls get_architect_turn until done, and returns the editorUrl from the result.",
+      "files": [],
+      "expectations": [
+        "Calls ask_architect without passing an explicit effort value (user did not name one).",
+        "Polls get_architect_turn and waits for status done before reporting.",
+        "Returns the editorUrl supplied by the tool result, not a hand-constructed URL.",
+        "Does not call direct scene-mutation tools before Architect finishes."
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "Run an Architect analysis for my existing Pascal project.",
+      "expected_output": "Calls ask_architect on the pascal-hosted server, polls until done, and reports the result.",
+      "files": [],
+      "expectations": [
+        "Uses the pascal-hosted server, not the local CLI.",
+        "Does not pass an effort value the user did not name.",
+        "Polls get_architect_turn with an appropriate delay between calls.",
+        "Reports the finished result and editor link, or the error if the turn fails."
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "Start an Architect design for a coffee-shop fit-out, then the user changes their mind and wants to cancel it.",
+      "expected_output": "Calls ask_architect to start the turn, then calls cancel_architect_turn with the returned turn_id when the user requests cancellation.",
+      "files": [],
+      "expectations": [
+        "Calls ask_architect and captures the turn_id from the response.",
+        "When the user asks to cancel, calls cancel_architect_turn with that turn_id.",
+        "Does not continue polling after cancellation is requested.",
+        "Does not invent a workaround or retry after cancellation."
+      ]
+    },
+    {
+      "id": 4,
+      "prompt": "Generate a floor plan with Architect. I am on the free Pascal plan.",
+      "expected_output": "Calls ask_architect, receives upgrade_required, surfaces the upgrade link from the tool result, and stops without inventing workarounds.",
+      "files": [],
+      "expectations": [
+        "Calls ask_architect with the user's brief.",
+        "When the tool returns upgrade_required, shows the upgrade link from the result.",
+        "Does not retry or suggest an alternative path that bypasses the upgrade requirement.",
+        "Does not invent workarounds."
+      ]
+    },
+    {
+      "id": 5,
+      "prompt": "I have no Pascal credits left. Run an Architect massing study.",
+      "expected_output": "Calls ask_architect, receives out_of_credits, surfaces the top-up link from the tool result, and stops.",
+      "files": [],
+      "expectations": [
+        "Calls ask_architect without inventing workarounds.",
+        "When the tool returns out_of_credits, shows the top-up link from the result.",
+        "Does not attempt the task through another path.",
+        "Clearly states that credits are needed to proceed."
+      ]
+    }
+  ]
+}

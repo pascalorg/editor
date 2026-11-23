@@ -1,5 +1,6 @@
 import { get, set } from 'idb-keyval'
 import { customAlphabet } from 'nanoid'
+import { isSchemeRelativeUrl } from '../schema/asset-url'
 import { ARTIFACT_URL_PREFIX, resolveArtifactUrl } from './artifact-store'
 
 export const ASSET_PREFIX = 'asset_data:'
@@ -25,6 +26,7 @@ export async function saveAsset(file: File): Promise<string> {
  */
 export async function loadAssetUrl(url: string): Promise<string | null> {
   if (!url) return null
+  if (isSchemeRelativeUrl(url)) return null
 
   // If it's already a blob or http URL, return as is
   if (url.startsWith('blob:') || url.startsWith('http')) {

@@ -1,5 +1,5 @@
 import { afterEach, expect, test } from 'bun:test'
-import { cameraPoseStore, publishCameraPose } from '../store/camera-pose-store'
+import { cameraPoseStore, publishCameraPose } from '@pascal-app/viewer/ui'
 import { cameraFacingYaw } from './camera-facing'
 
 afterEach(() => cameraPoseStore.setState({ pose: null }))

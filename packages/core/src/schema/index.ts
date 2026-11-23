@@ -71,6 +71,7 @@ export {
   GeometryScriptParamSpec,
   GeometryScriptParamValue,
   GeometryScriptSource,
+  GeometryShape,
   isGeometryScriptMimeType,
   LightGlow,
   LightSpot,
@@ -182,8 +183,10 @@ export {
   getCurtainWallConfig,
 } from './nodes/curtain-wall'
 export {
+  DoorHandleStyle,
   DoorNode,
   DoorSegment,
+  doorHandleStyle,
   FRENCH_DOOR_SEGMENTS,
   OpeningConstructionType,
   OpeningDimensionReference,
@@ -377,6 +380,8 @@ export {
   getSegmentSlopeFrame,
   hasSegmentMaterialOverride,
   isBandedShedSegment,
+  MAX_ROOF_PITCH,
+  MIN_ROOF_SEGMENT_DIMENSION,
   MIN_ROOF_SEGMENT_TRIM_SPAN,
   normalizeRoofSegmentTrim,
   ROOF_SHAPE_DEFAULTS,

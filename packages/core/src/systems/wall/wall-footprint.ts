@@ -71,13 +71,21 @@ export function getWallPlanFootprint(wallNode: WallNode, miterData: WallMiterDat
   }
 
   const polygon: Point2D[] = [pStartRight, pEndRight]
-  if (endJunction) {
-    polygon.push(...(endJunction.closingPath ?? [endJunction.closing ?? wallEnd]))
-  }
+  if (endJunction) polygon.push(...getWallJunctionClosing(endJunction, wallEnd))
   polygon.push(pEndLeft, pStartLeft)
-  if (startJunction) {
-    polygon.push(...(startJunction.closingPath ?? [startJunction.closing ?? wallStart]))
-  }
+  if (startJunction) polygon.push(...getWallJunctionClosing(startJunction, wallStart))
 
   return polygon
+}
+
+/**
+ * The points that close a wall end at a junction in `getWallPlanFootprint`'s polygon: one point,
+ * or several where a T-junction's closing path goes around the joint. Readers that index into the
+ * polygon (front/back edges) must count these rather than assume one.
+ */
+export function getWallJunctionClosing(
+  junction: { closing?: Point2D; closingPath?: Point2D[] },
+  end: Point2D,
+): Point2D[] {
+  return junction.closingPath ?? [junction.closing ?? end]
 }

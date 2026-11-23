@@ -32,7 +32,14 @@ export function initializeElevatorOpeningSync() {
 
   return useScene.subscribe((state, prevState) => {
     if (syncingAutoOpenings || isSettlingDocument(useScene)) return
-    if (!changedInputs(prevState.nodes, state.nodes, isElevatorOpeningInput)) return
+    // A level's child list is bookkeeping (furniture re-parenting under it): what joined or left
+    // is an input of its own, as the document reconcile reads it.
+    if (
+      !changedInputs(prevState.nodes, state.nodes, isElevatorOpeningInput, {
+        ignoreChildLists: true,
+      })
+    )
+      return
     applyChanges(isHydrationNormalization() || state.hydrationId !== prevState.hydrationId)
   })
 }

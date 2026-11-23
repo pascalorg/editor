@@ -2,7 +2,7 @@ import { useScene, type ZoneNode, usePascalI18n} from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { memo, useCallback, useState } from 'react'
 import { ColorDot } from './../../../../../components/ui/primitives/color-dot'
-import { formatAreaLabel } from './../../../../../lib/measurements'
+import { formatAreaLabel } from '@pascal-app/core'
 import {
   selectZoneOrRoom,
   useZoneSelected,

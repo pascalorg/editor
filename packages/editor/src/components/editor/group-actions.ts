@@ -14,7 +14,7 @@ import {
   useLiveTransforms,
   useScene,
 } from '@pascal-app/core'
-import { markPerfAction, useViewer } from '@pascal-app/viewer'
+import { isTypingTarget, markPerfAction, useViewer } from '@pascal-app/viewer'
 import { Plane, Vector2, Vector3 } from 'three'
 import { GROUP_MOVE_DRAG_LABEL } from '../../lib/contextual-help'
 import { clientToPlan } from '../../lib/floorplan/plan-coords'
@@ -28,7 +28,6 @@ import {
   pasteSystemEditorClipboardToLevel,
 } from '../../lib/scene-clipboard'
 import { emitDeleteSFX, sfxEmitter } from '../../lib/sfx-bus'
-import { isTypingTarget } from '../../lib/typing-target'
 import useAlignmentGuides from '../../store/use-alignment-guides'
 import useDeleteConfirmation from '../../store/use-delete-confirmation'
 import useEditor, {

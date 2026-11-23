@@ -2,10 +2,13 @@
 
 import {
   type AnyNode,
+  formatAreaLabel,
   formatFixed,
+  getAreaUnitLabel,
   isDerivedNode,
   MIN_SLAB_THICKNESS,
   type SlabNode,
+  squareMetersToAreaUnit,
   usePascalI18n,
   useScene,
 } from '@pascal-app/core'
@@ -14,8 +17,6 @@ import {
   ActionButton,
   ActionGroup,
   FloorFoundationPanel,
-  formatAreaLabel,
-  getAreaUnitLabel,
   holeEditScope,
   PanelSection,
   PanelWrapper,
@@ -23,7 +24,6 @@ import {
   SegmentedControl,
   ShapeChoice,
   SliderControl,
-  squareMetersToAreaUnit,
   startOpeningDraft,
   triggerSFX,
   useEditingHole,

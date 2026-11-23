@@ -52,7 +52,7 @@ import {
   Popover,
   PopoverContent,
   PopoverTrigger,
-} from './../../../../../components/ui/primitives/popover'
+} from '@pascal-app/viewer/ui'
 import {
   buildLevelDuplicateCreateOps,
   type LevelDuplicatePreset,
@@ -60,14 +60,7 @@ import {
 import { addStoreyOnTop } from './../../../../../lib/add-storey'
 import { offerExteriorWallCopy } from './../../../../../components/ui/level-wall-copy-prompt'
 import { deleteLevelWithFallbackSelection } from './../../../../../lib/level-selection'
-import {
-  formatAreaLabel,
-  getAreaUnitLabel,
-  getLinearUnitLabel,
-  linearUnitToMeters,
-  metersToLinearUnit,
-  squareMetersToAreaUnit,
-} from './../../../../../lib/measurements'
+import { formatAreaLabel, getAreaUnitLabel, getLinearUnitLabel, linearUnitToMeters, metersToLinearUnit, squareMetersToAreaUnit } from '@pascal-app/core'
 import { createLocalGuideImage, createLocalScan } from './../../../../../lib/local-guide-image'
 import { editorHostTreeChildrenRegistry } from './../../../../../lib/host-tree-children'
 import { requestRoomDeletion } from './../../../../../lib/room-structure-commands'
@@ -88,7 +81,7 @@ import { focusTreeNode, TreeNode, TreeNodeWrapper } from './tree-node'
 import { TreeNodeDragProvider } from './tree-node-drag'
 import { zoneDefaultName } from './default-names'
 import { nodeLabelDescriptor } from '../../../../../i18n/node-messages'
-import { authoredLevelName, localizedLevelName } from '../../../../../i18n/level-name'
+import { authoredLevelName, localizedLevelName } from '@pascal-app/viewer/ui'
 
 // ============================================================================
 // PROPERTY LINE SECTION

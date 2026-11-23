@@ -1,6 +1,12 @@
 'use client'
 
-import { type AnyNodeId, type LevelNode, type UnitNode, useScene } from '@pascal-app/core'
+import {
+  type AnyNodeId,
+  type LevelNode,
+  type UnitNode,
+  usePascalI18n,
+  useScene,
+} from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import {
   AppWindow,
@@ -13,6 +19,7 @@ import {
   Eye,
   EyeOff,
   FileJson,
+  Gauge,
   Grid3X3,
   Group,
   Hexagon,
@@ -21,8 +28,8 @@ import {
   Maximize2,
   Minimize2,
   Moon,
-  MousePointer2,
   Mountain,
+  MousePointer2,
   Package,
   PaintBucket,
   PencilLine,
@@ -48,6 +55,7 @@ import useEditor from '../../../store/use-editor'
 import { useCommandPalette } from './index'
 
 export function EditorCommands() {
+  const i18n = usePascalI18n()
   const register = useCommandRegistry((s) => s.register)
   const { navigateTo, setInputValue, setOpen } = useCommandPalette()
 
@@ -313,20 +321,36 @@ export function EditorCommands() {
           }),
       },
       {
-        id: 'editor.viewer.shading-solid',
-        label: 'Switch to Solid',
+        id: 'editor.viewer.quality-auto',
+        label: i18n._({ id: 'editor.commands.qualityAuto', message: 'Quality: Auto' }),
         group: 'Viewer Controls',
-        icon: <Box className="h-4 w-4" />,
-        keywords: ['solid', 'shading', 'render', 'mode', 'performance'],
-        execute: () => run(() => useViewer.getState().setShading('solid')),
+        icon: <Gauge className="h-4 w-4" />,
+        keywords: ['quality', 'auto', 'device', 'render'],
+        execute: () => run(() => useViewer.getState().setRenderQuality('auto')),
       },
       {
-        id: 'editor.viewer.shading-rendered',
-        label: 'Switch to Rendered',
+        id: 'editor.viewer.quality-low',
+        label: i18n._({ id: 'editor.commands.qualityLow', message: 'Quality: Low' }),
+        group: 'Viewer Controls',
+        icon: <Gauge className="h-4 w-4" />,
+        keywords: ['quality', 'low', 'fast', 'performance', 'solid', 'render'],
+        execute: () => run(() => useViewer.getState().setRenderQuality('low')),
+      },
+      {
+        id: 'editor.viewer.quality-medium',
+        label: i18n._({ id: 'editor.commands.qualityMedium', message: 'Quality: Medium' }),
+        group: 'Viewer Controls',
+        icon: <Gauge className="h-4 w-4" />,
+        keywords: ['quality', 'medium', 'render'],
+        execute: () => run(() => useViewer.getState().setRenderQuality('medium')),
+      },
+      {
+        id: 'editor.viewer.quality-high',
+        label: i18n._({ id: 'editor.commands.qualityHigh', message: 'Quality: High' }),
         group: 'Viewer Controls',
         icon: <Sparkles className="h-4 w-4" />,
-        keywords: ['rendered', 'shading', 'render', 'mode', 'quality'],
-        execute: () => run(() => useViewer.getState().setShading('rendered')),
+        keywords: ['quality', 'high', 'rendered', 'render'],
+        execute: () => run(() => useViewer.getState().setRenderQuality('high')),
       },
       {
         id: 'editor.viewer.camera-snapshot',
@@ -451,6 +475,7 @@ export function EditorCommands() {
     setPreviewMode,
     exportScene,
     unitListKey,
+    i18n,
   ])
 
   return null

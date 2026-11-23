@@ -18,6 +18,7 @@ import {
 } from '@pascal-app/core'
 import { sceneViewBounds, sceneViewPose } from '@pascal-app/core/agent-operations'
 import { retractNodes, useViewer } from '@pascal-app/viewer'
+import { cameraPoseStore, useFollowPascal } from '@pascal-app/viewer/ui'
 import { type Object3D, Vector2, Vector3 } from 'three'
 import {
   resolveRoofSegmentSelectionTarget,
@@ -25,9 +26,7 @@ import {
 } from '../../components/editor/selection-manager'
 import { getEditorThreeContext } from '../../components/editor/three-context-bridge'
 import { resolveEditorRoomHit } from '../../hooks/use-selected-room'
-import { cameraPoseStore } from '../../store/camera-pose-store'
 import useEditor, { getActiveContinuationContext } from '../../store/use-editor'
-import useFollowPascal from '../../store/use-follow-pascal'
 import useInteractionScope from '../../store/use-interaction-scope'
 import {
   type BubbleTarget,

@@ -15,7 +15,9 @@ import {
   isOutdoorRoomType,
   type LevelNode,
   migrateSiteMetadata,
+  type RoofNode,
   type RoofSegmentNode,
+  roofFaceShapes,
   type SceneSnapshot,
   type SiteNode,
   siteFrame,
@@ -75,7 +77,8 @@ export function findLowestLevel(
 /**
  * The roof's outline on the lot — every roof segment's plan rectangle out to
  * its deck's reach at its eaves and rakes, through the segment's, the roof's
- * and the building's turns, unioned into the outer ring(s). Dashed on the site plan: what the eye sees
+ * and the building's turns, and every face of another kind (`capabilities.roofs`)
+ * by its own outline, unioned into the outer ring(s). Dashed on the site plan: what the eye sees
  * from above is the roof, and the setback is measured to the wall under it.
  */
 export function roofOutlineRings(
@@ -93,6 +96,9 @@ export function roofOutlineRings(
   }
   if (roofs.size === 0) return []
   const rects: Pt[][] = []
+  for (const roof of roofs.values())
+    for (const face of roofFaceShapes(roof as RoofNode, scene.nodes))
+      rects.push(face.outline.map(([x, z]) => toSite(x, z)))
   for (const node of Object.values(scene.nodes)) {
     if (node.type !== 'roof-segment') continue
     const roof = roofs.get(String((node as { parentId?: unknown }).parentId))

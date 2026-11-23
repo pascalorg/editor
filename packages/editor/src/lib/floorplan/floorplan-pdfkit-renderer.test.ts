@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import type { FloorplanGeometry } from '@pascal-app/core'
+import { floorplanGeometryMetadata } from '@pascal-app/core'
 import PDFDocument from 'pdfkit'
-import { floorplanGeometryMetadata } from './floorplan-extension'
 import { FloorplanPdfDocument, loadFloorplanPdfFonts } from './floorplan-pdfkit-document'
 import { renderFloorplanGeometryToPdfKit } from './floorplan-pdfkit-renderer'
 

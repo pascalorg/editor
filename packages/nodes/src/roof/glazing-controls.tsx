@@ -1,16 +1,14 @@
 'use client'
 
 import type { CurtainGrid, RoofGlazing } from '@pascal-app/core'
-import { type MessageDescriptor, usePascalI18n } from '@pascal-app/core'
 import {
   getLinearUnitLabel,
   linearControlValueToMeters,
+  type MessageDescriptor,
   metersToLinearUnit,
-  PanelSection,
-  SegmentedControl,
-  SelectControl,
-  SliderControl,
-} from '@pascal-app/editor'
+  usePascalI18n,
+} from '@pascal-app/core'
+import { PanelSection, SegmentedControl, SelectControl, SliderControl } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { useCallback } from 'react'
 import type { createRoofGlazingPreview } from './glazing-preview'

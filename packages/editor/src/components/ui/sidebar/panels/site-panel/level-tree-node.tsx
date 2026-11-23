@@ -6,7 +6,7 @@ import { useShallow } from 'zustand/react/shallow'
 import { InlineRenameInput } from './inline-rename-input'
 import { focusTreeNode, TreeNode, TreeNodeWrapper } from './tree-node'
 import { TreeNodeActions } from './tree-node-actions'
-import { authoredLevelName, localizedLevelName } from '../../../../../i18n/level-name'
+import { authoredLevelName, localizedLevelName } from '@pascal-app/viewer/ui'
 
 interface LevelTreeNodeProps {
   nodeId: LevelNode['id']

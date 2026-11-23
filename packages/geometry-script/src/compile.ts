@@ -24,6 +24,7 @@ import { ADDITION, Brush, DIFFERENCE, Evaluator, INTERSECTION, SUBTRACTION } fro
 import { type Coverage, measureCoverage } from './coverage'
 import { cutToRegion, hostRegion } from './cut'
 import { type ModuleTable, transformModule } from './transform'
+import { readUsageShape } from './usage-shape'
 
 export type { GeometryScriptMount }
 
@@ -39,6 +40,8 @@ export type GeometryScriptCompileInput = {
    * module lays out, Pascal clips.
    */
   inputs?: Record<string, unknown>
+  /** Also write the manifest's `shape`: what the build occupies in plan at each height, for the usage checks. */
+  usageShape?: boolean
 }
 
 export type GeometryScriptCompileOutput = CompiledGeometryScript & { glb: ArrayBuffer }
@@ -1017,6 +1020,7 @@ export async function finishBuild({
   code,
   language,
   inputs,
+  usageShape,
 }: {
   built: THREE.Object3D
   mount: GeometryScriptMount
@@ -1029,6 +1033,7 @@ export async function finishBuild({
    * stands, in the host's frame, and is cut to the floor or face they describe.
    */
   inputs?: Record<string, unknown>
+  usageShape?: boolean
 }): Promise<GeometryScriptCompileOutput> {
   const root = new THREE.Group()
   root.name = 'pascal_script_root'
@@ -1078,6 +1083,7 @@ export async function finishBuild({
   }
 
   const { surfaces, undersides } = analyseGeometry(root, conventions.parts)
+  const shape = usageShape ? readUsageShape(visibleMeshes(root)) : null
   mergeByPartAndMaterial(root, animated)
   weldVertices(root)
   const bounds = visibleBounds(root)
@@ -1106,6 +1112,7 @@ export async function finishBuild({
       cutout: conventions.cutout,
       collider: conventions.collider,
       triangles: conventions.triangles,
+      ...(shape ? { shape } : {}),
       ...coverage,
     }),
   }
@@ -1165,5 +1172,6 @@ export async function compileGeometryScript(
     code: input.code,
     language: 'three',
     inputs: input.inputs,
+    usageShape: input.usageShape,
   })
 }

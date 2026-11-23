@@ -27,6 +27,10 @@ export {
   type MovementInput,
 } from './components/viewer/bvh-ecctrl'
 export {
+  DroneController,
+  type DroneControllerProps,
+} from './components/viewer/drone-controller'
+export {
   buildGlbInteractiveItems,
   GlbInteractive,
   type GlbInteractiveItem,
@@ -49,11 +53,16 @@ export {
   CROUCH_WALK_SPEED,
   EYE_LERP_SPEED,
   GlbWalkthroughController,
+  type GlbWalkthroughControllerProps,
   STAND_CAPSULE,
   STAND_CLEARANCE,
   STAND_FLOAT_HEIGHT,
   WALKTHROUGH_FOV,
 } from './components/viewer/glb-walkthrough-controller'
+export {
+  LiveWalkthroughController,
+  type LiveWalkthroughControllerProps,
+} from './components/viewer/live-walkthrough-controller'
 export type { HoverStyle, HoverStyles } from './components/viewer/post-processing'
 export {
   DEFAULT_HOVER_STYLES,
@@ -70,6 +79,14 @@ export {
   SceneGroundReplacement,
   useSceneGroundReplacement,
 } from './components/viewer/scene-ground-replacement'
+export { isSectionObject, SectionGroup } from './components/viewer/section-group'
+export {
+  type CalloutAction,
+  type CalloutText,
+  SelectionCallout,
+  type SelectionCalloutProps,
+} from './components/viewer/selection-callout'
+export { SiteSurfaceScope } from './components/viewer/site-surface-scope'
 export { applyWalkthroughCameraClipping } from './components/viewer/viewer-camera'
 export {
   isViewerPresentationTextureBorrowed,
@@ -86,7 +103,7 @@ export { useAssetUrl } from './hooks/use-asset-url'
 export { useGLTFKTX2 } from './hooks/use-gltf-ktx2'
 export { useLibraryMaterialsVersion } from './hooks/use-library-materials-version'
 export { useNodeEvents } from './hooks/use-node-events'
-export { ASSETS_CDN_URL, resolveAssetUrl, resolveCdnUrl } from './lib/asset-url'
+export { resolveAssetUrl, resolveCdnUrl } from './lib/asset-url'
 export { backdropColors, backdropGradient, deepSkyColor, horizonHazeColor } from './lib/backdrop'
 export { applyWorldScaleBoxUVs } from './lib/box-uv'
 // CSG primitives — used by chimney's roof-trim and other kinds whose
@@ -105,9 +122,50 @@ export {
   prepareBrushForCSG,
   SUBTRACTION,
 } from './lib/csg-utils'
+export {
+  createDaylightGroundMaterial,
+  DAYLIGHT_GROUND,
+  DAYLIGHT_PARCEL,
+  daylightGroundColor,
+} from './lib/daylight/ground'
+export {
+  type DaylightSite,
+  type LatLng,
+  type LocationSource,
+  requestDeviceLocation,
+  resolveLocation,
+} from './lib/daylight/location'
+export { type DaylightAtmosphereSource, isDaylightAtmosphere } from './lib/daylight/look'
+export { WEATHER_COVER, type Weather } from './lib/daylight/sky'
+export {
+  presetInstant,
+  type SkyPhase,
+  skyPhase,
+  solarClockInstant,
+  solarClockMinutes,
+  solarPosition,
+  sunEvents,
+  type TimeOfDay,
+  type TimeTarget,
+} from './lib/daylight/solar'
+export {
+  type TimeTransitionOptions,
+  timeTargetMinutes,
+  transitionTimeOfDay,
+} from './lib/daylight/time-transition'
 export type { DisplayState } from './lib/display-state'
 export { disposeObject3DResources } from './lib/dispose-object3d'
+export {
+  createDroneInput,
+  DRONE_SLOW_MULTIPLIER,
+  type DroneInput,
+  type DroneLook,
+  seedDroneLook,
+  stepDroneFlight,
+  turnFirstPersonLook,
+} from './lib/drone-flight'
 export type { EdgeMode } from './lib/edge-style'
+export { markHighlight, tintEmissive } from './lib/editor-highlight'
 export {
   BLOCK_MASONRY,
   concreteMaterial,
@@ -189,6 +247,8 @@ export {
   setSlotDefaultOverrides,
   WHITE_PALETTE,
 } from './lib/materials'
+export * from './lib/measurement-label'
+export * from './lib/measurement-presentation'
 export { mergedOutline } from './lib/merged-outline-node'
 export { createNodeTopSurfaceHeightSampler } from './lib/node-top-surface-height'
 export * from './lib/perf-actions'
@@ -234,6 +294,12 @@ export {
   revealTimingAt,
 } from './lib/reveal-schedule'
 export { planRevealWindows, type RevealWindow } from './lib/reveal-windows'
+export { temporarilyShowScanPoints } from './lib/scan-points'
+export {
+  familyForNode,
+  sceneFamilies,
+  VIEWER_FAMILIES,
+} from './lib/scene-families'
 export { createSceneSupportHeightSampler } from './lib/scene-support-height'
 export {
   getSceneTheme,
@@ -243,19 +309,22 @@ export {
 } from './lib/scene-themes'
 export {
   type HiddenReason,
+  heldReasons,
   hideFromScene,
   showInScene,
   temporarilyShowPresentation,
   temporarilyShowShadowOnly,
 } from './lib/scene-visibility'
 export { SCRIPTED_MODEL_FLAG } from './lib/scripted-opening'
+export { filterSectionHits, type SectionAxis, type SectionShadows } from './lib/section'
+export { sectionBounds } from './lib/section-bounds'
 export {
-  SITE_FOUNDATION,
   SITE_GROUND,
+  SITE_HORIZON,
   type SiteGroundRole,
-  siteFoundation,
   siteGround,
   siteSurfaces,
+  temporarilyHideSiteSurfaces,
   temporarilyVeilGround,
 } from './lib/site-surfaces'
 export {
@@ -286,6 +355,7 @@ export {
   textureMapForSlot,
 } from './lib/texture-reference'
 export { packNormalToRGB, unpackRGBToNormal } from './lib/tsl-compat'
+export { isTypingTarget } from './lib/typing-target'
 export {
   AMBIANCE_SECONDS,
   ambianceNow,
@@ -298,24 +368,44 @@ export {
   stepAmbianceProgress,
   temporarilyWithoutAmbiance,
   UNDERGROUND_RIM,
-  UNDERGROUND_RING,
   undergroundAmbianceNode,
 } from './lib/underground-ambiance'
+export {
+  ASSETS_CDN_URL,
+  configureViewer,
+  getViewerConfig,
+  type ViewerConfig,
+} from './lib/viewer-config'
+export { createWalkthroughInput, type WalkthroughInput } from './lib/walkthrough-input'
+export {
+  WALKTHROUGH_DEFAULT_SPEEDS,
+  WALKTHROUGH_SEE_DISTANCE,
+  type WalkthroughSpeeds,
+} from './lib/walkthrough-settings'
+export { filterXrayHits, xrayActive } from './lib/xray'
 export { createZoneShape, createZoneWallGeometry } from './lib/zone-geometry'
+export {
+  type FirstPersonHudState,
+  useFirstPersonHud,
+  type WalkthroughInteract,
+  type WalkthroughSeenInteract,
+} from './store/use-first-person-hud'
 export type { LightSource } from './store/use-item-light-pool'
 export { catalogLightSource, useItemLightPool } from './store/use-item-light-pool'
 export {
-  anyGroundVeiled,
   applyCountryUnitDefault,
   DEFAULT_UNDERGROUND_LOOK,
   default as useViewer,
   type GroundMode,
   groundVeiled,
   type MetricNotation,
+  type RenderQuality,
+  type RenderQualityChoice,
   siteGroundShown,
   type UndergroundEdge,
   type UndergroundLook,
   type UndergroundTransition,
+  type WalkthroughMovement,
   type WallMode,
 } from './store/use-viewer'
 export {
@@ -375,8 +465,17 @@ export { ElevatorInteractionSystem } from './systems/elevator/elevator-interacti
 // elevation under its footprint. Replaces the per-kind elevation block
 // that used to live inside `ItemSystem`.
 export { FloorElevationSystem } from './systems/floor-elevation/floor-elevation-system'
+export {
+  type GeometryFailure,
+  setGeometryFailure,
+  useGeometryStatus,
+} from './systems/geometry/geometry-status'
 export { GuideSystem } from './systems/guide/guide-system'
-export { InteractiveSystem } from './systems/interactive/interactive-system'
+export {
+  InteractiveSystem,
+  type InteractiveSystemProps,
+} from './systems/interactive/interactive-system'
+export { openingSettled, proceduralSettled } from './systems/interactive/opening-settled'
 export {
   type ScriptedClipActions,
   ScriptedClips,
@@ -480,9 +579,11 @@ export {
   WallSystem,
 } from './systems/wall/wall-system'
 export {
+  advanceWindowAnimations,
   poseWindowMovingParts,
   WindowAnimationSystem,
 } from './systems/window/window-animation-system'
+export { restoreWindowRollerShutter } from './systems/window/window-roller-shutter'
 export { buildWindowPreviewMesh, WindowSystem } from './systems/window/window-system'
 export { ZoneSystem } from './systems/zone/zone-system'
 export { useImmersiveXRPresentation } from './xr/presentation-context'

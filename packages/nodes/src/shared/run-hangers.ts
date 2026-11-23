@@ -26,7 +26,7 @@ import {
   Vector2,
   Vector3,
 } from 'three'
-import { rectSectionAxes } from '../duct-segment/geometry'
+import { rectSectionAxes } from '../duct-segment/profile'
 import { hasWallChildOverlap, resolveWallAttachmentAtPlanPoint } from './wall-attach-target'
 
 export type SupportedRun = DuctSegmentNode | PipeSegmentNode
@@ -111,7 +111,8 @@ export function planRunHangerSlots(
           )
           if (!hit) continue
           const base = getWallBaseElevationForNodes(host, nodes)
-          const top = base + getWallEffectiveHeightForNodes(host, nodes)
+          const top =
+            base + getWallEffectiveHeightForNodes(host, nodes, hit.localX / hit.wallLength)
           if (center.y < base || center.y > top) continue
           if (hasWallChildOverlap(host.id, nodes, hit.localX, center.y - base, 0.08, 0.08)) continue
           const frame = getWallCurveFrameAt(host, hit.localX / hit.wallLength)

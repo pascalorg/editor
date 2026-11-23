@@ -57,3 +57,71 @@ describe('operation door open kinematics', () => {
     })
   }
 })
+
+for (const slidingStyle of ['patio', 'bypass'] as const) {
+  for (const leafCount of [2, 3, 4] as const) {
+    for (const slideDirection of ['left', 'right'] as const) {
+      test(`${leafCount}-panel ${slidingStyle} slides ${slideDirection} at 0, 0.5 and 1`, () => {
+        const node = DoorNode.parse({
+          doorType: 'sliding',
+          width: 3,
+          leafCount,
+          slidingStyle,
+          slideDirection,
+        })
+        const mesh = buildDoorPreviewMesh(node)
+        const panels = mesh.children.filter((p) => p.name.startsWith('door-sliding-active'))
+        expect(panels).toHaveLength(leafCount)
+        const positions = [0, 0.5, 1].map((t) => {
+          expect(poseDoorMovingParts(node, mesh, t)).toBe(true)
+          return panels.map((p) => p.position.x)
+        })
+        const moving = positions[2]!.filter((x) => Math.abs(x) > 0.01)
+        expect(moving).toHaveLength(leafCount === 4 ? 2 : 1)
+        if (slidingStyle === 'bypass' || leafCount < 4)
+          expect(moving.every((x) => (slideDirection === 'left' ? x < 0 : x > 0))).toBe(true)
+        else expect(moving[0]! * moving[1]!).toBeLessThan(0)
+        for (let index = 0; index < leafCount; index++) {
+          expect(positions[0]![index]).toBeCloseTo(0)
+          expect(positions[1]![index]).toBeCloseTo(positions[2]![index]! / 2)
+          if (slidingStyle === 'bypass') {
+            let pulls = 0
+            panels[index]!.traverse((part) => {
+              if (part.userData.slotId === 'hardware') pulls++
+            })
+            expect(pulls).toBeGreaterThan(0)
+          }
+        }
+      })
+    }
+  }
+}
+
+for (const leafCount of [2, 4, 6, 8] as const) {
+  for (const slideDirection of ['left', 'right'] as const) {
+    test(`${leafCount} folding panels pose toward ${slideDirection}`, () => {
+      const node = DoorNode.parse({
+        doorType: 'folding',
+        width: 4,
+        leafCount,
+        slideDirection,
+        operationState: 0,
+      })
+      const mesh = buildDoorPreviewMesh(node)
+      const first = mesh.getObjectByName('door-fold-0')!
+      const anchor = first.position.clone()
+      for (const t of [0, 0.5, 1]) {
+        expect(poseDoorMovingParts(node, mesh, t)).toBe(true)
+        expect(first.position.equals(anchor)).toBe(true)
+        for (let index = 0; index < leafCount; index++) {
+          const panel = mesh.getObjectByName(`door-fold-${index}`)!
+          expect(panel).toBeDefined()
+          expect(Math.abs(panel.rotation.y)).toBeCloseTo(Math.PI * 0.44 * t * (index === 0 ? 1 : 2))
+        }
+      }
+      if (leafCount >= 6) expect(Math.sign(anchor.x)).toBe(slideDirection === 'left' ? -1 : 1)
+      poseDoorMovingParts(node, mesh, 0)
+      expect(first.rotation.y).toBeCloseTo(0)
+    })
+  }
+}

@@ -55,7 +55,7 @@ const SAMPLE = `export const messages = [
 `
 
 /**
- * A two-message project with the repository's Lingui config and glossary and
+ * A small project with the repository's Lingui config and glossary and
  * fully reviewed catalogs, so the real commands run in seconds.
  */
 function catalogProject(): string {
@@ -65,13 +65,22 @@ function catalogProject(): string {
     join(root, 'lingui.config.ts'),
     readFileSync('lingui.config.ts', 'utf8').replace(
       /include: \[[^\]]*\]/,
-      "include: ['packages/editor/src']",
+      "include: ['packages/editor/src', 'packages/viewer/src']",
     ),
   )
   mkdirSync(join(root, 'i18n'))
   cpSync('i18n/glossary.json', join(root, 'i18n/glossary.json'))
   mkdirSync(join(root, 'packages/editor/src'), { recursive: true })
   writeFileSync(join(root, 'packages/editor/src/sample.tsx'), SAMPLE)
+  mkdirSync(join(root, 'packages/viewer/src'), { recursive: true })
+  writeFileSync(
+    join(root, 'packages/viewer/src/sample.tsx'),
+    `export const messages = [
+      /* i18n */ { id: 'viewer.example.value', message: 'Value: {state}' },
+      /* i18n */ { id: 'viewer.example.plain', message: 'Plain label' },
+      /* i18n */ { id: 'viewer.example.escaped', message: "It''s ready" },
+    ]`,
+  )
   for (const locale of ['en', ...TARGETS]) {
     mkdirSync(join(root, `packages/editor/src/i18n/locales/${locale}`), { recursive: true })
     writeFileSync(
@@ -84,12 +93,17 @@ function catalogProject(): string {
     'viewer.camera.topView': 'Vue de dessus',
     'editor.buildPanel.advanced': 'Avancé',
   }
+  const englishMessages = Object.fromEntries(
+    parsePo(
+      readFileSync(join(root, 'packages/editor/src/i18n/locales/en/messages.po'), 'utf8'),
+    ).items.map((item) => [item.msgid, item.msgstr[0] ?? '']),
+  )
   for (const locale of TARGETS) {
     const path = join(root, `packages/editor/src/i18n/locales/${locale}/messages.po`)
     const po = parsePo(readFileSync(path, 'utf8'))
     for (const item of po.items) {
-      const english = item.msgid === 'viewer.camera.topView' ? 'Top view' : 'Advanced'
-      item.msgstr = [reviewed[item.msgid]!]
+      const english = englishMessages[item.msgid]!
+      item.msgstr = [reviewed[item.msgid] ?? english]
       item.comments = [
         `Source-Hash: ${hashSource(english)}`,
         'Review: human',
@@ -121,7 +135,10 @@ function run(root: string, command: 'check' | 'compile' | 'extract') {
 }
 
 const catalogFiles = (root: string) =>
-  [...new Bun.Glob('packages/editor/src/i18n/locales/*/messages.{po,ts}').scanSync({ cwd: root })]
+  [
+    ...new Bun.Glob('packages/editor/src/i18n/locales/*/messages.{po,ts}').scanSync({ cwd: root }),
+    'packages/core/src/i18n/english-formatting-fallback.ts',
+  ]
     .sort()
     .map((path) => [path, readFileSync(join(root, path), 'utf8')])
 
@@ -132,6 +149,31 @@ test('catalog checking does not rewrite PO or compiled catalogs', () => {
   expect(output).not.toContain('[i18n] ')
   expect(exitCode).toBe(0)
   expect(catalogFiles(root)).toEqual(before)
+}, 60_000)
+
+test('English formatting fallback omits plain messages, keeps escapes and rejects drift', () => {
+  const root = catalogProject()
+  const path = join(root, 'packages/core/src/i18n/english-formatting-fallback.ts')
+  const compiled = readFileSync(path, 'utf8')
+  expect(compiled).toContain('viewer.example.value')
+  expect(compiled).toContain('viewer.example.escaped')
+  expect(compiled).not.toContain('viewer.example.plain')
+  expect(compiled).not.toContain('editor.buildPanel.advanced')
+  expect(compiled).not.toContain('viewer.camera.topView')
+  const editor = readFileSync(join(root, 'packages/editor/src/i18n/locales/en/messages.ts'), 'utf8')
+  expect(editor).not.toContain('@pascal-app/core')
+  expect(editor).toContain('viewer.example.value')
+  expect(editor).toContain('viewer.example.plain')
+
+  writeFileSync(path, `${compiled}\n// drift\n`)
+  const checked = run(root, 'check')
+  expect(checked.exitCode).toBe(1)
+  expect(checked.output).toContain(
+    'packages/core/src/i18n/english-formatting-fallback.ts is not synchronized',
+  )
+  expect(readFileSync(path, 'utf8')).toBe(`${compiled}\n// drift\n`)
+  expect(run(root, 'compile').exitCode).toBe(0)
+  expect(readFileSync(path, 'utf8')).toBe(compiled)
 }, 60_000)
 
 test('ICU plural validation follows the target locale categories', () => {

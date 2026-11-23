@@ -122,7 +122,11 @@ function wallSolid(
   nodes: Readonly<Record<string, AnyNode>>,
 ): MultiPolygon | undefined {
   const support = wallSupportForNodes(wall, nodes).elevation
-  const height = getWallTop(wall, wall.parentId!, nodes, support) - support
+  const height =
+    Math.max(
+      getWallTop(wall, wall.parentId!, nodes, support, 0),
+      getWallTop(wall, wall.parentId!, nodes, support, 1),
+    ) - support
   const length = Math.hypot(wall.end[0] - wall.start[0], wall.end[1] - wall.start[1])
   if (
     ![height, length, support, wall.thickness ?? 0.1].every(Number.isFinite) ||

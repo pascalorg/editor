@@ -1,5 +1,5 @@
 import type { FloorplanGeometry } from '@pascal-app/core'
-import { type FloorplanAnnotationRole, readFloorplanGeometryMetadata } from './floorplan-extension'
+import { type FloorplanAnnotationRole, readFloorplanGeometryMetadata } from '@pascal-app/core'
 
 export type FloorplanAnnotationCategory =
   | 'automaticDimensions'

@@ -3,6 +3,7 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { Client, InMemoryTransport } from '@modelcontextprotocol/client'
+import { assetCatalogSource } from '@pascal-app/core/agent-operations'
 import { DESIGN_EXAMPLE } from '@pascal-app/core/procedural-items'
 import {
   type AnyNode,
@@ -14,7 +15,6 @@ import { SceneBridge } from '../bridge/scene-bridge'
 import { createPascalMcpServer } from '../server'
 import { SqliteSceneStore } from '../storage/sqlite-scene-store'
 import type { GeometryScriptHost } from './add-object'
-import type { AssetCatalog } from './asset-catalog'
 
 /**
  * The owner's bedroom prompt, over MCP (16 Oct): a 4 by 5 m bedroom with a double bed, two
@@ -27,15 +27,25 @@ type Result = {
   structuredContent?: Record<string, unknown>
 }
 
-const asset = (id: string): AssetInput => ({
+const asset = (
+  id: string,
+  category = 'furniture',
+  extra: Partial<AssetInput> = {},
+): AssetInput => ({
   id,
   name: id,
-  category: id === 'toilet' ? 'toilets' : 'furniture',
+  category,
   thumbnail: `/items/${id}/thumbnail.webp`,
   src: `/items/${id}/model.glb`,
   dimensions: [0.5, 0.5, 0.4],
+  ...extra,
 })
-const CATALOG = ['double-bed', 'bedside-table', 'dresser', 'closet', 'toilet'].map(asset)
+const CATALOG = [
+  ...['double-bed', 'bedside-table', 'dresser', 'closet', 'sofa'].map((id) => asset(id)),
+  asset('toilet', 'toilets'),
+  asset('fridge', 'kitchen-appliances'),
+  asset('palm', 'outdoor', { tags: ['tree', 'plant', 'garden'] }),
+]
 
 const compiledBox = (): CompiledGeometryScript => ({
   sha256: 'a'.repeat(64),
@@ -69,6 +79,14 @@ const openAxis = (design: string) => ({ kind: 'open' as const, design })
 const axes = {
   action: openAxis('the work the request calls for, designed as a whole'),
   size: openAxis('sizes chosen to fit the rooms they serve'),
+  form: {
+    ...openAxis('a single block composed to fit the rooms it holds'),
+    massing: { plan: 'rectangle' as const, volumes: 1, heights: 'one' as const },
+  },
+  facade: {
+    ...openAxis('a plain render facade with a free rhythm of windows'),
+    treatment: { cladding: ['render' as const], rhythm: 'free' as const },
+  },
   pieces: openAxis('the pieces each room needs, designed one by one'),
   openings: openAxis('openings placed for light and passage room by room'),
   style: openAxis('each piece designed in one calm character throughout'),
@@ -76,8 +94,19 @@ const axes = {
   dressing: openAxis('the rooms dressed lived-in, stated in beyond'),
 }
 
+const rooms = [
+  {
+    name: 'Bedroom',
+    use: 'bedroom' as const,
+    distinct: 'the parents’ room, calm and oak, with its own bathroom',
+    finishes: { floor: 'oak parquet', walls: 'limewashed white', tiled: false, skirting: true },
+    pieces: ['a king bed', 'two nightstands'],
+  },
+]
+
 const brief = (source: 'open' | 'catalog' | 'brand', extra: Record<string, unknown> = {}) => ({
   axes,
+  rooms,
   source,
   ...(source === 'open'
     ? {}
@@ -103,7 +132,8 @@ describe('the design brief over MCP', () => {
     storeArtifact: async ({ sha256 }) => sha256,
     readArtifact: async () => null,
   }
-  const catalog: AssetCatalog = async () => CATALOG
+  // A library searched where it is kept: the gate reads the tags of the pieces a call names.
+  const catalog = assetCatalogSource(CATALOG)
 
   const call = async (name: string, args: Record<string, unknown>) => {
     const result = (await client.callTool({ name, arguments: args })) as Result
@@ -201,62 +231,85 @@ describe('the design brief over MCP', () => {
       levelId,
     })
     expect(placed.payload.code).toBe('brief_source_open')
-    expect(placed.payload.error).toBe(
-      "The brief left the source open: double-bed can be made with add_object or place_design (view_assets shows the catalog's for reference), or, for technical equipment, named in the brief's asIs after view_assets, with a reason.",
+    expect(placed.payload.error).toContain(
+      'The brief left the source open: double-bed cannot be placed from the catalog, pieces are made. Technical equipment (sanitaryware, appliances) and plants are placed from the catalog under an open source;',
+    )
+    // The refusal is kept with the session: a retry, by any placing tool, is answered briefly.
+    const again = await call('place_items', {
+      items: [{ assetId: 'double-bed', x: 2, z: 2 }],
+      levelId,
+    })
+    expect(again.payload.error).toBe(
+      "Already refused, the brief's source is open: double-bed. Technical equipment and plants are placed from the catalog; add_object and place_design make the other pieces.",
     )
     const set = await call('furnish_room', { zoneId, roomType: 'bedroom' })
     expect(set.payload.code).toBe('brief_source_open')
   })
 
-  test('an open brief: a WC viewed, then named in asIs with its reason, is placed as it is', async () => {
-    await call('view_assets', { ids: ['toilet'] })
-    expect(bridge.agentSession.read().viewed).toEqual(['toilet'])
-    await call(
-      'design_brief',
-      brief('open', { asIs: [{ assetId: 'toilet', reason: 'technical equipment' }] }),
-    )
-    const wc = await call('place_items', { items: [{ assetId: 'toilet', x: 1, z: 1 }], levelId })
-    expect(wc.result.isError).toBeFalsy()
+  test('an open brief: a toilet and a fridge are placed from the catalog', async () => {
+    await call('design_brief', brief('open'))
+    const placed = await call('place_items', {
+      items: [
+        { assetId: 'toilet', x: 1, z: 1 },
+        { assetId: 'fridge', x: 3, z: 1 },
+      ],
+      levelId,
+    })
+    expect(placed.result.isError).toBeFalsy()
+    expect(Object.values(bridge.getNodes()).filter((node) => node.type === 'item')).toHaveLength(2)
+  })
+
+  test('an open brief: a palm is placed from the catalog', async () => {
+    await call('design_brief', brief('open'))
+    const placed = await call('place_items', {
+      items: [{ assetId: 'palm', x: 3, z: 4 }],
+      levelId,
+    })
+    expect(placed.result.isError).toBeFalsy()
     expect(Object.values(bridge.getNodes()).some((node) => node.type === 'item')).toBe(true)
   })
 
-  test('the owner’s bedroom: furniture named in asIs is refused, a toilet not viewed is refused, viewed it is kept', async () => {
-    await call('view_assets', { ids: ['double-bed', 'bedside-table', 'closet', 'toilet'] })
-    const furniture = await call(
-      'design_brief',
-      brief('open', {
-        asIs: ['double-bed', 'bedside-table', 'closet'].map((assetId) => ({
-          assetId,
-          reason: 'fits the room',
-        })),
-      }),
-    )
-    expect(furniture.result.isError).toBe(true)
-    expect(furniture.payload.code).toBe('brief_as_is_furniture')
-    expect(String(furniture.payload.error)).toContain(
-      'double-bed is furniture: in an open brief furniture is made (add_object, place_design) or the request names a catalog source; asIs keeps technical equipment (sanitaryware, appliances).',
-    )
-    expect(bridge.agentSession.read().designBrief).toBeUndefined()
+  test('an open brief: a sofa is still refused', async () => {
+    await call('design_brief', brief('open'))
+    const refused = await call('place_items', {
+      items: [{ assetId: 'sofa', x: 1, z: 1 }],
+      levelId,
+    })
+    expect(refused.payload.code).toBe('brief_source_open')
+    expect(Object.values(bridge.getNodes()).some((node) => node.type === 'item')).toBe(false)
+  })
 
-    bridge.agentSession.keep({ viewed: null })
-    const unseen = await call(
-      'design_brief',
-      brief('open', { asIs: [{ assetId: 'toilet', reason: 'technical equipment' }] }),
-    )
-    expect(unseen.payload.code).toBe('brief_as_is_not_viewed')
-    expect(String(unseen.payload.error)).toContain('toilet was not viewed')
-    expect(String(unseen.payload.error)).toContain('view_assets')
+  test('an open brief: a batch places the fridge and refuses the sofa', async () => {
+    await call('design_brief', brief('open'))
+    const batch = await call('run_batch', {
+      calls: [
+        { tool: 'place_in_room', input: { assetId: 'fridge', zoneId } },
+        { tool: 'place_in_room', input: { assetId: 'sofa', zoneId } },
+      ],
+      onRefusal: 'skip',
+    })
+    expect(batch.result.isError).toBeFalsy()
+    expect(batch.payload).toMatchObject({
+      applied: 1,
+      refused: 1,
+      calls: [
+        { index: 0, status: 'ok' },
+        { index: 1, status: 'refused', code: 'brief_source_open' },
+      ],
+    })
+  })
 
-    await call('view_assets', { ids: ['toilet'] })
-    const kept = await call(
-      'design_brief',
-      brief('open', { asIs: [{ assetId: 'toilet', reason: 'technical equipment' }] }),
-    )
-    expect(kept.payload.status).toBe('recorded')
-    expect(
-      (await call('place_items', { items: [{ assetId: 'toilet', x: 1, z: 1 }], levelId })).result
-        .isError,
-    ).toBeFalsy()
+  test('a catalog source places the toilet, and an asIs a model still sends is not kept', async () => {
+    const sent = await call('design_brief', {
+      ...brief('open'),
+      asIs: [{ assetId: 'toilet', reason: 'technical equipment' }],
+    })
+    expect(sent.payload.status).toBe('recorded')
+    expect(bridge.agentSession.read().designBrief).not.toHaveProperty('asIs')
+    await call('design_brief', brief('catalog'))
+    const wc = await call('place_items', { items: [{ assetId: 'toilet', x: 1, z: 1 }], levelId })
+    expect(wc.result.isError).toBeFalsy()
+    expect(Object.values(bridge.getNodes()).some((node) => node.type === 'item')).toBe(true)
   })
 
   test('a source other than open must quote the request; the quote is required here and not checked', async () => {
@@ -325,29 +378,73 @@ describe('the design brief over MCP', () => {
     ).toBeFalsy()
   })
 
-  test('run_batch holding a gated call is refused as a whole, whatever onRefusal says, and nothing is applied', async () => {
-    const before = Object.keys(bridge.getNodes()).length
+  test('run_batch keeps the brief gate: stop applies nothing, skip applies the other calls, and furnishing runs only after a brief', async () => {
+    const before = structuredClone(bridge.getNodes())
+    const [firstWall, secondWall] = Object.values(before).filter((node) => node.type === 'wall')
+    if (!(firstWall && secondWall)) throw new Error('The room needs two walls to delete')
+    const gatedCall = { tool: 'place_design', input: sofa() }
     const calls = [
-      { tool: 'delete_node', input: { id: 'wall_missing' } },
-      { tool: 'place_design', input: sofa() },
+      { tool: 'delete_node', input: { id: firstWall.id } },
+      gatedCall,
+      { tool: 'delete_node', input: { id: secondWall.id } },
     ]
-    for (const onRefusal of ['stop', 'skip'] as const) {
-      const { result, payload } = await call('run_batch', { calls, onRefusal })
+    for (const policy of [{}, { onRefusal: 'stop' }]) {
+      const { result, payload } = await call('run_batch', { calls, ...policy })
       expect(result.isError).toBe(true)
-      expect(payload.code).toBe('design_brief_required')
-      expect(String(payload.error)).toContain("The batch's call 2 (place_design) is refused")
+      expect(payload).toMatchObject({
+        code: 'batch_call_refused',
+        index: 1,
+        tool: 'place_design',
+        refusal: 'design_brief_required',
+      })
+      expect(bridge.getNodes()).toEqual(before)
     }
-    expect(Object.keys(bridge.getNodes()).length).toBe(before)
+    const skipped = await call('run_batch', { calls, onRefusal: 'skip' })
+    expect(skipped.result.isError).toBeFalsy()
+    expect(skipped.payload).toMatchObject({
+      status: 'applied',
+      applied: 2,
+      refused: 1,
+      calls: [
+        { index: 0, tool: 'delete_node', status: 'ok' },
+        {
+          index: 1,
+          tool: 'place_design',
+          status: 'refused',
+          code: 'design_brief_required',
+          error: expect.stringContaining('design_brief records what the request fixes'),
+        },
+        { index: 2, tool: 'delete_node', status: 'ok' },
+      ],
+    })
+    expect(bridge.getNodes()[firstWall.id]).toBeUndefined()
+    expect(bridge.getNodes()[secondWall.id]).toBeUndefined()
+    expect(
+      Object.values(bridge.getNodes()).filter((node) =>
+        ['item', 'procedural-item'].includes(node.type),
+      ),
+    ).toEqual([])
+    expect(compiles).toBe(0)
+    expect(bridge.agentSession.read().designBrief).toBeUndefined()
+
     await call('design_brief', brief('open'))
     const batch = await call('run_batch', {
-      calls: [calls[1]!, { tool: 'add_object', input: object }],
+      calls: [gatedCall, { tool: 'add_object', input: object }],
     })
     expect(batch.result.isError).toBeFalsy()
     expect(batch.payload).toMatchObject({ status: 'applied', applied: 2, refused: 0 })
+    expect(compiles).toBe(1)
+    expect(Object.values(bridge.getNodes()).some((node) => node.type === 'procedural-item')).toBe(
+      true,
+    )
     const refused = await call('run_batch', {
       calls: [{ tool: 'place_in_room', input: { assetId: 'double-bed', zoneId } }],
     })
-    expect(refused.payload.code).toBe('brief_source_open')
+    expect(refused.result.isError).toBe(true)
+    expect(refused.payload).toMatchObject({
+      code: 'batch_call_refused',
+      refusal: 'brief_source_open',
+    })
   })
 
   test('the brief is the session’s: the next brief replaces it, a scene load starts the session anew', async () => {

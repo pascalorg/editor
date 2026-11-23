@@ -3,7 +3,7 @@ import { DuctSegmentNode, useScene } from '@pascal-app/core'
 import { Vector3 } from 'three'
 import { buildDuctFittingGeometry } from '../duct-fitting/geometry'
 import { getDuctFittingPorts } from '../duct-fitting/ports'
-import { ductEndpointPort } from '../duct-segment/continuation'
+import { ductEndpointPort } from '../duct-segment/continuation-handle'
 import { planDuctDraw } from '../duct-segment/tool'
 import type { DuctProfile } from './auto-fitting'
 

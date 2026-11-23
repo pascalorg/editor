@@ -20,6 +20,13 @@ export function isOperationDoorType(
   )
 }
 
+/** A door a vehicle drives through: it has no leaf to swing across the floor. */
+export function isVehicleDoorType(doorType: DoorType | DoorNode['doorType'] | string | undefined) {
+  return (
+    doorType === 'garage-sectional' || doorType === 'garage-rollup' || doorType === 'garage-tiltup'
+  )
+}
+
 export function getDoorRenderOpenAmount(
   doorType: DoorType | DoorNode['doorType'],
   operationState: number | undefined,

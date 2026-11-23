@@ -309,7 +309,7 @@ export function resolveActivePaintMaterialFromSelection(params: {
     ) {
       const roofNode = selectedNode as RoofNode
       const fallbackSegment = (roofNode.children ?? [])
-        .map((id: AnyNodeId) => nodes[id as AnyNodeId] as RoofSegmentNode | undefined)
+        .map((id) => nodes[id as AnyNodeId] as RoofSegmentNode | undefined)
         .find(
           (segment: RoofSegmentNode | undefined) =>
             segment?.type === 'roof-segment' &&

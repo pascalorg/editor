@@ -2,7 +2,7 @@ import type { AnyNode, AnyNodeId, DuctFittingNode, PipeFittingNode } from '@pasc
 import type { ScenePort } from '@pascal-app/editor/distribution'
 import { Euler, Matrix4, Quaternion, Vector3 } from 'three'
 import { adapterShape } from '../duct-fitting/ports'
-import { rectSectionAxes } from '../duct-segment/geometry'
+import { rectSectionAxes } from '../duct-segment/profile'
 import { reducerOutletDiameter } from './reducer-size'
 
 export function inheritFittingProfile<T extends DuctFittingNode | PipeFittingNode>(

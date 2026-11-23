@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { measurementCentroid, pointInPolygon2D } from '@pascal-app/core'
-import { measurementPolygonLabelAnchor, triangulateMeasurementPolygon } from './measurement-label'
+import { measurementPolygonLabelAnchor, triangulateMeasurementPolygon } from '@pascal-app/viewer'
 
 describe('measurementPolygonLabelAnchor', () => {
   test('keeps a concave polygon label inside its visible fill', () => {

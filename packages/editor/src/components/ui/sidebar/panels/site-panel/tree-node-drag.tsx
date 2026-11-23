@@ -96,6 +96,11 @@ type DragState = {
 type DropTarget = {
   parentId: string
   insertIndex: number
+  /**
+   * The row the drop lands before; none at the end. The rows are not all of the parent's
+   * children (a roof's faces have no drop row), so the drop is placed by id.
+   */
+  beforeId?: string
 } | null
 
 type TreeNodeDragContextValue = {
@@ -143,6 +148,10 @@ export function TreeNodeDragProvider({ children }: { children: ReactNode }) {
     if (!(drag && dropTarget)) return
 
     const state = useScene.getState()
+    const place = (children: string[], id: string) => {
+      const before = dropTarget.beforeId ? children.indexOf(dropTarget.beforeId) : -1
+      children.splice(before === -1 ? children.length : before, 0, id)
+    }
 
     if (dropTarget.parentId === drag.sourceParentId) {
       // --- Reorder within same parent ---
@@ -152,8 +161,7 @@ export function TreeNodeDragProvider({ children }: { children: ReactNode }) {
         const fromIndex = currentChildren.indexOf(drag.nodeId)
         if (fromIndex === -1) return
         currentChildren.splice(fromIndex, 1)
-        const toIndex = Math.min(dropTarget.insertIndex, currentChildren.length)
-        currentChildren.splice(toIndex, 0, drag.nodeId)
+        place(currentChildren, drag.nodeId)
         state.updateNode(dropTarget.parentId as AnyNodeId, { children: currentChildren } as any)
       }
     } else {
@@ -185,8 +193,7 @@ export function TreeNodeDragProvider({ children }: { children: ReactNode }) {
         const idx = children.indexOf(drag.nodeId)
         if (idx !== -1) {
           children.splice(idx, 1)
-          const toIndex = Math.min(dropTarget.insertIndex, children.length)
-          children.splice(toIndex, 0, drag.nodeId)
+          place(children, drag.nodeId)
           state.updateNode(dropTarget.parentId as AnyNodeId, { children } as any)
         }
       }
@@ -259,6 +266,7 @@ export function TreeNodeDragProvider({ children }: { children: ReactNode }) {
         // Find child rows to determine insert index
         const childRows = targetEl.querySelectorAll<HTMLElement>('[data-drop-child]')
         let insertIndex = childRows.length
+        let beforeId: string | undefined
 
         for (let i = 0; i < childRows.length; i++) {
           const row = childRows[i]!
@@ -266,11 +274,12 @@ export function TreeNodeDragProvider({ children }: { children: ReactNode }) {
           const midY = rect.top + rect.height / 2
           if (e.clientY < midY) {
             insertIndex = i
+            beforeId = row.dataset.dropChild
             break
           }
         }
 
-        foundTarget = { parentId, insertIndex }
+        foundTarget = { parentId, insertIndex, beforeId }
         break
       }
 

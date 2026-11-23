@@ -21,6 +21,8 @@ jobs:
       pull-requests: read
     outputs:
       runtime: ${{ steps.filter.outputs.runtime }}
+      packaging: ${{ steps.filter.outputs.packaging }}
+      viewer: ${{ steps.filter.outputs.viewer }}
       skills: ${{ steps.filter.outputs.skills }}
     steps:
       - uses: actions/checkout@v4
@@ -29,9 +31,9 @@ jobs:
         with:
           predicate-quantifier: every
           filters: |
-            # The packed CLI/runtime smoke (macOS, ~5 min) only has to run
-            # when something that ships in the runtime changed; docs, agent
-            # skills, evals and tests do not.
+            # After a merge, the packed CLI/runtime smoke (macOS, 5-8 min)
+            # only has to run when something that ships in the runtime
+            # changed; docs, agent skills, evals and tests do not.
             runtime:
               - '**'
               - '!**/*.md'
@@ -43,6 +45,14 @@ jobs:
               - '!**/__tests__/**'
               - '!**/__fixtures__/**'
               - '!**/__snapshots__/**'
+            # What decides how the runtime is packed, as opposed to what is
+            # in it: the CLI and its staging scripts, the portable build
+            # switch in the editor's Next config, and the dependency set.
+            packaging:
+              - '{packages/cli/**,apps/editor/next.config.ts,apps/editor/package.json,bun.lock,turbo.json,.github/workflows/ci.yml}'
+              - '!**/*.md'
+            viewer:
+              - '{packages/core/**,packages/viewer/**,packages/nodes/**,fixtures/viewer-live/**,scripts/check-viewer-live-fixture.ts,package.json,bun.lock,.github/workflows/ci.yml}'
             # What `bun run skills:validate` reads: the skill bundles, the
             # maintainer skills, plugin evals, every plugin/marketplace manifest
             # and the logos they reference, the root README install lines, and
@@ -51,9 +61,13 @@ jobs:
             skills:
               - '{skills/**,.agents/**,plugin-evals/**,.claude-plugin/**,.codex-plugin/**,.cursor-plugin/**,plugin.json,mcp.json,gemini-extension.json,assets/pascal-mark*.svg,README.md,package.json,scripts/validate-skills.ts,scripts/path-containment*.ts,scripts/*-policy*.ts,.github/workflows/ci.yml}'
 
-  quality:
+  # Lint, localization, skills and types. The three jobs below ran back to
+  # back in one job (7 to 8 min); side by side the gate takes the slowest one.
+  static:
+    name: Lint, i18n, typecheck
     needs: changes
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     permissions:
       contents: read
     steps:
@@ -108,15 +122,95 @@ jobs:
       - name: Type check
         run: bun run check-types
 
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: package.json
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.23.4'
+
+      - name: Turbo cache
+        uses: rharkor/caching-for-turbo@2238fae6eb9a9936f92356f54cb3660200d105e7 # v2.5.1
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
       - name: Test
         run: bun run test
+
+  build:
+    name: Build and smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: package.json
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.23.4'
+
+      - name: Turbo cache
+        uses: rharkor/caching-for-turbo@2238fae6eb9a9936f92356f54cb3660200d105e7 # v2.5.1
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
 
       - name: Build
         run: bun run build
 
+      - name: Check standalone render bundle
+        run: bun run check:render-bundle
+
+      # Serves the build with `next start`: redirects, headers, the proxy,
+      # server rendering, scene route handlers and the image optimizer.
+      - name: Smoke-test the production editor server
+        working-directory: apps/editor
+        timeout-minutes: 5
+        run: bun run smoke
+
+  # The required check (`quality` in the main ruleset, wiki/npm-release.md).
+  # It always runs and passes only when all three jobs above succeeded.
+  quality:
+    needs: [static, test, build]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions: {}
+    steps:
+      - name: Static checks, tests and build succeeded
+        env:
+          STATIC_RESULT: ${{ needs.static.result }}
+          TEST_RESULT: ${{ needs.test.result }}
+          BUILD_RESULT: ${{ needs.build.result }}
+        run: |
+          echo "static: $STATIC_RESULT, test: $TEST_RESULT, build: $BUILD_RESULT"
+          [ "$STATIC_RESULT" = success ] && [ "$TEST_RESULT" = success ] && [ "$BUILD_RESULT" = success ]
+
+  # On a pull request only when the packaging itself changed. In 40 PR runs
+  # this job never failed without `quality` failing too, and it was the
+  # slowest job on every PR; a runtime change is smoked on main right after
+  # the merge, and again by the release workflow before anything is published.
   cli-smoke:
     needs: changes
-    if: needs.changes.outputs.runtime == 'true'
+    if: >-
+      needs.changes.outputs.packaging == 'true' ||
+      (github.event_name == 'push' && needs.changes.outputs.runtime == 'true')
     runs-on: macos-latest
     permissions:
       contents: read
@@ -150,3 +244,25 @@ jobs:
           bun run build
           bun run stage-runtime
           bun run smoke-runtime
+
+  viewer-live:
+    name: Packed live viewer
+    needs: changes
+    if: needs.changes.outputs.viewer == 'true' || github.event_name == 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: package.json
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.23.4'
+      - uses: rharkor/caching-for-turbo@2238fae6eb9a9936f92356f54cb3660200d105e7
+      - run: bun install --frozen-lockfile
+      # The check drives the runner's Google Chrome; install one only where the image lacks it.
+      - run: command -v google-chrome || bunx playwright-core install --with-deps chromium
+      - run: bun run check:viewer-live

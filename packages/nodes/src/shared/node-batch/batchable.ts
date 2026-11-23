@@ -60,3 +60,8 @@ export const perNodeGeometryBatchable: BatchableConfig = {
   scope: 'level',
   batchKey: nodeMeshBatchKey,
 }
+
+/** Parametric furniture that changes only through edits (shelves): its meshes hold still between marks. */
+export const staticBatchable: BatchableConfig = {
+  scope: 'level',
+}

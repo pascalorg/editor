@@ -487,10 +487,11 @@ describe('measure in world space', () => {
   test('the floor-lift flag list matches the built-in definitions that declare floorPlaced', () => {
     // Source scan, like core's metadata-reference inventory: MCP cannot load
     // @pascal-app/nodes (React, three), so keep this list in step with it.
+    // Capabilities live in each kind's render contribution.
     const nodesSrc = join(import.meta.dir, '../../../nodes/src')
     const declared: string[] = []
     for (const dir of readdirSync(nodesSrc)) {
-      const file = join(nodesSrc, dir, 'definition.ts')
+      const file = join(nodesSrc, dir, 'definition.render.ts')
       if (!existsSync(file)) continue
       const source = readFileSync(file, 'utf8')
       const sections = source.split(/\n\s+kind: '/).slice(1)

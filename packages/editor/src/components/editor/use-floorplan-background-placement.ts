@@ -3,6 +3,7 @@
 import {
   emitter,
   type FenceNode,
+  getPlanPointDistance,
   isCurvedWall,
   nodeRegistry,
   type WallNode,
@@ -14,7 +15,7 @@ import {
   useSyncExternalStore,
 } from 'react'
 import { resolveCeilingPlanPointSnap } from '../../lib/ceiling-plan-snap'
-import { alignFloorplanDraftPoint, getPlanPointDistance } from '../../lib/floorplan'
+import { alignFloorplanDraftPoint } from '../../lib/floorplan'
 import { resolveGenericFloorplanGridEventPoint } from '../../lib/floorplan-grid-event-point'
 import { snapRegisteredDraftPoint } from '../../lib/registered-draft-snap'
 import { resolveSlabPlanPointSnap } from '../../lib/slab-plan-snap'

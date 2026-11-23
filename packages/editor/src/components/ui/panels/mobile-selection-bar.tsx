@@ -12,8 +12,8 @@ interface MobileSelectionBarProps {
   node: AnyNode | null
   label?: string
   icon?: string
-  onMove: () => void
-  onDuplicate: () => void
+  onMove?: () => void
+  onDuplicate?: () => void
   onDelete: () => void
   onEdit: () => void
 }
@@ -58,28 +58,32 @@ export function MobileSelectionBar({
       </button>
 
       <div className="flex items-center gap-0.5 border-border/40 border-l pl-1">
-        <button
-          aria-label={i18n._({ id: 'editor.panels.mobileSelectionBar.move', message: 'Move' })}
-          className={ACTION_BTN}
-          onClick={(e) => {
-            stop(e)
-            onMove()
-          }}
-          type="button"
-        >
-          <Move className="h-4 w-4" />
-        </button>
-        <button
-          aria-label={i18n._({ id: 'editor.panels.mobileSelectionBar.duplicate', message: 'Duplicate' })}
-          className={ACTION_BTN}
-          onClick={(e) => {
-            stop(e)
-            onDuplicate()
-          }}
-          type="button"
-        >
-          <Copy className="h-4 w-4" />
-        </button>
+        {onMove && (
+          <button
+            aria-label={i18n._({ id: 'editor.panels.mobileSelectionBar.move', message: 'Move' })}
+            className={ACTION_BTN}
+            onClick={(e) => {
+              stop(e)
+              onMove()
+            }}
+            type="button"
+          >
+            <Move className="h-4 w-4" />
+          </button>
+        )}
+        {onDuplicate && (
+          <button
+            aria-label={i18n._({ id: 'editor.panels.mobileSelectionBar.duplicate', message: 'Duplicate' })}
+            className={ACTION_BTN}
+            onClick={(e) => {
+              stop(e)
+              onDuplicate()
+            }}
+            type="button"
+          >
+            <Copy className="h-4 w-4" />
+          </button>
+        )}
         <button
           aria-label={i18n._({ id: 'editor.panels.mobileSelectionBar.delete', message: 'Delete' })}
           className={cn(

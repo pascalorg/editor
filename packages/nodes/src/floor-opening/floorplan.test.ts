@@ -9,11 +9,11 @@ import {
 } from '@pascal-app/core'
 import {
   buildFloorOpeningFloorplan,
-  floorOpeningMoveVertexAffordance,
   moveRectangleEdge,
   openingRectangle,
   resizeRectangleCorner,
 } from './floorplan'
+import { floorOpeningMoveVertexAffordance } from './floorplan-affordances'
 
 const opening = FloorOpeningNode.parse({
   polygon: [

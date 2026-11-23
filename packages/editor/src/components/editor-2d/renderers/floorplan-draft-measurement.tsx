@@ -19,6 +19,7 @@ export type DraftMeasurement = {
 }
 
 export function FloorplanDraftMeasurement({
+  lengthHidden = false,
   measurement,
   measurementStroke,
   labelBackground,
@@ -26,6 +27,8 @@ export function FloorplanDraftMeasurement({
   sceneRotationDeg,
   unitsPerPixel,
 }: {
+  /** Leave the length plate to something drawn in its place (the typed-entry HUD). */
+  lengthHidden?: boolean
   measurement: DraftMeasurement
   measurementStroke: string
   labelBackground: string
@@ -68,7 +71,10 @@ export function FloorplanDraftMeasurement({
 
   return (
     <g pointerEvents="none">
-      <g transform={`translate(${cx} ${cy}) rotate(${labelAngleDeg})`}>
+      <g
+        display={lengthHidden ? 'none' : undefined}
+        transform={`translate(${cx} ${cy}) rotate(${labelAngleDeg})`}
+      >
         <rect
           fill={labelBg}
           height={lengthPlateH}

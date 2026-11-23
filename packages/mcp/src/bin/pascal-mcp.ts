@@ -4,6 +4,7 @@ import '../bridge/node-shims'
 
 import { readFileSync } from 'node:fs'
 import { parseArgs } from 'node:util'
+import { sdfChecksFromEnv, setSdfChecks } from '@pascal-app/core/usage-field'
 import { SceneBridge } from '../bridge/scene-bridge'
 import { version } from '../index'
 import { createPascalMcpServer } from '../server'
@@ -54,6 +55,7 @@ async function main(): Promise<void> {
     process.exit(0)
   }
 
+  setSdfChecks(sdfChecksFromEnv(process.env.PASCAL_SDF_CHECKS))
   const store = await createSceneStore()
   const createServer = () => {
     const bridge = new SceneBridge()

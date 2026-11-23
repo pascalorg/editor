@@ -1,4 +1,5 @@
 import type { GeometryScriptParamValue } from '@pascal-app/core'
+import { sdfChecksOn } from '@pascal-app/core/usage-field'
 import type { GeometryScriptCompileOutput } from '@pascal-app/geometry-script'
 import type { GeometryScriptWorkerRequest, GeometryScriptWorkerResponse } from './protocol'
 
@@ -148,6 +149,8 @@ export async function compileGeometryScriptInWorker(input: {
     code: input.code,
     params: input.params,
     inputs: input.inputs,
+    // the sandbox is its own context: the flag travels with the request, only when it is on
+    ...(sdfChecksOn() ? { usageShape: true } : {}),
   }
   return new Promise((resolve, reject) => {
     const timeout = setTimeout(() => {

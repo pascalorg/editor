@@ -4,6 +4,7 @@ import {
   type AnyNodeDefinition,
   BuildingNode,
   type FloorplanGeometry,
+  floorplanGeometryMetadata,
   type GeometryContext,
   LevelNode,
   loadPlugin,
@@ -36,7 +37,6 @@ import {
   resolveFloorplanScreenUnitsPerPixel,
   rotateFloorplanExportBounds,
 } from './floorplan-export'
-import { floorplanGeometryMetadata } from './floorplan-extension'
 import { FloorplanPdfDocument, loadFloorplanPdfFonts } from './floorplan-pdfkit-document'
 import { renderFloorplanGeometryToPdfKit } from './floorplan-pdfkit-renderer'
 

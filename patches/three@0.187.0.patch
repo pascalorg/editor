@@ -1,0 +1,69 @@
+diff --git a/build/three.webgpu.js b/build/three.webgpu.js
+index f8fc49fe7df98cbac4609603a1f2a2c6aea79675..4fe2bf59decdd8c6dfea6bb4f4d04dae79237ab5 100644
+--- a/build/three.webgpu.js
++++ b/build/three.webgpu.js
+@@ -32535,7 +32535,7 @@ class WebGLState {
+ 
+ 		let needsUpdate = false;
+ 
+-		if ( renderContext.textures !== null ) {
++		if ( renderContext.textures !== null && framebuffer !== null ) {
+ 
+ 			drawBuffers = this.currentDrawbuffers.get( framebuffer );
+ 
+diff --git a/build/three.webgpu.nodes.js b/build/three.webgpu.nodes.js
+index 39c897cb2f5f2092419c2cd4f464a88f1151d7d0..ee3c6093a557e44f01ec7e376573a18a582a6721 100644
+--- a/build/three.webgpu.nodes.js
++++ b/build/three.webgpu.nodes.js
+@@ -15805,7 +15805,11 @@ const cameraPosition = /*@__PURE__*/ ( Fn( ( { camera, renderer } ) => {
+ 
+ 			}
+ 
+-			return uniformArray( positions ).setGroup( renderGroup ).setName( 'cameraPositions' ).onRenderUpdate( ( { camera }, self ) => {
++			return uniformArray( positions ).setGroup( renderGroup ).setName( 'cameraPositions' ).onRenderUpdate( ( frame, self ) => {
++
++				if ( frame === undefined ) return;
++
++				const { camera } = frame;
+ 
+ 				const subCameras = camera.cameras;
+ 				const array = self.array;
+@@ -73737,7 +73741,7 @@ class WebGLState {
+ 
+ 		let needsUpdate = false;
+ 
+-		if ( renderContext.textures !== null ) {
++		if ( renderContext.textures !== null && framebuffer !== null ) {
+ 
+ 			drawBuffers = this.currentDrawbuffers.get( framebuffer );
+ 
+diff --git a/src/nodes/accessors/Camera.js b/src/nodes/accessors/Camera.js
+index 847c10b0f6b57a83f70c5319a9337194c7c88bd7..fdf1759c08f53367af3f1fdf6e8cf98d4ec23db6 100644
+--- a/src/nodes/accessors/Camera.js
++++ b/src/nodes/accessors/Camera.js
+@@ -328,7 +328,11 @@ export const cameraPosition = /*@__PURE__*/ ( Fn( ( { camera, renderer } ) => {
+ 
+ 			}
+ 
+-			return uniformArray( positions ).setGroup( renderGroup ).setName( 'cameraPositions' ).onRenderUpdate( ( { camera }, self ) => {
++			return uniformArray( positions ).setGroup( renderGroup ).setName( 'cameraPositions' ).onRenderUpdate( ( frame, self ) => {
++
++				if ( frame === undefined ) return;
++
++				const { camera } = frame;
+ 
+ 				const subCameras = camera.cameras;
+ 				const array = self.array;
+diff --git a/src/renderers/webgl-fallback/utils/WebGLState.js b/src/renderers/webgl-fallback/utils/WebGLState.js
+index 036f0f367c3ca578119245c1c2c8205088474333..7a00aa0a3244a719c9b13df20db6227fdb2952ea 100644
+--- a/src/renderers/webgl-fallback/utils/WebGLState.js
++++ b/src/renderers/webgl-fallback/utils/WebGLState.js
+@@ -1179,7 +1179,7 @@ class WebGLState {
+ 
+ 		let needsUpdate = false;
+ 
+-		if ( renderContext.textures !== null ) {
++		if ( renderContext.textures !== null && framebuffer !== null ) {
+ 
+ 			drawBuffers = this.currentDrawbuffers.get( framebuffer );
+ 

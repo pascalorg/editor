@@ -101,3 +101,11 @@ describe('getRoofSurfaceFaceBoundsAt', () => {
     expect(center).toBeGreaterThan(waist)
   })
 })
+
+test('changing a Dutch rake updates the accessory face extent after a cached query', () => {
+  const node = fixtureSegment({ roofType: 'dutch', width: 12, depth: 8, dutchGabletRake: 0 })
+  const before = getRoofSurfaceFaceBoundsAt(node, 0, 3)
+  const after = getRoofSurfaceFaceBoundsAt({ ...node, dutchGabletRake: 0.8 }, 0, 3)
+  expect(after.polygon).not.toEqual(before.polygon)
+  expect(getRoofSurfaceFaceBoundsAt(node, 0, 3).maxX).toBe(before.maxX)
+})

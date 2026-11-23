@@ -19,8 +19,8 @@ import {
   buildRectSection,
   buildSection,
   createDuctMaterial,
-  INCHES_TO_METERS,
 } from '../duct-segment/geometry'
+import { INCHES_TO_METERS } from '../duct-segment/profile'
 import { buildDuctAccessory } from './accessory-geometry'
 import { adapterShape, localFittingPorts } from './ports'
 import type { DuctFittingNode } from './schema'

@@ -6,7 +6,7 @@ import { cn } from '../../../lib/utils'
 import useEditor from '../../../store/use-editor'
 import { usePointAsk } from '../../../store/use-point-ask'
 import { isViewVisible, VIEW_3D } from '../../../store/view-layout'
-import { ActionButton } from './action-button'
+import { ActionButton } from '@pascal-app/viewer/ui'
 
 /**
  * Point and ask (key C): the toolbar's way into the mode where hovering names what Pascal would

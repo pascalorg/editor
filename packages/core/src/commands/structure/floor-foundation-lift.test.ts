@@ -516,3 +516,24 @@ test('a tiny room carried under the upper storey retains its own floor step', ()
     plan.changes.find((change) => change.op === 'update' && change.id === zone.id),
   ).toMatchObject({ data: { floor: { elevation: 0.75 } } })
 })
+
+test('a floor extended over an unraised shed raises its walls to meet it, not its floor', () => {
+  const nodes = scene()
+  const raised = apply(
+    nodes,
+    setFloorFoundation(nodes, { slabId: base(nodes).id, patch: { floorHeight: 0.55 } }),
+  )
+  const extended = reconcileStructureOnLoad({
+    ...raised,
+    slab_1: { ...raised.slab_1, polygon: rect(0, 14) } as AnyNode,
+  }).nodes
+  const shedWall = extended.wall_lift1_0 as WallNode
+  expect(getLevelElevations(extended).get('level_lift1')!.baseY).toBe(3.5)
+  expect(getWallPlaneTop(shedWall, shedWall.parentId!, extended)).toBeCloseTo(3.5)
+  expect(base(extended, 'zone_lift1').floorHeight).toBeUndefined()
+  expect(wallSupportForNodes(shedWall, extended).elevation).toBeCloseTo(
+    wallSupportForNodes(shedWall, nodes).elevation,
+  )
+  // With nothing above it, the shed keeps its own storey height.
+  expect(getWallPlaneTop(shedWall, shedWall.parentId!, raised)).toBe(3)
+})

@@ -14,7 +14,7 @@ import {
 } from '@pascal-app/core'
 import { addAfterEffect, invalidate } from '@react-three/fiber'
 import * as THREE from 'three'
-import { float, mix, positionViewDirection, transformedNormalView } from 'three/tsl'
+import { float, mix, normalView, positionViewDirection } from 'three/tsl'
 import { MeshLambertNodeMaterial, MeshStandardNodeMaterial } from 'three/webgpu'
 
 import { resolveCdnUrl } from './asset-url'
@@ -536,7 +536,9 @@ export function materialCastsShadow(material: THREE.Material | THREE.Material[])
  * This is what makes glass read as a surface instead of a flat blue tint.
  */
 function applyGlassFresnel(material: MeshStandardNodeMaterial) {
-  const facing = transformedNormalView.dot(positionViewDirection).clamp(0, 1)
+  // The daylight look swaps in its tuned glass for flagged materials (lib/daylight/material-hooks).
+  material.userData.isGlass = true
+  const facing = normalView.dot(positionViewDirection).clamp(0, 1)
   const fresnel = facing.oneMinus().pow(3)
   material.opacityNode = mix(float(material.opacity), float(0.92), fresnel)
   material.envMapIntensity = 1.4

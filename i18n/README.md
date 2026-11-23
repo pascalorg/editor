@@ -32,6 +32,22 @@ The source and translated catalogs are PO files under
 catalogs next to them are what the browser loads; PO files and the ICU compiler
 are not part of the normal rendering path.
 
+Extraction and compilation also emit
+`packages/core/src/i18n/english-formatting-fallback.ts`. It contains English
+entries used by core, viewer (including `viewer/ui`) and nodes whose compiled
+form is not exactly `[message]`: placeholders, selects, plurals and ICU escapes
+that change the source text. Plain messages render directly from the `message`
+supplied by their call sites, so they do not need eager catalog entries.
+Core loads this small compiled fallback automatically, so viewer-only hosts need
+no provider or registration, including in production. The editor still
+registers its complete English catalog over the fallback. Both catalogs are
+generated from the existing PO source and checked for drift by `i18n:check`.
+Built-in display code must supply both `id` and English `message`, including
+when passing descriptors from label maps or node-definition helpers.
+Other languages still require registered locale packs. Without one, selecting
+another locale in a viewer-only host shows formatted English text and uses the
+selected locale for number formatting.
+
 After adding or changing a runtime message:
 
 1. Run `bun run i18n:extract`. Lingui updates the PO catalogs and compiled
@@ -79,6 +95,9 @@ CI and releases allow drafts, never regressions:
   it falls back to `origin/main` if that is another commit with catalogs, then
   to the commit that introduced the catalogs. It never compares with a base
   that has no catalogs: with none available it fails and asks for `--base`.
+  A locale bundled after the base has no catalog there, and so no reviewed
+  entries to keep: the release job lists it as new and still scans its
+  compiled pack.
   It fails when a reviewed entry with the same English became a draft, or when
   a compiled pack contains any draft. Both jobs write the per-locale draft
   count, and the base used, to the job summary.

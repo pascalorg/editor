@@ -1,6 +1,7 @@
 import { spawn } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 import type { CompiledGeometryScript } from '@pascal-app/core'
+import { sdfChecksOn } from '@pascal-app/core/usage-field'
 import { compileBlenderBuild } from '@pascal-app/geometry-script/blender'
 import { runBlenderLocally } from '@pascal-app/geometry-script/blender-local'
 import { DiskArtifactStore } from '../storage/disk-artifact-store'
@@ -20,7 +21,11 @@ export function localGeometryScripts(projectPath: string): GeometryScriptHost {
         if (!blender)
           throw new Error('bpy scripts need PASCAL_BLENDER, the path to a Blender binary')
         const run = await runBlenderLocally({ blender, code: input.code, params: input.params })
-        const { glb, ...compiled } = await compileBlenderBuild({ ...input, run })
+        const { glb, ...compiled } = await compileBlenderBuild({
+          ...input,
+          run,
+          ...(sdfChecksOn() ? { usageShape: true } : {}),
+        })
         return { ...compiled, glb: new Uint8Array(glb) }
       }
       if (process.env.PASCAL_SERVER_SCRIPT_COMPILE !== '1') {
@@ -62,7 +67,9 @@ export function localGeometryScripts(projectPath: string): GeometryScriptHost {
             reject(new Error(`Geometry script compilation failed: ${stderr}`))
           }
         })
-        child.stdin.end(JSON.stringify(input))
+        child.stdin.end(
+          JSON.stringify({ ...input, ...(sdfChecksOn() ? { usageShape: true } : {}) }),
+        )
       })
     },
     storeArtifact: async ({ sha256, bytes }) => {

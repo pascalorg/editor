@@ -152,6 +152,7 @@ and `save_scene`; the scene is openable at `/scene/<id>`.
 ## Cross-cutting changes
 
 Documented in [`packages/mcp/CROSS_CUTTING.md`](./CROSS_CUTTING.md):
+
 1. **`packages/core/package.json` — additive subpath exports.** Adds `./schema`, `./store`, `./material-library`, `./spatial-grid`, `./wall`. Needed because the main entry re-exports browser-only systems; subpath entries let Node consumers skip them. Zero impact on existing consumers (`apps/editor`, `@pascal-app/viewer` still use the main entry).
 2. **`.github/workflows/mcp-ci.yml` — new CI.** Kept because the repo otherwise only has manual release CI. It runs on PRs touching MCP/core/editor scene API code; installs with Bun 1.3.0, builds MCP, runs MCP tests, runs focused editor scene API tests, and biome-checks the touched surface.
 3. **`apps/editor` scene routes.** Adds scene API routes and pages that read from the same SQLite-backed `SceneOperations` layer as MCP.

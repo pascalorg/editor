@@ -1,7 +1,9 @@
 // @ts-expect-error — bun:test is provided by the Bun runtime; viewer does not
 // include Bun ambient types in its production declaration build.
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import useViewer, { anyGroundVeiled, groundVeiled, siteGroundShown } from './use-viewer'
+import { useViewer } from '../index'
+import { resolveDaylightSite } from '../lib/daylight/location'
+import { groundVeiled, siteGroundShown } from './use-viewer'
 
 const resetMeasurementPreferences = () => {
   useViewer.setState({
@@ -180,12 +182,6 @@ describe('the ground over a level below grade', () => {
 
   test('is solid in the walkthrough, whatever level the overview had shown', () => {
     expect(groundVeiled({ ...below, walkthroughMode: true })).toBe(false)
-    expect(anyGroundVeiled({ ...below, groundWindowVeiled: true, walkthroughMode: true })).toBe(
-      false,
-    )
-    expect(anyGroundVeiled({ ...below, groundWindowVeiled: true, walkthroughMode: false })).toBe(
-      true,
-    )
   })
 })
 
@@ -226,10 +222,11 @@ describe('project rendering defaults', () => {
     expect(useViewer.getState().lookDefaults).toMatchObject({ theme: 'paper', edges: 'strong' })
     expect(useViewer.getState().projectPreferences['look-a']?.look).toBeUndefined()
     store.setProjectId('look-b')
+    // Edges are on or off (a saved 'strong' reads as on); Solid is retired into the quality tiers.
     expect(useViewer.getState()).toMatchObject({
       sceneTheme: 'paper',
-      edges: 'strong',
-      shading: 'solid',
+      edges: 'soft',
+      shading: 'rendered',
     })
   })
 
@@ -253,7 +250,8 @@ describe('project rendering defaults', () => {
     expect(useViewer.getState()).toMatchObject({
       sceneTheme: 'night',
       edges: 'soft',
-      shading: 'solid',
+      shading: 'rendered',
+      renderQuality: 'low',
     })
     store.resetProjectLook()
     expect(useViewer.getState()).toMatchObject({
@@ -286,9 +284,10 @@ describe('project rendering defaults', () => {
     store.setShading('solid')
     expect(useViewer.getState()).toMatchObject({
       sceneTheme: 'night',
-      edges: 'strong',
+      edges: 'soft',
       shadows: false,
-      shading: 'solid',
+      shading: 'rendered',
+      renderQuality: 'low',
     })
     store.resetProjectLook()
     expect(useViewer.getState()).toMatchObject({
@@ -316,6 +315,235 @@ describe('the site ground with showGround off', () => {
     for (const showGround of [undefined, true]) {
       expect(siteGroundShown({ showGround }, { belowGrade: false })).toBe(true)
       expect(siteGroundShown({ showGround }, { belowGrade: true })).toBe(true)
+    }
+  })
+})
+
+describe('render quality', () => {
+  const original = useViewer.getState()
+  afterEach(() => useViewer.setState(original, true))
+
+  test('auto follows the detected tier; a pick holds until auto is chosen again', () => {
+    const store = useViewer.getState()
+    store.setRenderQuality('auto')
+    store.setDetectedRenderQuality('low')
+    expect(useViewer.getState().renderQuality).toBe('low')
+    store.setRenderQuality('high')
+    store.setDetectedRenderQuality('medium')
+    expect(useViewer.getState()).toMatchObject({
+      renderQuality: 'high',
+      renderQualityChoice: 'high',
+    })
+    store.setRenderQuality('auto')
+    expect(useViewer.getState().renderQuality).toBe('medium')
+  })
+})
+
+test('denied preference storage does not block hydration or presentation changes', async () => {
+  const savedWindow = Object.getOwnPropertyDescriptor(globalThis, 'window')
+  try {
+    for (const storage of [
+      {
+        get localStorage(): Storage {
+          throw new DOMException('Denied', 'SecurityError')
+        },
+      },
+      {
+        localStorage: {
+          getItem() {
+            throw new DOMException('Denied', 'SecurityError')
+          },
+          setItem() {
+            throw new DOMException('Full', 'QuotaExceededError')
+          },
+          removeItem() {
+            throw new DOMException('Denied', 'SecurityError')
+          },
+        },
+      },
+    ]) {
+      Object.defineProperty(globalThis, 'window', { configurable: true, value: storage })
+      await useViewer.persist.rehydrate()
+      useViewer.getState().setShowMeasurements(false)
+      expect(useViewer.getState().showMeasurements).toBe(false)
+      useViewer.getState().setShowMeasurements(true)
+      expect(useViewer.getState().showMeasurements).toBe(true)
+      expect(() => useViewer.persist.clearStorage()).not.toThrow()
+    }
+  } finally {
+    if (savedWindow) Object.defineProperty(globalThis, 'window', savedWindow)
+    else Reflect.deleteProperty(globalThis, 'window')
+  }
+})
+
+describe('daylight presentation', () => {
+  const original = useViewer.getState()
+  afterEach(() => useViewer.setState(original, true))
+
+  test('an empty scene uses the host site; null preserves scene facts and location precedence', () => {
+    const store = useViewer.getState()
+    store.setDaylightSite({ northRotation: 1.2, lat: -33.87, lng: 151.21 })
+    expect(resolveDaylightSite(undefined, useViewer.getState().daylightSite, null)).toEqual({
+      northRotation: 1.2,
+      location: { lat: -33.87, lng: 151.21 },
+      source: 'site',
+    })
+    store.setDaylightSite(null)
+    const site = {
+      northRotation: 0.7,
+      parcel: { originLngLat: [2.35, 48.86] as const },
+      dossier: { point: { lat: 1, lng: 2 } },
+    }
+    expect(
+      resolveDaylightSite(site, useViewer.getState().daylightSite, { lat: 10, lng: 20 }),
+    ).toEqual({
+      northRotation: 0.7,
+      location: { lat: 48.86, lng: 2.35 },
+      source: 'site',
+    })
+    store.setDaylightSite({ northRotation: 2 })
+    expect(
+      resolveDaylightSite(site, useViewer.getState().daylightSite, { lat: 10, lng: 20 }),
+    ).toEqual({
+      northRotation: 2,
+      location: { lat: 10, lng: 20 },
+      source: 'device',
+    })
+  })
+
+  test('project changes reset the override; rerendering the same project retains it', () => {
+    const store = useViewer.getState()
+    store.setProjectId('sun-a')
+    store.setDaylightSite({ northRotation: 1 })
+    store.setProjectId('sun-a')
+    expect(useViewer.getState().daylightSite).toEqual({ northRotation: 1 })
+    store.setProjectId('sun-b')
+    expect(useViewer.getState().daylightSite).toBeNull()
+  })
+
+  test('all presets survive storage reloads, and the site override is never persisted', async () => {
+    const savedWindow = Object.getOwnPropertyDescriptor(globalThis, 'window')
+    const values = new Map<string, string>()
+    Object.defineProperty(globalThis, 'window', {
+      configurable: true,
+      value: {
+        localStorage: {
+          getItem: (key: string) => values.get(key) ?? null,
+          setItem: (key: string, value: string) => values.set(key, value),
+          removeItem: (key: string) => values.delete(key),
+        },
+      },
+    })
+    try {
+      for (const preset of ['dawn', 'golden', 'midday', 'blue', 'night'] as const) {
+        useViewer.getState().setDaylightSite({ northRotation: 1 })
+        useViewer.getState().setTimeOfDay(preset)
+        const persisted = values.get('viewer-preferences')!
+        expect(JSON.parse(persisted).state.daylightSite).toBeUndefined()
+        useViewer.setState({ timeOfDay: 'midday', daylightSite: null })
+        values.set('viewer-preferences', persisted)
+        await useViewer.persist.rehydrate()
+        expect(useViewer.getState().timeOfDay).toBe(preset)
+        expect(useViewer.getState().daylightSite).toBeNull()
+      }
+    } finally {
+      if (savedWindow) Object.defineProperty(globalThis, 'window', savedWindow)
+      else Reflect.deleteProperty(globalThis, 'window')
+    }
+  })
+})
+
+describe('section presentation', () => {
+  const defaults = {
+    sectionEnabled: false,
+    sectionAxis: 'y',
+    sectionPosition: 0,
+    sectionFlipped: false,
+    sectionShadows: 'full' as const,
+  }
+  afterEach(() => useViewer.setState(defaults))
+
+  test('defaults, setters and project changes are transient presentation', () => {
+    const viewer = useViewer.getState()
+    viewer.setProjectId('section-a')
+    expect(useViewer.getState()).toMatchObject(defaults)
+    viewer.setSectionEnabled(true)
+    viewer.setSectionShadows('cut')
+    viewer.setSectionAxis('z')
+    viewer.setSectionPosition(4.5)
+    viewer.setSectionFlipped(true)
+    expect(useViewer.getState()).toMatchObject({
+      sectionEnabled: true,
+      sectionAxis: 'z',
+      sectionPosition: 4.5,
+      sectionFlipped: true,
+      sectionShadows: 'cut',
+    })
+    viewer.setProjectId('section-a')
+    expect(useViewer.getState().sectionEnabled).toBe(true)
+    viewer.setProjectId('section-b')
+    expect(useViewer.getState()).toMatchObject(defaults)
+    viewer.setProjectId('section-a')
+    expect(useViewer.getState()).toMatchObject(defaults)
+  })
+
+  test('no section field is written to preference storage', () => {
+    const savedWindow = Object.getOwnPropertyDescriptor(globalThis, 'window')
+    let persisted = ''
+    Object.defineProperty(globalThis, 'window', {
+      configurable: true,
+      value: {
+        localStorage: {
+          getItem: () => null,
+          setItem: (_key: string, value: string) => {
+            persisted = value
+          },
+          removeItem: () => {},
+        },
+      },
+    })
+    try {
+      const viewer = useViewer.getState()
+      viewer.setSectionEnabled(true)
+      viewer.setSectionShadows('cut')
+      viewer.setSectionAxis('x')
+      viewer.setSectionPosition(12)
+      viewer.setSectionFlipped(true)
+      const state = JSON.parse(persisted).state
+      for (const key of Object.keys(defaults)) expect(state).not.toHaveProperty(key)
+    } finally {
+      if (savedWindow) Object.defineProperty(globalThis, 'window', savedWindow)
+      else Reflect.deleteProperty(globalThis, 'window')
+    }
+  })
+})
+
+describe('family presentation', () => {
+  afterEach(() => useViewer.getState().setXrayFamily(null))
+  test('defaults to no family, retains it for the same project and resets on project change', () => {
+    const viewer = useViewer.getState()
+    expect(useViewer.getInitialState().xrayFamily).toBeNull()
+    viewer.setProjectId('xray-a')
+    viewer.setXrayFamily('items')
+    viewer.setProjectId('xray-a')
+    expect(useViewer.getState().xrayFamily).toBe('items')
+    viewer.setProjectId('xray-b')
+    expect(useViewer.getState().xrayFamily).toBeNull()
+    viewer.setProjectId('xray-a')
+    expect(useViewer.getState().xrayFamily).toBeNull()
+  })
+  test('family is omitted from preference storage', () => {
+    const storage = useViewer.persist.getOptions().storage!
+    const original = storage.setItem
+    let written: any
+    storage.setItem = (_key, value) => {
+      written = value
+    }
+    try {
+      useViewer.getState().setXrayFamily('items')
+      expect(written.state).not.toHaveProperty('xrayFamily')
+    } finally {
+      storage.setItem = original
     }
   })
 })

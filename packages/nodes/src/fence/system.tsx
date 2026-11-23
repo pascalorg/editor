@@ -142,8 +142,24 @@ const FenceSystems = () => {
     }
   }, [])
 
+  const followers = useRef<{ nodes: unknown; any: boolean }>({ nodes: null, any: false })
+
   useFrame(() => {
     const nodes = useScene.getState().nodes
+    // Only a fence that follows surfaces cares when their geometry swaps. Without one there is
+    // nothing to watch; a follower added later is marked on creation and builds on what is there.
+    if (followers.current.nodes !== nodes) {
+      followers.current = {
+        nodes,
+        any: Object.values(nodes).some(
+          (node) => node.type === 'fence' && followsSurfaces(node as FenceNode),
+        ),
+      }
+    }
+    if (!followers.current.any) {
+      outputs.current.clear()
+      return
+    }
     const changedLevels = new Set<AnyNodeId>()
     for (const [id, level] of levels.current) {
       const root = sceneRegistry.nodes.get(id as AnyNodeId)

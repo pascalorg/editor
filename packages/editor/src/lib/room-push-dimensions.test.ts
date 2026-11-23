@@ -2,11 +2,11 @@ import { describe, expect, test } from 'bun:test'
 import {
   type AnyNode,
   createRoomTopologyIndex,
+  formatLinearMeasurement,
   LevelNode,
   type Point,
   WallNode,
 } from '@pascal-app/core'
-import { formatLinearMeasurement } from './measurements'
 import {
   DIMENSION_FLOOR_LIFT,
   mezzanineEdgeDimensions,

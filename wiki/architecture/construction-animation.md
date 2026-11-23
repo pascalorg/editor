@@ -1,6 +1,6 @@
 # Construction animation
 
-What the construction reveal (see [systems](systems.md), "Construction reveal") adds on top of staging a build phase by phase: the weight of a landing, the events a host listens to, the roof that lifts out of the way of the furniture, the build played in reverse for an undo, and Follow Pascal, the camera that follows the build. The engine is `packages/viewer/src/systems/construction-reveal`; Follow Pascal is in `packages/editor` (`src/lib/follow-pascal*.ts`, `src/components/editor/follow-pascal.tsx`, `src/store/use-follow-pascal.ts`).
+What the construction reveal (see [systems](systems.md), "Construction reveal") adds on top of staging a build phase by phase: the weight of a landing, the events a host listens to, the roof that lifts out of the way of the furniture, the build played in reverse for an undo, and Follow Pascal, the camera that follows the build. The engine is `packages/viewer/src/systems/construction-reveal`; Follow Pascal is in `packages/editor` (`src/lib/follow-pascal*.ts`, `src/components/editor/follow-pascal.tsx`); its switch and store (`useFollowPascal`, `FollowPascalToggle`) are in `@pascal-app/viewer/ui`.
 
 ## One rhythm: the reveal says what it is doing
 

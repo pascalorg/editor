@@ -46,6 +46,7 @@ import villaAurelia from '../../lib/__fixtures__/owner-villa-aurelia-basement.js
 import {
   atCaptureSize,
   captureDimensions,
+  captureHiddenTypes,
   capturesOrthographically,
   exteriorGroundForCapture,
   interiorCutaway,
@@ -205,31 +206,38 @@ describe('a sheet capture session', () => {
     const viewer = useViewer.getState()
     viewer.setWallMode('down')
     viewer.setLevelMode('exploded')
-    viewer.setShading('solid')
+    viewer.setRenderQuality('low')
     viewer.setTextures(false)
     viewer.setColorPreset('white')
+    viewer.setTimeOfDay('night')
+    viewer.setWeather('overcast')
     const view = () => {
-      const { wallMode, levelMode, shading, textures, colorPreset } = useViewer.getState()
-      return { wallMode, levelMode, shading, textures, colorPreset }
+      const { wallMode, levelMode, renderQuality, textures, colorPreset, timeOfDay, weather } =
+        useViewer.getState()
+      return { wallMode, levelMode, renderQuality, textures, colorPreset, timeOfDay, weather }
     }
-    // the shading stays the user's: the capture brings its own AO
+    // the quality stays the user's: the capture brings its own AO
 
     const restore = presentFinished()
     expect(view()).toEqual({
       wallMode: 'up',
       levelMode: 'stacked',
-      shading: 'solid',
+      renderQuality: 'low',
       textures: true,
       colorPreset: 'clay',
+      timeOfDay: 'midday',
+      weather: 'fair',
     })
 
     restore()
     expect(view()).toEqual({
       wallMode: 'down',
       levelMode: 'exploded',
-      shading: 'solid',
+      renderQuality: 'low',
       textures: false,
       colorPreset: 'white',
+      timeOfDay: 'night',
+      weather: 'overcast',
     })
   })
 
@@ -239,6 +247,8 @@ describe('a sheet capture session', () => {
     viewer.setLevelMode('stacked')
     viewer.setTextures(true)
     viewer.setColorPreset('clay')
+    viewer.setTimeOfDay('midday')
+    viewer.setWeather('fair')
     let writes = 0
     const unsubscribe = useViewer.subscribe(() => {
       writes++
@@ -650,5 +660,28 @@ describe("a capture's projection", () => {
     expect(capturesOrthographically({}, user.ortho)).toBe(true)
     expect(capturesOrthographically({}, user.perspective)).toBe(false)
     expect(capturesOrthographically({ snapLevels: true }, user.ortho)).toBe(false)
+  })
+})
+
+describe('what a capture leaves out', () => {
+  const view: { position: [number, number, number]; target: [number, number, number] } = {
+    position: [0, 10, 10],
+    target: [0, 0, 0],
+  }
+
+  test("a picture of the person's own view keeps the scans it shows", () => {
+    // Else a project that holds only a scan saves an empty frame as its thumbnail.
+    expect(captureHiddenTypes({})).toEqual(['guide', 'spawn'])
+    expect(captureHiddenTypes({ hideTypes: ['site'] })).toEqual(['guide', 'spawn', 'site'])
+  })
+
+  test('a view the caller poses itself is of the built house alone', () => {
+    expect(captureHiddenTypes({ ortho: { ...view, viewWidth: 20 } })).toContain('scan')
+    expect(captureHiddenTypes({ perspective: view })).toContain('scan')
+    expect(
+      captureHiddenTypes({
+        cameraPose: { position: [0, 1, 0], quaternion: [0, 0, 0, 1], fov: 50 },
+      }),
+    ).toContain('scan')
   })
 })

@@ -1,7 +1,7 @@
 import { type AnyNodeId, usePascalI18n, useScene } from '@pascal-app/core'
 import { Pencil } from 'lucide-react'
 import { memo, useCallback, useEffect, useRef, useState } from 'react'
-import { displayRoomName } from './../../../../../lib/room-name-messages'
+import { displayRoomName } from '@pascal-app/viewer/ui'
 import { cn } from './../../../../../lib/utils'
 import { commitTreeRoomRename } from './../../../panels/room-name-options'
 

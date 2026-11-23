@@ -6,6 +6,7 @@ import {
   setupI18n,
   type Values,
 } from '@lingui/core'
+import { messages as englishFormattingFallback } from './english-formatting-fallback'
 
 /** @experimental Unreleased API; signatures may change before the first i18n release. */
 export type TranslationParams = Record<string, string | number>
@@ -16,7 +17,7 @@ export type TranslationMessages = Record<string, TranslationMessage>
 /** @experimental Unreleased API; signatures may change before the first i18n release. */
 export type CompiledTranslationMessages = Messages
 
-const catalogs = new Map<string, Messages>()
+const catalogs = new Map<string, Messages>([['en', { ...englishFormattingFallback }]])
 const scopes = new Set<PascalI18n>()
 const warnedMissingKeys = new Set<string>()
 

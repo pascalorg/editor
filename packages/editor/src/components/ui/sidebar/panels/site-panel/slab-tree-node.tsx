@@ -2,7 +2,7 @@ import { type AnyNodeId, type SlabNode, usePascalI18n, useScene } from '@pascal-
 import { useViewer } from '@pascal-app/viewer'
 import Image from 'next/image'
 import { memo, useCallback, useState } from 'react'
-import { formatAreaLabel } from './../../../../../lib/measurements'
+import { formatAreaLabel } from '@pascal-app/core'
 import { InlineRenameInput } from './inline-rename-input'
 import { focusTreeNode, handleTreeSelection, TreeNodeWrapper } from './tree-node'
 import { TreeNodeActions } from './tree-node-actions'

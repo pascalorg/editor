@@ -1,25 +1,23 @@
 import {
   type AnyNode,
   area,
+  formatLinearMeasurement,
+  getAreaUnitLabel,
   getScaledDimensions,
   getWallCurveLength,
   getWallEffectiveHeightForNodes,
   getWallThickness,
   type ItemNode,
+  type LinearUnit,
+  type MetricNotation,
   resolveLevelId,
   type SlabNode,
   type StairNode,
+  squareMetersToAreaUnit,
   type WallNode,
   type WindowNode,
   type ZoneNode,
 } from '@pascal-app/core'
-import {
-  formatLinearMeasurement,
-  getAreaUnitLabel,
-  type LinearUnit,
-  type MetricNotation,
-  squareMetersToAreaUnit,
-} from '../measurements'
 import type { PointKind, PointTarget } from './types'
 
 // Point and ask names what the finger is on (the owner, 8 October): the label chip and the
@@ -115,7 +113,7 @@ const roomOfWall = (nodes: Nodes, levelId: string, wallId: string) =>
 
 function wallHeight(wall: WallNode, nodes: Nodes): number {
   try {
-    const height = getWallEffectiveHeightForNodes(wall, nodes as Record<string, AnyNode>)
+    const height = getWallEffectiveHeightForNodes(wall, nodes as Record<string, AnyNode>, 0)
     if (Number.isFinite(height) && height > 0) return height
   } catch {
     // No slab election to consult in a bare scene: the wall's own height stands.

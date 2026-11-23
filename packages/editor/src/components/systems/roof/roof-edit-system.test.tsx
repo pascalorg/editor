@@ -38,7 +38,6 @@ test('roof trim drag keeps its plane hit over a surface joining and leaving a ba
     id: 'rseg_batch_drag',
     width: 10,
     depth: 10,
-    metadata: { showTrimPlanes: true },
   })
   const source = new THREE.Group()
   const surface = new THREE.Mesh(new THREE.BoxGeometry(30, 0.25, 30), new THREE.MeshBasicMaterial())
@@ -52,6 +51,9 @@ test('roof trim drag keeps its plane hit over a surface joining and leaving a ba
       hoveredId: null,
       selection: { buildingId: null, levelId: null, zoneId: null, selectedIds: [segment.id] },
     })
+    useInteractionScope
+      .getState()
+      .begin({ kind: 'reshaping', reshape: 'trim', nodeId: segment.id, driver: 'tool' })
     await root.configure({
       gl: {
         domElement: canvas,
@@ -99,6 +101,18 @@ test('roof trim drag keeps its plane hit over a surface joining and leaving a ba
       events.dispatchEvent(new Event('pointercancel'))
     })
     expect(useLiveNodeOverrides.getState().overrides.has(segment.id)).toBe(false)
+    const fieldEscape = Object.assign(new Event('keydown'), { key: 'Escape' })
+    Object.defineProperty(fieldEscape, 'target', {
+      value: { closest: () => ({ tagName: 'INPUT' }) },
+    })
+    await act(async () => {
+      events.dispatchEvent(fieldEscape)
+    })
+    expect(useInteractionScope.getState().scope.kind).toBe('reshaping')
+    await act(async () => {
+      events.dispatchEvent(Object.assign(new Event('keydown'), { key: 'Escape' }))
+    })
+    expect(useInteractionScope.getState().scope.kind).toBe('idle')
   } finally {
     await act(async () => {
       root.render(null)

@@ -7,6 +7,7 @@ import {
   collectAlignmentAnchors,
   emitter,
   type GridEvent,
+  NEW_COLUMN_SLOTS,
   resolveFrozenFloorPlacementPatch,
   resolveSupportSlabPatch,
   useScene,
@@ -53,6 +54,7 @@ function createColumnFromPreset(presetId: ColumnPresetId, position: [number, num
     position,
     rotation: 0,
     ...preset,
+    slots: { ...NEW_COLUMN_SLOTS },
   })
 }
 
@@ -93,7 +95,16 @@ const PillarTool = () => {
     // here and refreshed after each placement so a just-placed column becomes a
     // target for the next one. `previewNode.id` never collides with a scene
     // node, so nothing real is excluded.
-    let alignmentCandidates = collectAlignmentAnchors(useScene.getState().nodes, previewNode.id)
+    let candidateNodes = useScene.getState().nodes
+    let alignmentCandidates = collectAlignmentAnchors(candidateNodes, previewNode.id)
+    let structuralGrids = collectStructuralGridAxes(candidateNodes, activeLevelId)
+    const refreshCandidates = () => {
+      const nodes = useScene.getState().nodes
+      if (nodes === candidateNodes) return
+      candidateNodes = nodes
+      alignmentCandidates = collectAlignmentAnchors(nodes, previewNode.id)
+      structuralGrids = collectStructuralGridAxes(nodes, activeLevelId)
+    }
 
     const pointedSurfaceFor = (event: FloorPlacementClickTriggerEvent) =>
       typeof HTMLCanvasElement !== 'undefined' &&
@@ -107,11 +118,8 @@ const PillarTool = () => {
       position: [number, number, number],
       surface: PointerSupportSurface | null,
     ) => {
-      const column = ColumnNode.parse({
-        ...createColumnFromPreset(DEFAULT_COLUMN_PRESET_ID, position),
-        parentId: activeLevelId,
-      })
-      const nodes = { ...useScene.getState().nodes, [column.id]: column }
+      const column = { ...previewNode, position, parentId: activeLevelId }
+      const nodes = useScene.getState().nodes
       const patch = surface?.sourceNodeId
         ? resolveFrozenFloorPlacementPatch(column, nodes, {
             position,
@@ -129,6 +137,7 @@ const PillarTool = () => {
     }
 
     const onGridMove = (event: GridEvent) => {
+      refreshCandidates()
       if (!cursorVisibleRef.current) {
         cursorVisibleRef.current = true
         setCursorVisible(true)
@@ -148,10 +157,7 @@ const PillarTool = () => {
       })
       const structuralSnap =
         isGridSnapActive() || isMagneticSnapActive()
-          ? resolveStructuralGridSnap(
-              [alignedPosition[0], alignedPosition[2]],
-              collectStructuralGridAxes(useScene.getState().nodes, activeLevelId),
-            )
+          ? resolveStructuralGridSnap([alignedPosition[0], alignedPosition[2]], structuralGrids)
           : null
       const planPosition: [number, number, number] = structuralSnap
         ? [structuralSnap.point[0], alignedPosition[1], structuralSnap.point[1]]
@@ -197,6 +203,7 @@ const PillarTool = () => {
     }
 
     const commitAtCursor = (event: FloorPlacementClickTriggerEvent) => {
+      refreshCandidates()
       const pointed = pointedSurfaceFor(event) ?? supportSurfaceRef.current
       supportSurfaceRef.current = pointed
       const fallbackPosition =
@@ -209,10 +216,7 @@ const PillarTool = () => {
         )
       const structuralSnap =
         isGridSnapActive() || isMagneticSnapActive()
-          ? resolveStructuralGridSnap(
-              [fallbackPosition[0], fallbackPosition[2]],
-              collectStructuralGridAxes(useScene.getState().nodes, activeLevelId),
-            )
+          ? resolveStructuralGridSnap([fallbackPosition[0], fallbackPosition[2]], structuralGrids)
           : null
       const planPosition: [number, number, number] = structuralSnap
         ? [structuralSnap.point[0], 0, structuralSnap.point[1]]
@@ -221,6 +225,7 @@ const PillarTool = () => {
       const committedColumn = ColumnNode.parse({
         ...column,
         ...patch,
+        id: undefined,
       })
       useScene.getState().createNode(committedColumn, activeLevelId)
       useViewer.getState().setSelection({ selectedIds: [committedColumn.id] })
@@ -229,7 +234,7 @@ const PillarTool = () => {
       usePlacementPreview.getState().clear()
       if (useEditor.getState().getContinuation('point') === 'repeat') {
         // The placed column is now a valid alignment target for the next one.
-        alignmentCandidates = collectAlignmentAnchors(useScene.getState().nodes, previewNode.id)
+        refreshCandidates()
       } else {
         cursorVisibleRef.current = false
         setCursorVisible(false)

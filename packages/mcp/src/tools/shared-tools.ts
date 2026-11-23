@@ -1,6 +1,7 @@
 import type { McpServer } from '@modelcontextprotocol/server'
 import {
   type AddObjectInput,
+  AGENT_OPERATION_STEPS,
   AGENT_OPERATIONS,
   type AgentContext,
   type AgentHostRuntime,
@@ -9,13 +10,13 @@ import {
   achievedChanges,
   applyAgentOutcome,
   assetViewNeeds,
-  assetViewsReadCatalog,
-  briefReadsCatalog,
   buildBatchObjects,
   createAssetViewLoader,
   createFetchAssetViewIO,
   furnishingRefusal,
+  readCatalog,
   type SceneChanges,
+  type Steps,
   startOfSession,
   writeCollections,
 } from '@pascal-app/core/agent-operations'
@@ -35,6 +36,8 @@ import {
   deleteNodeTool,
   designBriefTool,
   duplicateLevelTool,
+  duplicateNodeOutput,
+  duplicateNodeTool,
   findByTypeTool,
   fitStairTool,
   furnishRoomTool,
@@ -43,10 +46,13 @@ import {
   getSiteTool,
   getWallsTool,
   getZonesTool,
+  isAgentRefusal,
   listLevelsTool,
   listUnitsTool,
   measureStairTool,
   mergeWindowsTool,
+  moveNodeOutput,
+  moveNodeTool,
   moveRoofsToRoofLevelTool,
   paintTool,
   placeBuildingTool,
@@ -62,7 +68,9 @@ import {
   setGroundLevelTool,
   setUnitMembersTool,
   setWallTypeTool,
+  surfaceDescription,
   validateDesignTool,
+  verifySceneModelResult,
   verifySceneTool,
   viewAssetsTool,
 } from '@pascal-app/core/agent-tools'
@@ -106,8 +114,6 @@ export type OperationTool = {
   annotations: AgentToolAnnotations
   outputSchema?: Record<string, z.ZodType>
   envelope?: (bridge: SceneOperations) => Record<string, unknown>
-  /** Reads the host's item library: only these calls wait for it (the hosted one is a query). */
-  catalog?: true
 }
 
 export type PlanReadingHosts = {
@@ -115,6 +121,14 @@ export type PlanReadingHosts = {
   assetViews?: AssetViewLoader
   /** Compiles one add_object module for a batch before the synchronous operations run. */
   buildObject?: (input: Omit<AddObjectInput, 'compiled'>) => Promise<CompiledGeometryScript>
+  /**
+   * Awaited between the steps of a call that takes seconds on a large building (after each call of
+   * a run_batch, after each check of a verify_scene, author_scene's closing one included), so the
+   * host's timers and I/O run meanwhile. Only for a host whose scene no other call can reach then
+   * (a bridge of its own for each request): a batch is planned on the scene as its first call
+   * found it and applied after its last. Without it these calls run uninterrupted.
+   */
+  betweenSteps?: () => Promise<void>
 }
 
 const defaultAssetViews = createAssetViewLoader(createFetchAssetViewIO())
@@ -306,7 +320,7 @@ const SHARED_TOOLS: SharedTool[] = [
         z.looseObject({
           type: z.string(),
           message: z.string(),
-          severity: z.literal('info').optional(),
+          severity: z.enum(['info', 'warning']).optional(),
           nodeId: z.string().optional(),
           path: z.string().optional(),
           zoneId: z.string().optional(),
@@ -402,13 +416,24 @@ const SHARED_TOOLS: SharedTool[] = [
     contract: placeItemsTool,
     operation: AGENT_OPERATIONS.place_items,
     annotations: ADDITIVE_TOOL_ANNOTATIONS,
-    catalog: true,
   },
   {
     contract: deleteNodeTool,
     operation: AGENT_OPERATIONS.delete_node,
     annotations: DESTRUCTIVE_TOOL_ANNOTATIONS,
     outputSchema: { deletedIds: z.array(z.string()), ...achievedOutput, ...liveSyncOutput },
+  },
+  {
+    contract: moveNodeTool,
+    operation: AGENT_OPERATIONS.move_node,
+    annotations: DESTRUCTIVE_TOOL_ANNOTATIONS,
+    outputSchema: { ...moveNodeOutput, ...liveSyncOutput },
+  },
+  {
+    contract: duplicateNodeTool,
+    operation: AGENT_OPERATIONS.duplicate_node,
+    annotations: ADDITIVE_TOOL_ANNOTATIONS,
+    outputSchema: { ...duplicateNodeOutput, ...liveSyncOutput },
   },
   {
     contract: createRoomTool,
@@ -445,7 +470,6 @@ const SHARED_TOOLS: SharedTool[] = [
     contract: furnishRoomTool,
     operation: AGENT_OPERATIONS.furnish_room,
     annotations: ADDITIVE_TOOL_ANNOTATIONS,
-    catalog: true,
     outputSchema: {
       ok: z.literal(true),
       placed: z.number(),
@@ -478,7 +502,6 @@ const SHARED_TOOLS: SharedTool[] = [
     contract: placeInRoomTool,
     operation: AGENT_OPERATIONS.place_in_room,
     annotations: ADDITIVE_TOOL_ANNOTATIONS,
-    catalog: true,
     outputSchema: {
       ok: z.literal(true),
       itemId: z.string(),
@@ -514,13 +537,11 @@ const SHARED_TOOLS: SharedTool[] = [
     contract: searchAssetsTool,
     operation: AGENT_OPERATIONS.search_assets,
     annotations: READ_ONLY_TOOL_ANNOTATIONS,
-    catalog: true,
   },
   {
     contract: viewAssetsTool,
     operation: AGENT_OPERATIONS.view_assets,
     annotations: READ_ONLY_TOOL_ANNOTATIONS,
-    catalog: true,
   },
   {
     contract: searchMaterialsTool,
@@ -655,6 +676,65 @@ function writesScene(changes: SceneChanges | undefined): boolean {
   )
 }
 
+type FoundAsset = {
+  id: string
+  name: string
+  dimensions: unknown
+  attachTo: string | null
+  params?: unknown[]
+}
+
+/**
+ * search_assets as the model reads it: each item's id, name and placement facts, and the params
+ * of one built from a script (add_object changes them once placed); the category and the floor's
+ * null attachTo stay in the structured result.
+ */
+function searchAssetsModelResult(output: Record<string, unknown>) {
+  const groups = output.groups as { results: FoundAsset[] }[]
+  return {
+    ...output,
+    groups: groups.map((group) => ({
+      ...group,
+      results: group.results.map(({ id, name, dimensions, attachTo, params }) => ({
+        id,
+        name,
+        dimensions,
+        ...(attachTo && { attachTo }),
+        ...(params && { params }),
+      })),
+    })),
+  }
+}
+
+/**
+ * What the model reads of a tool's result: for verify_scene, the findings grouped and trimmed
+ * (`verifySceneModelResult`); for search_assets, the items without what placing them does not
+ * need; every other result as it is. The structured result keeps the whole.
+ */
+function modelResult(
+  name: string,
+  output: Record<string, unknown>,
+  input: Record<string, unknown>,
+) {
+  if (name === verifySceneTool.name) return verifySceneModelResult(output, input)
+  if (name === searchAssetsTool.name) return searchAssetsModelResult(output)
+  return output
+}
+
+/** Work one step at a time, the host's pause after each; `scope` is where each step runs. */
+export async function pausedBetweenSteps<Result>(
+  steps: Steps<Result>,
+  pause: () => Promise<void>,
+  scope: (step: () => IteratorResult<void, Result>) => IteratorResult<void, Result> = (step) =>
+    step(),
+): Promise<Result> {
+  for (;;) {
+    const step = scope(() => steps.next())
+    if (step.done) return step.value
+    await pause()
+  }
+}
+
 export function registerSharedTools(
   server: McpServer,
   bridge: SceneOperations,
@@ -680,7 +760,7 @@ export function registerOperationTool(
     tool.contract.name,
     {
       title: tool.contract.title,
-      description: tool.contract.description,
+      description: surfaceDescription(tool.contract, 'mcp'),
       inputSchema: z.object(tool.contract.input),
       // Loose: a client that listed the tools rejects any field the schema leaves out, and the
       // operations in core grow fields (verify_scene's guesses) that this list would miss.
@@ -697,22 +777,25 @@ export function registerOperationTool(
       // The agent's session begins with its first call, before anything is written.
       const first = bridge.agentSession && startOfSession(bridge.agentSession.read(), before)
       if (first) bridge.agentSession?.keep(first)
-      // Gate before catalog I/O or module compilation.
+      // Gate before module compilation. Under an open source the gate reads the catalog's tags to
+      // let technical equipment and plants through; a batch's calls are checked one by one. Any
+      // other refused call reads nothing of the library.
       const designBrief = briefInForce(bridge)
+      const gateRead =
+        designBrief?.source === 'open'
+          ? await readCatalog(before, tool.contract.name, input, catalog)
+          : undefined
       if (designBrief !== undefined) {
-        const refusal = furnishingRefusal(tool.contract.name, input, designBrief)
-        if (refusal) return refusalResult(refusal)
+        const refusal = furnishingRefusal(tool.contract.name, input, designBrief, {
+          session: bridge.agentSession?.read(),
+          catalog: gateRead?.catalog,
+        })
+        if (refusal) {
+          // A refusal can ask the session to remember what it refused (a catalog piece under an open source).
+          if (refusal.keep) bridge.agentSession?.keep(refusal.keep)
+          return refusalResult(refusal)
+        }
       }
-      const batchPlacesInRoom =
-        tool.contract.name === runBatchTool.name &&
-        Array.isArray(input.calls) &&
-        input.calls.some(
-          (call) =>
-            typeof call === 'object' &&
-            call !== null &&
-            'tool' in call &&
-            call.tool === placeInRoomTool.name,
-        )
       const batchesObjects =
         tool.contract.name === runBatchTool.name &&
         Array.isArray(input.calls) &&
@@ -731,14 +814,13 @@ export function registerOperationTool(
         ...(bridge.nodeSchema && { nodeSchema: (kind: string) => bridge.nodeSchema!(kind) }),
         session: bridge.agentSession?.read(),
         ...(designBrief !== undefined && { designBrief }),
-        ...((tool.catalog ||
-          batchPlacesInRoom ||
-          assetViewsReadCatalog(tool.contract.name, input) ||
-          briefReadsCatalog(tool.contract.name, input)) && { catalog: await catalog() }),
+        // What the call reads of the library: all of a list, or what it names of a source.
+        ...(gateRead ?? (await readCatalog(before, tool.contract.name, input, catalog))),
         ...(batchesObjects && {
           batchObjects: await buildBatchObjects(
             input.calls as { tool?: unknown; input?: unknown }[],
             hosts.buildObject ?? refuseScripts,
+            designBrief,
           ),
         }),
       }
@@ -748,8 +830,21 @@ export function registerOperationTool(
           pictures: needs.pictures,
         })
       try {
-        outcome = inScene(bridge, () => tool.operation(nodes, input as never, context))
+        const steps =
+          hosts.betweenSteps && Object.hasOwn(AGENT_OPERATION_STEPS, tool.contract.name)
+            ? AGENT_OPERATION_STEPS[tool.contract.name]
+            : undefined
+        outcome =
+          steps && hosts.betweenSteps
+            ? await pausedBetweenSteps(
+                steps(nodes, input as never, context),
+                hosts.betweenSteps,
+                (step) => inScene(bridge, step),
+              )
+            : inScene(bridge, () => tool.operation(nodes, input as never, context))
       } catch (error) {
+        // A refusal can ask the session to remember what it refused (a catalog piece under an open source).
+        if (isAgentRefusal(error) && error.keep) bridge.agentSession?.keep(error.keep)
         return refusalResult(error)
       }
       let result = outcome.result
@@ -787,11 +882,22 @@ export function registerOperationTool(
       })
       if (pictures.length)
         return {
-          content: [{ type: 'text' as const, text: JSON.stringify(shown) }, ...pictures],
+          content: [
+            {
+              type: 'text' as const,
+              text: JSON.stringify(modelResult(tool.contract.name, shown, input)),
+            },
+            ...pictures,
+          ],
           structuredContent: shown,
         }
       return {
-        content: [{ type: 'text' as const, text: JSON.stringify(payload) }],
+        content: [
+          {
+            type: 'text' as const,
+            text: JSON.stringify(modelResult(tool.contract.name, payload, input)),
+          },
+        ],
         structuredContent: payload,
       }
     },

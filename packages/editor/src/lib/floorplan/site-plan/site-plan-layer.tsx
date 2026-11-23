@@ -7,8 +7,8 @@ import {
   resumeSceneHistory,
   useScene,
 } from '@pascal-app/core'
+import { FloorplanGeometryRenderer } from '@pascal-app/viewer/ui'
 import { type PointerEvent as ReactPointerEvent, useCallback, useMemo, useRef } from 'react'
-import { FloorplanGeometryRenderer } from '../../../components/editor-2d/renderers/floorplan-geometry-renderer'
 import { clientToPlan } from '../plan-coords'
 import { buildSitePlanDrawing } from './build-site-plan-drawing'
 

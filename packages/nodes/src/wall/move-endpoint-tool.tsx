@@ -5,6 +5,7 @@ import {
   acquireSceneHistoryPause,
   collectAlignmentAnchors,
   emitter,
+  formatAngleRadians,
   type GridEvent,
   getWallBaseElevationForNodes,
   getWallCurveLength,
@@ -18,7 +19,6 @@ import {
 } from '@pascal-app/core'
 import {
   CursorSphere,
-  formatAngleRadians,
   getAngleToSegmentReference,
   getSegmentAngleReferenceAtPoint,
   isAlignmentGuideActive,
@@ -678,7 +678,7 @@ export const MoveWallEndpointTool: React.FC<{ target: MovingWallEndpoint }> = ({
     end: previewEnd,
     curveOffset: target.wall.curveOffset,
   })
-  const wallHeight = resolveWallOpeningCeiling(effectiveWall, nodes)
+  const wallHeight = resolveWallOpeningCeiling(effectiveWall, nodes, 0.5)
   const dimMidX = (previewStart[0] + previewEnd[0]) / 2
   const dimMidZ = (previewStart[1] + previewEnd[1]) / 2
 

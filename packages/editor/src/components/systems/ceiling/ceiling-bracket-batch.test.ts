@@ -29,6 +29,7 @@ import {
 type AttributesBackend = {
   createAttribute(): void
   updateAttribute(attribute: BufferAttribute): void
+  destroyAttribute(attribute: BufferAttribute): void
 }
 const Attributes = UntypedAttributes as new (
   backend: AttributesBackend,
@@ -371,6 +372,7 @@ test('WebGPU attribute updates skip resting frames and upload only written slots
   const attributes = new Attributes(
     {
       createAttribute() {},
+      destroyAttribute() {},
       updateAttribute(attribute: BufferAttribute) {
         uploads.push({ attribute, ranges: attribute.updateRanges.map((range) => ({ ...range })) })
         attribute.clearUpdateRanges()

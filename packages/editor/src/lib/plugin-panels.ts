@@ -10,6 +10,11 @@ export type EditorHostPanel = {
   kinds?: readonly string[]
   workspaces?: readonly EditorHostPanelWorkspace[]
   pluginId?: string
+  /**
+   * The v2 side menu's heading for this panel, e.g. "Project". A plugin's
+   * panel (`pluginId`) is listed under Plugins unless it names its own.
+   */
+  section?: string
   description?: string
   creator?: {
     name: string

@@ -23,7 +23,7 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from '../primitives/dropdown-menu'
+} from '@pascal-app/viewer/ui'
 import { type WallTypeEditorRequest, WallTypeEditorDialog } from './wall-type-editor-dialog'
 
 /**

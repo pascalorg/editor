@@ -24,7 +24,7 @@ export const roofPanelModel: NodePanelModel<RoofNode> = {
       if (editor.mode !== 'build') editor.setMode('build')
     }
     const segments = (node.children ?? [])
-      .map((id) => nodes[id])
+      .map((id) => nodes[id as AnyNodeId])
       .filter((child) => child?.type === 'roof-segment')
     const segmentIds = new Set<string>(segments.map((segment) => segment.id))
     const rows: PanelRow[] = segments.map((segment, index) => ({

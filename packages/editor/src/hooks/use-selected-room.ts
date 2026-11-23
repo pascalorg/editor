@@ -2,17 +2,17 @@
 
 import { type AnyNode, type AnyNodeId, nodeRegistry, useScene } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
-import { useCallback, useSyncExternalStore } from 'react'
-import { getFloorplanNodeExtension } from '../lib/floorplan/floorplan-extension'
-import { selectionEnabled } from '../lib/interaction/scope'
+import type { SelectionModifierKeys } from '@pascal-app/viewer/ui'
 import {
   type RoomKey,
   RoomSelectionIndex,
   type RoomSelectionRecord,
   resolveRoomHit,
-} from '../lib/room-selection'
+} from '@pascal-app/viewer/ui'
+import { useCallback, useSyncExternalStore } from 'react'
+import { getFloorplanNodeExtension } from '../lib/floorplan/floorplan-extension'
+import { selectionEnabled } from '../lib/interaction/scope'
 import { shouldInterceptRoom } from '../lib/room-selection-commands'
-import { type SelectionModifierKeys, selectionModifiersFromEvent } from '../lib/selection-routing'
 import useEditor from '../store/use-editor'
 import useInteractionScope from '../store/use-interaction-scope'
 
@@ -150,5 +150,3 @@ export function resolvePlanRoomHit(nodeId: string | null, point: readonly [numbe
   const levelId = node?.parentId ?? useViewer.getState().selection.levelId
   return levelId ? resolveEditorRoomHit(node ?? null, levelId, point, '2d') : null
 }
-
-export { selectionModifiersFromEvent }

@@ -1,11 +1,11 @@
 import { type AnyNode, type AnyNodeId, useScene, type ZoneNode } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
+import { type RoomKey, type SelectionModifierKeys, sameRoom } from '@pascal-app/viewer/ui'
 import { getRoomSelectionIndex, hoverRoomFromHit } from '../hooks/use-selected-room'
 import useEditor from '../store/use-editor'
 import { expandSessionSelectionForNode } from '../store/use-session-groups'
-import { type RoomKey, sameRoom } from './room-selection'
 import { selectRoom } from './room-selection-commands'
-import { resolveSelectedIdsForNodeClick, type SelectionModifierKeys } from './selection-routing'
+import { resolveSelectedIdsForNodeClick } from './selection-routing'
 
 // A room is one thing to the user whichever way they reach it: the canvas, the
 // Rooms list, the plan's fill or its label. Rooms the room index knows (closed,

@@ -188,10 +188,11 @@ export const MoveLinesetTool: React.FC<{ node: AnyNode }> = ({ node }) => {
         triggerSFX('sfx:grid-snap')
       }
       prevSnapRef.current = cur
-      hasMovedRef.current = true
       const nextPath = originalPath.map(([x, y, z]) => [x + dx, y, z + dz] as Vec3)
+      // Connected joints that cannot follow hold the last shown frame.
+      if (connectivity && !connectivity.preview({ path: nextPath })) return
+      hasMovedRef.current = true
       setPreview(nextPath)
-      connectivity?.preview({ path: nextPath })
     }
 
     const commit = (event: GridEvent) => {
@@ -204,12 +205,21 @@ export const MoveLinesetTool: React.FC<{ node: AnyNode }> = ({ node }) => {
         event.nativeEvent?.stopPropagation?.()
         return
       }
-      committed = true
       const finalPath = previewPathRef.current
+      const creating = isNew && !useScene.getState().nodes[nodeId]
+      // Fold connected-fitting / sibling-run follow-updates into the SAME
+      // batch as the moved run so the whole joint is one undo step.
+      const followUpdates =
+        creating || !connectivity ? [] : connectivity.commitUpdates({ path: finalPath })
+      if (!followUpdates) {
+        event.nativeEvent?.stopPropagation?.()
+        return
+      }
+      committed = true
 
       useScene.temporal.getState().resume()
       let selectId = nodeId
-      if (isNew && !useScene.getState().nodes[nodeId]) {
+      if (creating) {
         const created = LinesetNode.parse({
           ...(node as Record<string, unknown>),
           path: finalPath,
@@ -225,9 +235,6 @@ export const MoveLinesetTool: React.FC<{ node: AnyNode }> = ({ node }) => {
         ])
         selectId = created.id as AnyNodeId
       } else {
-        // Fold connected-fitting / sibling-run follow-updates into the SAME
-        // batch as the moved run so the whole joint is one undo step.
-        const followUpdates = connectivity?.commitUpdates({ path: finalPath }) ?? []
         useScene
           .getState()
           .updateNodes([

@@ -6,6 +6,7 @@ import {
   type GeometryContext,
   LevelNode,
   planStairPreset,
+  readFloorplanGeometryMetadata,
   resolveStairArcDimensions,
   resolveStairWalkingPaths,
   StairNode,
@@ -13,7 +14,6 @@ import {
   useLiveNodeOverrides,
   useScene,
 } from '@pascal-app/core'
-import { readFloorplanGeometryMetadata } from '@pascal-app/editor'
 import { buildFloorplanStairEntry, stairDefinition } from '../index'
 
 const definition = stairDefinition

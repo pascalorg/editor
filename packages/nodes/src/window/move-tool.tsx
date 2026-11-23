@@ -463,6 +463,7 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
       )
       const { clampedY } = slid
       let clampedX = slid.clampedX
+      let fits = slid.fits
       // The corner zone: the edge snaps to the corner, unless a curtain wall's margin keeps it off.
       // Alt, or snapping off, places the window where it is dropped.
       const found =
@@ -490,18 +491,23 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
         if (Math.abs(settled.clampedX - snap.centreX) > 1e-6) {
           block = { reason: 'curtain', end: snap.end }
           snap = null
-        } else clampedX = snap.centreX
+        } else {
+          clampedX = snap.centreX
+          fits = settled.fits
+        }
       }
 
-      const valid = !hasWallChildOverlap(
-        event.node.id,
-        nodes,
-        clampedX,
-        clampedY,
-        movingWindowNode.width,
-        movingWindowNode.height,
-        movingWindowNode.id,
-      )
+      const valid =
+        fits &&
+        !hasWallChildOverlap(
+          event.node.id,
+          nodes,
+          clampedX,
+          clampedY,
+          movingWindowNode.width,
+          movingWindowNode.height,
+          movingWindowNode.id,
+        )
 
       return {
         wallNode: event.node,
@@ -853,14 +859,7 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
       // Scene writes, not overrides: leaving the wall must actually remove the
       // window from the wall's `children` or the CSG cut trails the ghost
       // around the old wall (see the wall-branch note in `applyPreview`).
-      if (currentHostId === levelId) {
-        updateDraft({
-          position: [localX, sillCenterY, localZ],
-          rotation: [0, yaw, 0],
-          side: sideOverride,
-          visible: false,
-        })
-      } else {
+      if (currentHostId !== levelId) {
         if (currentHostId && currentHostId !== levelId) markHostDirty(currentHostId)
         updateDraft({
           position: [localX, sillCenterY, localZ],

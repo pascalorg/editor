@@ -8,6 +8,7 @@ import {
   useScene,
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
+import type { SelectionModifierKeys } from '@pascal-app/viewer/ui'
 import useEditor from '../store/use-editor'
 import { emitDeleteSFX } from './sfx-bus'
 
@@ -41,14 +42,6 @@ export function enterBuildingFromCanvas(node: AnyNode): boolean {
 export function enterBuildingFromPlanHit(hitId: string | null): boolean {
   const node = hitId ? useScene.getState().nodes[hitId as AnyNodeId] : undefined
   return node ? enterBuildingFromCanvas(node) : false
-}
-
-export type SelectionModifierKeys = {
-  meta: boolean
-  ctrl: boolean
-  shift: boolean
-  /** Alt alone: select one session-group member without expanding. */
-  alt: boolean
 }
 
 /** A Delete-mode click on a plan entry: the sledgehammer, not a selection. */
@@ -109,38 +102,6 @@ export function resolveCanvasSelectionNode({
 
 export function isSelectionModifierActive(keys: SelectionModifierKeys): boolean {
   return keys.meta || keys.ctrl || keys.shift
-}
-
-export function selectionModifiersFromEvent(
-  event?: {
-    metaKey?: boolean
-    ctrlKey?: boolean
-    shiftKey?: boolean
-    altKey?: boolean
-    nativeEvent?: {
-      metaKey?: boolean
-      ctrlKey?: boolean
-      shiftKey?: boolean
-      altKey?: boolean
-    }
-  } | null,
-  fallback?: Partial<SelectionModifierKeys>,
-): SelectionModifierKeys {
-  const fromEvent = (
-    key: keyof SelectionModifierKeys,
-    eventKey: 'metaKey' | 'ctrlKey' | 'shiftKey' | 'altKey',
-  ) => {
-    if (typeof event?.[eventKey] === 'boolean') return event[eventKey]
-    if (typeof event?.nativeEvent?.[eventKey] === 'boolean') return event.nativeEvent[eventKey]
-    return Boolean(fallback?.[key])
-  }
-
-  return {
-    meta: fromEvent('meta', 'metaKey'),
-    ctrl: fromEvent('ctrl', 'ctrlKey'),
-    shift: fromEvent('shift', 'shiftKey'),
-    alt: fromEvent('alt', 'altKey'),
-  }
 }
 
 export function resolveSelectedIdsForNodeClick({

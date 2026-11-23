@@ -6,7 +6,12 @@ import type {
   StairSegmentNode,
 } from '@pascal-app/core'
 import {
+  buildSvgAnnularSectorPath,
+  buildSvgArcPath,
+  buildSvgArrowHeadPoints,
   computeSegmentTransforms,
+  floorplanGeometryMetadata,
+  getArcPlanPoint,
   measureStairDetail,
   resolveStairArcDimensions,
   resolveStairHandrailPaths,
@@ -21,13 +26,6 @@ import {
 // curved-arrow gizmo would sit at the matching world point.
 const STAIR_ROTATE_PLAN_OFFSET = 0.4
 
-import {
-  buildSvgAnnularSectorPath,
-  buildSvgArcPath,
-  buildSvgArrowHeadPoints,
-  floorplanGeometryMetadata,
-  getArcPlanPoint,
-} from '@pascal-app/editor'
 import {
   buildStairDocumentation,
   resolveStairPlanDirection,

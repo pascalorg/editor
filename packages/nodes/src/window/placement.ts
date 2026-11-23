@@ -25,6 +25,7 @@ export const windowTypeOptions: Array<{ label: string; value: WindowNode['window
   { label: 'Sliding', value: 'sliding' },
   { label: 'Casement', value: 'casement' },
   { label: 'Awning', value: 'awning' },
+  { label: 'Tilt and Turn', value: 'tilt-turn' },
   { label: 'Single Hung', value: 'single-hung' },
   { label: 'Double Hung', value: 'double-hung' },
   { label: 'Bay', value: 'bay' },

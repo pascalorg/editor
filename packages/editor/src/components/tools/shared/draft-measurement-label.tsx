@@ -1,6 +1,6 @@
 'use client'
 
-import { Html } from '../../editor/localized-html'
+import { LocalizedHtml as Html } from '@pascal-app/viewer/ui'
 
 /** Lift of a draft's readout above the top of what it measures, in metres. */
 export const DRAFT_LABEL_Y_OFFSET = 0.22

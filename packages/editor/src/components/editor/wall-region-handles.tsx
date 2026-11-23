@@ -203,7 +203,7 @@ function WallRegionHandlesForWall({ wall }: { wall: WallNode }) {
   const frame: WallFrame = {
     wall: effectiveWall,
     baseElevation: getWallBaseElevationForNodes(effectiveWall, nodes),
-    wallHeight: getWallEffectiveHeightForNodes(effectiveWall, nodes),
+    wallHeight: getWallEffectiveHeightForNodes(effectiveWall, nodes, 0.5),
     angle: Math.atan2(
       effectiveWall.end[1] - effectiveWall.start[1],
       effectiveWall.end[0] - effectiveWall.start[0],
@@ -426,7 +426,7 @@ function RegionEdgeHandle({
       const face = region.face
       const faceSurface = getWallFaceSurface(initialNode, face)
       const baseAt = faceBaseSampler(initialNode.id, face)
-      const wallHeight = getWallEffectiveHeightForNodes(initialNode, nodes)
+      const wallHeight = getWallEffectiveHeightForNodes(initialNode, nodes, 0.5)
       const faceHeight = regionFaceHeight(region, faceSurface.length, wallHeight, baseAt)
       const bounds = resolveRegionBounds(region, faceSurface.length, faceHeight)
       const midU = (bounds.u0 + bounds.u1) / 2

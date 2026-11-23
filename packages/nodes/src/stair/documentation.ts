@@ -1,15 +1,16 @@
 import {
   type FloorplanGeometry,
   type FloorplanPoint,
+  floorplanGeometryMetadata,
   type GeometryContext,
   type Point2D,
+  readFloorplanContext,
   resolveStairArcDimensions,
   resolveStairTotalRise,
   resolveStairWinder,
   type StairNode,
   useScene,
 } from '@pascal-app/core'
-import { floorplanGeometryMetadata, readFloorplanContext } from '@pascal-app/editor'
 import {
   type ConstructionLengthProfile,
   type ConstructionMetricNotation,

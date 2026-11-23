@@ -3,8 +3,8 @@
 import { ZONE_COLOR_PALETTE } from '@pascal-app/core'
 import { useState } from 'react'
 import { cn } from '../../../lib/utils'
-import { Popover, PopoverContent, PopoverTrigger } from './popover'
-import { Tooltip, TooltipContent, TooltipTrigger } from './tooltip'
+import { Popover, PopoverContent, PopoverTrigger } from '@pascal-app/viewer/ui'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@pascal-app/viewer/ui'
 
 export const PALETTE_COLORS = ZONE_COLOR_PALETTE
 

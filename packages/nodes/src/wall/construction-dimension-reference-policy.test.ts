@@ -1,14 +1,12 @@
 import { describe, expect, test } from 'bun:test'
 import {
   type AnyNode,
+  createFloorplanContextExtensions,
   type FloorplanGeometry,
+  type FloorplanWallDimensionFaces,
   WallNode,
   type WallNode as WallNodeType,
 } from '@pascal-app/core'
-import {
-  createFloorplanContextExtensions,
-  type FloorplanWallDimensionFaces,
-} from '@pascal-app/editor'
 import { constructionDimensionStandard } from '../shared/construction-dimension-standards'
 import {
   buildLevelWallConstructionDimensionPlan,

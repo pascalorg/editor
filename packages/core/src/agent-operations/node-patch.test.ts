@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import { AgentRefusal, isAgentRefusal } from '../agent-tools/refusal'
 import { getCatalogMaterialById } from '../material-library'
-import { ColumnNode, SlabNode, WallNode } from '../schema'
+import { ColumnNode, DoorNode, SlabNode, WallNode } from '../schema'
 import { honestNodePatch } from './node-patch'
 
 /**
@@ -100,4 +100,13 @@ describe('honest patches', () => {
     expect(honestNodePatch(pier(), { height: 2.4 })).toEqual({ height: 2.4 })
     expect(AgentRefusal).toBeDefined()
   })
+})
+
+test('agent rotation and side edits keep an asymmetric door cutout in place', () => {
+  const door = DoorNode.parse({ position: [1, 1.05, 0], sidelightLeft: 0.2, sidelightRight: 0.6 })
+  for (const data of [{ rotation: [0, Math.PI, 0] }, { side: 'back' }]) {
+    const patch = honestNodePatch(door, data)
+    expect(patch.rotation).toEqual([0, Math.PI, 0])
+    expect((patch.position as number[])[0]).toBeCloseTo(1.4)
+  }
 })

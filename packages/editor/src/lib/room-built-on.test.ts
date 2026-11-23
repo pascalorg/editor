@@ -8,6 +8,7 @@ import {
   generateId,
   initSpaceDetectionSync,
   LevelNode,
+  roomFloorElevation,
   SlabNode,
   type SlabNode as SlabNodeType,
   useScene,
@@ -24,11 +25,7 @@ import {
   setRoomRelativeFloorHeight,
   stepRoomFloorElevation,
 } from './room-construction-commands'
-import {
-  commitRoomElevation,
-  ownFloorElevationBounds,
-  roomFloorElevation,
-} from './room-handle-drag'
+import { commitRoomElevation, ownFloorElevationBounds } from './room-handle-drag'
 import { applyRoomPlan } from './room-structure-commands'
 import { showRoomNotice, useRoomTransform } from './room-transform-session'
 

@@ -1,5 +1,4 @@
-import { cameraPoseStore } from '../store/camera-pose-store'
-import useEditor from '../store/use-editor'
+import { cameraPoseStore, navigationSyncPoseStore } from '@pascal-app/viewer/ui'
 import { getActiveBuildingPose } from './world-grid-snap'
 
 const QUARTER_TURN = Math.PI / 2
@@ -12,7 +11,7 @@ const QUARTER_TURN = Math.PI / 2
  */
 export function cameraFacingYaw(): number {
   const pose = cameraPoseStore.getState().pose
-  let azimuth = useEditor.getState().navigationSyncPose?.azimuth ?? 0
+  let azimuth = navigationSyncPoseStore.getState().pose?.azimuth ?? 0
   if (pose) {
     const dx = pose.position[0] - pose.target[0]
     const dz = pose.position[2] - pose.target[2]

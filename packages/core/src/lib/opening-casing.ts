@@ -1,7 +1,10 @@
 import type { AnyNode, DoorNode, WallFace, WindowNode } from '../schema'
 import { DEFAULT_OPENING_CASING_WIDTH, OPENING_CASING_PROUD } from '../schema/nodes/opening-types'
 import { DEFAULT_WALL_THICKNESS, getWallThickness } from '../systems/wall/wall-footprint'
+import { roomSideFaces } from '../systems/wall/wall-room-sides'
 import { cornerPair } from './corner-pair'
+import { getDoorOpeningSize } from './door-opening'
+import { openingExteriorFace } from './opening-exterior-face'
 
 /**
  * Door and window casing: flat boards on the finished faces of the host wall
@@ -27,6 +30,9 @@ type Span = readonly [number, number]
 export type OpeningCasingHost = {
   /** The host's total thickness with its finishes: each face is half of it off the mid-plane (m). */
   thickness: number
+  /** Room side, when known, for a window's interior stool. */
+  interiorFace?: WallFace
+  exteriorFace?: WallFace
   /** The host end a corner window runs to: no leg there; the head and bottom stop at the opening. */
   cornerEnd?: 'start' | 'end'
 }
@@ -62,8 +68,19 @@ export function openingCasingWidth(opening: Pick<CasedOpening, 'casingWidth'>): 
  * +1 when the unit faces the host's front (its own +z is face `a`), -1 when it is turned half
  * round to face the back, which mirrors its x and z against the host's.
  */
-export function openingHostFacing(opening: Pick<CasedOpening, 'rotation'>): 1 | -1 {
+export function openingHostFacing(opening: Partial<Pick<CasedOpening, 'rotation'>>): 1 | -1 {
   return Math.cos(opening.rotation?.[1] ?? 0) >= 0 ? 1 : -1
+}
+
+/** Roof face a is outside; an unbounded wall follows the same a/outside, b/inside convention. */
+export function openingInteriorFace(
+  opening: Pick<CasedOpening, 'parentId' | 'roofSegmentId'>,
+  nodes: Readonly<Record<string, AnyNode>>,
+): WallFace {
+  if (!opening.roofSegmentId && opening.parentId && nodes[opening.parentId]?.type === 'wall') {
+    return roomSideFaces(nodes, opening.parentId).inside ?? 'b'
+  }
+  return 'b'
 }
 
 /**
@@ -78,15 +95,31 @@ export function resolveOpeningCasingHost(
   host: AnyNode | undefined = nodes[opening.roofSegmentId ?? opening.parentId ?? ''],
 ): OpeningCasingHost | null {
   if (opening.source) return null
+  const exteriorFace = opening.type === 'window' ? openingExteriorFace(opening, nodes) : undefined
+  const interior =
+    opening.type === 'window'
+      ? {
+          exteriorFace,
+          ...(opening.sillInterior
+            ? {
+                interiorFace: exteriorFace === 'a' ? ('b' as const) : ('a' as const),
+              }
+            : {}),
+        }
+      : {}
   if (opening.roofSegmentId) {
     return host?.type === 'roof-segment'
-      ? { thickness: host.wallThickness ?? DEFAULT_WALL_THICKNESS }
+      ? { thickness: host.wallThickness ?? DEFAULT_WALL_THICKNESS, ...interior }
       : null
   }
   if (host?.type !== 'wall' || host.wallType === 'curtain' || host.wallType === 'railing')
     return null
   const pair = opening.type === 'window' ? cornerPair(nodes, opening) : null
-  return { thickness: getWallThickness(host), ...(pair ? { cornerEnd: pair.end } : {}) }
+  return {
+    thickness: getWallThickness(host),
+    ...interior,
+    ...(pair ? { cornerEnd: pair.end } : {}),
+  }
 }
 
 /** The host faces an opening is cased on: both unless turned off (a save from before has both). */
@@ -102,11 +135,16 @@ export function openingCasingFaces(
   return faces
 }
 
-/** How far a window's sill takes the bottom board down on `face`: its thickness, on its front. */
-function sillDrop(opening: CasedOpening, face: WallFace): number {
-  if (opening.type !== 'window' || !opening.sill || opening.openingKind === 'opening') return 0
-  const front: WallFace = openingHostFacing(opening) === 1 ? 'a' : 'b'
-  return face === front ? Math.max(opening.sillThickness ?? 0, 0) : 0
+/** The casing bottom clears whichever sill is on this host face. */
+function sillDrop(opening: CasedOpening, face: WallFace, host: OpeningCasingHost): number {
+  if (opening.type !== 'window' || opening.openingKind === 'opening') return 0
+  const front: WallFace = host.exteriorFace ?? (openingHostFacing(opening) === 1 ? 'a' : 'b')
+  return Math.max(
+    opening.sill && face === front ? Math.max(opening.sillThickness ?? 0, 0) : 0,
+    opening.sillInterior && face === (host.interiorFace ?? 'b')
+      ? (opening.sillInteriorThickness ?? 0.03)
+      : 0,
+  )
 }
 
 /** The casing boards of a rectangular opening on each face it is cased on, in the host frame. */
@@ -116,8 +154,11 @@ export function openingCasingBoards(
 ): OpeningCasingBoard[] {
   const width = openingCasingWidth(opening)
   const proud = OPENING_CASING_PROUD
-  const halfWidth = opening.width / 2
-  const halfHeight = opening.height / 2
+  const size = getDoorOpeningSize(opening)
+  const halfWidth = size.width / 2
+  const halfHeight = size.height / 2
+  const offsetX = -size.leafOffsetX * openingHostFacing(opening)
+  const offsetY = (size.height - opening.height) / 2
   const corner = host.cornerEnd === 'start' ? -1 : host.cornerEnd === 'end' ? 1 : 0
   const left = -halfWidth - (corner === -1 ? 0 : width)
   const right = halfWidth + (corner === 1 ? 0 : width)
@@ -134,13 +175,13 @@ export function openingCasingBoards(
       boards.push({
         face,
         part,
-        center: [(x0 + x1) / 2, (y0 + y1) / 2, z],
+        center: [(x0 + x1) / 2 + offsetX, (y0 + y1) / 2 + offsetY, z],
         size: [x1 - x0, y1 - y0, proud],
       })
     board('head', [left, right], [halfHeight, halfHeight + width])
     for (const along of legs) board('leg', along, [-halfHeight, halfHeight])
     if (opening.type !== 'window') continue
-    const drop = sillDrop(opening, face)
+    const drop = sillDrop(opening, face, host)
     if (drop > 1e-6)
       for (const along of legs) board('foot', along, [-halfHeight - drop, -halfHeight])
     board('bottom', [left, right], [-halfHeight - drop - width, -halfHeight - drop])

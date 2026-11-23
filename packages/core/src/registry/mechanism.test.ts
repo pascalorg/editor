@@ -3,9 +3,14 @@ import { z } from 'zod'
 import type { AnyNode, AnyNodeId } from '../schema/types'
 import { useInteractive } from '../store/use-interactive'
 import useScene from '../store/use-scene'
-import { nodeMechanism, toggleNodeMechanism } from './mechanism'
+import {
+  nodeMechanism,
+  nodeMechanismParts,
+  toggleMechanismPart,
+  toggleNodeMechanism,
+} from './mechanism'
 import { nodeRegistry, registerNode } from './registry'
-import type { AnyNodeDefinition } from './types'
+import type { AnyNodeDefinition, MechanismPart } from './types'
 
 const KIND = 'test:articulated'
 const NODE_ID = 'articulated_one' as AnyNodeId
@@ -81,4 +86,41 @@ describe('mechanism capability', () => {
     useInteractive.getState().removeMechanism(NODE_ID)
     expect(NODE_ID in useInteractive.getState().mechanisms).toBe(false)
   })
+})
+
+const extraPart: MechanismPart = {
+  id: 'shutters',
+  label: 'Shutters',
+  icon: 'shutters',
+  verb: 'open',
+  has: () => true,
+  isOn: (node, state) => Boolean(state.mechanismParts[`${node.id}:shutters`]),
+  set: (node, on) => useInteractive.getState().setMechanismPart(node.id, 'shutters', on),
+}
+
+test('parts work without a main mechanism and toggle independently of it', () => {
+  register({
+    mechanism: {
+      ...singleSwitch,
+      parts: [extraPart, { ...extraPart, id: 'absent', has: () => false }],
+    },
+  })
+  const node = articulated(0)
+  expect(nodeMechanism(node)).toBeUndefined()
+  expect(nodeMechanismParts(node)).toEqual([extraPart])
+  const before = useScene.getState().nodes
+  toggleMechanismPart(extraPart, node)
+  expect(extraPart.isOn(node, useInteractive.getState())).toBe(true)
+  expect(useInteractive.getState().mechanisms[node.id]).toBeUndefined()
+  expect(useScene.getState().nodes).toBe(before)
+  toggleMechanismPart(extraPart, node)
+  expect(extraPart.isOn(node, useInteractive.getState())).toBe(false)
+})
+
+test('existing plugin mechanisms need no parts declaration', () => {
+  register({ mechanism: singleSwitch })
+  expect(nodeMechanismParts(articulated(1))).toEqual([])
+  expect(nodeMechanismParts(undefined)).toEqual([])
+  nodeRegistry._reset()
+  expect(nodeMechanismParts(articulated(1))).toEqual([])
 })

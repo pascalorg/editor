@@ -7,15 +7,19 @@ import type {
   FloorplanPalette,
   LiveNodeOverrides,
 } from '@pascal-app/core'
-import { type AnyNodeDefinition, emitter, nodeRegistry, registerNode } from '@pascal-app/core'
+import {
+  type AnyNodeDefinition,
+  emitter,
+  floorplanGeometryMetadata,
+  nodeRegistry,
+  registerNode,
+} from '@pascal-app/core'
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { z } from 'zod'
-import {
-  FLOORPLAN_NODE_EXTENSION_KEY,
-  floorplanGeometryMetadata,
-} from '../../../lib/floorplan/floorplan-extension'
+import { AXIS_MOVE_DRAG_LABEL, PATH_POINT_DRAG_LABEL } from '../../../lib/contextual-help'
 import type { SessionWrites } from '../../../lib/session-writes'
+import { snapContextOf } from '../../../lib/snapping-mode'
 import {
   buildFloorplanEntryGeometry,
   cancelFloorplanAffordanceDrag,
@@ -275,6 +279,26 @@ describe('floorplan affordance ownership', () => {
       reshape: 'curve',
       driver: 'floorplan',
     })
+  })
+
+  // With no scope, Select mode reads every snap mode as off, so these drags
+  // never snapped to the grid on the plan.
+  test('gives the MEP run point and segment drags a handle-drag scope in the run snap context', () => {
+    const point = floorplanAffordanceReshapeScope('move-path-point', 'duct_1', { pointIndex: 0 })
+    const segment = floorplanAffordanceReshapeScope('move-segment', 'duct_1', { segmentIndex: 0 })
+    expect(point).toEqual({ kind: 'handle-drag', nodeId: 'duct_1', handle: PATH_POINT_DRAG_LABEL })
+    expect(segment).toEqual({ kind: 'handle-drag', nodeId: 'duct_1', handle: AXIS_MOVE_DRAG_LABEL })
+    for (const scope of [point, segment]) {
+      expect(
+        snapContextOf({
+          scope: scope!,
+          mode: 'select',
+          tool: null,
+          profileOf: () => undefined,
+          profileOfNode: () => 'structural',
+        }),
+      ).toBe('polygon')
+    }
   })
 })
 
@@ -754,11 +778,7 @@ describe('collectFloorplanLinkedLevelNodes', () => {
       category: 'structure',
       defaults: () => ({}) as never,
       floorplan: () => null,
-      extensions: {
-        [FLOORPLAN_NODE_EXTENSION_KEY]: {
-          linkedLevelIds: () => ['level_upper' as AnyNodeId],
-        },
-      },
+      floorplanLinkedLevelIds: () => ['level_upper' as AnyNodeId],
     } as unknown as AnyNodeDefinition)
     const child = {
       id: 'linked_child',

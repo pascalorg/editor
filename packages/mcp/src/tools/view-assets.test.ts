@@ -3,7 +3,11 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { Client } from '@modelcontextprotocol/client'
 import { InMemoryTransport, McpServer } from '@modelcontextprotocol/server'
-import { createAssetViewLoader, createFetchAssetViewIO } from '@pascal-app/core/agent-operations'
+import {
+  assetCatalogSource,
+  createAssetViewLoader,
+  createFetchAssetViewIO,
+} from '@pascal-app/core/agent-operations'
 import { viewAssetsTool } from '@pascal-app/core/agent-tools'
 import { type AssetInput, ItemNode } from '@pascal-app/core/schema'
 import { SceneBridge } from '../bridge/scene-bridge'
@@ -59,7 +63,7 @@ async function connect(catalog?: AssetInput[], hosts: PlanReadingHosts = {}) {
   registerSharedTools(
     server,
     createSceneOperations({ bridge }),
-    catalog ? async () => catalog : undefined,
+    catalog ? assetCatalogSource(catalog) : undefined,
     hosts,
   )
   const [serverTransport, clientTransport] = InMemoryTransport.createLinkedPair()

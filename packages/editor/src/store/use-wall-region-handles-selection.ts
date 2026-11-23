@@ -1,10 +1,9 @@
 import { type AnyNodeId, useScene } from '@pascal-app/core'
-import { useViewer } from '@pascal-app/viewer'
+import { isTypingTarget, useViewer } from '@pascal-app/viewer'
 import { create } from 'zustand'
 import { hasLiveGestures } from '../lib/gesture-lifecycle'
 import { removeWallRegion } from '../lib/paint-regions'
 import { sfxEmitter } from '../lib/sfx-bus'
-import { isTypingTarget } from '../lib/typing-target'
 import useDeleteConfirmation from './use-delete-confirmation'
 import useInteractionScope from './use-interaction-scope'
 

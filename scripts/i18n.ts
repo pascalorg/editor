@@ -84,6 +84,10 @@ function compiledCatalogPath(locale: string): string {
   return join(CATALOG_ROOT, locale, 'messages.ts')
 }
 
+function englishFormattingFallbackPath(): string {
+  return join(ROOT, 'packages/core/src/i18n/english-formatting-fallback.ts')
+}
+
 function readJson<T>(path: string): T {
   return JSON.parse(readFileSync(path, 'utf8')) as T
 }
@@ -399,17 +403,18 @@ function promptFor(request: TranslationRequest): string {
   ].join('\n\n')
 }
 
-async function configuredProvider(): Promise<TranslationProvider> {
+export async function configuredProvider(
+  env: NodeJS.ProcessEnv = process.env,
+): Promise<TranslationProvider> {
   const name =
-    process.env.I18N_PROVIDER ??
-    (process.env.OPENAI_API_KEY ? 'openai' : process.env.ANTHROPIC_API_KEY ? 'anthropic' : '')
-  const modelName = process.env.I18N_MODEL
+    env.I18N_PROVIDER ?? (env.OPENAI_API_KEY ? 'openai' : env.ANTHROPIC_API_KEY ? 'anthropic' : '')
+  const modelName = env.I18N_MODEL
   if (!modelName) throw new Error('Set I18N_MODEL to the translation model')
 
-  if (name === 'openai' && !process.env.OPENAI_API_KEY) {
+  if (name === 'openai' && !env.OPENAI_API_KEY) {
     throw new Error('Set OPENAI_API_KEY for the OpenAI translation provider')
   }
-  if (name === 'anthropic' && !process.env.ANTHROPIC_API_KEY) {
+  if (name === 'anthropic' && !env.ANTHROPIC_API_KEY) {
     throw new Error('Set ANTHROPIC_API_KEY for the Anthropic translation provider')
   }
   if (name !== 'openai' && name !== 'anthropic') {
@@ -420,12 +425,12 @@ async function configuredProvider(): Promise<TranslationProvider> {
   const model =
     name === 'openai'
       ? (await import('@ai-sdk/openai')).createOpenAI({
-          apiKey: process.env.OPENAI_API_KEY,
-          baseURL: process.env.OPENAI_BASE_URL,
+          apiKey: env.OPENAI_API_KEY,
+          baseURL: env.OPENAI_BASE_URL,
         })(modelName)
       : (await import('@ai-sdk/anthropic')).createAnthropic({
-          apiKey: process.env.ANTHROPIC_API_KEY,
-          baseURL: process.env.ANTHROPIC_BASE_URL,
+          apiKey: env.ANTHROPIC_API_KEY,
+          baseURL: env.ANTHROPIC_BASE_URL,
         })(modelName)
   const translationOutputSchema = z.object({
     locale: z.string(),
@@ -565,6 +570,24 @@ function compiledCatalog(locale: string, sources: SourceMessage[]) {
   })
 }
 
+function compiledEnglishFormattingFallback(sources: SourceMessage[]) {
+  return createCompiledCatalog(
+    'en',
+    Object.fromEntries(
+      sources
+        .filter((source) =>
+          source.context.some((path) => /^packages\/(core|viewer|nodes)\/src\//.test(path)),
+        )
+        .filter(({ message }) => {
+          const compiled = compileMessageOrThrow(message)
+          return compiled.length !== 1 || compiled[0] !== message
+        })
+        .map(({ id, message }) => [id, message]),
+    ),
+    { namespace: 'ts', outputPrefix: '/*eslint-disable*/', strict: true },
+  )
+}
+
 function writeCompiledCatalogs(strict = false): void {
   const sources = readSourceMessages()
   if (strict) {
@@ -576,13 +599,21 @@ function writeCompiledCatalogs(strict = false): void {
     )
     if (errors.length > 0) throw new Error(errors.join('\n'))
   }
-  const compiled = ALL_LOCALES.map((locale) => [locale, compiledCatalog(locale, sources)] as const)
-  const errors = compiled.flatMap(([locale, result]) =>
-    result.errors.map(({ id, error }) => `${locale}: failed to compile "${id}": ${error.message}`),
+  const compiled = [
+    ...ALL_LOCALES.map(
+      (locale) => [compiledCatalogPath(locale), compiledCatalog(locale, sources)] as const,
+    ),
+    [englishFormattingFallbackPath(), compiledEnglishFormattingFallback(sources)] as const,
+  ]
+  const errors = compiled.flatMap(([path, result]) =>
+    result.errors.map(
+      ({ id, error }) => `${relative(ROOT, path)}: failed to compile "${id}": ${error.message}`,
+    ),
   )
   if (errors.length > 0) throw new Error(errors.join('\n'))
-  for (const [locale, result] of compiled) {
-    writeFileSync(compiledCatalogPath(locale), result.source)
+  for (const [path, result] of compiled) {
+    mkdirSync(dirname(path), { recursive: true })
+    writeFileSync(path, result.source)
   }
   writePseudoCatalog(sources)
 }
@@ -1049,8 +1080,12 @@ export function releaseCheck(
 /** The package whose release carries the bundled catalogs. */
 const CATALOG_PACKAGE = 'editor'
 
+/**
+ * Whether `revision` postdates the catalogs. One catalog is enough: a locale
+ * bundled since then has none there, and so no reviewed entries to keep.
+ */
 function hasCatalogs(revision: string): boolean {
-  return TARGET_LOCALES.every(
+  return TARGET_LOCALES.some(
     (locale) => readAtRevision(revision, catalogPath(locale)) !== undefined,
   )
 }
@@ -1137,15 +1172,18 @@ function checkEnglishCatalog(
 }
 
 function checkCompiledCatalogs(sources: SourceMessage[]): string[] {
-  return ALL_LOCALES.flatMap((locale) => {
-    const compiled = compiledCatalog(locale, sources)
+  const catalogs = [
+    ...ALL_LOCALES.map(
+      (locale) => [compiledCatalogPath(locale), compiledCatalog(locale, sources)] as const,
+    ),
+    [englishFormattingFallbackPath(), compiledEnglishFormattingFallback(sources)] as const,
+  ]
+  return catalogs.flatMap(([path, compiled]) => {
     const errors = compiled.errors.map(
-      ({ id, error }) => `${locale}: failed to compile "${id}": ${error.message}`,
+      ({ id, error }) => `${relative(ROOT, path)}: failed to compile "${id}": ${error.message}`,
     )
-    if (compiled.source !== readFileSync(compiledCatalogPath(locale), 'utf8')) {
-      errors.push(
-        `${relative(ROOT, compiledCatalogPath(locale))} is not synchronized; run bun run i18n:compile`,
-      )
+    if (!existsSync(path) || compiled.source !== readFileSync(path, 'utf8')) {
+      errors.push(`${relative(ROOT, path)} is not synchronized; run bun run i18n:compile`)
     }
     return errors
   })
@@ -1202,6 +1240,19 @@ async function main(): Promise<void> {
           return existsSync(file) ? readFileSync(file, 'utf8') : undefined
         })
       : readLocaleEntries((path) => readAtRevision(revision!, path))
+    const added = TARGET_LOCALES.filter((locale) => !base[locale])
+    if (baseDir && added.length === TARGET_LOCALES.length) {
+      console.error(
+        `[i18n] release-check: --base-dir ${baseDir} has no bundled PO catalogs to compare with`,
+      )
+      process.exitCode = 1
+      return
+    }
+    if (added.length > 0) {
+      console.log(
+        `New locales since ${baseDir ?? resolved?.label}, with no reviewed entries to keep: ${added.join(', ')}`,
+      )
+    }
     const sources = readSourceMessages()
     const { errors, warnings } = releaseCheck(sources, base)
     reportWarnings(warnings)

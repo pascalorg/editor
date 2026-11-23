@@ -1,7 +1,7 @@
 import type { AnyNode } from '../schema/types'
 import { useInteractive } from '../store/use-interactive'
 import { nodeRegistry } from './registry'
-import type { MechanismCapability } from './types'
+import type { MechanismCapability, MechanismPart } from './types'
 
 /** The node's mechanism, when its kind declares one and the node has something to run. */
 export function nodeMechanism(node: AnyNode | undefined): MechanismCapability | undefined {
@@ -21,4 +21,17 @@ export function toggleNodeMechanism(node: AnyNode): boolean {
   if (!mechanism) return false
   toggleMechanism(mechanism, node)
   return true
+}
+
+/** Additional controls are independent of whether the main mechanism is available. */
+export function nodeMechanismParts(node: AnyNode | undefined): MechanismPart[] {
+  if (!node) return []
+  return (
+    nodeRegistry.get(node.type)?.capabilities.mechanism?.parts?.filter((part) => part.has(node)) ??
+    []
+  )
+}
+
+export function toggleMechanismPart(part: MechanismPart, node: AnyNode): void {
+  part.set(node, !part.isOn(node, useInteractive.getState()))
 }

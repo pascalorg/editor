@@ -1,11 +1,12 @@
 import {
+  formatLinearMeasurement,
+  type LinearUnit,
   type OpenWallEnd,
   planJoinOpenWallEnd,
   runAsSingleSceneHistoryStep,
   useScene,
   type WallJoinResult,
 } from '@pascal-app/core'
-import { formatLinearMeasurement, type LinearUnit } from '../measurements'
 
 const JOIN_REFUSALS: Record<Extract<WallJoinResult, { ok: false }>['reason'], string> = {
   'covered-existing-wall': 'An existing wall already covers this span',

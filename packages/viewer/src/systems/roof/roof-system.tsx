@@ -52,6 +52,7 @@ import { applyWorldScaleBoxUVs } from '../../lib/box-uv'
 import { ensureRenderableGeometryAttributes, subtractCsgBrush } from '../../lib/csg-utils'
 import useViewer from '../../store/use-viewer'
 import { isRevealAssembling } from '../construction-reveal/construction-reveal'
+import { setGeometryFailure, useGeometryStatus } from '../geometry/geometry-status'
 import {
   ROOF_GABLE_LEFT_MATERIAL_INDEX,
   ROOF_GABLE_RIGHT_MATERIAL_INDEX,
@@ -190,9 +191,15 @@ const MAX_SEGMENTS_PER_FRAME = 3
 /** What each roof's shell was last merged from: its node and its segments, as the store held them. */
 const mergedFrom = new Map<AnyNodeId, Map<string, AnyNode>>()
 
+/** A roof's shell is merged from the roof and its segments; its faces of other kinds draw apart. */
+const shellInputIds = (roof: RoofNode, nodes: Record<string, AnyNode>): string[] => [
+  roof.id,
+  ...(roof.children ?? []).filter((id) => nodes[id]?.type === 'roof-segment'),
+]
+
 function rememberMergedInputs(roof: RoofNode, nodes: Record<string, AnyNode>) {
   const inputs = new Map<string, AnyNode>()
-  for (const id of [roof.id, ...(roof.children ?? [])]) {
+  for (const id of shellInputIds(roof, nodes)) {
     const node = nodes[id]
     if (node) inputs.set(id, node)
   }
@@ -204,7 +211,7 @@ function mergedFromStillHolds(roofId: AnyNodeId, nodes: Record<string, AnyNode>)
   const inputs = mergedFrom.get(roofId)
   const roof = nodes[roofId]
   if (!inputs || roof?.type !== 'roof') return false
-  const ids = [roofId, ...(roof.children ?? [])]
+  const ids = shellInputIds(roof, nodes)
   return ids.length === inputs.size && ids.every((id) => inputs.get(id) === nodes[id])
 }
 
@@ -473,7 +480,12 @@ export const RoofSystem = ({ geometryAdapter }: { geometryAdapter?: RoofGeometry
       // Built even while hidden: a roof assembling from its segments (construction
       // reveal) hides its shell, and must show it whole the moment it is captured.
       rememberMergedInputs(node as RoofNode, nodes)
-      updateMergedRoofGeometry(node as RoofNode, group, nodes, framing)
+      try {
+        updateMergedRoofGeometry(node as RoofNode, group, nodes, framing)
+      } catch (error) {
+        setGeometryFailure(node.id, 'build-failed')
+        console.error('Roof rebuild failed:', error)
+      }
       roofsProcessed++
 
       pendingRoofUpdates.delete(id)
@@ -494,7 +506,18 @@ function updateRoofSegmentGeometry(
   adapter?: RoofGeometryAdapter,
   framing = false,
 ) {
-  const newGeo = generateRoofSegmentGeometry(node, nodes, { framing })
+  let newGeo: THREE.BufferGeometry
+  try {
+    newGeo = generateRoofSegmentGeometry(node, nodes, { framing })
+  } catch (error) {
+    setGeometryFailure(node.id, 'build-failed')
+    console.error('Roof segment rebuild failed:', error)
+    return
+  }
+  if (useGeometryStatus.getState().failures.has(node.id)) {
+    newGeo.dispose()
+    return
+  }
 
   mesh.geometry.dispose()
   mesh.geometry = newGeo
@@ -523,70 +546,71 @@ function subtractAccessoryCuts(
   let workingShin = brushes.shinSlab
   let workingDeck = brushes.deckSlab
   let workingWall = brushes.wallBrush
-  for (const childElemId of segment.children ?? []) {
-    const storedChild = nodes[childElemId as AnyNodeId]
-    if (!storedChild) continue
-    const childElem = getEffectiveNode(storedChild)
-    const meta =
-      typeof childElem.metadata === 'object' && childElem.metadata !== null
-        ? (childElem.metadata as Record<string, unknown>)
-        : undefined
-    if (meta?.isTransient) continue
+  try {
+    for (const childElemId of segment.children ?? []) {
+      const storedChild = nodes[childElemId as AnyNodeId]
+      if (!storedChild) continue
+      const childElem = getEffectiveNode(storedChild)
+      const meta =
+        typeof childElem.metadata === 'object' && childElem.metadata !== null
+          ? (childElem.metadata as Record<string, unknown>)
+          : undefined
+      if (meta?.isTransient) continue
 
-    const childDef = nodeRegistry.get(childElem.type)
-    const buildCut = childDef?.capabilities?.roofAccessory?.buildCut
-    if (!buildCut) continue
+      const childDef = nodeRegistry.get(childElem.type)
+      const buildCut = childDef?.capabilities?.roofAccessory?.buildCut
+      if (!buildCut) continue
 
-    const cutGeo = buildCut(childElem, segment)
-    if (!cutGeo) continue
+      const cutGeo = buildCut(childElem, segment)
+      if (!cutGeo) continue
 
-    // Wrap the kind-emitted geometry in a Brush. Kinds return raw
-    // shapes; the viewer welds (mandatory after rotations leave
-    // duplicated verts), attaches a single material group, and
-    // builds the bounds tree — keeping kind code free of
-    // three-bvh-csg / three-mesh-bvh imports.
-    const welded = mergeVertices(cutGeo, 1e-4)
-    cutGeo.dispose()
-    const idxCount = welded.getIndex()?.count ?? 0
-    if (idxCount === 0) {
-      welded.dispose()
-      continue
-    }
-    welded.clearGroups()
-    welded.addGroup(0, idxCount, 0)
-    welded.computeVertexNormals()
-    ensureRenderableGeometryAttributes(welded)
-    computeGeometryBoundsTree(welded)
-    const cut = new Brush(welded, dummyMats[0])
-    cut.updateMatrixWorld()
-
-    const cutScope = childDef?.capabilities?.roofAccessory?.cutScope ?? 'all'
-    try {
-      if (cutScope !== 'wall') {
-        const nextShin = csgEvaluator.evaluate(workingShin, cut, SUBTRACTION) as Brush
-        workingShin.geometry.dispose()
-        prepareBrushForCSG(nextShin)
-        workingShin = nextShin
-
-        const nextDeck = csgEvaluator.evaluate(workingDeck, cut, SUBTRACTION) as Brush
-        workingDeck.geometry.dispose()
-        prepareBrushForCSG(nextDeck)
-        workingDeck = nextDeck
+      // Wrap the kind-emitted geometry in a Brush. Kinds return raw
+      // shapes; the viewer welds (mandatory after rotations leave
+      // duplicated verts), attaches a single material group, and
+      // builds the bounds tree — keeping kind code free of
+      // three-bvh-csg / three-mesh-bvh imports.
+      const welded = mergeVertices(cutGeo, 1e-4)
+      cutGeo.dispose()
+      const idxCount = welded.getIndex()?.count ?? 0
+      if (idxCount === 0) {
+        welded.dispose()
+        continue
       }
+      welded.clearGroups()
+      welded.addGroup(0, idxCount, 0)
+      welded.computeVertexNormals()
+      ensureRenderableGeometryAttributes(welded)
+      computeGeometryBoundsTree(welded)
+      const cut = new Brush(welded, dummyMats[0])
+      cut.updateMatrixWorld()
 
-      const nextWall = csgEvaluator.evaluate(workingWall, cut, SUBTRACTION) as Brush
-      workingWall.geometry.dispose()
-      prepareBrushForCSG(nextWall)
-      workingWall = nextWall
-    } catch (e) {
-      console.error(`[${childElem.type}] cut CSG failed:`, e)
-    } finally {
-      cut.geometry.dispose()
+      const cutScope = childDef?.capabilities?.roofAccessory?.cutScope ?? 'all'
+      try {
+        if (cutScope !== 'wall') {
+          const nextShin = csgEvaluator.evaluate(workingShin, cut, SUBTRACTION) as Brush
+          workingShin.geometry.dispose()
+          prepareBrushForCSG(nextShin)
+          workingShin = nextShin
+
+          const nextDeck = csgEvaluator.evaluate(workingDeck, cut, SUBTRACTION) as Brush
+          workingDeck.geometry.dispose()
+          prepareBrushForCSG(nextDeck)
+          workingDeck = nextDeck
+        }
+
+        const nextWall = csgEvaluator.evaluate(workingWall, cut, SUBTRACTION) as Brush
+        workingWall.geometry.dispose()
+        prepareBrushForCSG(nextWall)
+        workingWall = nextWall
+      } finally {
+        cut.geometry.dispose()
+      }
     }
+  } finally {
+    brushes.shinSlab = workingShin
+    brushes.deckSlab = workingDeck
+    brushes.wallBrush = workingWall
   }
-  brushes.shinSlab = workingShin
-  brushes.deckSlab = workingDeck
-  brushes.wallBrush = workingWall
 }
 
 function getMergedRoofSegmentBrushes(
@@ -612,7 +636,7 @@ function getMergedRoofSegmentBrushes(
     ),
     () =>
       getRoofSegmentBrushes(segment, {
-        fascia: wearsFascia(segment, roofNode),
+        fascia: wearsFascia(segment, roofNode, nodes),
         framing: framingDepth,
       }),
   )
@@ -622,7 +646,12 @@ function getMergedRoofSegmentBrushes(
     return null
   }
 
-  subtractAccessoryCuts(brushes, segment, nodes)
+  try {
+    subtractAccessoryCuts(brushes, segment, nodes)
+  } catch (error) {
+    disposeRoofSegmentBrushSet(brushes)
+    throw error
+  }
 
   _matrix.compose(
     _position.set(segment.position[0], segment.position[1], segment.position[2]),
@@ -687,10 +716,11 @@ function updateMergedRoofGeometry(
   // Merge each child through `getEffectiveNode` so an in-flight handle
   // drag (live override on width / depth / wallHeight / pitch / rotation)
   // is reflected in the merged shell during the drag, not only on commit.
+  // Faces of other kinds (`capabilities.roofs`) render as their own kind, outside the shell.
   const children = (roofNode.children ?? [])
     .map((id) => {
-      const scn = nodes[id] as RoofSegmentNode | undefined
-      return scn ? getEffectiveNode(scn) : undefined
+      const scn = nodes[id]
+      return scn?.type === 'roof-segment' ? getEffectiveNode(scn) : undefined
     })
     .filter(
       (n): n is RoofSegmentNode =>
@@ -702,6 +732,7 @@ function updateMergedRoofGeometry(
     // Not BoxGeometry: its 6 groups against the merged mesh's 4-material array
     // crash GLTFExporter (materials[4] → undefined) when the roof bakes.
     mergedMesh.geometry = createDegenerateRoofPlaceholder()
+    setGeometryFailure(roofNode.id, null)
     return
   }
 
@@ -772,7 +803,7 @@ function updateMergedRoofGeometry(
       totalDeckSlab = brushes.deckSlab
     }
 
-    if (!shouldIncludeRoofSegmentWallShell(child, roofNode)) {
+    if (!shouldIncludeRoofSegmentWallShell(child, roofNode, nodes)) {
       brushes.wallBrush.geometry.dispose()
       brushes.innerBrush.geometry.dispose()
     } else {
@@ -823,6 +854,7 @@ function updateMergedRoofGeometry(
           )
           warnedMergedRoofNaNIds.add(roofNode.id)
         }
+        setGeometryFailure(roofNode.id, 'invalid-geometry')
         resultGeo.dispose()
         if (combined !== shinDeck) shinDeck.geometry.dispose()
         totalShinSlab.geometry.dispose()
@@ -850,7 +882,7 @@ function updateMergedRoofGeometry(
       splitRoofWallBandFaces(
         finalGeo,
         csgChildren
-          .filter((child) => shouldIncludeRoofSegmentWallShell(child, roofNode))
+          .filter((child) => shouldIncludeRoofSegmentWallShell(child, roofNode, nodes))
           .map((child) => ({
             node: child,
             inverse: new THREE.Matrix4()
@@ -879,9 +911,11 @@ function updateMergedRoofGeometry(
       ensureRenderableGeometryAttributes(finalGeo)
       mergedMesh.geometry.dispose()
       mergedMesh.geometry = finalGeo
+      setGeometryFailure(roofNode.id, null)
 
       if (combined !== shinDeck) shinDeck.geometry.dispose()
     } catch (e) {
+      setGeometryFailure(roofNode.id, 'build-failed')
       console.error('Merged roof CSG failed:', e)
     }
 
@@ -901,6 +935,7 @@ function updateMergedRoofGeometry(
       ensureRenderableGeometryAttributes(finalGeo)
       mergedMesh.geometry.dispose()
       mergedMesh.geometry = finalGeo
+      setGeometryFailure(roofNode.id, null)
     }
     for (const geometry of directSegmentGeometries) {
       if (geometry !== finalGeo) geometry.dispose()
@@ -1059,7 +1094,7 @@ function getMergedRoofSegmentCacheKey(
     roofPosition: roofNode.position ?? [0, 0, 0],
     roofRotation: roofNode.rotation ?? 0,
     // a shed's fascia depends on whether its roof is a composite of pieces
-    composite: (roofNode.children?.length ?? 0) > 1,
+    composite: isCompositeRoof(roofNode, nodes),
     segment,
     accessories: getMergedRoofAccessoryCachePayload(segment, nodes),
     framing,
@@ -1211,7 +1246,20 @@ function readShedOpenEndSides(node: RoofSegmentNode): Set<ShedEndSide> {
   return new Set(value.filter((side): side is ShedEndSide => side === 'left' || side === 'right'))
 }
 
-function shouldIncludeRoofSegmentWallShell(node: RoofSegmentNode, parentRoof?: RoofNode): boolean {
+/**
+ * Whether a roof's shell is pieced from several segments. Its faces of other kinds
+ * (`capabilities.roofs`) are no pieces of it; without the scene, every child counts.
+ */
+function isCompositeRoof(roof: RoofNode, nodes?: Readonly<Record<string, AnyNode>>): boolean {
+  const children = roof.children ?? []
+  return (nodes ? children.filter((id) => nodes[id]?.type === 'roof-segment') : children).length > 1
+}
+
+function shouldIncludeRoofSegmentWallShell(
+  node: RoofSegmentNode,
+  parentRoof?: RoofNode,
+  nodes?: Readonly<Record<string, AnyNode>>,
+): boolean {
   if (node.wallShell === 'include') return true
   if (node.wallShell === 'omit') return false
   if (node.roofType !== 'shed') return true
@@ -1219,7 +1267,7 @@ function shouldIncludeRoofSegmentWallShell(node: RoofSegmentNode, parentRoof?: R
   // Older composite roofs use overlapping shed segments as deck pieces. Their
   // wall volumes were never part of the rendered shell and make CSG grow
   // exponentially when unioned together.
-  return !parentRoof || (parentRoof.children?.length ?? 0) <= 1
+  return !parentRoof || !isCompositeRoof(parentRoof, nodes)
 }
 
 function hasSegmentTrim(node: RoofSegmentNode): boolean {
@@ -1815,11 +1863,15 @@ function buildEaveCuts(
  * one deck (the same pieces whose wall shells are left out), so boards would
  * show between them.
  */
-function wearsFascia(node: RoofSegmentNode, parentRoof?: RoofNode): boolean {
+function wearsFascia(
+  node: RoofSegmentNode,
+  parentRoof?: RoofNode,
+  nodes?: Readonly<Record<string, AnyNode>>,
+): boolean {
   if (node.fascia !== true) return false
   if (node.roofType !== 'shed') return true
   if (isLeanToShedSegment(node)) return false
-  return !parentRoof || (parentRoof.children?.length ?? 0) <= 1
+  return !parentRoof || !isCompositeRoof(parentRoof, nodes)
 }
 
 /** What a framed roof's deck keeps over its open structure band at least: a 7/16 in sheet. */
@@ -2426,21 +2478,27 @@ export function generateRoofSegmentGeometry(
     }
     result.computeVertexNormals()
     ensureRenderableGeometryAttributes(result)
+    setGeometryFailure(node.id, null)
     return result
   }
   const brushes = withSegmentUvMatrix(segmentWorldMatrix, () =>
     getRoofSegmentBrushes(node, {
-      fascia: wearsFascia(node, parentRoof),
+      fascia: wearsFascia(node, parentRoof, nodes),
       framing: options.framing ? roofFramingDepth(node) : 0,
     }),
   )
   if (!brushes) {
-    // Fallback: simple box
+    setGeometryFailure(node.id, 'build-failed')
     return new THREE.BoxGeometry(node.width, node.wallHeight, node.depth)
   }
 
   if (nodes) {
-    subtractAccessoryCuts(brushes, node, nodes)
+    try {
+      subtractAccessoryCuts(brushes, node, nodes)
+    } catch (error) {
+      disposeRoofSegmentBrushSet(brushes)
+      throw error
+    }
   }
 
   const { deckSlab, shinSlab, wallBrush, innerBrush, rakeBoards } = brushes
@@ -2451,7 +2509,7 @@ export function generateRoofSegmentGeometry(
     prepareBrushForCSG(shinDeck)
     let combined = shinDeck
     let hollowWall: Brush | null = null
-    if (shouldIncludeRoofSegmentWallShell(node, parentRoof)) {
+    if (shouldIncludeRoofSegmentWallShell(node, parentRoof, nodes)) {
       hollowWall = csgEvaluator.evaluate(wallBrush, innerBrush, SUBTRACTION)
       prepareBrushForCSG(hollowWall)
       combined = csgEvaluator.evaluate(shinDeck, hollowWall, ADDITION)
@@ -2469,8 +2527,9 @@ export function generateRoofSegmentGeometry(
     resultGeo = csgGeometry(combined)
     if (geometryHasInvalidAttributes(resultGeo)) {
       resultGeo.dispose()
+      setGeometryFailure(node.id, 'invalid-geometry')
       resultGeo = csgGeometry(wallBrush).clone()
-    }
+    } else setGeometryFailure(node.id, null)
 
     const resultMaterials = csgMaterials(combined)
 
@@ -2496,6 +2555,7 @@ export function generateRoofSegmentGeometry(
     hollowWall?.geometry.dispose()
     if (combined !== shinDeck) shinDeck.geometry.dispose()
   } catch (e) {
+    setGeometryFailure(node.id, 'build-failed')
     console.error('Roof CSG failed:', e)
     resultGeo = csgGeometry(wallBrush).clone()
   }

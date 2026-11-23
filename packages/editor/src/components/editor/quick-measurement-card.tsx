@@ -1,9 +1,9 @@
 'use client'
 
 import type { QuickMeasurementMetric, QuickMeasurementReport } from '@pascal-app/core'
+import { formatAreaLabel, formatLinearMeasurement, formatVolumeLabel } from '@pascal-app/core'
 import { Crosshair, MapPin } from 'lucide-react'
 import { memo } from 'react'
-import { formatAreaLabel, formatLinearMeasurement, formatVolumeLabel } from '../../lib/measurements'
 
 function formatMetric(
   metric: QuickMeasurementMetric,

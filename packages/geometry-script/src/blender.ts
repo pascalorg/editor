@@ -87,6 +87,7 @@ export async function compileBlenderBuild(input: {
   code: string
   params?: Record<string, GeometryScriptParamValue>
   run: BlenderRun
+  usageShape?: boolean
 }): Promise<GeometryScriptCompileOutput> {
   assertScriptSize(input.code)
   const mount = (input.run.mount ?? 'floor') as GeometryScriptMount
@@ -102,5 +103,13 @@ export async function compileBlenderBuild(input: {
   restoreNames(gltf.scene, gltf.animations)
   const built = gltf.scene
   built.animations = gltf.animations
-  return finishBuild({ built, mount, specs, params, code: input.code, language: 'bpy' })
+  return finishBuild({
+    built,
+    mount,
+    specs,
+    params,
+    code: input.code,
+    language: 'bpy',
+    usageShape: input.usageShape,
+  })
 }

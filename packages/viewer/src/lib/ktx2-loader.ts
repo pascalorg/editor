@@ -10,6 +10,7 @@ import {
 // LottieLoader/TTFLoader, whose CDN URL imports (`lottie-web`, `opentype.js`)
 // crash bun's test runtime for every consumer of the viewer barrel.
 import { KTX2Loader } from 'three/examples/jsm/loaders/KTX2Loader.js'
+import { getViewerConfig } from './viewer-config'
 
 /** The private KTX2Loader surface this module relies on (stable across three
  *  releases but not part of the public types). */
@@ -165,7 +166,6 @@ class AlignmentSafeKTX2Loader extends KTX2Loader {
  * the scene, so catalog `.ktx2` finishes still load).
  */
 export const ktx2Loader = new AlignmentSafeKTX2Loader()
-ktx2Loader.setTranscoderPath('https://cdn.jsdelivr.net/gh/pmndrs/drei-assets@master/basis/')
 
 const configuredRenderers = new WeakSet<object>()
 const warnedRenderers = new WeakSet<object>()
@@ -188,6 +188,7 @@ export function whenKtx2Ready(): Promise<void> {
 
 /** Returns true once support has been detected for this renderer (KTX2 safe to load). */
 export function ensureKtx2Support(renderer: unknown): boolean {
+  ktx2Loader.setTranscoderPath(getViewerConfig().decoders.basisPath)
   const key = renderer as object | null
   if (!key) return false
   if (configuredRenderers.has(key)) return true

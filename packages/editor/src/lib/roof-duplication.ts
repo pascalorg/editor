@@ -1,13 +1,16 @@
 'use client'
 
 import {
+  type AnyNode,
   type AnyNodeId,
   collectionIdsOf,
   generateId,
+  nodeRegistry,
   type RoofNode,
   RoofNode as RoofNodeSchema,
   type RoofSegmentNode,
   RoofSegmentNode as RoofSegmentNodeSchema,
+  roofFaceOf,
   sceneRegistry,
   useScene,
 } from '@pascal-app/core'
@@ -121,6 +124,23 @@ export function duplicateRoofSubtree(
     segmentSourceIds.push(childNode.id)
   }
 
+  // Its faces of other kinds (`capabilities.roofs`) are copied by their own schema, in the copy's
+  // frame as in the source's; a face that does not parse fails the copy, as a segment does.
+  const faceClones: { node: AnyNode; sourceId: AnyNodeId }[] = []
+  for (const childId of sourceRoof.children ?? []) {
+    const childNode = scene.nodes[childId as AnyNodeId]
+    const schema =
+      childNode && roofFaceOf(childNode) ? nodeRegistry.get(childNode.type)?.schema : undefined
+    if (!(childNode && schema)) continue
+    const { id: _id, ...fields } = structuredClone(childNode)
+    const node = schema.parse({
+      ...fields,
+      parentId: roofClone.id,
+      metadata: buildDuplicateMetadata(childNode.metadata),
+    }) as AnyNode
+    faceClones.push({ node, sourceId: childNode.id })
+  }
+
   // Each copy is in the collections its source is in.
   scene.createNodes([
     { node: roofClone, parentId, collectionIds: collectionIdsOf(scene.collections, sourceRoofId) },
@@ -128,6 +148,11 @@ export function duplicateRoofSubtree(
       node: segment,
       parentId: roofClone.id as AnyNodeId,
       collectionIds: collectionIdsOf(scene.collections, segmentSourceIds[index]!),
+    })),
+    ...faceClones.map(({ node, sourceId }) => ({
+      node,
+      parentId: roofClone.id as AnyNodeId,
+      collectionIds: collectionIdsOf(scene.collections, sourceId),
     })),
   ])
 
@@ -148,12 +173,12 @@ export function duplicateRoofSubtree(
 
   const segmentIds = segmentClones.map((segment) => segment.id)
   const createdChildIds = (createdRoof.children ?? []) as AnyNodeId[]
-  const missingSegmentId = segmentIds.find(
-    (segmentId) => !createdChildIds.includes(segmentId as AnyNodeId),
+  const missingChildId = [...segmentIds, ...faceClones.map(({ node }) => node.id)].find(
+    (childId) => !createdChildIds.includes(childId as AnyNodeId),
   )
-  if (missingSegmentId) {
+  if (missingChildId) {
     throw new Error(
-      `Duplicated roof "${createdRoof.id}" is missing cloned segment "${missingSegmentId}"`,
+      `Duplicated roof "${createdRoof.id}" is missing cloned child "${missingChildId}"`,
     )
   }
 
@@ -206,7 +231,7 @@ export function clearRoofDuplicateMetadata(
 
   for (const childId of roofNode.children ?? []) {
     const childNode = scene.nodes[childId as AnyNodeId]
-    if (childNode?.type !== 'roof-segment') {
+    if (!childNode) {
       continue
     }
 

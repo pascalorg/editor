@@ -53,17 +53,35 @@ const rect = (x0: number, z0: number, x1: number, z1: number): Pt[] => [
   [x0, z1],
 ]
 
+const wallAt = (tag: string, start: Pt, end: Pt) =>
+  WallNode.parse({ id: `wall_${tag}`, name: `Wall ${tag}`, parentId: 'level_0', start, end, height: 2.5 })
+
 const roomZone = (id: string, levelId: string, name: string, polygon: Pt[], extra = {}) =>
   ZoneNode.parse({ id, parentId: levelId, name, polygon, spaceRole: 'room', ...extra })
 
 const ground = (...nodes: AnyNode[]) => scene(building(), level('level_0', 0), ...nodes)
 
-/** A finished room on the ground floor: its walls, a door, its room zone, floor and ceiling. */
+/** A finished room on the ground floor: its walls painted on both faces, a door, its room zone with a floor and a wall finish, a floor plate and a painted ceiling. */
 const finished = (tag: string, name: string, ring: Pt[] = ROOM) => [
-  ...wallRing('level_0', tag, ring),
-  roomZone(`zone_${tag}`, 'level_0', name, ring),
+  ...wallRing('level_0', tag, ring).map((wall) =>
+    wall.type === 'wall'
+      ? WallNode.parse({
+          ...wall,
+          slots: { a: 'library:preset-softwhite', b: 'library:preset-softwhite' },
+        })
+      : wall,
+  ),
+  roomZone(`zone_${tag}`, 'level_0', name, ring, {
+    floor: { finish: 'library:wood-woodparquet14' },
+    wallMaterial: 'library:preset-softwhite',
+  }),
   SlabNode.parse({ id: `slab_${tag}`, parentId: 'level_0', polygon: ring }),
-  CeilingNode.parse({ id: `ceiling_${tag}`, parentId: 'level_0', polygon: ring }),
+  CeilingNode.parse({
+    id: `ceiling_${tag}`,
+    parentId: 'level_0',
+    polygon: ring,
+    slots: { surface: 'library:preset-softwhite' },
+  }),
 ]
 
 const living = () => finished('living', 'Living')
@@ -102,20 +120,39 @@ type Expect = {
   check?: (result: Record<string, unknown>) => string[]
 }
 
-const verify = (name: string, build: () => SceneGraph, expect: Expect): AgentToolCase => ({
-  name,
-  tool: 'verify_scene',
-  scene: build,
-  input: {},
-  ...(expect.surfaces && { surfaces: expect.surfaces }),
-  expect: {
-    result: expect.result ?? {},
-    ...(expect.contains && { contains: { issues: expect.contains } }),
-    ...(expect.lacks && { lacks: { issues: expect.lacks } }),
-    ...(expect.mentions && { mentions: expect.mentions }),
-    ...(expect.check && { check: (result) => expect.check!(result) }),
-  },
-})
+/**
+ * A case that says "the scene is clean" (`hasIssues: false`) says it of the checks the case is
+ * about: these scenes have rooms and no roof, which `verify_scene` states as a fact of its own
+ * (`missing_roof`), so the case holds that no other issue stands.
+ */
+const cleanBesidesRoof = (result: Record<string, unknown>) =>
+  (result.issues as { type: string; severity?: string }[])
+    .filter((issue) => issue.type !== 'missing_roof' && issue.severity !== 'info')
+    .map((issue) => `an issue stands: ${issue.type}`)
+
+const verify = (name: string, build: () => SceneGraph, expect: Expect): AgentToolCase => {
+  const { hasIssues, ...rest } = (expect.result ?? {}) as Record<string, unknown>
+  const clean = hasIssues === false
+  return {
+    name,
+    tool: 'verify_scene',
+    scene: build,
+    input: {},
+    ...(expect.surfaces && { surfaces: expect.surfaces }),
+    expect: {
+      result: clean ? rest : (expect.result ?? {}),
+      ...(expect.contains && { contains: { issues: expect.contains } }),
+      ...(expect.lacks && { lacks: { issues: expect.lacks } }),
+      ...(expect.mentions && { mentions: expect.mentions }),
+      ...((expect.check || clean) && {
+        check: (result: Record<string, unknown>) => [
+          ...(expect.check ? expect.check(result) : []),
+          ...(clean ? cleanBesidesRoof(result) : []),
+        ],
+      }),
+    },
+  }
+}
 
 const issuesOf = (result: Record<string, unknown>, type: string) =>
   (result.issues as { type: string; [key: string]: unknown }[]).filter(
@@ -378,6 +415,36 @@ export const VALIDATE_SCENE_CASES: AgentToolCase[] = [
       lacks: [{ type: 'missing_stair' }],
     },
   ),
+]
+
+/** An 8 × 3 m house with a partition at x = 4: two spaces, west and east, each as the zones given cover it. */
+const twoSpaces = (...extra: AnyNode[]) =>
+  ground(
+    ...wallRing('level_0', 'pair', rect(0, 0, 8, 3)),
+    WallNode.parse({ id: 'wall_partition', parentId: 'level_0', start: [4, 0], end: [4, 3] }),
+    ...extra,
+  )
+
+const westRoom = (extra = {}) => roomZone('zone_west', 'level_0', 'Study', rect(0, 0, 4, 3), extra)
+const eastRoom = (polygon: Pt[] = rect(4, 0, 8, 3), extra = {}) =>
+  roomZone('zone_east', 'level_0', 'Bedroom', polygon, extra)
+
+/** A stair as wide as the east space, standing on its far end: floor a zone need not claim. */
+const wideStair = () => [
+  StairNode.parse({
+    id: 'stair_wide',
+    parentId: 'level_0',
+    name: 'Wide stair',
+    position: [6, 0, 1.5],
+  }),
+  StairSegmentNode.parse({
+    id: 'sseg_wide',
+    parentId: 'stair_wide',
+    width: 3.9,
+    length: 1.5,
+    height: 2.5,
+    stepCount: 10,
+  }),
 ]
 
 export const CHECK_ROOMS_CASES: AgentToolCase[] = [
@@ -696,5 +763,138 @@ export const CHECK_ROOMS_CASES: AgentToolCase[] = [
       )
     },
     { lacks: [{ type: 'room_not_enclosed' }] },
+  ),
+  // Rooms are tiled by their zones: two rooms on one floor, or floor the walls enclose that no zone claims. Wall bodies are
+  // not floor, a width is the short side of the rectangle with the piece's area and perimeter after a 7.5 cm opening, and what is under 0.1 m² (overlap) or 0.3 m² (unclaimed) or 15 cm wide is quiet.
+  // A store adopts a drawn zone as its space's room when it loads a scene, so a zone that overlaps another or stops short can only
+  // be read as declared: the cases that raise a finding run on the core runner; the quiet ones run everywhere.
+  verify(
+    'verify_scene on two rooms whose zones share a half-metre strip across their partition: zones_overlap names both rooms with the strip\'s area, width and place',
+    () => twoSpaces(westRoom(), eastRoom(rect(3.5, 0, 8, 3))),
+    {
+      surfaces: ['core'],
+      contains: [{ type: 'zones_overlap', severity: 'warning', levelId: 'level_0' }],
+      lacks: [{ type: 'space_many_rooms' }],
+      check: (result) => {
+        const found = issuesOf(result, 'zones_overlap')
+        const [first] = found
+        const ids = [...((first?.zoneIds ?? []) as string[])].sort().join()
+        const [x] = (first?.at ?? [0, 0]) as Pt
+        return [
+          ...(found.length === 1 ? [] : [`${found.length} zones_overlap, not one strip`]),
+          ...(ids === 'zone_east,zone_west' ? [] : [`zones ${ids}, not the study and the bedroom`]),
+          // 0.5 m less the partition's half thickness on its side, by the wall-to-wall length: about 0.45 x 2.9
+          ...((first?.area as number) > 1.2 && (first?.area as number) < 1.4
+            ? []
+            : [`area ${first?.area} m², not the strip beside the partition`]),
+          ...((first?.width as number) > 0.4 && (first?.width as number) < 0.5
+            ? []
+            : [`width ${first?.width} m, not about 0.45`]),
+          ...(x > 3.5 && x < 4 ? [] : [`at x ${x}, not in the strip`]),
+        ]
+      },
+    },
+  ),
+  verify(
+    'verify_scene on two rooms whose zones meet on the partition\'s centre line: neither overlap nor unclaimed floor',
+    () => twoSpaces(westRoom(), eastRoom()),
+    { lacks: [{ type: 'zones_overlap' }, { type: 'floor_unclaimed' }] },
+  ),
+  verify(
+    'verify_scene on two rooms whose zones stop at the partition\'s faces, not its centre line: the wall body is not floor, so nothing is unclaimed or overlapped',
+    () =>
+      twoSpaces(
+        roomZone('zone_west', 'level_0', 'Study', rect(0.05, 0.05, 3.95, 2.95)),
+        eastRoom(rect(4.05, 0.05, 7.95, 2.95)),
+      ),
+    { lacks: [{ type: 'zones_overlap' }, { type: 'floor_unclaimed' }] },
+  ),
+  verify(
+    'verify_scene on a room whose zone covers three quarters of its space: floor_unclaimed with the strip\'s area, width and place, beside the room',
+    () => twoSpaces(westRoom(), eastRoom(rect(4, 0, 8, 2.25))),
+    {
+      surfaces: ['core'],
+      contains: [{ type: 'floor_unclaimed', severity: 'warning', levelId: 'level_0' }],
+      lacks: [{ type: 'space_no_room' }, { type: 'zones_overlap' }],
+      check: (result) => {
+        const found = issuesOf(result, 'floor_unclaimed')
+        const [first] = found
+        const [, z] = (first?.at ?? [0, 0]) as Pt
+        return [
+          ...(found.length === 1 ? [] : [`${found.length} floor_unclaimed, not one strip`]),
+          // 0.7 m by the east space's 3.9 m
+          ...((first?.area as number) > 2.5 && (first?.area as number) < 2.9
+            ? []
+            : [`area ${first?.area} m², not the strip the zone stops short of`]),
+          ...((first?.width as number) > 0.65 && (first?.width as number) < 0.75
+            ? []
+            : [`width ${first?.width} m, not about 0.7`]),
+          ...(z > 2.25 ? [] : [`at z ${z}, not beyond the zone's edge`]),
+          ...(((first?.zoneIds ?? []) as string[]).includes('zone_east')
+            ? []
+            : ['the room beside the strip is not named']),
+        ]
+      },
+    },
+  ),
+  verify(
+    'verify_scene on a space no zone covers: space_no_room says it, floor_unclaimed does not repeat it',
+    () => ground(...wallRing('level_0', 'bare', ROOM)),
+    {
+      surfaces: ['core'],
+      contains: [{ type: 'space_no_room', levelId: 'level_0' }],
+      lacks: [{ type: 'floor_unclaimed' }],
+    },
+  ),
+  verify(
+    'verify_scene on a space whose zone stops short where a stair stands: the stair claims its floor, so nothing is unclaimed',
+    () => twoSpaces(westRoom(), eastRoom(rect(4, 0, 8, 1.6)), ...wideStair()),
+    { lacks: [{ type: 'floor_unclaimed' }] },
+  ),
+  verify(
+    'verify_scene on the same space with no stair: the floor the zone stops short of is unclaimed',
+    () => twoSpaces(westRoom(), eastRoom(rect(4, 0, 8, 1.6))),
+    { surfaces: ['core'], contains: [{ type: 'floor_unclaimed', levelId: 'level_0' }] },
+  ),
+  // Where straight walls meet: an end that stops 3-25 cm short of another wall (daylight between them), and a wall a few
+  // degrees off the line of its neighbours (a short wall holding a door, drawn skewed). Angled walls drawn on purpose are quiet.
+  // wall_open_end (info, with the nearest wall to repair toward) says the same end when the room graph elects no joint: both stand.
+  verify(
+    'verify_scene on a wall that stops 10 cm short of another wall: wall_end_short names both walls with the gap',
+    () => ground(wallAt('across', [0, 0], [4, 0]), wallAt('stub', [2, 2], [2, 0.15])),
+    {
+      contains: [{ type: 'wall_end_short', severity: 'warning', levelId: 'level_0', wallId: 'wall_stub', otherWallId: 'wall_across', end: 'end' }],
+      check: (result) => {
+        const [first] = issuesOf(result, 'wall_end_short')
+        return (first?.gap as number) > 0.099 && (first?.gap as number) < 0.101 ? [] : [`gap ${first?.gap} m, not 10 cm of daylight`]
+      },
+    },
+  ),
+  verify(
+    'verify_scene on a short wall between two walls on one line, turned 4 degrees: wall_nearly_aligned names it with the angle and both neighbours',
+    () => {
+      const end: Pt = [4 + Math.cos((4 * Math.PI) / 180), Math.sin((4 * Math.PI) / 180)]
+      return ground(wallAt('left', [0, 0], [4, 0]), wallAt('gap', [4, 0], end), wallAt('right', end, [end[0] + 4, end[1]]))
+    },
+    {
+      contains: [{ type: 'wall_nearly_aligned', severity: 'warning', levelId: 'level_0', wallId: 'wall_gap', angle: 4 }],
+      check: (result) => {
+        const [first] = issuesOf(result, 'wall_nearly_aligned')
+        const ids = ((first?.neighbours ?? []) as { wallId: string }[]).map((n) => n.wallId).sort().join()
+        return ids === 'wall_left,wall_right' ? [] : [`neighbours ${ids}, not the two walls it sits between`]
+      },
+    },
+  ),
+  verify(
+    'verify_scene on walls joined square, a T and a bay turned 30 degrees: neither wall_end_short nor wall_nearly_aligned',
+    () =>
+      ground(
+        wallAt('a', [0, 0], [4, 0]),
+        wallAt('b', [4, 0], [4, 3]),
+        wallAt('stem', [2, 0], [2, 3]),
+        wallAt('bay1', [4, 3], [6, 3 + 2 * Math.tan((30 * Math.PI) / 180)]),
+        wallAt('bay2', [6, 3 + 2 * Math.tan((30 * Math.PI) / 180)], [8, 3]),
+      ),
+    { lacks: [{ type: 'wall_end_short' }, { type: 'wall_nearly_aligned' }] },
   ),
 ]

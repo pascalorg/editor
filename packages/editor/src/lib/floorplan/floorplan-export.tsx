@@ -4,23 +4,28 @@ import {
   type AnyNode,
   type AnyNodeId,
   type ConstructionDrawingType,
+  FLOORPLAN_VIEW_ROTATION_DEG,
   type FloorplanGeometry,
+  type FloorplanMetricNotation,
   type FloorplanPalette,
   type FloorplanPoint,
+  type FloorplanSchedule,
+  type FloorplanWallDimensionFaces,
   getLevelDisplayName,
   isNodeKindEnabled,
   type LiveNodeOverrides,
   type NodeCategory,
   nodeRegistry,
+  readFloorplanGeometryMetadata,
   resolveBuildingForLevel,
   useScene,
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
+import { FloorplanGeometryRenderer, navigationSyncPoseStore } from '@pascal-app/viewer/ui'
 import { createElement } from 'react'
 import { flushSync } from 'react-dom'
 import { createRoot } from 'react-dom/client'
 import { resolveSvgAnnotationCollisions } from '../../components/editor-2d/renderers/floorplan-annotation-layout'
-import { FloorplanGeometryRenderer } from '../../components/editor-2d/renderers/floorplan-geometry-renderer'
 import {
   buildContext,
   collectDirectFloorplanScopeNodes,
@@ -33,7 +38,6 @@ import {
   splitFloorplanOverlay,
 } from '../../components/editor-2d/renderers/floorplan-registry-layer'
 import useDrawingView, { DRAWING_TYPE_OPTIONS } from '../../store/use-drawing-view'
-import useEditor from '../../store/use-editor'
 import useFloorplanAnnotationVisibility from '../../store/use-floorplan-annotation-visibility'
 import useFloorplanMode from '../../store/use-floorplan-mode'
 import {
@@ -41,17 +45,10 @@ import {
   filterFloorplanAnnotationGeometry,
 } from './annotation-visibility'
 import { resolveNodeForDrawingType } from './drawing-coordination'
-import {
-  type FloorplanMetricNotation,
-  type FloorplanSchedule,
-  type FloorplanWallDimensionFaces,
-  getFloorplanNodeExtension,
-  readFloorplanGeometryMetadata,
-} from './floorplan-extension'
+import { getFloorplanNodeExtension } from './floorplan-extension'
 import { type FloorplanMode, resolveFloorplanAnnotationVisibility } from './floorplan-mode'
 import { createFloorplanPdfDocument, type FloorplanPdfDocument } from './floorplan-pdfkit-document'
 import { renderFloorplanGeometryToPdfKit } from './floorplan-pdfkit-renderer'
-import { FLOORPLAN_VIEW_ROTATION_DEG } from './geometry'
 
 /**
  * Floorplan PDF export.
@@ -193,7 +190,7 @@ export async function exportFloorplanPdf(scope: FloorplanExportScope): Promise<v
     expertAnnotationState.visibility,
     expertAnnotationState.showDimensions,
   )
-  const navigationAzimuth = useEditor.getState().navigationSyncPose?.azimuth
+  const navigationAzimuth = navigationSyncPoseStore.getState().pose?.azimuth
   const drawingType = useDrawingView.getState().drawingType
   const annotationLayoutOverrides = useDrawingView.getState().annotationLayoutOverrides
   const drawingLabel =

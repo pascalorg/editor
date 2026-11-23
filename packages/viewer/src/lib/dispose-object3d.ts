@@ -23,7 +23,9 @@ export function disposeObject3DResources(root: Object3D): void {
     }
   })
 
-  for (const geometry of geometries) geometry.dispose()
+  for (const geometry of geometries) {
+    if (!geometry.userData.shared) geometry.dispose()
+  }
   for (const material of materials) {
     if (!isCachedMaterial(material)) material.dispose()
   }

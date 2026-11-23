@@ -11,7 +11,7 @@ import {
   useLiveNodeOverrides,
   useScene,
 } from '@pascal-app/core'
-import { useViewer } from '@pascal-app/viewer'
+import { isTypingTarget, useViewer } from '@pascal-app/viewer'
 import { type ThreeEvent, useThree } from '@react-three/fiber'
 import { useEffect, useRef } from 'react'
 import {
@@ -28,7 +28,6 @@ import { isHistoryShortcut } from '../../../lib/history'
 import { sfxEmitter } from '../../../lib/sfx-bus'
 import { intersectSpatialDragPlane } from '../../../lib/spatial-drag-plane'
 import { getSpatialPointerId, spatialPointerInput } from '../../../lib/spatial-pointer-input'
-import { isTypingTarget } from '../../../lib/typing-target'
 import useInteractionScope from '../../../store/use-interaction-scope'
 import { suppressBoxSelectForPointer } from '../../tools/select/box-select-state'
 import { commitHandleDragPatch } from './handle-drag-history'

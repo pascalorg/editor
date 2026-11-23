@@ -1,8 +1,10 @@
 import { z } from 'zod'
 import { DOOR_STYLES, WINDOW_STYLES } from '../building/opening-style-presets'
 import { FOUNDATION_BY_REGION_NOTE } from '../lib/foundation-construction'
+import { DoorHandleStyle, DoorType, WindowType } from '../schema/nodes/opening-types'
 import { levelTarget } from './levels'
 import { measurement } from './measurement'
+import { doorDetailFields, windowDetailFields } from './wall-openings'
 
 // A list of two, not a tuple: a tuple's list-form schema is refused by some clients.
 const point = z.array(z.number()).length(2)
@@ -25,7 +27,7 @@ export const createRoomTool = {
   name: 'create_room',
   title: 'Create room',
   description:
-    "Create a room on a level from its polygon: a wall per edge, an edge a wall already runs along reusing that wall (rooms share their boundary with their neighbour), and the room zone that names it. The floor plate and the ceiling are derived from the room — never author a slab or a ceiling for it. Declare the room's doors and windows in the same call by polygon edge (wallIndex) and t along it, no wall ids needed; each is placed with add_door's and add_window's rules, and one that cannot be is skipped and listed in skippedOpenings with its code. Returns zoneId, slabId, ceilingId, wallIds in edge order (null where no wall), doorIds, windowIds. outdoor: true draws a terrace instead: separators where no wall runs, no walls of its own and no ceiling. Where the walls already enclose a room the reconciler numbered, the call names that room instead of adding a second one; where they enclose a room with a name of its own (not a number the editor gave it), it is refused (room_named_by_person) unless rename is true, which you pass only when the person asked for the rename, so a name is never changed silently.",
+    "Create a room on a level from its polygon: a wall per edge, an edge a wall already runs along reusing that wall (rooms share their boundary with their neighbour), and the room zone that names it. The floor plate and the ceiling are derived from the room — never author a slab or a ceiling for it. Declare the room's doors and windows in the same call by polygon edge (wallIndex) and t along it, no wall ids needed; each is placed with add_door's and add_window's rules, and one that cannot be is skipped and listed in skippedOpenings with its code. Returns zoneId, slabId, ceilingId, wallIds in edge order (null where no wall), doorIds, windowIds. outdoor: true draws a terrace instead: separators where no wall runs, no walls of its own and no ceiling. Where the walls already enclose a room the reconciler numbered, the call names that room instead of adding a second one; where they enclose a room with a name of its own (not a number the editor gave it), it is refused (room_named_by_person) unless rename is true, which you pass only when the person asked for the rename, so a name is never changed silently. Not available in run_batch: the result needs the floor plate and ceiling derived by the host after reconciliation.",
   input: {
     ...levelTarget,
     name: z.string().min(1).describe('Room name, e.g. "Bedroom", "Kitchen".'),
@@ -64,6 +66,8 @@ export const createRoomTool = {
       .array(
         z.object({
           ...onEdge,
+          ...doorDetailFields,
+          doorType: DoorType.optional(),
           width: measurement('length', 'm', {
             positive: true,
             description: 'Door width (default 0.9 m).',
@@ -72,6 +76,7 @@ export const createRoomTool = {
             positive: true,
             description: 'Door height (default 2.1 m).',
           }).optional(),
+          handleStyle: DoorHandleStyle.optional().describe('Door handle style (default lever).'),
           hingesSide: z.enum(['left', 'right']).optional().describe('Hinge side (default left).'),
           swingDirection: z
             .enum(['inward', 'outward'])
@@ -91,6 +96,8 @@ export const createRoomTool = {
       .array(
         z.object({
           ...onEdge,
+          ...windowDetailFields,
+          windowType: WindowType.optional().describe('How it opens (default fixed).'),
           width: measurement('length', 'm', {
             positive: true,
             description: 'Window width (default 1.5 m).',

@@ -16,6 +16,7 @@ import {
   type TerrainField,
   terrainContours,
   terrainFieldOf,
+  terrainOverFloors,
   union,
   unionPolygons,
   useLiveNodeOverrides,
@@ -26,9 +27,14 @@ import {
 import {
   backdropColors,
   backdropGradient,
+  createDaylightGroundMaterial,
+  DAYLIGHT_PARCEL,
   groundWindowMaskNode,
+  isDaylightAtmosphere,
   NodeRenderer,
   SITE_GROUND,
+  SITE_HORIZON,
+  SiteSurfaceScope,
   siteGroundShown,
   UNDERGROUND_RIM,
   useImmersiveXRPresentation,
@@ -57,21 +63,13 @@ import {
   vec2,
 } from 'three/tsl'
 import { MeshLambertNodeMaterial } from 'three/webgpu'
-import { GenericFoundation } from './generic-foundation'
 import {
   GroundHole,
   groundHoleColorNode,
   groundHoleShadowNode,
   solidGroundMaskNode,
 } from './ground-hole'
-import {
-  GroundVeil,
-  gradeRingGeometry,
-  gradeRingMaterial,
-  groundVeilMaterial,
-  horizonVeilMaterial,
-  noopRaycast,
-} from './ground-veil'
+import { GroundVeil, groundVeilMaterial, horizonVeilMaterial, noopRaycast } from './ground-veil'
 import { GroundWindowSystem } from './ground-window-system'
 import {
   buildPatternedRibbon,
@@ -202,7 +200,13 @@ export const SiteRenderer = ({ node }: { node: SiteNode }) => {
   useRegistry(node.id, 'site', ref)
 
   const theme = useViewer((state) => state.sceneAppearance)
-  const bgColor = theme.ground
+  // The colored appearance's daylight look: a neutral parcel, lit by the sky (Standard), on a
+  // squared ground whose horizon the atmosphere's fog blends into the sky.
+  const daylight = isDaylightAtmosphere(atmosphere)
+  // Solid shading is Lambert everywhere (the sky reaches it as a hemisphere light, not the
+  // environment), so the daylight grounds follow it.
+  const solid = useViewer((state) => state.shading === 'solid')
+  const bgColor = daylight ? DAYLIGHT_PARCEL : theme.ground
   const { background: backgroundColor, sky: skyColor, haze, skyDeep } = backdropColors(theme)
   const maxLightIntensity = Math.max(1, ...theme.lights.map((light) => light.intensity))
   const livePolygon = useLiveNodeOverrides(
@@ -246,8 +250,8 @@ export const SiteRenderer = ({ node }: { node: SiteNode }) => {
   }, [polygonPoints])
 
   // Where the ground meets the levels below grade. `all` says whether the scene has any (the
-  // ground materials carry the hole's mask from then on); `shown` is what the hole is cut over and
-  // the grade ring runs along under the veil: the level shown and the ones between it and grade, as
+  // ground materials carry the hole's mask from then on); `shown` is what the hole is cut over under
+  // the veil: the level shown and the ones between it and grade, as
   // the level display hides them. While the level shown is not below grade the last such set is
   // kept, so a hole easing shut keeps its shape. `covered` is the part of them under the house
   // itself, whatever level is shown: the ground stands open there (see `holes`).
@@ -305,7 +309,9 @@ export const SiteRenderer = ({ node }: { node: SiteNode }) => {
   // not when a floor is picked), the opening a uniform; without one the materials stay plain.
   const hasBasement = buried.all.length > 0
   const groundMaterial = useMemo(() => {
-    const material = new MeshLambertNodeMaterial({ color: bgColor })
+    const material = daylight
+      ? createDaylightGroundMaterial(solid, { color: bgColor })
+      : new MeshLambertNodeMaterial({ color: bgColor })
     material.polygonOffset = true
     material.polygonOffsetFactor = 1
     material.polygonOffsetUnits = 1
@@ -320,13 +326,26 @@ export const SiteRenderer = ({ node }: { node: SiteNode }) => {
       ;(material as unknown as { maskNode: unknown }).maskNode = groundWindowMaskNode()
     }
     return material
-  }, [bgColor, hasBasement])
+  }, [bgColor, daylight, hasBasement, solid])
 
   // Presentation horizon: a large ground disc under the lot, fading into the
   // active fog radiance (or the theme backdrop when there is no atmosphere) so
   // the scene sits on an "infinite" plane instead of a hard-edged plate. Never pickable.
   const horizonMaterial = useMemo(() => {
     if (!fadeBounds || groundReplaced) return null
+    if (daylight) {
+      const material = createDaylightGroundMaterial(solid, { horizon: atmosphere?.fogRadiance })
+      material.polygonOffset = true
+      material.polygonOffsetFactor = 2
+      material.polygonOffsetUnits = 2
+      if (hasBasement) {
+        ;(material as unknown as { maskNode: unknown }).maskNode = solidGroundMaskNode()
+        material.receivedShadowNode = groundHoleShadowNode()
+      } else {
+        ;(material as unknown as { maskNode: unknown }).maskNode = groundWindowMaskNode()
+      }
+      return material
+    }
     const material = new MeshLambertNodeMaterial({ color: bgColor })
     const center = vec2(fadeBounds.cx, fadeBounds.cz)
     const dist = positionWorld.xz.sub(center).length()
@@ -380,6 +399,8 @@ export const SiteRenderer = ({ node }: { node: SiteNode }) => {
     }
     return material
   }, [
+    solid,
+    daylight,
     hasBasement,
     atmosphere,
     bgColor,
@@ -415,6 +436,16 @@ export const SiteRenderer = ({ node }: { node: SiteNode }) => {
     return next
   })
 
+  // Inside a storey's own floor the ground never shows over it: the part of each floor plate the
+  // terrain stands over (a slope interpolated just over a walk-out's floor included) is cut too.
+  const overFloorsCache = useRef<[number, number][][]>([])
+  const overFloors = useScene((state: S) => {
+    const next = terrainOverFloors(state.nodes)
+    if (polygonsMatch(next, overFloorsCache.current)) return overFloorsCache.current
+    overFloorsCache.current = next
+    return next
+  })
+
   // What the ground is cut open over: the recessed slabs, and the basement under the house. The
   // house covers that part of a basement, so the ground there is open whatever level is shown:
   // from outside nothing changes, and a stairwell, a floor opening or a walkthrough on the stair
@@ -426,25 +457,13 @@ export const SiteRenderer = ({ node }: { node: SiteNode }) => {
   // the triangulation.
   const coverOpen = !(belowGrade && groundMode === 'solid')
   const holes = useMemo(() => {
-    if (!coverOpen || buried.covered.length === 0 || !polygonPoints || polygonPoints.length < 3)
+    const open = [...buried.covered, ...overFloors]
+    if (!coverOpen || open.length === 0 || !polygonPoints || polygonPoints.length < 3)
       return slabPolygons
-    const inLot = intersection(union(buried.covered), polygonPoints as [number, number][])
+    const inLot = intersection(union(open), polygonPoints as [number, number][])
     const covered = inLot.filter((piece) => piece.holes.length === 0).map((piece) => piece.outer)
     return covered.length > 0 ? [...slabPolygons, ...covered] : slabPolygons
-  }, [coverOpen, buried.covered, polygonPoints, slabPolygons])
-
-  const gradeRings = useMemo(
-    () => buried.shown.map((outline) => gradeRingGeometry(outline, persistedField)),
-    [buried.shown, persistedField],
-  )
-  useEffect(
-    () => () => {
-      for (const ring of gradeRings) ring.dispose()
-    },
-    [gradeRings],
-  )
-  const gradeRing = useMemo(gradeRingMaterial, [])
-  useEffect(() => () => gradeRing.dispose(), [gradeRing])
+  }, [coverOpen, buried.covered, overFloors, polygonPoints, slabPolygons])
 
   // Ground shape: site polygon with slab footprints punched as holes
   const groundShape = useMemo(() => {
@@ -472,7 +491,8 @@ export const SiteRenderer = ({ node }: { node: SiteNode }) => {
 
   const horizonGeometry = useMemo(() => {
     if (!fadeBounds || groundReplaced) return null
-    const radius = Math.max(fadeBounds.radius * 8, 400)
+    // Daylight: reach the atmosphere's fog end so the ground meets the sky at the horizon.
+    const radius = daylight ? 6000 : Math.max(fadeBounds.radius * 8, 400)
     const shape = new Shape()
     const segments = 64
     shape.moveTo(radius, 0)
@@ -483,7 +503,7 @@ export const SiteRenderer = ({ node }: { node: SiteNode }) => {
     shape.closePath()
     addSlabHoles(shape, holes, fadeBounds.cx, fadeBounds.cz)
     return new ShapeGeometry(shape)
-  }, [fadeBounds, holes, groundReplaced])
+  }, [daylight, fadeBounds, holes, groundReplaced])
   useEffect(() => () => horizonGeometry?.dispose(), [horizonGeometry])
   useEffect(() => () => horizonMaterial?.dispose(), [horizonMaterial])
 
@@ -698,7 +718,6 @@ export const SiteRenderer = ({ node }: { node: SiteNode }) => {
   return (
     <group ref={ref} {...handlers}>
       <GroundWindowSystem />
-      <GenericFoundation />
       <GroundHole
         drawnFloorY={buried.drawnFloorY}
         floorY={buried.floorY}
@@ -713,143 +732,149 @@ export const SiteRenderer = ({ node }: { node: SiteNode }) => {
         <NodeRenderer key={childId} nodeId={childId as AnyNodeId} />
       ))}
 
-      {/* Sculpted ground, when the site has terrain */}
-      {showSiteSurfaces && showGround && showTerrain && (
-        <TerrainRenderer
-          holes={holes}
-          material={groundMaterial}
-          polygon={polygonPoints}
-          site={node}
-          veil={groundVeil}
-        />
-      )}
-
-      {/* Ground fill: site polygon with slab holes, occludes below-grade geometry */}
-      {showSiteSurfaces && showGround && groundGeometry && !showTerrain && (
-        <>
-          <mesh
-            geometry={groundGeometry}
+      <SiteSurfaceScope siteId={node.id} object={() => ref.current}>
+        {/* Sculpted ground, when the site has terrain */}
+        {showSiteSurfaces && showGround && showTerrain && (
+          <TerrainRenderer
+            holes={holes}
             material={groundMaterial}
-            position={GROUND_FILL_POSITION}
+            polygon={polygonPoints}
+            site={node}
+            veil={groundVeil}
+          />
+        )}
+
+        {/* Ground fill: site polygon with slab holes, occludes below-grade geometry */}
+        {showSiteSurfaces && showGround && groundGeometry && !showTerrain && (
+          <>
+            <mesh
+              geometry={groundGeometry}
+              material={groundMaterial}
+              position={GROUND_FILL_POSITION}
+              receiveShadow
+              rotation={FLAT_ON_THE_GROUND}
+              userData={{ [SITE_GROUND]: 'solid' }}
+            />
+            <GroundVeil
+              geometry={groundGeometry}
+              material={groundVeil}
+              position={GROUND_FILL_POSITION}
+              rotation={FLAT_ON_THE_GROUND}
+            />
+          </>
+        )}
+      </SiteSurfaceScope>
+      <SiteSurfaceScope siteId={node.id} object={() => ref.current}>
+        {/* Infinite-ground presentation disc fading into the sky at the horizon */}
+        {showGround && !immersiveXR && horizonGeometry && horizonMaterial && fadeBounds && (
+          <mesh
+            geometry={horizonGeometry}
+            material={horizonMaterial}
+            position={[fadeBounds.cx, horizonY, fadeBounds.cz]}
+            raycast={noopRaycast}
             receiveShadow
             rotation={FLAT_ON_THE_GROUND}
-            userData={{ [SITE_GROUND]: 'solid' }}
+            userData={{ pascalExport: 'strip', [SITE_GROUND]: 'solid', [SITE_HORIZON]: true }}
           />
+        )}
+        {showGround && !immersiveXR && horizonGeometry && horizonVeil && fadeBounds && (
           <GroundVeil
-            geometry={groundGeometry}
-            material={groundVeil}
-            position={GROUND_FILL_POSITION}
+            geometry={horizonGeometry}
+            horizon
+            material={horizonVeil}
+            position={[fadeBounds.cx, horizonY, fadeBounds.cz]}
             rotation={FLAT_ON_THE_GROUND}
           />
-        </>
-      )}
-
-      {/* Infinite-ground presentation disc fading into the sky at the horizon */}
-      {showGround && !immersiveXR && horizonGeometry && horizonMaterial && fadeBounds && (
-        <mesh
-          geometry={horizonGeometry}
-          material={horizonMaterial}
-          position={[fadeBounds.cx, horizonY, fadeBounds.cz]}
-          raycast={noopRaycast}
-          receiveShadow
-          rotation={FLAT_ON_THE_GROUND}
-          userData={{ pascalExport: 'strip', [SITE_GROUND]: 'solid' }}
-        />
-      )}
-      {showGround && !immersiveXR && horizonGeometry && horizonVeil && fadeBounds && (
-        <GroundVeil
-          geometry={horizonGeometry}
-          material={horizonVeil}
-          position={[fadeBounds.cx, horizonY, fadeBounds.cz]}
-          rotation={FLAT_ON_THE_GROUND}
-        />
-      )}
-
-      {showSiteSurfaces &&
-        gradeRings.map((geometry, index) => (
-          <GroundVeil geometry={geometry} key={index} material={gradeRing} shows="veiled" />
-        ))}
-
-      {showSiteSurfaces && ribbons && (
-        <>
-          {/* The property line: dark, thick, long dash + two dots, on the ground */}
-          <mesh
-            frustumCulled={false}
-            geometry={ribbons.property}
-            raycast={noopRaycast}
-            renderOrder={9}
-          >
-            <meshBasicMaterial
-              color="#1c1917"
-              depthWrite={false}
-              side={DoubleSide}
-              toneMapped={false}
-            />
-          </mesh>
-          {/* The setback envelope: black dashes */}
-          {ribbons.envelope && (
+        )}
+      </SiteSurfaceScope>
+      <SiteSurfaceScope siteId={node.id} object={() => ref.current}>
+        {showSiteSurfaces && ribbons && (
+          <>
+            {/* The property line: dark, thick, long dash + two dots, on the ground */}
             <mesh
               frustumCulled={false}
-              geometry={ribbons.envelope}
+              geometry={ribbons.property}
               raycast={noopRaycast}
               renderOrder={9}
             >
               <meshBasicMaterial
-                color="#000000"
+                color="#1c1917"
                 depthWrite={false}
-                opacity={0.85}
                 side={DoubleSide}
                 toneMapped={false}
-                transparent
               />
             </mesh>
-          )}
-          {/* The corner sight triangles */}
-          {ribbons.triangles.map((g, i) => (
-            <mesh frustumCulled={false} geometry={g} key={i} raycast={noopRaycast} renderOrder={9}>
-              <meshBasicMaterial
-                color="#000000"
-                depthWrite={false}
-                opacity={0.85}
-                side={DoubleSide}
-                toneMapped={false}
-                transparent
-              />
-            </mesh>
-          ))}
-          {/* The thin ring the sculpt tool moves live */}
-          {/* @ts-expect-error */}
-          <line frustumCulled={false} geometry={lineGeometry} renderOrder={8}>
-            <lineBasicMaterial color="#1c1917" opacity={0.5} transparent />
+            {/* The setback envelope: black dashes */}
+            {ribbons.envelope && (
+              <mesh
+                frustumCulled={false}
+                geometry={ribbons.envelope}
+                raycast={noopRaycast}
+                renderOrder={9}
+              >
+                <meshBasicMaterial
+                  color="#000000"
+                  depthWrite={false}
+                  opacity={0.85}
+                  side={DoubleSide}
+                  toneMapped={false}
+                  transparent
+                />
+              </mesh>
+            )}
+            {/* The corner sight triangles */}
+            {ribbons.triangles.map((g, i) => (
+              <mesh
+                frustumCulled={false}
+                geometry={g}
+                key={i}
+                raycast={noopRaycast}
+                renderOrder={9}
+              >
+                <meshBasicMaterial
+                  color="#000000"
+                  depthWrite={false}
+                  opacity={0.85}
+                  side={DoubleSide}
+                  toneMapped={false}
+                  transparent
+                />
+              </mesh>
+            ))}
+            {/* The thin ring the sculpt tool moves live */}
+            {/* @ts-expect-error */}
+            <line frustumCulled={false} geometry={lineGeometry} renderOrder={8}>
+              <lineBasicMaterial color="#1c1917" opacity={0.5} transparent />
+            </line>
+          </>
+        )}
+
+        {/* Simple boundary line */}
+        {showSiteSurfaces && !ribbons && (
+          // @ts-expect-error
+          <line frustumCulled={false} geometry={lineGeometry} renderOrder={9}>
+            <lineBasicMaterial color="#f59e0b" linewidth={2} opacity={0.6} transparent />
           </line>
-        </>
-      )}
+        )}
 
-      {/* Simple boundary line */}
-      {showSiteSurfaces && !ribbons && (
-        // @ts-expect-error
-        <line frustumCulled={false} geometry={lineGeometry} renderOrder={9}>
-          <lineBasicMaterial color="#f59e0b" linewidth={2} opacity={0.6} transparent />
-        </line>
-      )}
-
-      {/* The contour lines: thin, translucent, barely black, on the ground */}
-      {showSiteSurfaces && contourGeometry && (
-        <lineSegments
-          frustumCulled={false}
-          geometry={contourGeometry}
-          raycast={noopRaycast}
-          renderOrder={8}
-        >
-          <lineBasicMaterial
-            color="#000000"
-            depthWrite={false}
-            opacity={0.22}
-            toneMapped={false}
-            transparent
-          />
-        </lineSegments>
-      )}
+        {/* The contour lines: thin, translucent, barely black, on the ground */}
+        {showSiteSurfaces && contourGeometry && (
+          <lineSegments
+            frustumCulled={false}
+            geometry={contourGeometry}
+            raycast={noopRaycast}
+            renderOrder={8}
+          >
+            <lineBasicMaterial
+              color="#000000"
+              depthWrite={false}
+              opacity={0.22}
+              toneMapped={false}
+              transparent
+            />
+          </lineSegments>
+        )}
+      </SiteSurfaceScope>
     </group>
   )
 }

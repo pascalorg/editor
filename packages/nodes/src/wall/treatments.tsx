@@ -1,6 +1,7 @@
 'use client'
 
 import {
+  clampWallEndHeightOffset,
   type DoorNode,
   getWallCurveFrameAt,
   getWallLocalFaceZ,
@@ -414,9 +415,19 @@ function trimOpeningRanges(
   childrenNodes: OpeningLike[],
   yBottom: number,
   height: number,
+  slope = 0,
 ) {
   const yTop = yBottom + height
-  const reaches = (bottom: number, top: number) => top > yBottom + EPS && bottom < yTop - EPS
+  // The band rises `slope` per metre along the wall, so a box cuts it only over
+  // the stretch where the two overlap.
+  const cut = (x0: number, x1: number, bottom: number, top: number): Array<[number, number]> => {
+    if (Math.abs(slope) <= EPS) return top > yBottom + EPS && bottom < yTop - EPS ? [[x0, x1]] : []
+    const a = (top - yBottom) / slope
+    const b = (bottom - yTop) / slope
+    const from = Math.max(x0, Math.min(a, b))
+    const to = Math.min(x1, Math.max(a, b))
+    return to - from > EPS ? [[from, to]] : []
+  }
   const nodes = useScene.getState().nodes
   return childrenNodes
     .filter((child) => child.type === 'door' || child.type === 'window')
@@ -425,16 +436,26 @@ function trimOpeningRanges(
       const childHeight = child.height ?? 0
       const position = child.position ?? [0, 0, 0]
       const childBottom = position[1] - childHeight / 2
-      const ranges: Array<[number, number]> = []
-      if (reaches(childBottom, childBottom + childHeight))
-        ranges.push([position[0] - width / 2, position[0] + width / 2])
+      const ranges = cut(
+        position[0] - width / 2,
+        position[0] + width / 2,
+        childBottom,
+        childBottom + childHeight,
+      )
       const opening = { ...child, position } as DoorNode | WindowNode
       const host = resolveOpeningCasingHost(opening, nodes, node)
       if (!host) return ranges
       for (const board of openingCasingBoards(opening, host)) {
         const [x, y] = [position[0] + board.center[0], position[1] + board.center[1]]
-        if (board.face === face && reaches(y - board.size[1] / 2, y + board.size[1] / 2))
-          ranges.push([x - board.size[0] / 2, x + board.size[0] / 2])
+        if (board.face === face)
+          ranges.push(
+            ...cut(
+              x - board.size[0] / 2,
+              x + board.size[0] / 2,
+              y - board.size[1] / 2,
+              y + board.size[1] / 2,
+            ),
+          )
       }
       return ranges
     })
@@ -527,16 +548,22 @@ export function buildTrimGeometry(
   childrenNodes: OpeningLike[],
   levelData: WallTreatmentLevelData,
 ) {
-  const wallHeight = resolveWallOpeningCeiling(node, useScene.getState().nodes)
+  const wallHeight = resolveWallOpeningCeiling(node, useScene.getState().nodes, 0)
   const height = trim.height
+  const endHeightOffset = clampWallEndHeightOffset(node.endHeightOffset, wallHeight)
+  const minWallHeight = Math.min(wallHeight, wallHeight + endHeightOffset)
+
+  const chairRailOffsetY = trim.offsetY ?? WALL_CHAIR_RAIL_DEFAULT.offsetY ?? 0.9
+  const requiredWallHeight = kind === 'chairRail' ? chairRailOffsetY + height : height
+  if (minWallHeight < requiredWallHeight - EPS) {
+    return null
+  }
+
   const yBottom =
     kind === 'crown'
-      ? Math.max(0, wallHeight - height)
+      ? wallHeight - height
       : kind === 'chairRail'
-        ? Math.max(
-            0,
-            Math.min(wallHeight - height, trim.offsetY ?? WALL_CHAIR_RAIL_DEFAULT.offsetY ?? 0.9),
-          )
+        ? Math.max(0, Math.min(minWallHeight - height, chairRailOffsetY))
         : 0
 
   const faceOffset =
@@ -546,6 +573,8 @@ export function buildTrimGeometry(
   if (inner.length < 2) return null
 
   const wallLength = Math.hypot(node.end[0] - node.start[0], node.end[1] - node.start[1])
+  if (wallLength < EPS) return null
+  const crownSlope = kind === 'crown' ? endHeightOffset / wallLength : 0
   const support =
     kind === 'skirting' && node.parentId
       ? (levelData.supports?.get(node.id) ??
@@ -576,7 +605,7 @@ export function buildTrimGeometry(
   const runs = bases.flatMap((base) => {
     const bottom = support ? base.elevation - support.elevation : yBottom
     const openingRanges = [
-      ...trimOpeningRanges(node, face, childrenNodes, bottom, height),
+      ...trimOpeningRanges(node, face, childrenNodes, bottom, height, crownSlope),
       ...floorGaps,
     ]
     if (support)
@@ -595,11 +624,13 @@ export function buildTrimGeometry(
         start,
         end,
         bottom,
-        slopeStart: stationX(base.start),
+        slopeStart: kind === 'crown' ? 0 : stationX(base.start),
         slope:
-          base.endElevation === undefined
-            ? 0
-            : (base.endElevation - base.elevation) / (stationX(base.end) - stationX(base.start)),
+          kind === 'crown'
+            ? crownSlope
+            : base.endElevation === undefined
+              ? 0
+              : (base.endElevation - base.elevation) / (stationX(base.end) - stationX(base.start)),
       }),
     )
   })

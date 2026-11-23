@@ -15,6 +15,7 @@ import {
   addWindowOutput as addWindowResult,
   addWindowTool,
   isAgentRefusal,
+  surfaceDescription,
 } from '@pascal-app/core/agent-tools'
 import type {
   AnyNode,
@@ -165,7 +166,7 @@ export function registerAddDoor(
     addDoorTool.name,
     {
       title: addDoorTool.title,
-      description: addDoorTool.description,
+      description: surfaceDescription(addDoorTool, 'mcp'),
       inputSchema: z.object(addDoorTool.input),
       outputSchema: z.object(addDoorOutput),
       annotations: ADDITIVE_TOOL_ANNOTATIONS,
@@ -204,7 +205,7 @@ export function registerAddWindow(
     addWindowTool.name,
     {
       title: addWindowTool.title,
-      description: addWindowTool.description,
+      description: surfaceDescription(addWindowTool, 'mcp'),
       inputSchema: z.object(addWindowTool.input),
       outputSchema: z.object(addWindowOutput),
       annotations: ADDITIVE_TOOL_ANNOTATIONS,

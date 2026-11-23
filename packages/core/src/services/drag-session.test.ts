@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, mock, test } from 'bun:test'
+import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test'
 import { z } from 'zod'
 import { nodeRegistry, registerNode } from '../registry/registry'
 import type { AnyNodeDefinition, DragAction, Relations, SceneApi } from '../registry/types'
@@ -81,9 +81,12 @@ function makeAction(): DragAction<{ id: AnyNodeId }, { x: number }> {
 }
 
 describe('createDragSession', () => {
+  let restoreRegistry = () => {}
   beforeEach(() => {
+    restoreRegistry = nodeRegistry._snapshot()
     nodeRegistry._reset()
   })
+  afterEach(() => restoreRegistry())
 
   test('start pauses history; commit resumes', () => {
     const scene = makeSpyScene()

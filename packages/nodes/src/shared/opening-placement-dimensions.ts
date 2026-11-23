@@ -6,14 +6,16 @@ import {
   type FloorplanGeometry,
   type FloorplanPoint,
   type GeometryContext,
+  getDoorOpeningSize,
   getWallFaceOffsets,
   isCurvedWall,
   type OpeningSpan,
+  openingHostFacing,
+  readFloorplanContext,
   useScene,
   type WallNode,
   type WindowNode,
 } from '@pascal-app/core'
-import { readFloorplanContext } from '@pascal-app/editor'
 import { formatConstructionLength } from './construction-length'
 import { resolveWallOpeningCeiling } from './wall-opening-ceiling'
 
@@ -83,27 +85,33 @@ export function buildOpeningPlacementDimensions(
     const sibling = ctx.resolve(childId) as AnyNode | undefined
     if (!sibling || (sibling.type !== 'door' && sibling.type !== 'window')) continue
     const sib = sibling as DoorNode | WindowNode
+    const size = getDoorOpeningSize(sib)
     siblings.push({
       id: sib.id,
-      centerS: sib.position[0],
-      width: sib.width,
-      centerY: sib.position[1],
-      height: sib.height,
+      centerS: sib.position[0] - size.leafOffsetX * openingHostFacing(sib),
+      width: size.width,
+      centerY: sib.position[1] + (size.height - sib.height) / 2,
+      height: size.height,
     })
   }
 
+  const size = getDoorOpeningSize(opening)
   const guides = computeOpeningGuides({
     moving: {
       id: opening.id,
-      centerS: opening.position[0],
-      width: opening.width,
-      centerY: opening.position[1],
-      height: opening.height,
+      centerS: opening.position[0] - size.leafOffsetX * openingHostFacing(opening),
+      width: size.width,
+      centerY: opening.position[1] + (size.height - opening.height) / 2,
+      height: size.height,
     },
     siblings,
     wall: {
       length: wallLength,
-      height: resolveWallOpeningCeiling(wall, useScene.getState().nodes),
+      height: resolveWallOpeningCeiling(
+        wall,
+        useScene.getState().nodes,
+        wallLength > 1e-4 ? Math.max(0, Math.min(1, opening.position[0] / wallLength)) : 0.5,
+      ),
     },
     // The 2D plan is top-down: sill/head height and vertical alignment aren't
     // representable here — those belong to the 3D viewport.

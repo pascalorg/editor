@@ -23,6 +23,11 @@ export {
   CapturePointCloudLayer,
   type PointCloudData,
 } from './layers/point-cloud-layer'
+export {
+  POINT_DISC_SIZE,
+  PointDiscCloud,
+  type PointDiscCloudProps,
+} from './layers/point-disc-cloud'
 export { CaptureRoomModel } from './layers/room-model-layer'
 export {
   buildSurfaceMeshData,

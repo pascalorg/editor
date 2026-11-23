@@ -1,8 +1,7 @@
 'use client'
 
-import { emitter, useScene } from '@pascal-app/core'
+import { computeSceneBoundsXZ, emitter, useScene } from '@pascal-app/core'
 import { useEffect, useRef } from 'react'
-import { computeSceneBoundsXZ } from '../lib/scene-bounds'
 
 /**
  * Auto-frame the camera onto a freshly loaded scene.

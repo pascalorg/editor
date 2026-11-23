@@ -25,20 +25,34 @@ import { resolveCeilingHeight } from '../services/level-height'
 import { CEILING_DRAW_OFFSET } from '../services/storey'
 import {
   aabbsOverlap,
-  findBlockedDoors,
+  type BlockedDoorIssue,
+  type DoorBlockReading,
+  type DoorClearZone,
+  type DoorSide,
+  findBlockedDoors as findBlockedDoorsByBox,
   itemNodePlanAabb,
+  itemNodePlanCorners,
   itemPlanAabb,
   type PlanAabb,
   resolveNodeLevelId,
 } from './door-clearance'
-import { furnitureKind, isFloorUnderlay } from './furniture-kind'
-import { itemHosts, itemLevelHeightRange, itemPlanAabbInLevel } from './item-space'
-import { pointInPolygon, type Vec2 } from './plan-geometry'
+import { designedTogether, isFloorUnderlay, isWallDressing, wallBoundWord } from './furniture-kind'
+import { type ItemSolid, manifestSolids, relateSolids, type ToLevel } from './item-solids'
+import { itemLevelHeightRange, itemLevelPose, itemPlanAabbInLevel } from './item-space'
+import {
+  axisOverlap,
+  type ClearMove,
+  clearingMoves,
+  describeMoves,
+  metres,
+  roundBox,
+  roundMm,
+} from './plan-clearance'
+import { distanceToSegment, pointInPolygon, type Vec2 } from './plan-geometry'
 
 export {
   aabbsOverlap,
   collectDoorKeepouts,
-  findBlockedDoors,
   itemNodePlanAabb,
   itemPlanAabb,
   type PlanAabb,
@@ -57,6 +71,17 @@ export type OccupiedFootprint = {
   aabb: PlanAabb
 }
 
+/**
+ * How far two items stand in or from each other. Boxes: the depth along the shallower axis and
+ * along each, or the gap, with the moves of `a` that leave the clearance. Real shapes (wall
+ * panelling): the area they share, or the plan gap between them, and no moves.
+ */
+export type ItemPairReading =
+  | { overlapM: number; overlapAlongM: { x: number; z: number }; clearBy: ClearMove[] }
+  | { gapM: number; clearBy: ClearMove[] }
+  | { overlapAreaM2: number }
+  | { gapM: number }
+
 export type ItemCollision = {
   aId: string
   bId: string
@@ -66,7 +91,49 @@ export type ItemCollision = {
   kind: 'item-aabb'
   violation: 'overlap' | 'clearance'
   minimumClearanceMeters: number
+  /** Of a and of b: the boxes the check reads. */
+  footprints: [PlanAabb, PlanAabb]
+  reading: ItemPairReading
   message: string
+}
+
+function boxReading(a: PlanAabb, b: PlanAabb, gap: number): ItemPairReading {
+  const shared = axisOverlap(a, b)
+  const depth = Math.min(shared.x, shared.z)
+  const clearBy = clearingMoves(a, b, gap)
+  return depth > 0
+    ? {
+        overlapM: roundMm(depth),
+        overlapAlongM: { x: roundMm(shared.x), z: roundMm(shared.z) },
+        clearBy,
+      }
+    : { gapM: roundMm(-depth), clearBy }
+}
+
+function collisionMessage(
+  violation: ItemCollision['violation'],
+  gap: number,
+  [a, b]: [{ id: string; name?: string }, { id: string; name?: string }],
+  reading: ItemPairReading,
+): string {
+  const [first, second] = [a.name ?? a.id, b.name ?? b.id]
+  const pair = `${first} (${a.id}) and ${second} (${b.id})`
+  const how =
+    'overlapAreaM2' in reading
+      ? `share ${metres(reading.overlapAreaM2)} m²`
+      : 'overlapAlongM' in reading
+        ? `by ${metres(reading.overlapAlongM.x)} m along x and ${metres(reading.overlapAlongM.z)} m along z`
+        : `are ${metres(reading.gapM)} m apart`
+  const lead =
+    violation === 'overlap'
+      ? `Items overlap: ${pair} ${how}`
+      : `Items are closer than ${gap} m: ${pair} ${how}`
+  const shapes = 'clearBy' in reading ? 'footprint boxes' : 'real shapes'
+  const moves =
+    'clearBy' in reading
+      ? ` ${first} is ${gap} m clear of ${second}, the gap the check keeps, after ${describeMoves(reading.clearBy)}.`
+      : ''
+  return `${lead} (${shapes}).${moves}`
 }
 
 export function nodeItemAabb(node: AnyNode): PlanAabb | null {
@@ -237,6 +304,42 @@ export function scriptItemBoundsInLevel(
   }
 }
 
+/**
+ * Where a script item's own model space stands in its level: maps a point of its manifest (its
+ * bounds, parts, surfaces) to the level's frame, through the corrective asset pose and the item's
+ * node pose the renderer applies. Undefined where the bounds cannot be resolved.
+ */
+export function scriptItemToLevel(
+  node: ItemNode,
+  nodes: Record<string, AnyNode>,
+): ((point: [number, number, number]) => [number, number, number]) | undefined {
+  const resolved = scriptItemBoundsInLevel(node, nodes)
+  const origin = node.source?.manifest.bounds.min
+  const corner = resolved?.corners[0]
+  if (!(origin && corner)) return
+  const corrected = (point: [number, number, number]) => {
+    const asset = rotateVector(
+      point.map((value, axis) => value * (node.asset.scale?.[axis] ?? 1)) as [
+        number,
+        number,
+        number,
+      ],
+      node.asset.rotation,
+    )
+    return rotateVector(
+      asset.map(
+        (value, axis) => (value + (node.asset.offset[axis] ?? 0)) * (node.scale[axis] ?? 1),
+      ) as [number, number, number],
+      node.rotation,
+    )
+  }
+  // The elected attachment translation comes from the shared bounds resolver, not a guessed floor Y.
+  const first = corrected(origin)
+  const shift = corner.map((value, axis) => value - (first[axis] ?? 0))
+  return (point) =>
+    corrected(point).map((value, axis) => value + shift[axis]!) as [number, number, number]
+}
+
 function itemVerticalInterval(
   node: AnyNode | undefined,
   nodes: Record<string, AnyNode>,
@@ -257,6 +360,136 @@ function itemVerticalInterval(
     }
 }
 
+/**
+ * An item's real shape in its level's frame (see `item-solids`), or null where there is none to read:
+ * a script with no faces, a catalogue model, a tilted or animated one. A thing hosted by another item
+ * stands at its host chain's pose, on the floor construction under the item at the chain's root.
+ */
+export function itemSolidsInLevel(
+  node: ItemNode,
+  nodes: Record<string, AnyNode>,
+): ItemSolid[] | null {
+  const manifest = node.source?.manifest
+  if (
+    !manifest ||
+    manifest.animations?.length ||
+    !planarRotation(node.rotation) ||
+    !planarRotation(node.asset.rotation)
+  )
+    return null
+  const direct = scriptItemToLevel(node, nodes)
+  const toLevel = direct ?? hostedToLevel(node, nodes)
+  if (!toLevel) return null
+  try {
+    const solids = manifestSolids(manifest, toLevel)
+    return solids?.every((solid) => Number.isFinite(solid.y0) && Number.isFinite(solid.y1))
+      ? solids
+      : null
+  } catch {
+    // A malformed outline is not evidence of separation: the box reads instead.
+    return null
+  }
+}
+
+/** The map of a manifest point to the level for an item hosted by other items, or undefined. */
+function hostedToLevel(node: ItemNode, nodes: Record<string, AnyNode>): ToLevel | undefined {
+  // biome-ignore lint/plugin: an item hosted by other items resolves each parent through the whole scene
+  const byId = new Map(Object.entries(nodes))
+  const pose = itemLevelPose(node, byId)
+  if (
+    !pose ||
+    !node.scale.every((value) => value > 0) ||
+    !(node.asset.scale ?? [1, 1, 1]).every((value) => value > 0)
+  )
+    return
+  let root: ItemNode = node
+  for (let depth = 0; depth < 16; depth++) {
+    const parent = root.parentId ? nodes[root.parentId] : undefined
+    if (parent?.type !== 'item') break
+    root = parent
+  }
+  const rootParent = root.parentId ? nodes[root.parentId] : undefined
+  if (rootParent?.type !== 'level') return
+  const lift = itemFloorLift(root, nodes)
+  if (!Number.isFinite(lift)) return
+  const assetScale = node.asset.scale ?? [1, 1, 1]
+  const turn: [number, number, number] = [node.rotation[0], pose.yawDeg, node.rotation[2]]
+  return (point) => {
+    const asset = rotateVector(
+      point.map((value, axis) => value * assetScale[axis]!) as [number, number, number],
+      node.asset.rotation,
+    )
+    const placed = rotateVector(
+      asset.map((value, axis) => (value + node.asset.offset[axis]!) * node.scale[axis]!) as [
+        number,
+        number,
+        number,
+      ],
+      turn,
+    )
+    return [
+      placed[0] + pose.position[0],
+      placed[1] + pose.position[1] + lift,
+      placed[2] + pose.position[2],
+    ]
+  }
+}
+
+/**
+ * Doors blocked by furniture. An item is its box, as tall as its heights say (a pendant over the door
+ * is above its leaf); wall panelling alone is its real strips (see `findItemItemCollisions`).
+ */
+export function findBlockedDoors(
+  args: Parameters<typeof findBlockedDoorsByBox>[0],
+): BlockedDoorIssue[] {
+  const list = [...args.nodes]
+  const nodes = Object.fromEntries(list.map((node) => [node.id, node]))
+  const byId = new Map(list.map((node) => [node.id, node]))
+  const finite = list.every((node) => node.type === 'item' || finiteNumbers(node))
+  return findBlockedDoorsByBox({
+    ...args,
+    nodes: list,
+    solidsOf: (node) => (finite && isWallDressing(node) ? itemSolidsInLevel(node, nodes) : null),
+    heightsOf: (node) => itemHeightsInLevel(node, nodes, byId, finite) ?? null,
+  })
+}
+
+/** Plan overlap, in square metres, from which two real shapes are overlapping: a touching edge or a boolean's sliver is not. */
+export const MIN_OVERLAP_AREA = 0.001
+
+/**
+ * An item's bottom and top in the level's frame, as the renderer stands it: the model's own bounds
+ * through the floor construction under it (measured) or, where it has none, its pose and its height
+ * above its host, lifted by the floor construction under the item at the root of its host chain. A
+ * thing hosted by a ceiling or a wall, or one whose heights are unknown, has none.
+ */
+export function itemHeightsInLevel(
+  node: ItemNode,
+  nodes: Record<string, AnyNode>,
+  byId: Map<string, AnyNode>,
+  finiteContext = true,
+): ItemVerticalInterval | undefined {
+  const measured = finiteContext ? itemVerticalInterval(node, nodes) : undefined
+  if (measured) return measured
+  const range = itemLevelHeightRange(node, byId)
+  let root: ItemNode = node
+  for (let depth = 0; depth < 16; depth++) {
+    const parent = root.parentId ? nodes[root.parentId] : undefined
+    if (parent?.type !== 'item') break
+    root = parent
+  }
+  const rootParent = root.parentId ? nodes[root.parentId] : undefined
+  const levelId = resolveNodeLevelId(node.id, byId)
+  if (!(range && levelId && finiteContext && rootParent?.type === 'level')) return undefined
+  const lift = itemFloorLift(root, nodes)
+  return Number.isFinite(lift)
+    ? { levelId, min: range.min + lift, max: range.max + lift }
+    : undefined
+}
+
+/** How far an item may sink into what it stands on and still be resting on it, in metres. */
+export const STACK_TOLERANCE = 0.02
+
 export function findItemItemCollisions(args: {
   nodes: Iterable<AnyNode>
   levelId?: string
@@ -269,54 +502,77 @@ export function findItemItemCollisions(args: {
   // Drawing fallbacks on invalid support heights cannot prove collision separation.
   const finiteContext = list.every((node) => node.type === 'item' || finiteNumbers(node))
   const byId = new Map(list.map((node) => [node.id, node]))
-  // The measured interval when the model's bounds allow it, else the node's own height above its
-  // floor. A measured contact stays a collision (roundoff); a lamp standing on a table top by its
-  // own height is stacked.
-  const intervals = new Map(
-    footprints.map(({ id }) => {
-      const node = nodes[id] as ItemNode
-      const measured = finiteContext ? itemVerticalInterval(node, nodes) : undefined
-      if (measured) return [id, { ...measured, measured: true }]
-      const range = itemLevelHeightRange(node, byId)
-      return [
-        id,
-        range
-          ? {
-              levelId: resolveNodeLevelId(id, byId) ?? '',
-              min: range.min,
-              max: range.max,
-              measured: false,
-            }
-          : undefined,
-      ]
-    }),
-  )
-  const hosts = new Map(footprints.map(({ id }) => [id, itemHosts(nodes[id]!, byId)]))
+  const heights = new Map<string, ItemVerticalInterval | undefined>()
+  for (const { id } of footprints)
+    heights.set(id, itemHeightsInLevel(nodes[id] as ItemNode, nodes, byId, finiteContext))
+  // A box is as tall as its heights say; a real shape is read for wall panelling only.
+  const solids = new Map<string, readonly ItemSolid[] | null>()
+  const solidsOf = (id: string): readonly ItemSolid[] | null => {
+    if (!solids.has(id))
+      solids.set(id, finiteContext ? itemSolidsInLevel(nodes[id] as ItemNode, nodes) : null)
+    return solids.get(id) ?? null
+  }
+  const boxSolid = (id: string): readonly ItemSolid[] | null => {
+    const node = nodes[id] as ItemNode
+    const pose = itemLevelPose(node, byId)
+    if (!pose) return null
+    const corners = itemNodePlanCorners({
+      ...node,
+      position: pose.position,
+      rotation: [node.rotation[0], pose.yawDeg, node.rotation[2]],
+    })
+    if (!corners.every((corner) => corner.every(Number.isFinite))) return null
+    const interval = heights.get(id)
+    return [
+      {
+        polygons: [{ outer: corners.map(([x, z]) => [x, z] as [number, number]), holes: [] }],
+        y0: interval?.min ?? Number.NEGATIVE_INFINITY,
+        y1: interval?.max ?? Number.POSITIVE_INFINITY,
+      },
+    ]
+  }
   const collisions: ItemCollision[] = []
   for (let i = 0; i < footprints.length; i++) {
     for (let j = i + 1; j < footprints.length; j++) {
       const a = footprints[i]!
       const b = footprints[j]!
       if (a.levelId && b.levelId && a.levelId !== b.levelId) continue
-      // A thing resting on top of its host is stacked by design: its bottom at the host's top. A
-      // child sunk into its host, or one whose height is unknown, is still a collision.
-      const [child, host] = hosts.get(a.id)?.has(b.id)
-        ? [a, b]
-        : hosts.get(b.id)?.has(a.id)
-          ? [b, a]
-          : []
-      if (child && host) {
-        const cY = intervals.get(child.id)
-        const hY = intervals.get(host.id)
-        if (cY && hY && cY.min >= hY.max - 0.02) continue
-      }
       if (!aabbsOverlap(a.aabb, b.aabb, gap)) continue
-      const aY = intervals.get(a.id)
-      const bY = intervals.get(b.id)
-      // Contact and sub-micrometre separation remain conservative against roundoff.
-      if (aY && bY && aY.levelId === bY.levelId) {
-        const touch = aY.measured && bY.measured ? 1e-6 : -1e-6
-        if (bY.min - aY.max > touch || aY.min - bY.max > touch) continue
+      const aY = heights.get(a.id)
+      const bY = heights.get(b.id)
+      let violation: ItemCollision['violation']
+      let reading: ItemPairReading
+      if (isWallDressing(nodes[a.id] as ItemNode) || isWallDressing(nodes[b.id] as ItemNode)) {
+        // Wall panelling is thin strips along the walls, and its box is the room's: it is read by its
+        // strips, a piece beside it by its footprint. Nothing else is: a script's horizontal faces leave
+        // out its rails, backs and foliage, so the box stays the shape of the rest.
+        const left = solidsOf(a.id) ?? boxSolid(a.id)
+        const right = solidsOf(b.id) ?? boxSolid(b.id)
+        if (!(left && right)) continue
+        const relation = relateSolids(left, right, {
+          stack: STACK_TOLERANCE,
+          minArea: MIN_OVERLAP_AREA,
+        })
+        if (relation.overlapArea > 0) {
+          violation = 'overlap'
+          reading = { overlapAreaM2: roundMm(relation.overlapArea) }
+        } else if (relation.gap < gap) {
+          violation = 'clearance'
+          reading = { gapM: roundMm(relation.gap) }
+        } else continue
+      } else {
+        // Two boxes. One standing on the other (a lamp on a table, a vase on a console) is stacked,
+        // whether it is the other's child or a sibling in the scene: its bottom is at or above the
+        // other's top, to within what a model sinks into it. Unknown heights waive nothing.
+        if (
+          aY &&
+          bY &&
+          aY.levelId === bY.levelId &&
+          (aY.min >= bY.max - STACK_TOLERANCE - 1e-9 || bY.min >= aY.max - STACK_TOLERANCE - 1e-9)
+        )
+          continue
+        violation = aabbsOverlap(a.aabb, b.aabb, 0) ? 'overlap' : 'clearance'
+        reading = boxReading(a.aabb, b.aabb, gap)
       }
       collisions.push({
         aId: a.id,
@@ -325,11 +581,11 @@ export function findItemItemCollisions(args: {
         bName: b.name,
         levelId: a.levelId ?? b.levelId,
         kind: 'item-aabb',
-        violation: aabbsOverlap(a.aabb, b.aabb, 0) ? 'overlap' : 'clearance',
+        violation,
         minimumClearanceMeters: gap,
-        message: aabbsOverlap(a.aabb, b.aabb, 0)
-          ? `Items overlap: ${a.name ?? a.id} (${a.id}) and ${b.name ?? b.id} (${b.id})`
-          : `Items are closer than ${gap} m: ${a.name ?? a.id} (${a.id}) and ${b.name ?? b.id} (${b.id})`,
+        footprints: [roundBox(a.aabb), roundBox(b.aabb)],
+        reading,
+        message: collisionMessage(violation, gap, [a, b], reading),
       })
     }
   }
@@ -530,17 +786,6 @@ const DEFAULT_WALL_THICKNESS_M = 0.1
 const cross = (o: Vec2, p: Vec2, q: Vec2) =>
   (p[0] - o[0]) * (q[1] - o[1]) - (p[1] - o[1]) * (q[0] - o[0])
 
-function distanceToSegment(point: Vec2, a: Vec2, b: Vec2) {
-  const dx = b[0] - a[0]
-  const dz = b[1] - a[1]
-  const length2 = dx * dx + dz * dz
-  const t =
-    length2 === 0
-      ? 0
-      : Math.max(0, Math.min(1, ((point[0] - a[0]) * dx + (point[1] - a[1]) * dz) / length2))
-  return Math.hypot(point[0] - (a[0] + t * dx), point[1] - (a[1] + t * dz))
-}
-
 /** The shortest distance from a footprint box to a wall's centre line (0 when the line passes through it). */
 function boxToSegment(box: PlanAabb, a: Vec2, b: Vec2) {
   const corners: Vec2[] = [
@@ -568,7 +813,9 @@ function boxToSegment(box: PlanAabb, a: Vec2, b: Vec2) {
 /** A wall as the mid-room check reads it: its centre line and half its thickness. */
 export type WallFace = { a: Vec2; b: Vec2; halfThickness: number }
 
-/** The walls of a level (resolved through `byId`), as the mid-room check reads them. */
+/**
+ * The walls of a level (resolved through `byId`), as the mid-room check reads them: its wall nodes.
+ */
 export function wallFacesOn(
   nodes: Iterable<AnyNode>,
   levelId: string | undefined,
@@ -576,12 +823,13 @@ export function wallFacesOn(
 ): WallFace[] {
   const walls: WallFace[] = []
   for (const node of nodes) {
-    if (node.type !== 'wall' || resolveNodeLevelId(node.id, byId) !== levelId) continue
-    walls.push({
-      a: [node.start[0], node.start[1]],
-      b: [node.end[0], node.end[1]],
-      halfThickness: (node.thickness ?? DEFAULT_WALL_THICKNESS_M) / 2,
-    })
+    if (resolveNodeLevelId(node.id, byId) !== levelId) continue
+    if (node.type === 'wall')
+      walls.push({
+        a: [node.start[0], node.start[1]],
+        b: [node.end[0], node.end[1]],
+        halfThickness: (node.thickness ?? DEFAULT_WALL_THICKNESS_M) / 2,
+      })
   }
   return walls
 }
@@ -596,8 +844,10 @@ export function gapToWalls(box: PlanAabb, walls: readonly WallFace[]): number {
 
 /**
  * Wall-bound pieces (a fridge, a counter, a bed, a sofa) that stand in a room but away from every
- * wall: further than {@link MID_ROOM_DISTANCE_M} from the face of each wall of their level. Pieces
- * outside every room, free-standing kinds, and levels with no walls are not judged.
+ * wall: further than {@link MID_ROOM_DISTANCE_M} from the face of each wall of their level. A roof
+ * on the level stands walls of its own (knee walls, gable ends) where no wall node does, so a loft
+ * bounded by its roof is measured to them. Pieces outside every room, free-standing kinds, and
+ * levels with neither walls nor a roof shell are not judged.
  */
 export function findItemsMidRoom(args: { nodes: Iterable<AnyNode>; levelId?: string }): {
   id: string
@@ -618,7 +868,8 @@ export function findItemsMidRoom(args: { nodes: Iterable<AnyNode>; levelId?: str
     ...(args.levelId === undefined ? {} : { levelId: args.levelId }),
   })) {
     const node = byId.get(footprint.id)
-    if (node?.type !== 'item' || furnitureKind(node.asset) !== 'wall') continue
+    const word = node?.type === 'item' ? wallBoundWord(node.asset) : null
+    if (node?.type !== 'item' || !word) continue
     const room = zones.find((zone) =>
       pointInPolygon([node.position[0], node.position[2]], zone.polygon as Vec2[], true),
     )
@@ -627,19 +878,34 @@ export function findItemsMidRoom(args: { nodes: Iterable<AnyNode>; levelId?: str
     if (gap <= MID_ROOM_DISTANCE_M) continue
     found.push({
       id: node.id,
-      message: `${footprint.name ?? node.asset.id} (${node.id}) stands in the middle of ${room.name || room.id}, ${gap.toFixed(1)} m from the nearest wall: a ${node.asset.id} belongs against a wall (place_in_room puts it there).`,
+      message: `${footprint.name ?? node.asset.id} (${node.id}) stands in the middle of ${room.name || room.id}, ${gap.toFixed(1)} m from the nearest wall: a ${word} belongs against a wall (place_in_room puts it there).`,
     })
   }
   return found
 }
 
+type LayoutFinding = { message: string; nodeIds: string[] }
+
+export type LayoutIssue =
+  | (LayoutFinding &
+      DoorBlockReading & {
+        type: 'door_blocked'
+        obstacle: { nodeId: string; name?: string; footprint: PlanAabb; side: DoorSide }
+        clearZone: DoorClearZone
+      })
+  | (LayoutFinding &
+      ItemPairReading & {
+        type: 'item_overlap' | 'item_too_close'
+        footprints: [PlanAabb, PlanAabb]
+        minimumClearanceMeters: number
+      })
+  | (LayoutFinding & { type: 'item_mid_room' })
+
 /**
- * Collect layout issues, scoped per level so stacked floors do not false-positive.
+ * Collect layout issues, scoped per level so stacked floors do not false-positive. A blocked door and
+ * a pair of items carry the numbers of the finding: what stands where, how deep, and the way clear.
  */
-export function layoutIssuesFromScene(nodes: Iterable<AnyNode>): {
-  type: 'door_blocked' | 'item_overlap' | 'item_too_close' | 'item_mid_room'
-  message: string
-}[] {
+export function layoutIssuesFromScene(nodes: Iterable<AnyNode>): LayoutIssue[] {
   const list = [...nodes]
   const byId = new Map(list.map((n) => [n.id, n] as const))
   const levelIds = new Set<string>()
@@ -652,24 +918,45 @@ export function layoutIssuesFromScene(nodes: Iterable<AnyNode>): {
     if (lid) levelIds.add(lid)
   }
 
-  const issues = new Map<
-    string,
-    'door_blocked' | 'item_overlap' | 'item_too_close' | 'item_mid_room'
-  >()
+  const issues = new Map<string, LayoutIssue>()
   const levels = levelIds.size > 0 ? [...levelIds] : [undefined]
+  const itemById = new Map<string, AnyNode>(list.map((n) => [n.id, n]))
 
   for (const levelId of levels) {
     for (const b of findBlockedDoors({ nodes: list, levelId })) {
-      issues.set(b.message, 'door_blocked')
+      issues.set(b.message, {
+        type: 'door_blocked',
+        message: b.message,
+        nodeIds: [b.doorId, b.itemId, b.wallId],
+        obstacle: { nodeId: b.itemId, name: b.itemName, footprint: b.footprint, side: b.side },
+        clearZone: b.clearZone,
+        ...b.reading,
+      })
     }
     for (const c of findItemItemCollisions({ nodes: list, levelId })) {
-      issues.set(c.message, c.violation === 'overlap' ? 'item_overlap' : 'item_too_close')
+      // Close is the design for a nightstand beside its bed, a chair at its table: not a finding.
+      const [a, b] = [itemById.get(c.aId), itemById.get(c.bId)]
+      if (
+        c.violation === 'clearance' &&
+        a?.type === 'item' &&
+        b?.type === 'item' &&
+        designedTogether(a, b)
+      )
+        continue
+      issues.set(c.message, {
+        type: c.violation === 'overlap' ? 'item_overlap' : 'item_too_close',
+        message: c.message,
+        nodeIds: [c.aId, c.bId],
+        footprints: c.footprints,
+        minimumClearanceMeters: c.minimumClearanceMeters,
+        ...c.reading,
+      })
     }
     for (const m of findItemsMidRoom({ nodes: list, levelId })) {
-      issues.set(m.message, 'item_mid_room')
+      issues.set(m.message, { type: 'item_mid_room', message: m.message, nodeIds: [m.id] })
     }
   }
 
   // Deduplicate (node may appear under multiple walks)
-  return [...issues].map(([message, type]) => ({ type, message }))
+  return [...issues.values()]
 }

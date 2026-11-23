@@ -122,7 +122,12 @@ export function checkDistributionSystems(nodes: Record<AnyNodeId, AnyNode>): Sys
   for (const wall of Object.values(nodes)) {
     if (wall.type !== 'wall') continue
     const base = getWallBaseElevationForNodes(wall, nodes)
-    const top = base + getWallEffectiveHeightForNodes(wall, nodes)
+    const top =
+      base +
+      Math.max(
+        getWallEffectiveHeightForNodes(wall, nodes, 0),
+        getWallEffectiveHeightForNodes(wall, nodes, 1),
+      )
     const points: Vector3[] = []
     for (let i = 0; i <= 16; i++) {
       const frame = getWallCurveFrameAt(wall, i / 16)

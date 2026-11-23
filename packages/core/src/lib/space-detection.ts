@@ -103,6 +103,7 @@ function wallGeometrySignature(wall: WallNode, nodes: Record<string, any>, level
       : typeof wall.height === 'number'
         ? wall.height.toFixed(4)
         : String(wall.height),
+    (wall.endHeightOffset ?? 0).toFixed(4),
     wall.supportSlabId ?? 'elected',
     (wall.supportOffset ?? 0).toFixed(4),
     getClampedWallCurveOffset(wall).toFixed(4),

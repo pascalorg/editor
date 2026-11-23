@@ -10,10 +10,15 @@ export class AgentRefusal extends Error {
     readonly code: string,
     message: string,
     readonly details: Record<string, unknown> = {},
+    /** What the refusal asks its host to remember with the agent's session, as an outcome's `keep` does. */
+    readonly keep?: RefusalKeep,
   ) {
     super(message)
   }
 }
+
+/** The readings a refusal asks a host to keep (`SessionKeep.readings`): a refused call changes nothing else. */
+export type RefusalKeep = { readonly readings: Readonly<Record<string, unknown>> }
 
 export function isAgentRefusal(error: unknown): error is AgentRefusal {
   return (

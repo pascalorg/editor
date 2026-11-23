@@ -1,5 +1,5 @@
 import type { McpServer } from '@modelcontextprotocol/server'
-import { clearSceneTool } from '@pascal-app/core/agent-tools'
+import { clearSceneTool, surfaceDescription } from '@pascal-app/core/agent-tools'
 import { z } from 'zod'
 import type { SceneOperations } from '../operations'
 import { DESTRUCTIVE_TOOL_ANNOTATIONS } from './annotations'
@@ -16,7 +16,7 @@ export function registerClearScene(server: McpServer, operations: SceneOperation
     clearSceneTool.name,
     {
       title: clearSceneTool.title,
-      description: clearSceneTool.description,
+      description: surfaceDescription(clearSceneTool, 'mcp'),
       inputSchema: z.object(clearSceneTool.input),
       outputSchema: z.object({
         cleared: z.object({ removed: z.number() }),

@@ -1,11 +1,11 @@
 import {
   type FloorplanGeometry,
   area as footprintArea,
+  formatAreaLabel,
   type GeometryContext,
   polygonInteriorPoint,
   type ZoneNode,
 } from '@pascal-app/core'
-import { formatAreaLabel } from '@pascal-app/editor'
 
 export function buildZoneContextualDimensions(
   node: ZoneNode,

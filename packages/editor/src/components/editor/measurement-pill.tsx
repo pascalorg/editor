@@ -1,8 +1,8 @@
 'use client'
 
+import { formatLinearMeasurement, type MetricNotation } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { type ForwardedRef, Fragment, forwardRef } from 'react'
-import { formatLinearMeasurement, type MetricNotation } from '../../lib/measurements'
 
 // Canonical in-world dimension formatter — metric metres or imperial
 // feet/inches. Shared by every measurement readout so they read the same.

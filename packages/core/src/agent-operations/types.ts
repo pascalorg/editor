@@ -1,14 +1,16 @@
 import type { ZodType } from 'zod'
 import type { DesignBrief } from '../agent-tools/design-brief'
+import type { Steps } from '../lib/steps'
 import type {
   AnyNode,
-  AssetInput,
   Collection,
   CompiledGeometryScript,
   SceneMaterial,
   SceneMaterialId,
 } from '../schema'
+import type { AssetSearchResult } from './asset-catalog'
 import type { AssetViewFacts } from './asset-views'
+import type { CatalogAsset } from './catalog-asset'
 import type { SessionKeep, SessionRecord } from './scene-checkpoint'
 
 export type SceneNodes = Readonly<Record<string, AnyNode>>
@@ -16,11 +18,13 @@ export type SceneNodes = Readonly<Record<string, AnyNode>>
 /**
  * What a surface knows beyond the scene: the chat knows the floor a person is viewing; a host
  * passes the agent's session so far (the moments it named, what it made), which verify_scene
- * compares the scene with. A host with an item library passes it as `catalog` (the chat and the
- * hosted MCP: the published library; the standalone MCP: its built-in list), resolved before the
- * call, as the operations are sync. A host that can store scene materials with the nodes that use
- * them passes the scene's `materials`: paint then checks scene refs against them and keeps a native
- * material as one.
+ * compares the scene with. A host with an item library reads what the call needs of it before
+ * the call, as the operations are sync (`readCatalog`): a list held whole (the standalone MCP's
+ * built-in one) is the `catalog`; a library searched where it is kept (the chat's and the hosted
+ * MCP's published library) gives the items the call names as `catalog` and its search answers as
+ * `catalogSearches`. A host that can store scene materials with the nodes that use them passes
+ * the scene's `materials`: paint then checks scene refs against them and keeps a native material
+ * as one.
  */
 export type AgentContext = {
   activeLevelId: string | null
@@ -35,7 +39,9 @@ export type AgentContext = {
   checkpoint?: { name: string; measure: unknown }
   /** The agent's session so far. The host keeps it where its sessions live; it is never scene data. */
   session?: SessionRecord
-  catalog?: readonly AssetInput[]
+  catalog?: readonly CatalogAsset[]
+  /** The library's answers to the call's searches, by `assetSearchKey`; set, they are what search_assets lists. */
+  catalogSearches?: Readonly<Record<string, AssetSearchResult>>
   /**
    * What a host read about catalog items before the call, by item id (`assetViewNeeds` says
    * which): their pictures for view_assets, the names of their paintable surfaces for it and for
@@ -109,6 +115,15 @@ export type AgentOperation<Input = never> = (
   input: Input,
   context: AgentContext,
 ) => AgentOperationOutcome
+
+/**
+ * An operation that takes seconds on a large building, in steps: a batch's calls, verify_scene's
+ * checks. A host that can let other work run between them resumes it one step at a time; the
+ * operation of the same name runs it through (`inOneGo`), with the same outcome.
+ */
+export type AgentOperationSteps<Input = never> = (
+  ...args: Parameters<AgentOperation<Input>>
+) => Steps<AgentOperationOutcome>
 
 /** Operations by tool name: core's `AGENT_OPERATIONS`, or a plugin's `./agent-operations` export. */
 export type AgentOperations = Readonly<Record<string, AgentOperation>>

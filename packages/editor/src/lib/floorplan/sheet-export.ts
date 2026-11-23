@@ -30,7 +30,11 @@ import type {
   FloorplanGeometry,
   LiveNodeOverrides,
 } from '@pascal-app/core'
-import { nodeRegistry, resolveBuildingForLevel } from '@pascal-app/core'
+import {
+  type FloorplanMetricNotation,
+  nodeRegistry,
+  resolveBuildingForLevel,
+} from '@pascal-app/core'
 import {
   buildContext,
   collectFloorplanLinkedLevelNodes,
@@ -52,14 +56,12 @@ import {
   resolveFloorplanExportRotationDeg,
   resolveFloorplanExportViewState,
 } from './floorplan-export'
-import type { FloorplanMetricNotation } from './floorplan-extension'
 import { createFloorplanPdfDocument } from './floorplan-pdfkit-document'
 import { renderFloorplanGeometryToPdfKit } from './floorplan-pdfkit-renderer'
 
 /** PDF user-space units per inch. */
 export const POINTS_PER_INCH = 72
 
-export type { FloorplanSchedule } from './floorplan-extension'
 /**
  * The schedules the kinds on a level contribute
  * (`def.extensions['pascal:editor/floorplan'].schedule`). Re-exported here so
@@ -316,3 +318,5 @@ async function drawPlate(
     },
   )
 }
+
+export type { FloorplanSchedule } from '@pascal-app/core'

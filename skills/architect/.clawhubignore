@@ -1,0 +1,13 @@
+.env*
+.next/
+dist/
+node_modules/
+coverage/
+test-results/
+playwright-report/
+screenshots/
+*.lock
+*.lockb
+package-lock.json
+pnpm-lock.yaml
+yarn.lock

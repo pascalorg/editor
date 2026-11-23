@@ -14,7 +14,7 @@ import {
   XCircle,
 } from 'lucide-react'
 import { useState } from 'react'
-import { Button } from '../../../../../components/ui/primitives/button'
+import { Button } from '@pascal-app/viewer/ui'
 import {
   Dialog,
   DialogContent,
@@ -23,11 +23,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '../../../../../components/ui/primitives/dialog'
-import {
-  getAreaUnitLabel,
-  type LinearUnit,
-  squareMetersToAreaUnit,
-} from '../../../../../lib/measurements'
+import { getAreaUnitLabel, type LinearUnit, squareMetersToAreaUnit } from '@pascal-app/core'
 
 export type PendingImport = {
   fileName: string

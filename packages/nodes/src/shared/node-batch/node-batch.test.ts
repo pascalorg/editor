@@ -932,3 +932,45 @@ test('a built single-slot block joins the batch; a painted multi-slot block keep
   expect(candidate('block_0').entries).toHaveLength(1)
   expect(collectBatchCandidate('block_1')).toBeNull()
 })
+
+test('two families in one material batch retain only the selected family without rejoining', () => {
+  const { root } = setup('slab', 4)
+  const definition = nodeRegistry.get('slab')!
+  nodeRegistry._register({ ...definition, extensions: { 'pascal:viewer': { family: 'floors' } } })
+  nodeRegistry._register({
+    ...definition,
+    kind: 'item',
+    extensions: { 'pascal:viewer': { family: 'items' } },
+  })
+  const nodes = useScene.getState().nodes
+  useScene.setState({
+    nodes: {
+      ...nodes,
+      slab_0: { ...nodes.slab_0, type: 'item' },
+      slab_1: { ...nodes.slab_1, type: 'item' },
+    },
+  } as never)
+  settle()
+  const batch = batches(root)[0]!
+  expect(batches(root)).toHaveLength(1)
+  expect([0, 1, 2, 3].map((id) => batch.getVisibleAt(id))).toEqual([true, true, true, true])
+  const geometry = batch.geometry
+  useViewer.getState().setXrayFamily('items')
+  expect([0, 1, 2, 3].map((id) => batch.getVisibleAt(id))).toEqual([true, true, false, false])
+  const writes = spyOn(batch, 'setVisibleAt')
+  frame()
+  frame()
+  expect(writes).not.toHaveBeenCalled()
+  writes.mockRestore()
+  expect(batches(root)[0]).toBe(batch)
+  expect(batch.geometry).toBe(geometry)
+  expect([0, 1, 2, 3].map((id) => batch.getVisibleAt(id))).toEqual([true, true, false, false])
+  useViewer.getState().setWalkthroughMode(true)
+  frame()
+  expect([0, 1, 2, 3].map((id) => batch.getVisibleAt(id))).toEqual([true, true, true, true])
+  useViewer.getState().setWalkthroughMode(false)
+  useViewer.getState().setXrayFamily(null)
+  frame()
+  expect(batches(root)[0]).toBe(batch)
+  expect([0, 1, 2, 3].map((id) => batch.getVisibleAt(id))).toEqual([true, true, true, true])
+})

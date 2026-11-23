@@ -6,23 +6,14 @@ export {
   type FloorplanAlignmentResult,
 } from './apply-alignment'
 export {
-  clampPlanValue,
   doesPolygonIntersectSelectionBounds,
-  FLOORPLAN_VIEW_ROTATION_DEG,
-  floorplanLocalToWorldPoint,
   getDistanceToWallSegment,
   getFloorplanSelectionBounds,
-  getPlanPointDistance,
   getRotatedRectanglePolygon,
-  getThickPlanLinePolygon,
-  interpolatePlanPoint,
   isPointInsidePolygon,
   isPointInsidePolygonWithHoles,
   isPointInsideSelectionBounds,
-  movePlanPointTowards,
   pointMatchesWallPlanPoint,
-  rotatePlanVector,
-  worldToFloorplanLocalPoint,
 } from './geometry'
 export {
   buildFloorplanItemEntry,

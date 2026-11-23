@@ -181,9 +181,11 @@ export function reconcileDocument(
           )
             changed.push(id)
         for (const id in roofsFrom) if (!(id in current)) changed.push(id)
-        const roofInput = (node: AnyNode | undefined) =>
-          isRoofElevationInput(node) || node?.type === 'roof-segment'
-        if (changed.some((id) => roofInput(roofsFrom[id]) || roofInput(current[id]))) {
+        if (
+          changed.some(
+            (id) => isRoofElevationInput(roofsFrom[id]) || isRoofElevationInput(current[id]),
+          )
+        ) {
           const roofs = [
             ...roofsKeptOverStorey(roofsFrom, view()),
             ...planRoofElevationUpdates(view(), roofsAffectedBy(roofsFrom, current, changed)),

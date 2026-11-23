@@ -2,7 +2,10 @@ import {
   type AnyNode,
   type AnyNodeId,
   type DuctFittingNode,
+  DuctSegmentNode,
   type FloorplanAffordance,
+  type NodePort,
+  nodeRegistry,
   useScene,
 } from '@pascal-app/core'
 import { useEditor } from '@pascal-app/editor'
@@ -12,13 +15,8 @@ import {
   findMatedScenePorts,
   planDuctElbowBranchPromotion,
   planDuctTeeCrossPromotion,
-  type RunContinuationHandlePlan,
-  resolveDuctContinuationHandle,
 } from '../shared/elbow-branch-continuation'
-import { ductPortDiameterIn } from './geometry'
-import type { DuctSegmentNode } from './schema'
-
-export type DuctEndpoint = 'start' | 'end'
+import { type DuctEndpoint, ductEndpointPort } from './continuation-handle'
 
 export type DuctContinuationSeed = {
   duct: DuctSegmentNode
@@ -30,6 +28,7 @@ export type DuctContinuationSeed = {
 type DuctContinuationDefaults = {
   continuation?: {
     nodeId?: unknown
+    portId?: unknown
     endpoint?: unknown
     fittingId?: unknown
     segmentIndex?: unknown
@@ -37,55 +36,37 @@ type DuctContinuationDefaults = {
   }
 }
 
-export function ductEndpointPort(duct: DuctSegmentNode, endpoint: DuctEndpoint): ScenePort | null {
-  if (duct.path.length < 2) return null
-  const index = endpoint === 'start' ? 0 : duct.path.length - 1
-  const neighborIndex = endpoint === 'start' ? 1 : duct.path.length - 2
-  const position = duct.path[index]!
-  const neighbor = duct.path[neighborIndex]!
-  const dx = position[0] - neighbor[0]
-  const dy = position[1] - neighbor[1]
-  const dz = position[2] - neighbor[2]
-  const length = Math.hypot(dx, dy, dz)
-  return {
-    id: endpoint,
-    nodeId: duct.id,
-    position,
-    direction: length < 1e-9 ? [1, 0, 0] : [dx / length, dy / length, dz / length],
-    diameter: ductPortDiameterIn(duct),
-    system: duct.system,
-  }
-}
-
-export function ductContinuationHandlePoint(
-  duct: DuctSegmentNode,
-  endpoint: DuctEndpoint,
-  gap = 0.28,
-): [number, number, number] | null {
-  const port = ductEndpointPort(duct, endpoint)
-  if (!port) return null
-  return [
-    port.position[0] + port.direction[0] * gap,
-    port.position[1] + port.direction[1] * gap,
-    port.position[2] + port.direction[2] * gap,
-  ]
-}
-
-export function ductContinuationHandlePlan(
-  duct: DuctSegmentNode,
-  endpoint: DuctEndpoint,
-  nodes: Readonly<Record<string, AnyNode>>,
-  gap = 0.28,
-): RunContinuationHandlePlan | null {
-  const port = ductEndpointPort(duct, endpoint)
-  return port ? resolveDuctContinuationHandle(port, nodes, gap) : null
-}
-
 export function resolveDuctContinuationSeed(
   defaults: unknown,
   nodes: Record<string, AnyNode>,
 ): DuctContinuationSeed | null {
   const continuation = (defaults as DuctContinuationDefaults | null)?.continuation
+  if (typeof continuation?.portId === 'string' && typeof continuation.nodeId === 'string') {
+    const source = nodes[continuation.nodeId]
+    const port =
+      source &&
+      nodeRegistry
+        .get(source.type)
+        ?.ports?.(source)
+        .find((p) => p.id === continuation.portId)
+    if (!port || (port.system !== 'supply' && port.system !== 'return')) return null
+    return {
+      duct: DuctSegmentNode.parse({
+        parentId: source.parentId,
+        path: [
+          [...port.position],
+          port.position.map((value, index) => value + port.direction[index]!),
+        ],
+        shape: port.shape ?? 'round',
+        diameter: port.diameter,
+        width: port.width ?? 14,
+        height: port.height ?? 8,
+        system: port.system,
+      }),
+      port: { ...port, nodeId: source.id },
+      body: null,
+    }
+  }
   const endpoint = continuation?.endpoint
   const nodeId = continuation?.nodeId
   if (endpoint === 'branch' && typeof nodeId === 'string') {
@@ -145,6 +126,9 @@ export function activateDuctBranch(
   if (!segment || !next) return
   const editor = useEditor.getState()
   editor.setToolDefaults('duct-segment', {
+    ...editor.toolDefaults['duct-segment'],
+    routingMode: 'surface',
+    crossingMode: 'connect',
     continuation: { nodeId: duct.id, endpoint: 'branch', segmentIndex, point },
     shape: duct.shape,
     diameter: duct.diameter,
@@ -168,6 +152,9 @@ export function activateDuctContinuation(
   if (!ductEndpointPort(duct, endpoint)) return
   const editor = useEditor.getState()
   editor.setToolDefaults('duct-segment', {
+    ...editor.toolDefaults['duct-segment'],
+    routingMode: 'surface',
+    crossingMode: 'connect',
     continuation: { nodeId: duct.id, endpoint, ...(fittingId ? { fittingId } : {}) },
     shape: duct.shape,
     diameter: duct.diameter,
@@ -178,6 +165,27 @@ export function activateDuctContinuation(
     insulated: duct.insulated,
     insulationR: duct.insulationR,
     system: duct.system,
+  })
+  useViewer.getState().setSelection({ selectedIds: [] })
+  editor.setTool('duct-segment')
+}
+
+export function activateDuctCollarContinuation(node: AnyNode, port: NodePort): void {
+  const editor = useEditor.getState()
+  editor.setToolDefaults('duct-segment', {
+    ...editor.toolDefaults['duct-segment'],
+    continuation: { nodeId: node.id, portId: port.id },
+    shape: port.shape ?? 'round',
+    diameter: port.diameter,
+    width: port.width ?? 14,
+    height: port.height ?? 8,
+    system: port.system,
+    ductMaterial: 'sheet-metal',
+    elevation: port.position[1],
+    routingMode:
+      Math.hypot(port.direction[0], port.direction[2]) < 1e-6 ? 'vertical' : 'horizontal',
+    targetElevation: port.position[1] + Math.sign(port.direction[1] || 1),
+    crossingMode: 'connect',
   })
   useViewer.getState().setSelection({ selectedIds: [] })
   editor.setTool('duct-segment')

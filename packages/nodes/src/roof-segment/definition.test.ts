@@ -17,6 +17,7 @@ import {
   WallNode,
 } from '@pascal-app/core'
 import { useEditor, useInteractionScope } from '@pascal-app/editor'
+import { renderPlugin } from '@pascal-app/nodes/render'
 import { roofSegmentDefinition } from './definition'
 
 function segment(overrides: Partial<RoofSegmentNode> = {}): RoofSegmentNode {
@@ -274,4 +275,14 @@ describe('roof-segment 3D side arrows onto the walls below', () => {
     const off = { ...node, position: [0, 0, 1] as [number, number, number] }
     expect(handle.apply(off, 9, sceneApi).wallThickness).toBeCloseTo(0.1)
   })
+})
+
+test('render roof slots expose glazed finishes without a paint contribution', () => {
+  const render = renderPlugin.nodes!.find((definition) => definition.kind === 'roof-segment')!
+  const slots = render.capabilities.slots!
+  expect(slots(segment({ roofSystem: 'standard' }))).toEqual([])
+  expect(
+    slots(segment({ roofType: 'gable', roofSystem: 'glazed' })).map((slot) => slot.slotId),
+  ).toEqual(['glazing-frame', 'glazing-glass', 'glazing-solid'])
+  expect(render.capabilities.paint).toBeUndefined()
 })

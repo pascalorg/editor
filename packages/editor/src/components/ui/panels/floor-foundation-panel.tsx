@@ -19,7 +19,7 @@ import {
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { localizedFloorFootprintName } from '../../../i18n/floor-footprint-name'
-import { localizedLevelName } from '../../../i18n/level-name'
+import { localizedLevelName } from '@pascal-app/viewer/ui'
 import { useRef, useState } from 'react'
 import {
   applyFloorFoundation,
@@ -36,11 +36,11 @@ import {
   THICK_FLOOR_HINT,
   thickFloorAdvice,
 } from '../../../lib/floor-footprints'
-import { formatLinearMeasurement } from '../../../lib/measurements'
+import { formatLinearMeasurement } from '@pascal-app/core'
 import { FinishSwatch } from '../controls/finish-swatch'
 import { MetricControl } from '../controls/metric-control'
 import { SegmentedControl } from '../controls/segmented-control'
-import { Button } from '../primitives/button'
+import { Button } from '@pascal-app/viewer/ui'
 import { PanelWrapper } from './panel-wrapper'
 
 /** Unpainted finishes, as the plate renders them (nodes' slab slot defaults). */
@@ -533,7 +533,7 @@ export function FloorFoundationPanel({ node, onClose }: { node: SlabNode; onClos
             hint={i18n._({ id: 'editor.panels.floorFoundationPanel.theFloorSOutsideEdgeAll', message: 'The floor\'s outside edge, all around the footprint.' })}
             label={i18n._({ id: 'editor.panels.floorFoundationPanel.edgeFinish', message: 'Edge finish' })}
             node={plate}
-            role="edge"
+            paintRole="edge"
             value={plate.slots?.edge}
           />
           {thickFloor && (
@@ -578,7 +578,7 @@ export function FloorFoundationPanel({ node, onClose }: { node: SlabNode; onClos
                   fallback={FOUNDATION_DEFAULT}
                   label={i18n._({ id: 'editor.panels.floorFoundationPanel.foundationFinish', message: 'Foundation finish' })}
                   node={plate}
-                  role="foundation"
+                  paintRole="foundation"
                   value={
                     typeof plate.foundation?.material === 'string'
                       ? plate.foundation.material

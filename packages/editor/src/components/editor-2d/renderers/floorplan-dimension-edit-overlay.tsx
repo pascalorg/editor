@@ -3,7 +3,8 @@
 import type { AnyNode, AnyNodeId } from '@pascal-app/core'
 import { useLocale, useScene } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { FloorplanDimensionHitsProvider } from '@pascal-app/viewer/ui'
+import { type ReactNode, useCallback, useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import {
   parseDimensionInput,
@@ -26,8 +27,8 @@ import useEditor from '../../../store/use-editor'
  * anchor the value is written as `textOverride` on a construction-dimension
  * node instead, and the label renders an "override" badge.
  *
- * The label is found by DOM delegation on the attributes
- * `floorplan-dimension-renderer.tsx` emits, so this works identically for
+ * The label is found by DOM delegation on the attributes the viewer's
+ * dimension renderer emits under `FloorplanDimensionHitsGate`, so this works identically for
  * `dimension` and `dimension-string` geometry, for automatic wall dimensions,
  * contextual dimensions and manual construction-dimension nodes — and on
  * sheets, which mount the same renderer.
@@ -60,6 +61,15 @@ export function isDimensionEditAllowed(
 export function useDimensionEditAllowed(): boolean {
   const readOnly = useScene((state) => state.readOnly)
   return useEditor((state) => isDimensionEditAllowed(state, { readOnly }))
+}
+
+/** Plan dimension labels under the editor carry their typeable hit rects while typing is allowed. */
+export function FloorplanDimensionHitsGate({ children }: { children: ReactNode }) {
+  return (
+    <FloorplanDimensionHitsProvider value={useDimensionEditAllowed()}>
+      {children}
+    </FloorplanDimensionHitsProvider>
+  )
 }
 
 /**

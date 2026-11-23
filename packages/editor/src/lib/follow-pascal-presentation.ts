@@ -1,5 +1,5 @@
 import type { WallMode } from '@pascal-app/viewer'
-import type { RoomKey } from './room-selection'
+import type { RoomKey } from '@pascal-app/viewer/ui'
 
 /**
  * Follow Pascal changes how the building is shown so the build it follows is in view: the walls cut

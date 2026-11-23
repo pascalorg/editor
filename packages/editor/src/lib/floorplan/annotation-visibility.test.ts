@@ -1,11 +1,11 @@
 import { describe, expect, test } from 'bun:test'
 import type { FloorplanGeometry } from '@pascal-app/core'
+import { floorplanGeometryMetadata, withFloorplanGeometryMetadata } from '@pascal-app/core'
 import {
   DEFAULT_FLOORPLAN_ANNOTATION_VISIBILITY,
   filterFloorplanAnnotationGeometry,
   normalizeFloorplanAnnotationVisibility,
 } from './annotation-visibility'
-import { floorplanGeometryMetadata, withFloorplanGeometryMetadata } from './floorplan-extension'
 
 describe('floor-plan annotation visibility', () => {
   test('fills missing persisted categories with visible defaults', () => {

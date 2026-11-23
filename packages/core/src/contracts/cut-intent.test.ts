@@ -256,6 +256,8 @@ describe('publishers declare capabilities.cuts', () => {
       const src = path.join(packages, pkg, 'src')
       if (!existsSync(src)) continue
       for (const file of readdirSync(src, { recursive: true }) as string[]) {
+        // Dot directories hold scratch files other suites write and remove while this one reads.
+        if (file.split(path.sep).some((part) => part.startsWith('.'))) continue
         if (!/\.tsx?$/.test(file) || /\.test\.tsx?$/.test(file)) continue
         if (pkg === 'core' && file === path.join('registry', 'types.ts')) continue
         if (/\bcuttable\b/.test(readFileSync(path.join(src, file), 'utf8'))) {

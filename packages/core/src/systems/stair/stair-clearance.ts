@@ -50,7 +50,8 @@ function detailError(stair: StairNode, nodes: Record<string, AnyNode>) {
   ).error
 }
 
-function sourceFrame(stair: StairNode, nodes: Record<string, AnyNode>) {
+/** The level a stair starts from, with its absolute base elevation (building Y of the stair's origin). */
+export function stairSourceFrame(stair: StairNode, nodes: Record<string, AnyNode>) {
   const levels = getLevelElevations(nodes as Record<AnyNodeId, AnyNode>)
   const sourceId =
     nodes[stair.fromLevelId ?? '']?.type === 'level'
@@ -167,7 +168,7 @@ export function resolveStairWalkingSurfaces(
   if (error) throw new RangeError(error)
   if (countSurfaces(stair, nodes) > MAX_CLEARANCE_SURFACES)
     throw new RangeError('Detailed stair clearance exceeds the surface query budget')
-  const frame = sourceFrame(stair, nodes)
+  const frame = stairSourceFrame(stair, nodes)
   const point = (x: number, z: number): [number, number] => {
     const [dx, dz] = rotateXZ(x, z, stair.rotation)
     return [stair.position[0] + dx, stair.position[2] + dz]
@@ -454,7 +455,7 @@ export function measureStairHeadroom(
   })
   if (detailError(stair, nodes) || countSurfaces(stair, nodes) > MAX_CLEARANCE_SURFACES)
     return unresolved()
-  const frame = sourceFrame(stair, nodes)
+  const frame = stairSourceFrame(stair, nodes)
   const walking = resolveStairWalkingSurfaces(stair, nodes)
   const obstacles: {
     nodeId: string
@@ -483,7 +484,7 @@ export function measureStairHeadroom(
   let surfaceCount = walking.length
   for (const other of Object.values(nodes)) {
     if (other.type !== 'stair' || other.id === stair.id || !visible(other, nodes)) continue
-    if (sourceFrame(other, nodes).buildingId !== frame.buildingId) continue
+    if (stairSourceFrame(other, nodes).buildingId !== frame.buildingId) continue
     if (detailError(other, nodes)) return unresolved()
     surfaceCount += countSurfaces(other, nodes)
     if (surfaceCount > MAX_CLEARANCE_SURFACES) return unresolved()

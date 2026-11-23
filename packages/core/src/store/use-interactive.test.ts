@@ -118,3 +118,40 @@ test('the walkthrough opens an open clip, plays a named clip by its name, and sw
   expect(itemPrompt(ids[2]!, 'Lamp', lamp).verb).toBe('turn off')
   for (const id of ids) store.removeItem(id)
 })
+
+test('part switches are isolated and idempotent, and node cleanup removes all of its parts', () => {
+  const id = 'window_parts' as AnyNodeId
+  const other = 'window_parts_other' as AnyNodeId
+  const store = useInteractive.getState()
+  store.setMechanismPart(id, 'shutters', true)
+  const before = useInteractive.getState()
+  store.setMechanismPart(id, 'shutters', true)
+  expect(useInteractive.getState()).toBe(before)
+  store.setMechanismPart(id, 'shade', false)
+  store.setMechanismPart(other, 'shutters', true)
+  store.removeMechanismPart(id, 'shutters')
+  expect(useInteractive.getState().mechanismParts[`${id}:shutters`]).toBeUndefined()
+  expect(useInteractive.getState().mechanismParts[`${id}:shade`]).toBe(false)
+  store.setMechanismPart(id, 'shutters', true)
+  store.removeMechanism(id)
+  expect(useInteractive.getState().mechanismParts[`${id}:shutters`]).toBeUndefined()
+  expect(useInteractive.getState().mechanismParts[`${id}:shade`]).toBeUndefined()
+  expect(useInteractive.getState().mechanismParts[`${other}:shutters`]).toBe(true)
+  store.removeMechanism(other)
+})
+
+test('window fields queue and clear independently', () => {
+  const id = 'window_tracks' as AnyNodeId
+  const store = useInteractive.getState()
+  const animation = { from: 0, to: 1, startedAt: null, durationMs: 520, persist: false }
+  store.startWindowAnimation(id, { ...animation, field: 'operationState' })
+  store.startWindowAnimation(id, { ...animation, field: 'shutterOpen' })
+  store.setWindowOpenState(id, { operationState: 0.2, shutterOpen: 0.6 })
+  store.cancelWindowAnimation(id, 'shutterOpen')
+  store.removeWindowOpenState(id, 'shutterOpen')
+  expect(useInteractive.getState().windowAnimations[id]?.operationState?.to).toBe(1)
+  expect(useInteractive.getState().windows[id]).toEqual({ operationState: 0.2 })
+  store.cancelWindowAnimation(id, 'operationState')
+  expect(useInteractive.getState().windowAnimations[id]).toBeUndefined()
+  store.removeWindowOpenState(id)
+})

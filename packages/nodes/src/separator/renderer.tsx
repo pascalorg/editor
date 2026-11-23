@@ -1,7 +1,12 @@
 'use client'
 
-import { type SeparatorNode, useLiveNodeOverrides, useRegistry, useScene } from '@pascal-app/core'
-import { separatorFloorElevation, useEditor } from '@pascal-app/editor'
+import {
+  type SeparatorNode,
+  separatorFloorElevation,
+  useLiveNodeOverrides,
+  useRegistry,
+  useScene,
+} from '@pascal-app/core'
 import { useNodeEvents, useViewer } from '@pascal-app/viewer'
 import { useEffect, useMemo, useRef } from 'react'
 import { BufferGeometry, Float32BufferAttribute, type Group } from 'three'
@@ -14,14 +19,19 @@ const hitMaterial = new MeshBasicNodeMaterial({ transparent: true, opacity: 0, d
  * An invisible wall in 3D: a dashed line on the floor, shown while its room or
  * it is selected. A push or end drag moves it live (`useLiveNodeOverrides`).
  */
-export default function SeparatorRenderer({ node }: { node: SeparatorNode }) {
+export default function SeparatorRenderer({
+  node,
+  focusedZoneId,
+}: {
+  node: SeparatorNode
+  focusedZoneId?: string
+}) {
   const ref = useRef<Group>(null!)
   useRegistry(node.id, 'separator', ref)
-  const roomId = useEditor((s) => s.room?.zoneId)
   const viewerRoomId = useViewer((s) => s.selection.zoneId)
   const selected = useViewer((s) => s.selection.selectedIds.includes(node.id))
   const zone = useScene((s) => {
-    const id = roomId ?? viewerRoomId
+    const id = focusedZoneId ?? viewerRoomId
     return id ? s.nodes[id as keyof typeof s.nodes] : undefined
   })
   const inRoom = zone?.type === 'zone' && zone.boundarySeparatorIds.includes(node.id)

@@ -7,7 +7,11 @@ import {
   listCollections,
   writeCollections,
 } from '@pascal-app/core/agent-operations'
-import { editCollectionTool, listCollectionsTool } from '@pascal-app/core/agent-tools'
+import {
+  editCollectionTool,
+  listCollectionsTool,
+  surfaceDescription,
+} from '@pascal-app/core/agent-tools'
 import { untracked } from '@pascal-app/core/runtime'
 import type { AnyNodeId } from '@pascal-app/core/schema'
 import { z } from 'zod'
@@ -33,7 +37,7 @@ export function registerCollectionTools(server: McpServer, bridge: SceneOperatio
     listCollectionsTool.name,
     {
       title: listCollectionsTool.title,
-      description: listCollectionsTool.description,
+      description: surfaceDescription(listCollectionsTool, 'mcp'),
       inputSchema: z.object(listCollectionsTool.input),
       annotations: READ_ONLY_TOOL_ANNOTATIONS,
     },
@@ -50,7 +54,7 @@ export function registerCollectionTools(server: McpServer, bridge: SceneOperatio
     editCollectionTool.name,
     {
       title: editCollectionTool.title,
-      description: editCollectionTool.description,
+      description: surfaceDescription(editCollectionTool, 'mcp'),
       inputSchema: z.object(editCollectionTool.input),
       annotations: DESTRUCTIVE_TOOL_ANNOTATIONS,
     },

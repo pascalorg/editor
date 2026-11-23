@@ -1,6 +1,11 @@
 import { describe, expect, test } from 'bun:test'
-import { type FloorplanGeometry, type GeometryContext, ItemNode, LevelNode } from '@pascal-app/core'
-import { createFloorplanContextExtensions } from '@pascal-app/editor'
+import {
+  createFloorplanContextExtensions,
+  type FloorplanGeometry,
+  type GeometryContext,
+  ItemNode,
+  LevelNode,
+} from '@pascal-app/core'
 import { cabinetDefinition, cabinetModuleDefinition } from '../cabinet/definition'
 import { buildCabinetModuleFloorplan } from '../cabinet/floorplan'
 import { CabinetModuleNode, CabinetNode } from '../cabinet/schema'

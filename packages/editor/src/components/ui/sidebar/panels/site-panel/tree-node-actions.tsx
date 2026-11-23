@@ -6,7 +6,7 @@ import {
   Popover,
   PopoverContent,
   PopoverTrigger,
-} from './../../../../../components/ui/primitives/popover'
+} from '@pascal-app/viewer/ui'
 
 interface TreeNodeActionsProps {
   nodeId: AnyNodeId

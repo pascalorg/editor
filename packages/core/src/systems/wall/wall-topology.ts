@@ -1,5 +1,8 @@
 import { GROUND_SUPPORT_ID } from '../../hooks/spatial-grid/support-host-id'
+import { getDoorOpeningSize } from '../../lib/door-opening'
 import { withFoundationConstruction } from '../../lib/foundation-wall'
+import { openingHostFacing } from '../../lib/opening-casing'
+import { wallSupportForNodes } from '../../lib/opening-floor-datum'
 import { detectOpenWallEnds, type OpenWallEnd, wallEndJoinCandidates } from '../../lib/room-graph'
 import { terrainSupportLift } from '../../lib/terrain-support'
 import {
@@ -13,7 +16,14 @@ import {
   WallNode as WallSchema,
   type WindowNode,
 } from '../../schema'
-import { getWallArcData, getWallCurveFrameAt, getWallCurveLength, isCurvedWall } from './wall-curve'
+import { getWallTop } from '../../services/storey'
+import {
+  getWallArcData,
+  getWallChordFractionAt,
+  getWallCurveFrameAt,
+  getWallCurveLength,
+  isCurvedWall,
+} from './wall-curve'
 import { getWallFaceOffsets } from './wall-frame'
 import type { WallPlanPoint } from './wall-move'
 
@@ -394,10 +404,12 @@ export function wallAttachmentSpan(
 ): { min: number; max: number; center: number } | null {
   if (node.type === 'door') {
     const door = node as DoorNode
+    const size = getDoorOpeningSize(door)
+    const center = door.position[0] - size.leafOffsetX * openingHostFacing(door)
     return {
-      min: door.position[0] - door.width / 2,
-      max: door.position[0] + door.width / 2,
-      center: door.position[0],
+      min: center - size.width / 2,
+      max: center + size.width / 2,
+      center,
     }
   }
   if (node.type === 'window') {
@@ -453,6 +465,28 @@ function remapAttachment(
   } as Partial<AnyNode>
 }
 
+/**
+ * The height and end offset of the piece of a sloped wall between curve parameters `startT` and
+ * `endT`, so the pieces' tops continue the original line. The first piece keeps the wall's own
+ * height (a storey-bound start stays storey-bound); later ones start at the top where they begin.
+ */
+function slopedPieceTop(
+  wall: WallNode,
+  nodes: Record<AnyNodeId, AnyNode>,
+  startT: number,
+  endT: number,
+): Pick<WallNode, 'height' | 'endHeightOffset'> {
+  const base = wallSupportForNodes(wall, nodes).elevation
+  const length = getWallCurveLength(wall)
+  const topAt = (t: number) =>
+    getWallTop(wall, wall.parentId ?? '', nodes, base, getWallChordFractionAt(wall, t * length))
+  const startTop = topAt(startT)
+  return {
+    height: startT === 0 ? wall.height : startTop - base,
+    endHeightOffset: topAt(endT) - startTop,
+  }
+}
+
 export function splitWall(
   wall: WallNode,
   splitParameters: number[],
@@ -475,6 +509,7 @@ export function splitWall(
       start: wallPointAt(wall, startT),
       end: wallPointAt(wall, endT),
       curveOffset: segmentCurveOffset(wall, startT, endT),
+      ...(wall.endHeightOffset ? slopedPieceTop(wall, nodes, startT, endT) : {}),
       children: [],
     })
   })

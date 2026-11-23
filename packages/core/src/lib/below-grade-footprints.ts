@@ -10,6 +10,7 @@ import {
   floorBuriedOnFlatSite,
   type LevelGradeStanding,
   levelGradeStanding,
+  slabGradeElevation,
   terrainFieldOverLevel,
 } from './grade-standing'
 import { groundOverPart } from './ground-over-part'
@@ -62,11 +63,12 @@ function levelPlates(nodes: Record<AnyNodeId, AnyNode>): LevelPlates[] {
       const plate = slab.polygon.map(([x, z]) => levelLocalToWorldXZ(placed, x, z))
       plates.push(plate)
       if (standing === 'at-grade') continue
-      if (field && plane !== null)
-        buried.push(...groundOverPart(plate, field, plane + slab.elevation + BELOW_GRADE_TOLERANCE))
-      else if (plane !== null) {
+      const floorY = plane === null ? null : plane + slabGradeElevation(nodes, level, slab)
+      if (field && floorY !== null)
+        buried.push(...groundOverPart(plate, field, floorY + BELOW_GRADE_TOLERANCE))
+      else if (floorY !== null) {
         // A flat site, a level of floors at different heights: a floor is buried or it is not.
-        if (floorBuriedOnFlatSite(plane + slab.elevation)) buried.push(plate)
+        if (floorBuriedOnFlatSite(floorY)) buried.push(plate)
       } else buried.push(plate)
     }
     levels.push({
@@ -86,8 +88,7 @@ function levelPlates(nodes: Record<AnyNodeId, AnyNode>): LevelPlates[] {
  * Where the ground meets the levels below grade, in the site's plan: each such level's floor slabs
  * placed where its building stands and joined into outlines, the levels' together as one set (a
  * deeper level wider than the one over it, or under part of it, gives one outline, not overlapping
- * ones). The 3D view cuts its hole in the ground and draws its grade ring along them while the
- * ground is veiled. An automatic floor follows the walls' centrelines, so an outline runs half a
+ * ones). The 3D view cuts its hole in the ground over them while the ground is veiled. An automatic floor follows the walls' centrelines, so an outline runs half a
  * wall inside the outer faces. A level only partly below grade (a walk-out on a hillside) gives
  * the part of its floor the ground stands over by more than {@link BELOW_GRADE_TOLERANCE}, the
  * edge following the slope; fully buried levels give their whole floor.
@@ -165,6 +166,47 @@ export function coveredBelowGradeFootprints(nodes: Record<AnyNodeId, AnyNode>): 
   return rings
 }
 
+/** Ground this little over a floor counts as level with it, not over it: the terrain's centimetre steps. */
+const OVER_FLOOR_EPSILON = 0.005
+const overFloorsMemo = new WeakMap<object, Point2D[][]>()
+
+/**
+ * The part of every floor plate the rendered terrain stands over, in the site's plan: each visible
+ * level's floor slabs (not a recessed pit, not site flatwork), cut where the ground (the triangle
+ * plane the terrain draws) is higher than that slab's own top. Inside a storey's floor the ground
+ * is never seen over it: the terrain is cut open there, whatever the level's grade standing. Unlike
+ * the below-grade outlines this takes no {@link BELOW_GRADE_TOLERANCE}: a slope interpolated a few
+ * centimetres to 0.3 m over a walk-out's floor near where the ground rises is cut too. Rings only,
+ * as the cover: an outline with an inner outline is left out. Empty on a site with no terrain.
+ */
+export function terrainOverFloors(nodes: Record<AnyNodeId, AnyNode>): Point2D[][] {
+  const hit = overFloorsMemo.get(nodes)
+  if (hit) return hit
+  const elevations = getLevelElevations(nodes)
+  const pieces: Point2D[][] = []
+  for (const level of Object.values(nodes)) {
+    if (level.type !== 'level' || level.visible === false) continue
+    const field = terrainFieldOverLevel(nodes, level)
+    const plane = field ? levelPlaneWorldY(nodes, level.id) : null
+    if (!field || plane === null) continue
+    const buildingId = elevations.get(level.id)?.buildingId
+    const building = buildingId ? nodes[buildingId as AnyNodeId] : undefined
+    const placed = building?.type === 'building' ? building : null
+    for (const childId of level.children) {
+      const slab = nodes[childId as AnyNodeId]
+      if (slab?.type !== 'slab' || slab.recessed === true || isSiteFlatwork(slab)) continue
+      if (slab.visible === false) continue
+      const plate = slab.polygon.map(([x, z]) => levelLocalToWorldXZ(placed, x, z))
+      pieces.push(...groundOverPart(plate, field, plane + slab.elevation + OVER_FLOOR_EPSILON))
+    }
+  }
+  const rings = union(pieces)
+    .filter((polygon) => polygon.holes.length === 0)
+    .map((polygon) => polygon.outer)
+  overFloorsMemo.set(nodes, rings)
+  return rings
+}
+
 /**
  * How deep the pit under the hole goes: the world Y of the top of the lowest floor of the level
  * shown (the sunken room of a split level, not its raised part), the deepest of the levels the hole
@@ -182,9 +224,8 @@ export function belowGradeFloorY(
 /** How far under the top of the floor plate the pit hangs its own floor: the default plate's thickness. */
 export const GROUND_PIT_FLOOR_DROP = 0.05
 /**
- * How far the pit's floor keeps from the plane of the plate's underside. The foundation under the
- * level tops out on that plane (`genericFoundation`), and seen through the hole it has to stand
- * on the pit's floor, not share its plane: two faces on one plane flicker. 2 cm is what a 24-bit
+ * How far the pit's floor keeps from the plane of the plate's underside: two faces on one plane
+ * flicker. 2 cm is what a 24-bit
  * depth buffer with the viewer's 0.3 m near plane tells apart out to about 300 m, further than
  * the hole is ever looked into from.
  */

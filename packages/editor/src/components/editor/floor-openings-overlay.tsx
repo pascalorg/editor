@@ -5,6 +5,7 @@ import {
   type AnyNodeId,
   type FloorOpeningNode,
   resolveCeilingHeight,
+  roomFloorElevation,
   sceneRegistry,
   useScene,
 } from '@pascal-app/core'
@@ -24,7 +25,6 @@ import { useCeilingEditSession } from '../../lib/ceiling-edit-session'
 import { EDITOR_LAYER } from '../../lib/constants'
 import { openingRoom, roomSurfaceOpenings, useFloorEditSession } from '../../lib/floor-edit-session'
 import { useOpeningDraft } from '../../lib/floor-opening-draft'
-import { roomFloorElevation } from '../../lib/room-handle-drag'
 import { PolygonEditor } from '../tools/shared/polygon-editor'
 
 // The openings of the room being edited ("Edit floor", "Edit ceiling", or a

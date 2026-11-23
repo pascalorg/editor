@@ -99,3 +99,24 @@ describe('textured catalog materials', () => {
     }
   })
 })
+
+for (const [id, color, roughness, metalness, opacity] of [
+  ['metal-black', '#1f1f1f', 0.55, 0.5, 1],
+  ['metal-bronze', '#4a3a2a', 0.45, 0.7, 1],
+  ['preset-glass-frosted', '#e8edf0', 0.6, 0, 0.6],
+  ['preset-glass-tinted', '#6f8a99', 0.1, 0, 0.45],
+] as const) {
+  test(`${id} is a map-free FrontSide finish with the specified PBR values`, () => {
+    const material = getCatalogMaterialById(id)!
+    expect(material.preset.maps).toEqual({})
+    expect(material.preset.mapProperties).toMatchObject({
+      color,
+      roughness,
+      metalness,
+      opacity,
+      side: 0,
+      transparent: opacity < 1,
+    })
+    expect(material.preset.mapProperties).not.toHaveProperty('transmission')
+  })
+}

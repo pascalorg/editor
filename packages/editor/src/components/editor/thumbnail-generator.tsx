@@ -30,6 +30,7 @@ import {
   temporarilyGroundWindowForCapture,
   temporarilyHideNodeTypes,
   temporarilyShowPresentation,
+  temporarilyShowScanPoints,
   temporarilyShowShadowOnly,
   temporarilyVeilGround,
   temporarilyWithoutAmbiance,
@@ -438,13 +439,15 @@ const HOLD_MAX_MS = 300_000
  * What the sheets' pictures are drawn in, whatever the user's view: full-
  * height walls, the storeys stacked at their true heights, the materials'
  * own textures and colours (a white or blueprint palette is a view, not the
- * house). The shading stays the user's: the capture brings its own AO.
+ * house), lit by a fair midday. The shading stays the user's: the capture brings its own AO.
  */
 const FINISHED_PRESENTATION = {
   wallMode: 'up',
   levelMode: 'stacked',
   textures: true,
   colorPreset: 'clay',
+  timeOfDay: 'midday',
+  weather: 'fair',
 } as const
 
 /** The viewer switched to FINISHED_PRESENTATION; the returned function puts the user's view back. */
@@ -470,6 +473,25 @@ export function presentFinished(): () => void {
     const colorPreset = viewer.colorPreset
     viewer.setColorPreset(FINISHED_PRESENTATION.colorPreset)
     restores.push(() => useViewer.getState().setColorPreset(colorPreset))
+  }
+  if (
+    viewer.timeOfDay !== FINISHED_PRESENTATION.timeOfDay ||
+    viewer.timeOfDayMinutes !== null ||
+    viewer.skyLive
+  ) {
+    const { timeOfDay, timeOfDayMinutes, skyLive } = viewer
+    viewer.setTimeOfDay(FINISHED_PRESENTATION.timeOfDay)
+    restores.push(() => {
+      const next = useViewer.getState()
+      next.setTimeOfDay(timeOfDay)
+      if (timeOfDayMinutes !== null) next.setTimeOfDayMinutes(timeOfDayMinutes)
+      if (skyLive) next.setSkyLive(true)
+    })
+  }
+  if (viewer.weather !== FINISHED_PRESENTATION.weather) {
+    const weather = viewer.weather
+    viewer.setWeather(FINISHED_PRESENTATION.weather)
+    restores.push(() => useViewer.getState().setWeather(weather))
   }
   return () => {
     for (const restore of restores.reverse()) restore()
@@ -612,6 +634,26 @@ export function capturesOrthographically(
   return !event.perspective && mainCamera instanceof THREE.OrthographicCamera
 }
 
+/**
+ * Whether a capture shows the scans. A scan is what was captured on site: a
+ * picture of the person's own view (a thumbnail, a snapshot) shows it as that
+ * view does, so a project that holds only a scan is not an empty frame, and it
+ * stays out only where the person hid it. A view the caller poses itself (a
+ * sheet's, an agent's, an authored shot's) is of the built house alone.
+ */
+export function capturesScans(
+  event: Pick<ThumbnailGenerateEvent, 'cameraPose' | 'ortho' | 'perspective'>,
+): boolean {
+  return !(event.cameraPose || event.ortho || event.perspective)
+}
+
+/** The node types a capture leaves out: the editor's aids always, the scans unless it shows them. */
+export function captureHiddenTypes(
+  event: Pick<ThumbnailGenerateEvent, 'cameraPose' | 'ortho' | 'perspective' | 'hideTypes'>,
+): string[] {
+  return ['guide', 'spawn', ...(capturesScans(event) ? [] : ['scan']), ...(event.hideTypes ?? [])]
+}
+
 export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorProps) => {
   const gl = useThree((state) => state.gl)
   const scene = useThree((state) => state.scene)
@@ -715,7 +757,8 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
       // frame rendered at print scale.
       const edgesOverride = event.edges
       const ortho = event.ortho
-      const hideTypes = event.hideTypes ?? []
+      const hiddenTypes = captureHiddenTypes(event)
+      const showsScans = capturesScans(event)
       const perspective = event.perspective
       const lightFace = event.lightFace === true
       const clip = event.clip ?? []
@@ -926,10 +969,8 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
                 }
                 restore(snapLevelsToTruePositions())
               }
-              // Hide scan, guide, and spawn nodes (and what the caller asks) so
-              // they are excluded from the thumbnail regardless of whether the
-              // system listeners are registered.
-              restore(temporarilyHideNodeTypes(['scan', 'guide', 'spawn', ...hideTypes]))
+              // Hidden here, whether or not the system listeners are registered.
+              restore(temporarilyHideNodeTypes(hiddenTypes))
               // a sheet's picture is of the house: what a renderer excluded
               // from captures stays out of it, and every storey stands at its
               // true height
@@ -986,6 +1027,8 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
               // those meshes before either snapshot render path submits them,
               // and restore fog afterwards so the atmosphere never leaks in.
               restore(refreshIsolation(scene))
+              // After isolation, which holds a cloud back by its layers: one it holds stays out.
+              if (showsScans) restore(temporarilyShowScanPoints())
               if (event.presentation) {
                 restore(presentLevelsForCapture(event.presentation))
                 cameraData.presentation = event.presentation

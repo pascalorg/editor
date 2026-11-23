@@ -2,6 +2,7 @@
 
 import { type AlignmentGuide, sceneRegistry } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
+import { LocalizedHtml as Html } from '@pascal-app/viewer/ui'
 import { useFrame } from '@react-three/fiber'
 import { memo, useMemo, useRef } from 'react'
 import { BoxGeometry, CircleGeometry, type Group, RingGeometry, Vector3 } from 'three'
@@ -11,7 +12,6 @@ import useAlignmentGuides, {
   type DraftGuideLine,
   type DraftGuides,
 } from '../../store/use-alignment-guides'
-import { Html } from './localized-html'
 import { formatMeasurement } from './measurement-pill'
 
 /**

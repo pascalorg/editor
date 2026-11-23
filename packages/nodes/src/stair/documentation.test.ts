@@ -1,12 +1,13 @@
 import { describe, expect, test } from 'bun:test'
 import {
+  createFloorplanContextExtensions,
   type FloorplanGeometry,
   type GeometryContext,
   LevelNode,
+  readFloorplanGeometryMetadata,
   StairNode,
   StairSegmentNode,
 } from '@pascal-app/core'
-import { createFloorplanContextExtensions, readFloorplanGeometryMetadata } from '@pascal-app/editor'
 import { buildFloorplanStairEntry } from '../index'
 import {
   buildStairDocumentation,

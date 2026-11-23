@@ -327,9 +327,19 @@ export const NOTATION_CASES: NotationCase[] = [
  * pixels, so neither is listed; a length or an angle added as a bare number fails the test.
  */
 export const NOT_LENGTHS = new Set([
+  'add_window.rollerShutterOpen',
+  'add_window.shutterOpen',
+  'author_scene.payload.levels[].walls[].openings[].rollerShutterOpen',
+  'author_scene.payload.levels[].walls[].openings[].shutterOpen',
+  'create_room.windows[].rollerShutterOpen',
+  'create_room.windows[].shutterOpen',
   'author_scene.payload.levels[].lights[].intensity',
   'author_scene.payload.levels[].lights[].softness',
   'author_scene.payload.levels[].lights[].glow.strength',
+  // move_node reads its sill/bottom height in metres and its yaw in degrees, as its description
+  // says; the one notation (N1) is still owed on them.
+  'move_node.y',
+  'move_node.rotation',
   // Coordinates, in level metres.
   'add_column.x',
   'add_column.y',

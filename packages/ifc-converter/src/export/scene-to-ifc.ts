@@ -9,6 +9,7 @@ import {
   DEFAULT_WALL_THICKNESS,
   type DoorNode,
   difference,
+  getDoorOpeningSize,
   getLevelElevations,
   getOpeningWallCut,
   getRenderableSlabPolygon,
@@ -26,6 +27,7 @@ import {
   type LevelNode,
   liftedManualSlab,
   measureStair,
+  openingHostFacing,
   prepareSlabPolygonContext,
   resolveCeilingHeight,
   resolveWallExteriorSide,
@@ -907,7 +909,9 @@ export function buildIfcExport(input: IfcExportInput): IfcExportResult {
       const chord = Math.hypot(endPlan[0] - startPlan[0], endPlan[1] - startPlan[1])
       const support = wallSupportForNodes(wall, nodes)
       const base = support.elevation
-      const top = getWallTop(wall, levelId, nodes as Record<AnyNodeId, AnyNode>, base)
+      const startTop = getWallTop(wall, levelId, nodes as Record<AnyNodeId, AnyNode>, base, 0)
+      const endTop = getWallTop(wall, levelId, nodes as Record<AnyNodeId, AnyNode>, base, 1)
+      const top = Math.max(startTop, endTop)
       const cells = wallBaseCells(wall, support, top)
       if (chord < 1e-6 || cells.every((cell) => top - cell.bottom <= 1e-4)) {
         skipped.push({ nodeId: wall.id, type: wall.type, reason: 'degenerate' })
@@ -942,7 +946,7 @@ export function buildIfcExport(input: IfcExportInput): IfcExportResult {
       }
       // A stepped base (runs on different supports, or faces on different
       // floors) becomes one prism per run, each clipped from the footprint.
-      const solids =
+      const prisms =
         cells.length === 1
           ? [
               model.extrusion(
@@ -967,9 +971,17 @@ export function buildIfcExport(input: IfcExportInput): IfcExportResult {
                       : []
                   }),
             )
+      // A sloped top is linear along the chord, the wall frame's +X: each prism rises to the
+      // higher end and the plane through both end tops cuts it down.
+      const sloped = Math.abs(endTop - startTop) > 1e-6
+      const solids = sloped
+        ? prisms.map((prism) =>
+            model.clipAboveSlope(prism, [0, 0, startTop - base], (endTop - startTop) / chord),
+          )
+        : prisms
       const shape = model.shape([
         model.axisRepresentation(model.polyline2(axisPoints, false)),
-        model.bodyRepresentation('SweptSolid', solids),
+        model.bodyRepresentation(sloped ? 'Clipping' : 'SweptSolid', solids),
       ])
       const wallPlacement = model.localPlacement(storey.placement, frame)
       const wallRef = emitElement(
@@ -1060,11 +1072,15 @@ export function buildIfcExport(input: IfcExportInput): IfcExportResult {
           angle: Math.atan2(-curve.tangent.y, curve.tangent.x),
         }
         const cutBottom = (cut?.bottom ?? nominalBottom) - nominalBottom
+        const openingSize = getDoorOpeningSize(opening)
         const cutDepth =
-          (cut?.top ?? nominalBottom + opening.height) - (cut?.bottom ?? nominalBottom)
+          (cut?.top ?? nominalBottom + openingSize.height) - (cut?.bottom ?? nominalBottom)
+        const cutOffset = isCurvedWall(wall)
+          ? 0
+          : openingSize.leafOffsetX * openingHostFacing(opening)
         let openingRef: StepRef | null = null
         let openingPlacement: StepRef | null = null
-        if (cutDepth > 1e-4 && opening.width > 1e-4) {
+        if (cutDepth > 1e-4 && openingSize.width > 1e-4) {
           let profile: StepRef
           const band =
             isCurvedWall(wall) && cut
@@ -1077,8 +1093,16 @@ export function buildIfcExport(input: IfcExportInput): IfcExportResult {
                 )
               : []
           if (band.length > 0) profile = model.polygonProfile(band)
-          else profile = model.rectangleProfile(opening.width, thickness + 0.2)
-          openingPlacement = model.localPlacement(wallPlacement, relativeFrame(frame, openingFrame))
+          else profile = model.rectangleProfile(openingSize.width, thickness + 0.2)
+          const cutFrame: PlanFrame = {
+            ...openingFrame,
+            origin: [
+              openingFrame.origin[0] - cutOffset * curve.tangent.x,
+              openingFrame.origin[1] + cutOffset * curve.tangent.y,
+              nominalBottom,
+            ],
+          }
+          openingPlacement = model.localPlacement(wallPlacement, relativeFrame(frame, cutFrame))
           openingRef = step.add(
             'IFCOPENINGELEMENT',
             model.guid(`${opening.id}:opening`),
@@ -1117,7 +1141,7 @@ export function buildIfcExport(input: IfcExportInput): IfcExportResult {
           ])
         }
         const elementPlacement = openingPlacement
-          ? model.localPlacement(openingPlacement, IDENTITY_FRAME)
+          ? model.localPlacement(openingPlacement, { origin: [cutOffset, 0, 0], angle: 0 })
           : model.localPlacement(storey.placement, openingFrame)
         const fill = emitElement(
           meshClassFor(opening),

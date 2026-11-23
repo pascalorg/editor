@@ -16,8 +16,8 @@ import { assignZoneToUnit, enterUnitFocus } from './../../../../../lib/units'
 import { InlineRenameInput } from './inline-rename-input'
 import { TreeNodeWrapper } from './tree-node'
 import { nodeLabelDescriptor } from '../../../../../i18n/node-messages'
-import { localizedLevelName } from '../../../../../i18n/level-name'
-import { displayRoomName } from '../../../../../lib/room-name-messages'
+import { localizedLevelName } from '@pascal-app/viewer/ui'
+import { displayRoomName } from '@pascal-app/viewer/ui'
 
 type UnitWarningCode = ReturnType<typeof unitWarnings>[number]['code']
 

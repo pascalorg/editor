@@ -1,6 +1,7 @@
 import {
   type AnyNode,
   type AnyNodeId,
+  doorPositionForFacing,
   emitter,
   nodeRegistry,
   pauseSpaceDetection,
@@ -8,7 +9,7 @@ import {
   toggleNodeMechanism,
   useScene,
 } from '@pascal-app/core'
-import { cancelPerfAction, markPerfAction, useViewer } from '@pascal-app/viewer'
+import { cancelPerfAction, isTypingTarget, markPerfAction, useViewer } from '@pascal-app/viewer'
 import { useEffect } from 'react'
 import {
   cutSelectionToEditorClipboard,
@@ -39,7 +40,6 @@ import { sfxEmitter } from '../lib/sfx-bus'
 import { openSidebarPanel } from '../lib/sidebar-panel'
 import { activeSiteNode, clampBrushRadius } from '../lib/terrain-sculpt'
 import { armToolShortcut, toolShortcutForKey } from '../lib/tool-shortcuts'
-import { isTypingTarget } from '../lib/typing-target'
 import { leaveUnitFocus } from '../lib/units'
 import { subscribeWallKindReset } from '../lib/wall-draw-variant'
 import { isWallNudgeKey, nudgeSelectedWall } from '../lib/wall-nudge'
@@ -687,6 +687,11 @@ export const useKeyboard = ({
             useScene.getState().updateNode(node.id, {
               side: node.side === 'front' ? 'back' : 'front',
               rotation: [node.rotation[0], node.rotation[1] + Math.PI, node.rotation[2]],
+              position: doorPositionForFacing(node, [
+                node.rotation[0],
+                node.rotation[1] + Math.PI,
+                node.rotation[2],
+              ]),
             })
             if (node.parentId) {
               useScene.getState().dirtyNodes.add(node.parentId as AnyNodeId)

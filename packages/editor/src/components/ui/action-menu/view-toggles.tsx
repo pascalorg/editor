@@ -35,11 +35,11 @@ import {
   useWallsBelowSetting,
 } from '../../editor-2d/floorplan-adjacent-walls-layer'
 import { SliderControl } from '../controls/slider-control'
-import { Popover, PopoverContent, PopoverTrigger } from '../primitives/popover'
-import { Switch } from '../primitives/switch'
-import { ActionButton } from './action-button'
-import { useActionMenuPopupSide } from './placement'
-import { localizedLevelName } from '../../../i18n/level-name'
+import { Popover, PopoverContent, PopoverTrigger } from '@pascal-app/viewer/ui'
+import { Switch } from '@pascal-app/viewer/ui'
+import { ActionButton } from '@pascal-app/viewer/ui'
+import { useActionMenuPopupSide } from '@pascal-app/viewer/ui'
+import { localizedLevelName } from '@pascal-app/viewer/ui'
 
 const MAX_FILE_SIZE = 200 * 1024 * 1024 // 200MB
 const ACCEPTED_FILE_TYPES = '.glb,.gltf,image/jpeg,image/png,image/webp,image/gif'

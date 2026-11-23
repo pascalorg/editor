@@ -15,6 +15,7 @@ import {
 } from '@pascal-app/core'
 import { AGENT_OPERATIONS, applyAgentOutcome } from '@pascal-app/core/agent-operations'
 import { createAgentHost, liveSceneRuntime } from '@pascal-app/core/runtime'
+import { displayRoomName } from '@pascal-app/viewer/ui'
 import {
   commitRoomNameEdit,
   commitRoomNamePick,
@@ -22,7 +23,7 @@ import {
   roomNameOptions,
 } from '../components/ui/panels/room-name-options'
 import { roomNameSections } from './room-name-catalog'
-import { displayRoomName, localizedRoomNameSections } from './room-name-messages'
+import { localizedRoomNameSections } from './room-name-messages'
 import { applyRoomPlan, renameRoom } from './room-structure-commands'
 import { copySelectedNodesToEditorClipboard, pasteEditorClipboardToLevel } from './scene-clipboard'
 

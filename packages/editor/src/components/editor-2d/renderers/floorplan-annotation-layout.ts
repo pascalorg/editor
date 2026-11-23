@@ -1,6 +1,3 @@
-import type { FloorplanGeometry } from '@pascal-app/core'
-import { readFloorplanGeometryMetadata } from '../../../lib/floorplan/floorplan-extension'
-
 export type AnnotationLabelRectangle = {
   id: string
   x: number
@@ -465,33 +462,6 @@ function candidateCost(
     candidate.dx * -rectangle.tangentY + candidate.dy * rectangle.tangentX,
   )
   return preference + distance + perpendicularMovement * 4
-}
-
-export function isFloorplanAnnotationObstacleGeometry(geometry: FloorplanGeometry): boolean {
-  if (floorplanAnnotationObstacleMode(geometry)) return true
-  if (geometry.kind !== 'group') return false
-  const hasPlate = geometry.children.some(
-    (child) => child.kind === 'rect' || child.kind === 'circle',
-  )
-  const hasUprightText = geometry.children.some((child) => child.kind === 'text' && child.upright)
-  return hasPlate && hasUprightText
-}
-
-export function floorplanAnnotationObstacleMode(
-  geometry: FloorplanGeometry,
-): 'bounds' | 'outline' | '' | undefined {
-  const metadata = readFloorplanGeometryMetadata(geometry)
-  if (metadata.annotationObstacle) return metadata.annotationObstacle
-  switch (metadata.annotationRole) {
-    case 'room-label':
-      return geometry.kind === 'text' ? 'bounds' : undefined
-    case 'column-center':
-      return geometry.kind === 'line' || geometry.kind === 'text' ? 'bounds' : undefined
-    case 'stair-annotation':
-      return geometry.kind === 'polyline' || geometry.kind === 'line' ? 'outline' : 'bounds'
-    default:
-      return undefined
-  }
 }
 
 function rectanglesOverlap(

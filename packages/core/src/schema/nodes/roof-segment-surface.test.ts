@@ -1,5 +1,10 @@
 import { describe, expect, test } from 'bun:test'
-import { getRoofSegmentSurfaceY, ROOF_SHAPE_DEFAULTS, RoofSegmentNode } from './roof-segment'
+import {
+  getActiveRoofHeight,
+  getRoofSegmentSurfaceY,
+  ROOF_SHAPE_DEFAULTS,
+  RoofSegmentNode,
+} from '@pascal-app/core'
 
 describe('getRoofSegmentSurfaceY', () => {
   test('falls linearly from a conical apex in every radial direction', () => {
@@ -78,4 +83,43 @@ describe('getRoofSegmentSurfaceY', () => {
     expect(localZ).toBeGreaterThan(innerWaistHalfZ)
     expect(getRoofSegmentSurfaceY(segment, localX, localZ)).toBeCloseTo(expected, 6)
   })
+})
+
+test('gambrel surface follows its lower and upper slopes across the kink', () => {
+  const node = RoofSegmentNode.parse({
+    roofType: 'gambrel',
+    width: 10,
+    depth: 8,
+    wallHeight: 0,
+    pitch: 45,
+  })
+  const peak = getActiveRoofHeight(node)
+  expect(getRoofSegmentSurfaceY(node, 0, 3)).toBeCloseTo(1, 6)
+  expect(getRoofSegmentSurfaceY(node, 0, 2)).toBeCloseTo(2, 6)
+  expect(getRoofSegmentSurfaceY(node, 0, 1)).toBeCloseTo((peak + 2) / 2, 6)
+})
+
+test('mansard surface includes the shoulder and a ridge on rectangular footprints', () => {
+  const node = RoofSegmentNode.parse({
+    roofType: 'mansard',
+    width: 12,
+    depth: 8,
+    wallHeight: 0,
+    pitch: 45,
+  })
+  const peak = getActiveRoofHeight(node)
+  expect(getRoofSegmentSurfaceY(node, 0, 3.4)).toBeCloseTo(0.6, 6)
+  expect(getRoofSegmentSurfaceY(node, 0, 2.8)).toBeCloseTo(1.2, 6)
+  expect(getRoofSegmentSurfaceY(node, 1, 0)).toBeCloseTo(peak, 6)
+  expect(getRoofSegmentSurfaceY(node, 5.4, 0)).toBeCloseTo(0.6, 6)
+})
+
+test('rectangular hip surface stays at crown height along the ridge in either orientation', () => {
+  for (const [width, depth, x, z] of [
+    [10, 6, 1, 0],
+    [6, 10, 0, 1],
+  ]) {
+    const node = RoofSegmentNode.parse({ roofType: 'hip', width, depth, wallHeight: 0, pitch: 45 })
+    expect(getRoofSegmentSurfaceY(node, x!, z!)).toBeCloseTo(3, 6)
+  }
 })

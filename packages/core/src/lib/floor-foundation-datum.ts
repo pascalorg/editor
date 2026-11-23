@@ -1,3 +1,4 @@
+import { roofFaceShapes } from '../registry/roofs'
 import type { AnyNode, SlabNode } from '../schema'
 import { DEFAULT_SLAB_ELEVATION, MIN_SLAB_THICKNESS } from '../schema/nodes/slab'
 import { wallOverlapsSlabFootprint } from '../systems/slab/slab-support'
@@ -299,11 +300,13 @@ function computeFootprintSupport(
     const segments = node.children
       .map((id) => nodes[id])
       .filter((segment) => segment?.type === 'roof-segment')
-    if (!segments.length)
+    const faces = roofFaceShapes(node, nodes)
+    if (!segments.length && !faces.length)
       return containsPoint(
         [{ outer: base.polygon, holes: base.holes ?? [] }],
         [node.position[0], node.position[2]],
       )
+    if (faces.some((face) => polygonsOverlap(base, face.outline))) return true
     return segments.some((segment) => {
       if (segment.type !== 'roof-segment') return false
       const corners: [number, number][] = [

@@ -7,6 +7,7 @@ import {
   collectionIdsOf,
   createSceneApi,
   getWallMidpointHandlePoint,
+  isNodeDuplicable,
   type NodeQuickAction,
   nodeRegistry,
   runAsSingleSceneHistoryStep,
@@ -255,7 +256,7 @@ export function FloorplanRegistryActionMenu() {
   const canMove =
     !registryMoveDisabled(node) &&
     (!!def.capabilities.movable || !!def.floorplanMoveTarget || !!def.affordanceTools?.move)
-  const canDuplicate = def.capabilities.duplicable !== false
+  const canDuplicate = isNodeDuplicable(node)
   const canDelete = def.capabilities.deletable !== false
   const canAddHole = node.type === 'slab' || node.type === 'ceiling'
 

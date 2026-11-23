@@ -903,7 +903,7 @@ export type ExposedStructure = 'cmu' | 'concrete'
  * block or cast concrete above grade, and from under the ground, is what it is. `null` for a wall
  * with a cladding (`wallAssemblyFinishRef` speaks for it), a lining outside the core (a
  * partition), a framed or foam core (`wood`, `lgs`, `icf`), and a wall whose exterior side is not
- * yet resolved. The viewer draws it as the generic foundation draws the same structure.
+ * yet resolved.
  */
 export function wallAssemblyExposedStructure(
   wall: Pick<WallNode, 'assembly' | 'frontSide' | 'backSide'>,

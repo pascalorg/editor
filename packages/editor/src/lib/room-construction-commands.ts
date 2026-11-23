@@ -17,7 +17,9 @@ import {
   type NodeChange,
   planWallJustification,
   resolveCeilingHeight,
+  roomFloorElevation,
   roomFloorElevationFromRelative,
+  roomOwnPlate,
   roomSideFaces,
   runAsSingleSceneHistoryStep,
   type StructureConflict,
@@ -32,13 +34,12 @@ import useDeleteConfirmation, {
 } from '../store/use-delete-confirmation'
 import useEditor from '../store/use-editor'
 import { footprintHeightValue } from './floor-footprints'
-import { roomOwnPlate, roomSharedFootprint } from './room-built-on'
+import { roomSharedFootprint } from './room-built-on'
 import { roomClearPolygon, roomConstructionState, roomFloorContents } from './room-construction'
 import {
   mezzanineElevationBounds,
   ownFloorElevationBounds,
   planRoomElevation,
-  roomFloorElevation,
 } from './room-handle-drag'
 import { applyRoomPlan } from './room-structure-commands'
 import { showRoomNotice } from './room-transform-session'

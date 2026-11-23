@@ -262,8 +262,6 @@ export const UNDERGROUND_PALETTE = {
   vignette: '#0c0c0c',
   /** The thin rim along the cut of the hole in the ground, from above. */
   rim: '#3c3c3c',
-  /** The grade ring under the ground: a light rim where the ground meets the level. */
-  ring: '#b4b4b4',
   /** The sky light's tint (ambient and hemisphere pulled toward it under the ground). */
   tint: '#c8c8c8',
 } as const

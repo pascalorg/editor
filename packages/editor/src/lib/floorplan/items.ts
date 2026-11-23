@@ -6,9 +6,10 @@ import {
   getWallLocalFaceZ,
   type ItemNode,
   type LevelNode,
+  rotatePlanVector,
   useLiveTransforms,
 } from '@pascal-app/core'
-import { getRotatedRectanglePolygon, rotatePlanVector } from './geometry'
+import { getRotatedRectanglePolygon } from './geometry'
 import type { FloorplanItemEntry, FloorplanNodeTransform, LevelDescendantMap } from './types'
 
 export function collectLevelDescendants(

@@ -8,6 +8,7 @@ const testRoot = await mkdtemp(path.join(os.tmpdir(), 'pascal-cli-command-test-'
 const testHome = path.join(testRoot, 'home')
 const claimFetchPreload = path.join(testRoot, 'claim-fetch-preload.mjs')
 const architectFetchPreload = path.join(testRoot, 'architect-fetch-preload.mjs')
+const viewerFetchPreload = path.join(testRoot, 'viewer-fetch-preload.mjs')
 
 await writeFile(
   architectFetchPreload,
@@ -50,6 +51,23 @@ await writeFile(
       headers: { 'content-type': 'application/json' },
       status: Number(process.env.PASCAL_AGENT_TEST_STATUS),
     })
+  }
+`,
+)
+
+await writeFile(
+  viewerFetchPreload,
+  `
+  globalThis.fetch = async (_url, init) => {
+    if (init?.method === 'PUT') {
+      if (new Headers(init.headers).has('authorization')) throw new Error('Upload credential leak')
+      return new Response()
+    }
+    const deploymentId = 'viewerdeploy_Abc123DEF456ghi7'
+    if (init?.body) return Response.json({ deploymentId, expiresIn: 900,
+      uploads: JSON.parse(init.body).files.map(file => ({ path: file.path,
+        url: 'https://storage.example/upload', headers: {} })) }, { status: 201 })
+    return Response.json({ deploymentId, status: 'active' })
   }
 `,
 )
@@ -203,6 +221,123 @@ describe('command parsing', () => {
 
     expect(result.exitCode).toBe(2)
     expect(JSON.parse(result.stderr)).toMatchObject({ error: 'unknown_command' })
+  })
+
+  test('shows focused help for viewer deploy', async () => {
+    const result = await runCli('viewer', '--help')
+    expect(result.exitCode).toBe(0)
+    expect(result.stdout).toContain('pascal viewer deploy <dir> --viewer <id>')
+    expect(result.stdout).toContain('Host on Pascal')
+    expect(result.stdout).toContain('PASCAL_API_KEY')
+    expect(result.stdout).toContain('100 MiB')
+    expect(result.stdout).not.toContain('pascal plugin list')
+  })
+
+  test.each(
+    [
+      ['deploy'],
+      ['deploy', './dist'],
+      ['deploy', './dist', '--viewer'],
+      ['deploy', './dist', 'extra', '--viewer', 'viewer_abc'],
+      ['deploy', './dist', '--viewer', '../admin'],
+      ['deploy', './dist', '--viewer', 'viewer_abc', '--api-origin', 'http://localhost'],
+    ].map((args) => [args]),
+  )('rejects invalid viewer usage %j', async (args) => {
+    const result = await runCli('viewer', ...args, '--json')
+    expect(result.exitCode).toBe(2)
+    expect(JSON.parse(result.stderr)).toMatchObject({ error: 'invalid_option' })
+    expect(result.stderr).toContain('pascal viewer deploy')
+    expect(result.stdout).toBe('')
+  })
+
+  test('rejects unknown viewer commands', async () => {
+    const result = await runCli('viewer', 'create', '--json')
+    expect(result.exitCode).toBe(2)
+    expect(JSON.parse(result.stderr)).toMatchObject({ error: 'unknown_command' })
+  })
+
+  test('prints dry-run human and JSON output without a key', async () => {
+    const directory = path.join(testRoot, 'viewer-build')
+    await mkdir(path.join(directory, '.vite'), { recursive: true })
+    await writeFile(path.join(directory, 'index.html'), 'hello')
+    await writeFile(path.join(directory, '.DS_Store'), 'metadata')
+    await writeFile(path.join(directory, '.vite', 'manifest.json'), '{}')
+    const args = ['viewer', 'deploy', directory, '--viewer', 'viewer_abc123', '--dry-run']
+    const human = await runCli(...args)
+    expect(human.exitCode).toBe(0)
+    expect(human.stdout).toContain('Checked 1 file (5 bytes)')
+    expect(human.stderr).toBe('')
+    expect(human.stdout).toContain('Skipped 2 hidden entries: .DS_Store, .vite/')
+    const json = await runCli(...args, '--json')
+    expect(json.exitCode).toBe(0)
+    expect(json.stderr).toBe('')
+    expect(JSON.parse(json.stdout)).toEqual({
+      schemaVersion: 1,
+      dryRun: true,
+      fileCount: 1,
+      totalBytes: 5,
+      skipped: ['.DS_Store', '.vite/'],
+      files: [
+        {
+          path: 'index.html',
+          size: 5,
+          sha256: '2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824',
+          contentType: 'text/html',
+        },
+      ],
+    })
+  })
+
+  test.each([
+    [1, '2.0 KiB'],
+    [3, '1.0 MiB'],
+  ])(
+    'prints correct counts and binary sizes for %i files with quiet non-TTY progress',
+    async (count, size) => {
+      const directory = path.join(testRoot, `viewer-deploy-${count}`)
+      await mkdir(directory, { recursive: true })
+      await writeFile(
+        path.join(directory, 'index.html'),
+        Buffer.alloc(count === 1 ? 2048 : 1024 * 1024),
+      )
+      await writeFile(path.join(directory, '.hidden'), '')
+      for (let i = 1; i < count; i++) await writeFile(path.join(directory, `asset${i}.js`), '')
+      const child = Bun.spawn(
+        [
+          process.execPath,
+          '--preload',
+          viewerFetchPreload,
+          executable,
+          'viewer',
+          'deploy',
+          directory,
+          '--viewer',
+          'viewer_abc123',
+        ],
+        {
+          env: { ...process.env, PASCAL_API_KEY: 'sk_live_test', PASCAL_HOME: testHome },
+          stdout: 'pipe',
+          stderr: 'pipe',
+        },
+      )
+      const [exitCode, stdout, stderr] = await Promise.all([
+        child.exited,
+        new Response(child.stdout).text(),
+        new Response(child.stderr).text(),
+      ])
+      expect(exitCode).toBe(0)
+      expect(stdout).toContain(`Deployed ${count} ${count === 1 ? 'file' : 'files'} (${size})`)
+      expect(stdout).toContain('Skipped 1 hidden entry: .hidden')
+      expect(stderr).toBe('')
+    },
+  )
+
+  test('requires a managing workspace key for viewer deploy', async () => {
+    const result = await runCli('viewer', 'deploy', './dist', '--viewer', 'viewer_abc123', '--json')
+    expect(result.exitCode).toBe(1)
+    expect(JSON.parse(result.stderr)).toMatchObject({ error: 'agent_api_key_missing' })
+    expect(result.stderr).toContain('workspace')
+    expect(result.stdout).toBe('')
   })
 
   test('shows focused help for hosted architect runs', async () => {

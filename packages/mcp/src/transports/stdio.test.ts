@@ -25,6 +25,7 @@ const clients: Record<string, ClientOptions> = {
 
 function createServer() {
   const bridge = new SceneBridge()
+  bridge.setScene({}, [])
   bridge.loadDefault()
   return createPascalMcpServer({ bridge })
 }

@@ -31,6 +31,12 @@ export const RESIZE_HANDLE_DRAG_LABEL = 'resize-handle'
 export const GROUP_MOVE_DRAG_LABEL = 'group-move-handle'
 export const GROUP_ROTATE_DRAG_LABEL = 'group-rotate-handle'
 
+// `activeHandleDrag.label`s for the MEP handles, in 3D and on the plan: one
+// point of a run, where Alt detaches the joint, and a fitting, a run or one
+// run segment slid along an axis. Their snap context is the kind's own.
+export const PATH_POINT_DRAG_LABEL = 'path-point'
+export const AXIS_MOVE_DRAG_LABEL = 'axis-move'
+
 export function resolveRotateHandleHelpHints(altPressed: boolean): ContextualShortcutHint[] {
   return [
     {

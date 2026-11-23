@@ -6,12 +6,11 @@ import {
   loadPlugin,
   nodeRegistry,
 } from '@pascal-app/core'
+import { FloorplanPreview } from '@pascal-app/viewer/ui'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { z } from 'zod'
-import { FloorplanPreview } from '../../components/viewer/floorplan-preview'
 import { DEFAULT_FLOORPLAN_ANNOTATION_VISIBILITY } from './annotation-visibility'
 import { collectFloorplanGeometry, floorplanExportInstalledPlugins } from './floorplan-export'
-import { FLOORPLAN_NODE_EXTENSION_KEY } from './floorplan-extension'
 
 // Plugin API v1, no-install case: a plugin kind's floor-plan output appears in
 // the read-only preview and the PDF export only while the project has the
@@ -31,7 +30,7 @@ const bed = {
   visible: true,
   metadata: {},
 } as unknown as AnyNode
-// Lives on the upper level but draws on this one through `linkedLevelIds`.
+// Lives on the upper level but draws on this one through `floorplanLinkedLevelIds`.
 const upper = LevelNode.parse({ id: 'level_plugin_upper', level: 1, children: ['fxshaft_plan'] })
 const shaft = {
   object: 'node',
@@ -70,7 +69,7 @@ beforeEach(async () => {
         category: 'structure',
         defaults: () => ({}),
         capabilities: {},
-        extensions: { [FLOORPLAN_NODE_EXTENSION_KEY]: { linkedLevelIds: () => [level.id] } },
+        floorplanLinkedLevelIds: () => [level.id],
         floorplan: () => ({ kind: 'rect', x: 3, y: 0, width: 1, height: 1 }),
       } as unknown as AnyNodeDefinition,
     ],

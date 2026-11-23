@@ -4,11 +4,12 @@ import {
   CabinetModuleNode,
   type CabinetNode,
   createSceneApi,
+  formatLinearMeasurement,
   runAsSingleSceneHistoryStep,
   usePascalI18n,
   useScene,
 } from '@pascal-app/core'
-import { ActionButton, formatLinearMeasurement } from '@pascal-app/editor'
+import { ActionButton } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { useState } from 'react'
 import { applyCabinetModuleInsertion, cabinetModuleForRunInsertion } from './insertion'

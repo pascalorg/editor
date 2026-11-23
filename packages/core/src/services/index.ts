@@ -165,6 +165,7 @@ export {
   getStoredLevelHeight,
   getWallPlaneTop,
   getWallTop,
+  getWallTopOver,
   isLevelBelowGrade,
   type LevelElevation,
   levelFloorWorldY,

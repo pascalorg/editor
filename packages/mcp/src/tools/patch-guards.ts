@@ -5,6 +5,7 @@ import {
   planNodeDeletion,
   previewDefaultGutterRefresh,
   validateNodeRelations,
+  wouldCreateHierarchyCycle,
 } from '@pascal-app/core'
 import {
   scriptedFieldRefusal,
@@ -248,6 +249,14 @@ export function assertPatchKeepsIdentity(
           `invalid patch: patches[${index}] create parentId "${patch.parentId}" not found`,
         )
       }
+      if (wouldCreateHierarchyCycle(node.id as AnyNodeId, parentId as AnyNodeId | null, at)) {
+        throw new PatchRefusedError(
+          'invalid_parent',
+          index,
+          node.id,
+          `create cannot place "${node.id}" under ${JSON.stringify(parentId)}: it would create a hierarchy cycle.`,
+        )
+      }
       put({ ...node, parentId } as AnyNode)
       const parent = parentId ? at(parentId) : undefined
       if (parent) put(withChild(parent, node.id))
@@ -301,6 +310,15 @@ export function assertPatchKeepsIdentity(
         }
       }
       if ('parentId' in data && data.parentId !== current.parentId) {
+        const newParentId = typeof data.parentId === 'string' ? (data.parentId as AnyNodeId) : null
+        if (wouldCreateHierarchyCycle(patch.id, newParentId, at)) {
+          throw new PatchRefusedError(
+            'invalid_parent',
+            index,
+            patch.id,
+            `update cannot move "${patch.id}" under ${JSON.stringify(data.parentId)}: it would create a hierarchy cycle.`,
+          )
+        }
         const newParent = typeof data.parentId === 'string' ? at(data.parentId) : undefined
         if (!(newParent && Array.isArray((newParent as { children?: unknown }).children))) {
           throw new PatchRefusedError(

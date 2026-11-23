@@ -9,6 +9,7 @@ import {
   FRAMING_POST_MATERIAL_REF,
   FRAMING_POST_SIZES,
   type FramingPostSize,
+  formatLinearMeasurement,
   framingPostBasePatch,
   framingPostHeightLimit,
   framingPostSize,
@@ -16,12 +17,7 @@ import {
   usePascalI18n,
   useScene,
 } from '@pascal-app/core'
-import {
-  formatLinearMeasurement,
-  MetricControl,
-  PanelSection,
-  SegmentedControl,
-} from '@pascal-app/editor'
+import { MetricControl, PanelSection, SegmentedControl } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { electedPostFoot } from './post-placement'
 

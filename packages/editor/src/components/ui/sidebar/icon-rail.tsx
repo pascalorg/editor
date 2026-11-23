@@ -7,7 +7,7 @@ import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
-} from './../../../components/ui/primitives/tooltip'
+} from '@pascal-app/viewer/ui'
 import { cn } from './../../../lib/utils'
 
 export type PanelId = string
@@ -23,6 +23,8 @@ export type ExtraPanel = {
   onSelect?: () => void
   stageActive?: boolean
   onDeselect?: () => void
+  /** The v2 side menu's heading for this entry (see `SidebarTab.section`). */
+  section?: string
 }
 
 interface IconRailProps {

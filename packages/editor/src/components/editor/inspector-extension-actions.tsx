@@ -1,6 +1,6 @@
 'use client'
 
-import { useIsMobile } from '../../hooks/use-mobile'
+import { useIsMobile } from '@pascal-app/viewer/ui'
 import { openExtension } from '../../lib/inspector-card-mode'
 import { useInspectorExpanded } from '../../lib/inspector-expanded'
 import { renderExtensionIcon, useInspectorExtensions } from '../ui/panels/inspector-extensions'

@@ -1,16 +1,14 @@
 import { describe, expect, test } from 'bun:test'
 import {
+  createFloorplanContextExtensions,
   DoorNode,
+  type FloorplanWallDimensionFaces,
   type GeometryContext,
   ItemNode,
   WallNode,
   WindowNode,
   ZoneNode,
 } from '@pascal-app/core'
-import {
-  createFloorplanContextExtensions,
-  type FloorplanWallDimensionFaces,
-} from '@pascal-app/editor'
 import { buildDoorContextualDimensions } from '../door/contextual-dimensions'
 import { buildItemContextualDimensions } from '../item/floorplan'
 import { buildWallContextualDimensions } from '../wall/contextual-dimensions'

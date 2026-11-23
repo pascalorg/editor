@@ -23,6 +23,7 @@ import {
   isAgentRefusal,
   type ObjectPiece,
   refuse,
+  surfaceDescription,
 } from '@pascal-app/core/agent-tools'
 import { untracked } from '@pascal-app/core/runtime'
 import {
@@ -264,7 +265,7 @@ export function registerAddObject(
     addObjectTool.name,
     {
       title: addObjectTool.title,
-      description: addObjectTool.description,
+      description: surfaceDescription(addObjectTool, 'mcp'),
       inputSchema: z.object(addObjectTool.input),
       annotations: DESTRUCTIVE_TOOL_ANNOTATIONS,
     },
@@ -397,7 +398,7 @@ export function registerGetSource(
     getSourceTool.name,
     {
       title: getSourceTool.title,
-      description: getSourceTool.description,
+      description: surfaceDescription(getSourceTool, 'mcp'),
       inputSchema: z.object(getSourceTool.input),
       annotations: READ_ONLY_TOOL_ANNOTATIONS,
     },

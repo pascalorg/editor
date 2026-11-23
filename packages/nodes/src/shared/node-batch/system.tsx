@@ -10,24 +10,27 @@ import {
   useScene,
 } from '@pascal-app/core'
 import {
+  familyForNode,
   getPendingWallRebuildCount,
   isIsolationActive,
   isNodeRevealing,
   publishPerfBatchStats,
   registerMaterialCacheCleanup,
   useViewer,
+  xrayActive,
 } from '@pascal-app/viewer'
 import { useFrame, useThree } from '@react-three/fiber'
 import { useEffect, useRef } from 'react'
 import type { Object3D } from 'three'
 import { isSlotPaintPreviewActive, subscribeSlotPaintPreviews } from '../slot-paint'
 import {
+  addBatchableDescendants,
   batchableConfig,
   collectBatchCandidate,
   collectTintedNodes,
   getBatchableNodeIds,
   hideBatchedNode,
-  isWallHosted,
+  hostsBusy,
   revealAllBatchedHolds,
   revealBatchedNode,
 } from './candidates'
@@ -51,11 +54,13 @@ const store = new NodeBatchStore(
 /**
  * Marks captured before the consuming systems (priority 2+) clear them — the
  * walls' `drainRebuiltWalls` ledger, done from the outside: a priority-1 pass
- * snapshots which nodes this frame touched. A dirty WALL cascades to its
- * hosted doors/windows: the wall edit moves them in level space without
- * marking them.
+ * snapshots which nodes this frame touched. A dirty host cascades to the
+ * batchable nodes it carries: a wall edit moves its doors and windows, a
+ * cabinet run edit its modules, in level space without marking them.
  */
 const changedNodes = new Set<string>()
+/** Scene containers: their children are organised under them, not carried by them. */
+const CONTAINER_TYPES = new Set(['level', 'building', 'site'])
 const surfaceLevelReadyAt = new Map<string, number>()
 const staleNodes = new Set<string>()
 /**
@@ -124,6 +129,8 @@ function appearanceChanged(): boolean {
 }
 
 export function resetNodeBatchState() {
+  visibilityFamily = undefined
+  visibilityNodes = undefined
   releaseAll()
   changedNodes.clear()
   surfaceLevelReadyAt.clear()
@@ -176,13 +183,51 @@ function releaseAll() {
   revealAllBatchedHolds()
 }
 
+let visibilityFamily: string | null | undefined
+let visibilityNodes: unknown
+
+function updateBatchVisibility() {
+  const viewer = useViewer.getState()
+  const nodes = useScene.getState().nodes
+  const family = xrayActive(viewer) ? viewer.xrayFamily : null
+  if (family === visibilityFamily && (family === null || nodes === visibilityNodes)) return
+  visibilityFamily = family
+  visibilityNodes = nodes
+  store.setVisibility(
+    family !== null
+      ? (id) => {
+          const node = nodes[id as AnyNodeId]
+          const family = node && familyForNode(node)
+          return family === undefined || family === viewer.xrayFamily
+        }
+      : null,
+  )
+}
+
 export function subscribeBatchInteractions(invalidate: () => void): () => void {
+  // A gesture or release on a host moves what it carries too.
   const changed = (nodeId: string) => {
-    if (!batchableConfig(useScene.getState().nodes[nodeId as AnyNodeId])) return
-    releaseNode(nodeId)
-    changedNodes.add(nodeId)
+    const nodes = useScene.getState().nodes
+    const ids = new Set<string>()
+    if (batchableConfig(nodes[nodeId as AnyNodeId])) ids.add(nodeId)
+    addBatchableDescendants(nodeId, nodes, ids)
+    if (ids.size === 0) return
+    for (const id of ids) {
+      releaseNode(id)
+      changedNodes.add(id)
+    }
     invalidate()
   }
+  // The viewport draws at priority 1, before the priority-5 join/release pass.
+  const unsubscribeFamily = useViewer.subscribe((state, previous) => {
+    if (
+      state.xrayFamily !== previous.xrayFamily ||
+      state.walkthroughMode !== previous.walkthroughMode
+    ) {
+      updateBatchVisibility()
+      invalidate()
+    }
+  })
   const unsubscribeTransforms = useLiveTransforms.subscribe((state, previous) => {
     for (const nodeId of state.transforms.keys()) {
       if (!previous.transforms.has(nodeId)) changed(nodeId)
@@ -199,6 +244,7 @@ export function subscribeBatchInteractions(invalidate: () => void): () => void {
     invalidate()
   })
   return () => {
+    unsubscribeFamily()
     unsubscribeTransforms()
     unsubscribePreviews()
     unsubscribeReleases()
@@ -214,13 +260,10 @@ export function captureChangedNodes() {
     const node = nodes[id]
     if (!node) continue
     if (batchableConfig(node)) changedNodes.add(id as string)
-    else if (node.type === 'wall' && Array.isArray(node.children)) {
-      // The wall edit moved its openings in level space; their own marks may
-      // never come.
-      for (const childId of node.children) {
-        if (isWallHosted(nodes[childId as AnyNodeId])) changedNodes.add(childId as string)
-      }
-    }
+    // The host edit moved what it carries in level space; their own marks may never come. A
+    // level, building or site carries nothing that way: its child list is bookkeeping (it changes
+    // whenever furniture is re-parented), and cascading from it released the whole floor.
+    if (!CONTAINER_TYPES.has(node.type)) addBatchableDescendants(id as string, nodes, changedNodes)
   }
 }
 
@@ -231,6 +274,7 @@ export function runBatchFrame(
   try {
     processBatchFrame(invalidate, wakeRef)
   } finally {
+    updateBatchVisibility()
     store.flushReleases()
     const emptyPending = store.pruneEmpty(
       performance.now(),
@@ -436,6 +480,12 @@ function processBatchFrame(
       dirty.has(nodeId as AnyNodeId) ||
       // Still growing in from a construction reveal: its transform moves every frame.
       isNodeRevealing(nodeId) ||
+      // A host still being rebuilt or revealed moves this node with it.
+      hostsBusy(
+        nodeId,
+        sceneNodes,
+        (hostId) => dirty.has(hostId as AnyNodeId) || isNodeRevealing(hostId),
+      ) ||
       overrides.get(nodeId) !== undefined ||
       useLiveTransforms.getState().get(nodeId) !== undefined ||
       isSlotPaintPreviewActive(nodeId)

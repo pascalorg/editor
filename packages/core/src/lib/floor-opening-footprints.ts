@@ -1,6 +1,8 @@
 import type { AnyNode, DoorNode, WallNode, WindowNode } from '../schema'
 import { getWallCurveFrameAt, getWallCurveLength, isCurvedWall } from '../systems/wall/wall-curve'
+import { getDoorOpeningSize } from './door-opening'
 import type { PlateRoom } from './floor-plates'
+import { openingHostFacing } from './opening-casing'
 import { openingFitsAtDatum } from './opening-floor-datum'
 import { difference, intersection, type MultiPolygon, type Ring, union } from './polygon-boolean'
 
@@ -46,13 +48,21 @@ export function wallOpeningFootprint(
 
 export function openingAperture(
   wall: WallNode,
-  opening: Pick<DoorNode | WindowNode, 'position' | 'width'>,
+  opening: Pick<DoorNode | WindowNode, 'position' | 'width'> &
+    Partial<
+      Pick<
+        DoorNode,
+        'height' | 'rotation' | 'sidelightLeft' | 'sidelightRight' | 'transomHeight' | 'doorType'
+      >
+    >,
   footprints: ReadonlyMap<string, Ring>,
 ): MultiPolygon {
   const length = getWallCurveLength(wall)
   if (length < 1e-9) return []
-  const from = Math.max(0, (opening.position[0] - opening.width / 2) / length)
-  const to = Math.min(1, (opening.position[0] + opening.width / 2) / length)
+  const size = getDoorOpeningSize({ ...opening, height: opening.height ?? 0 })
+  const centerX = opening.position[0] - size.leafOffsetX * openingHostFacing(opening)
+  const from = Math.max(0, (centerX - size.width / 2) / length)
+  const to = Math.min(1, (centerX + size.width / 2) / length)
   const aperture = wallOpeningFootprint(wall, footprints.get(wall.id) ?? [], from, to)
   const points = aperture.flatMap((part) => part.outer)
   const xs = points.map((p) => p[0]),
@@ -113,8 +123,10 @@ export function openingLandings(
           ((point.x - wall.start[0]) * dx + (point.y - wall.start[1]) * dz) / (dx * dx + dz * dz)
         )
       }
-      const from = Math.max(0, chord(opening.position[0] - opening.width / 2))
-      const to = Math.min(1, chord(opening.position[0] + opening.width / 2))
+      const size = getDoorOpeningSize({ ...opening, height: opening.height ?? 0 })
+      const centerX = opening.position[0] - size.leafOffsetX * openingHostFacing(opening)
+      const from = Math.max(0, chord(centerX - size.width / 2))
+      const to = Math.min(1, chord(centerX + size.width / 2))
       const cuts = [
         ...new Set([
           from,

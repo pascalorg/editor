@@ -4,18 +4,19 @@ import {
   type AnyNode,
   type AnyNodeId,
   type FloorplanGeometry,
+  formatLinearMeasurement,
   nodeRegistry,
   type Point,
   roomDrawnFloor,
   useScene,
 } from '@pascal-app/core'
-import { useViewer } from '@pascal-app/viewer'
+import { MEASUREMENT_FLOORPLAN_COLOR, useViewer } from '@pascal-app/viewer'
+import { FloorplanGeometryRenderer } from '@pascal-app/viewer/ui'
 import { Minus, Plus } from 'lucide-react'
 import { type PointerEvent as ReactPointerEvent, useMemo, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { useRoomRecords, useSelectedRoom } from '../../hooks/use-selected-room'
 import { getFloorplanNodeExtension } from '../../lib/floorplan/floorplan-extension'
-import { formatLinearMeasurement, MEASUREMENT_FLOORPLAN_COLOR } from '../../lib/measurements'
 import {
   commitRoomFloorElevation,
   roomRelativeFloorHeight,
@@ -40,7 +41,6 @@ import useEditor from '../../store/use-editor'
 import useFloorplanAnnotationVisibility from '../../store/use-floorplan-annotation-visibility'
 import useInteractionScope from '../../store/use-interaction-scope'
 import { useFloorplanRender } from '../editor-2d/floorplan-render-context'
-import { FloorplanGeometryRenderer } from '../editor-2d/renderers/floorplan-geometry-renderer'
 import { suppressBoxSelectForPointer } from '../tools/select/box-select-state'
 import { ActionMenuButton } from './action-menu-button'
 import { formatMeasurement } from './measurement-pill'

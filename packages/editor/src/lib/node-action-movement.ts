@@ -4,12 +4,14 @@ import {
   cloneNodesInto,
   collectSubtree,
   isMovable,
+  isMoveLocked,
   nodeRegistry,
   useScene,
 } from '@pascal-app/core'
 import { copyCreateOps } from './fresh-planar-placement'
 
 export function registryMoveDisabled(node: AnyNode): boolean {
+  if (isMoveLocked(node)) return true
   const def = nodeRegistry.get(node.type)
   return Boolean(
     def?.capabilities.movable &&

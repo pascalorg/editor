@@ -1,4 +1,4 @@
-import type { LinearUnit } from './measurements'
+import type { LinearUnit } from '@pascal-app/core'
 
 const METRES_PER_INCH = 0.0254
 

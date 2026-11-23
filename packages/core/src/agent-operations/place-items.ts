@@ -9,6 +9,7 @@ import {
 } from '../lib/geometry-surfaces'
 import { type AnyNode, type AssetInput, ItemNode, type WallNode, type ZoneNode } from '../schema'
 import { getWallLocalFaceZ } from '../systems/wall/wall-frame'
+import { type CatalogAsset, catalogItemFields } from './catalog-asset'
 import { collectDoorKeepouts, type DoorKeepout } from './door-clearance'
 import { type LevelTargetInput, targetLevel } from './level-target'
 import {
@@ -212,13 +213,13 @@ export const placeItems: AgentOperation<PlaceItemsInput> = (nodes, input, contex
   const level = targetLevel(nodes, input, context)
   const create: NonNullable<SceneChanges['create']> = []
   const doorsOn: Record<string, DoorKeepout[]> = {}
-  const make = (asset: AssetInput, pose: Pose) => {
+  const make = (asset: CatalogAsset, pose: Pose) => {
     const node = ItemNode.parse({
       name: asset.name,
       parentId: pose.parentId,
       position: pose.position,
       rotation: pose.rotation,
-      asset,
+      ...catalogItemFields(asset),
       ...pose.extra,
     })
     create.push({ node, parentId: pose.parentId })

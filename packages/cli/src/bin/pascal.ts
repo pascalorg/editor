@@ -34,6 +34,7 @@ import { listLocalProjects, projectUrl, resolveLocalProject } from '../projects.
 import { ensureWebRuntime } from '../runtime-download.js'
 import { TerminalProgress } from '../terminal-progress.js'
 import { version } from '../version.js'
+import { deployViewer, manifestFile, requireViewerId, scanViewerBuild } from '../viewer-deploy.js'
 
 const HELP = `Pascal — local 3D editor
 
@@ -67,6 +68,7 @@ USAGE:
   pascal architect run "<brief>" [--effort <level>] [--project <id>] [--max-credits <n>] [--detach] [--json]
   pascal architect status <id> [--json]
   pascal architect cancel <id> [--json]
+  pascal viewer deploy <dir> --viewer <id> [--dry-run] [--json]
   pascal mcp connect | status | config | setup <client>
   pascal plugin list [--json]
 
@@ -143,6 +145,29 @@ unavailable (no executor, rate limited) and safe to retry, 130 detached.
 Documentation: https://editor.pascal.app/docs/developers/mcp
 `
 
+const VIEWER_HELP = `Pascal viewer — deploy a static build to hosted Pascal
+
+USAGE:
+  pascal viewer deploy <dir> --viewer <id> [--dry-run] [--json]
+
+Register the hosted viewer first under Settings → Viewers → Host on Pascal.
+The CLI uploads your build and activates it; it does not create viewers.
+
+OPTIONS:
+  --viewer <id>   Hosted viewer ID from Settings → Viewers
+  --dry-run       Check the build and print its manifest summary without uploading
+  --json          Print structured output without progress
+
+Set PASCAL_API_KEY to a key that can manage the viewer's workspace; the CLI
+never stores it. A dry run needs no API key and makes no network requests.
+
+Limits: 2,000 files, 100 MiB total, 25 MiB per file, root index.html required.
+Exit codes: 0 success, 1 error, 2 invalid usage, 75 temporarily unavailable
+or rate limited and safe to retry.
+
+Documentation: https://editor.pascal.app/docs/developers/api
+`
+
 const paths = resolvePascalPaths()
 const agentApiKey = process.env.PASCAL_API_KEY
 Reflect.deleteProperty(process.env, 'PASCAL_API_KEY')
@@ -159,7 +184,9 @@ async function main(): Promise<void> {
           ? AGENT_HELP
           : command === 'architect'
             ? ARCHITECT_HELP
-            : HELP,
+            : command === 'viewer'
+              ? VIEWER_HELP
+              : HELP,
     )
   }
 
@@ -194,6 +221,8 @@ async function main(): Promise<void> {
       return runAgent(args, agentApiKey)
     case 'architect':
       return runArchitect(args, agentApiKey)
+    case 'viewer':
+      return runViewer(args, agentApiKey)
     case 'plugin':
       return runPlugin(args)
     case 'mcp':
@@ -775,6 +804,105 @@ async function runAgent(args: string[], apiKey: string | undefined): Promise<voi
       'Claiming links accountability. It does not transfer project ownership or grant access to private projects.',
     ].join('\n'),
   )
+}
+
+async function runViewer(args: string[], apiKey: string | undefined): Promise<void> {
+  const [subcommand, ...rest] = args
+  const usage = 'Use "pascal viewer deploy <dir> --viewer <id> [--dry-run] [--json]".'
+  if (subcommand !== 'deploy') {
+    throw new CliError('unknown_command', usage, undefined, 2)
+  }
+  const parsed = (() => {
+    try {
+      return parseArgs({
+        args: rest,
+        strict: true,
+        allowPositionals: true,
+        options: {
+          viewer: { type: 'string' },
+          'dry-run': { type: 'boolean', default: false },
+          json: { type: 'boolean', default: false },
+        },
+      })
+    } catch {
+      throw new CliError('invalid_option', usage, undefined, 2)
+    }
+  })()
+  const { values, positionals } = parsed
+  if (positionals.length !== 1 || !values.viewer) {
+    throw new CliError('invalid_option', usage, undefined, 2)
+  }
+  const viewerId = requireViewerId(values.viewer)
+  const directory = positionals[0]!
+  const progress = !values.json && process.stderr.isTTY ? new TerminalProgress() : undefined
+  progress?.start('Checking build')
+  try {
+    if (values['dry-run']) {
+      const build = await scanViewerBuild(directory)
+      output(
+        values.json,
+        {
+          schemaVersion: 1,
+          dryRun: true,
+          fileCount: build.files.length,
+          totalBytes: build.totalBytes,
+          skipped: build.skipped,
+          files: build.files.map(manifestFile),
+        },
+        [
+          `Checked ${build.files.length} ${build.files.length === 1 ? 'file' : 'files'} (${formatViewerBytes(build.totalBytes)}). Ready to deploy to ${viewerId}.`,
+          ...describeSkipped(build.skipped),
+        ].join('\n'),
+      )
+      return
+    }
+    const result = await deployViewer(
+      apiKey,
+      { viewerId, directory },
+      {
+        onProgress: ({ phase, uploaded, total }) => {
+          if (!progress) return
+          progress.update(
+            phase === 'checking'
+              ? total === 0
+                ? 'Checking build'
+                : `Checking ${total} ${total === 1 ? 'file' : 'files'}`
+              : phase === 'uploading'
+                ? `Uploading ${uploaded}/${total} ${total === 1 ? 'file' : 'files'}`
+                : 'Activating',
+          )
+        },
+      },
+    )
+    progress?.stop()
+    output(
+      values.json,
+      result,
+      [
+        `Deployed ${result.fileCount} ${result.fileCount === 1 ? 'file' : 'files'} (${formatViewerBytes(result.totalBytes)}) to ${viewerId}.`,
+        `Deployment: ${result.deploymentId}`,
+        ...(result.url ? [`Live at: ${result.url}`] : []),
+        ...describeSkipped(result.skipped),
+      ].join('\n'),
+    )
+  } finally {
+    progress?.stop()
+  }
+}
+
+function formatViewerBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} ${bytes === 1 ? 'byte' : 'bytes'}`
+  return bytes < 1024 * 1024
+    ? `${(bytes / 1024).toFixed(1)} KiB`
+    : `${(bytes / (1024 * 1024)).toFixed(1)} MiB`
+}
+
+function describeSkipped(skipped: string[]): string[] {
+  return skipped.length
+    ? [
+        `Skipped ${skipped.length} hidden ${skipped.length === 1 ? 'entry' : 'entries'}: ${skipped.join(', ')}`,
+      ]
+    : []
 }
 
 async function runArchitect(args: string[], apiKey: string | undefined): Promise<void> {

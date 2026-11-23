@@ -9,7 +9,7 @@ import {
   sceneViewNote,
   sceneViewPlan,
 } from '@pascal-app/core/agent-operations'
-import { refuse, viewSceneTool } from '@pascal-app/core/agent-tools'
+import { refuse, surfaceDescription, viewSceneTool } from '@pascal-app/core/agent-tools'
 import type { AnyNode } from '@pascal-app/core/schema'
 import { z } from 'zod'
 import type { SceneOperations } from '../operations'
@@ -60,7 +60,7 @@ export function registerViewScene(
     viewSceneTool.name,
     {
       title: viewSceneTool.title,
-      description: viewSceneTool.description,
+      description: surfaceDescription(viewSceneTool, 'mcp'),
       inputSchema: z.object(viewSceneTool.input),
       annotations: READ_ONLY_TOOL_ANNOTATIONS,
     },

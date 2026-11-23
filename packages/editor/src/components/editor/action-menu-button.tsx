@@ -1,11 +1,11 @@
 'use client'
 
 import { usePascalI18n } from '@pascal-app/core'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@pascal-app/viewer/ui'
 import type { MouseEventHandler, ReactNode } from 'react'
 import { toolHintKey } from '../../i18n/node-messages'
 import { cn } from '../../lib/utils'
 import { shortcutDisplayValue } from '../ui/primitives/shortcut-token'
-import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/primitives/tooltip'
 
 const BUTTON =
   'rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground'

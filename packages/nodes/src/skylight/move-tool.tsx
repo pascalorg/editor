@@ -12,7 +12,10 @@ import {
 } from '@pascal-app/core'
 import {
   consumePlacementDragRelease,
+  isGridSnapActive,
+  isMagneticSnapActive,
   markToolCancelConsumed,
+  stripPlacementMetadataFlags,
   triggerSFX,
   useEditor,
 } from '@pascal-app/editor'
@@ -89,9 +92,9 @@ export default function MoveSkylightTool({ node }: { node: SkylightNode }) {
       const rawTarget = roofDrag.resolve(event)
       if (!rawTarget) return null
       return snapRoofSurfaceNodeTarget({
-        target: snapRelativeRoofDragTarget(rawTarget, event.nativeEvent?.shiftKey === true),
+        target: snapRelativeRoofDragTarget(rawTarget, event.nativeEvent?.altKey === true),
         node,
-        bypass: event.nativeEvent?.shiftKey === true,
+        bypass: !isMagneticSnapActive() || event.nativeEvent?.altKey === true,
       })
     }
 
@@ -132,7 +135,11 @@ export default function MoveSkylightTool({ node }: { node: SkylightNode }) {
     const onRoofMove = (event: RoofEvent) => {
       const sx = Math.round(event.position[0] * 20) / 20
       const sz = Math.round(event.position[2] * 20) / 20
-      if (event.nativeEvent?.shiftKey !== true && (sx !== lastSnapX || sz !== lastSnapZ)) {
+      if (
+        isGridSnapActive() &&
+        event.nativeEvent?.altKey !== true &&
+        (sx !== lastSnapX || sz !== lastSnapZ)
+      ) {
         triggerSFX('sfx:grid-snap')
         lastSnapX = sx
         lastSnapZ = sz
@@ -172,7 +179,7 @@ export default function MoveSkylightTool({ node }: { node: SkylightNode }) {
         position: [target.localX, target.localY, target.localZ],
         rotation: finalRotation,
         visible: true,
-        metadata: {},
+        metadata: stripPlacementMetadataFlags(original.metadata),
       })
 
       if (original.roofSegmentId && original.roofSegmentId !== (targetSegmentId as string)) {

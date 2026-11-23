@@ -208,7 +208,8 @@ test('casing paint targets each host side, inherits the frame, and previews and 
             openingShape,
             slots: { frame: frameRef },
           }
-          const node = kind === 'door' ? DoorNode.parse(fields) : WindowNode.parse(fields)
+          const node =
+            kind === 'door' ? DoorNode.parse(fields) : WindowNode.parse({ ...fields, sill: false })
           const mesh =
             node.type === 'door' ? buildDoorPreviewMesh(node) : buildWindowPreviewMesh(node)
           mesh.updateMatrixWorld(true)

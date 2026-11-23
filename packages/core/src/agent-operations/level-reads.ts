@@ -3,6 +3,7 @@ import { area } from '../lib/polygon-boolean'
 import { porchFramingSettings } from '../lib/porch-framing'
 import { porchPartOf } from '../lib/porch-framing-sync'
 import { roomFloorChoices } from '../lib/room-floor-choices'
+import { roofFaceOf } from '../registry/roofs'
 import type {
   AnyNode,
   AnyNodeId,
@@ -46,7 +47,7 @@ export function wallResolvedHeight(nodes: SceneNodes, wall: WallNode): number {
     nodes as Record<AnyNodeId, AnyNode>,
   )
   return (
-    getWallTop(wall, levelId, nodes as Record<AnyNodeId, AnyNode>, support.elevation) -
+    getWallTop(wall, levelId, nodes as Record<AnyNodeId, AnyNode>, support.elevation, 0) -
     support.elevation
   )
 }
@@ -205,7 +206,9 @@ function levelSummary(nodes: SceneNodes, level: LevelNode) {
     roofs: ofType(content, 'roof').map((roof) => ({
       id: roof.id,
       name: roof.name,
-      segmentCount: roof.children.length,
+      segmentCount: roof.children.filter((id) => nodes[id]?.type === 'roof-segment').length,
+      // Faces of other kinds (a plugin's roof planes) are listed in `other`.
+      faceCount: roof.children.filter((id) => roofFaceOf(nodes[id])).length,
     })),
     other: content
       .filter((node) => !SUMMARISED.has(node.type))

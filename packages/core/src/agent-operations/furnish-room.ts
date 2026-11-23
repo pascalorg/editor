@@ -2,6 +2,7 @@ import type { FURNISHED_ROOM_TYPES } from '../agent-tools/furnish-room'
 import { refuse } from '../agent-tools/refusal'
 import { OTHER_SOURCES } from '../agent-tools/sources'
 import { type AssetInput, ItemNode, type WallNode } from '../schema'
+import { catalogItemFields } from './catalog-asset'
 import { edgeProjection } from './create-room'
 import {
   collectDoorKeepouts,
@@ -32,6 +33,19 @@ type FurnishRoomInput = LevelTargetInput & {
   polygon?: number[][]
   roomType: RoomType
   doorWallIndex?: number
+}
+
+/** Every catalog id a room type's set may take, whatever the room's size: what a host reads first. */
+export const FURNISH_ROOM_ASSETS: Readonly<Record<RoomType, readonly string[]>> = {
+  bedroom: ['double-bed', 'single-bed', 'bedside-table', 'dresser', 'closet'],
+  kitchen: ['kitchen', 'kitchen-counter', 'stove', 'fridge'],
+  bathroom: ['toilet', 'bathroom-sink', 'bathtub', 'shower-square'],
+  living: ['sofa', 'coffee-table', 'livingroom-chair', 'tv-stand'],
+  dining: ['dining-table', 'dining-chair'],
+  hallway: ['coat-rack'],
+  entry: ['coat-rack'],
+  laundry: ['washing-machine', 'drying-rack'],
+  storage: ['closet'],
 }
 
 // A door belongs to a room edge when it stands this close to the edge's line, within its span.
@@ -362,7 +376,7 @@ export const furnishRoom: AgentOperation<FurnishRoomInput> = (nodes, input, cont
         parentId: levelId,
         position: [candidate.x, 0, candidate.z],
         rotation: [0, rotation, 0],
-        asset,
+        ...catalogItemFields(asset),
       }),
     )
   }
