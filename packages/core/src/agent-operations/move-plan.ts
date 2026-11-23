@@ -239,6 +239,7 @@ function planOpeningMove(
       : target.y === undefined
         ? node.position[1]
         : target.y + node.height / 2
+  // Fold transomHeight into cutout.height on purpose so clampDoorToWall slides the full opening instead of shrinking the transom.
   const doorClamp =
     node.type === 'door'
       ? clampDoorToWall(
