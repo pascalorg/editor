@@ -22,6 +22,15 @@ test('bundled locale packs cover the converted viewer and editor surfaces', () =
   }
 })
 
+test('the Italian pack serves the reviewed entries in Italian', () => {
+  registerBundledLocales()
+  setLocale('it')
+
+  // Entries a native reviewer approved (Review: human) are compiled; drafts stay English.
+  expect(translate('editor.actionMenu.structureTools.window', 'Window')).toBe('Finestra')
+  expect(translate('editor.sidebar.panels.sitePanel.site', 'Site')).toBe('Sito')
+})
+
 test('Simplified Chinese aliases use zh-CN without affecting Traditional Chinese', () => {
   registerBundledLocales()
 
