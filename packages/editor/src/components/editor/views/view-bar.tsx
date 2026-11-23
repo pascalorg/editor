@@ -32,7 +32,12 @@ import { cn } from '../../../lib/utils'
 import useEditor from '../../../store/use-editor'
 import { activeViewLayout, VIEW_2D, VIEW_3D, type ViewPaneIndex } from '../../../store/view-layout'
 import { IconRefGlyph } from '../../ui/icon-ref'
-import { PLUGINS_VIEW_ID, useActiveViewLayout, useEditorViews } from './use-editor-views'
+import {
+  PLUGINS_VIEW_ID,
+  useActiveViewLayout,
+  useEditorViews,
+  useViewsSettled,
+} from './use-editor-views'
 
 const GROUP = cn(
   'pointer-events-auto inline-flex h-8 shrink-0 items-stretch overflow-hidden rounded-[10px]',
@@ -62,7 +67,8 @@ export function ViewTabs({ pane, className }: { pane: ViewPaneIndex; className?:
   const tabs = views.filter((view) => view.id === current || isViewPinned(view, pinnedViews))
   // A restored layout can name a view this project cannot show (its plugin removed): it still
   // gets a tab, marked as broken, so the person sees where they are and how to leave.
-  const missing = !tabs.some((view) => view.id === current)
+  const settled = useViewsSettled()
+  const missing = settled && !tabs.some((view) => view.id === current)
   const activeIndex = missing ? tabs.length : tabs.findIndex((view) => view.id === current)
   const tabList = useRef<HTMLDivElement>(null)
   useEffect(() => {

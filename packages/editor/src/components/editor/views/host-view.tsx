@@ -4,6 +4,7 @@ import { type LazyComponent, usePascalI18n } from '@pascal-app/core'
 import { type ComponentType, lazy, Suspense } from 'react'
 import type { EditorViewDescriptor } from '../../../lib/editor-views'
 import { ErrorBoundary } from '../../ui/primitives/error-boundary'
+import { useViewsSettled } from './use-editor-views'
 
 // `React.lazy` once per loader, so a view keeps its identity across renders.
 const lazyViewCache = new WeakMap<LazyComponent, ComponentType>()
@@ -84,7 +85,12 @@ export function HostView({
   /** Leaves an unavailable view for the 3D scene. */
   onShowScene?: () => void
 }) {
-  if (!view?.component) return <UnavailableViewMessage onShowScene={onShowScene} />
+  const settled = useViewsSettled()
+  if (!view?.component) {
+    // Until the project's plugins have registered their views, a missing one is still loading.
+    if (!settled) return <ViewMessage body="" title="Loading…" />
+    return <UnavailableViewMessage onShowScene={onShowScene} />
+  }
   const Component = resolveViewComponent(view.component)
   return (
     <ErrorBoundary
