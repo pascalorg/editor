@@ -26,6 +26,7 @@ import {
 } from './wall-curve'
 import { getWallFaceOffsets } from './wall-frame'
 import type { WallPlanPoint } from './wall-move'
+import { wallTrimPiece } from './wall-trim'
 
 export const WALL_MIN_LENGTH = 0.01
 const WALL_SPLIT_ENDPOINT_EPSILON = 0.02
@@ -493,6 +494,12 @@ export function splitWall(
   nodes: Record<AnyNodeId, AnyNode>,
   mintId?: () => string,
 ): { create: WallNode[]; update: WallTopologyChanges['update'] } | null {
+  // A curved piece has a different chord frame. Never copy local bounded trim onto it.
+  if (
+    isCurvedWall(wall) &&
+    (['skirting', 'crown', 'chairRail'] as const).some((kind) => wall[kind]?.spans !== undefined)
+  )
+    return null
   const parameters = [
     0,
     ...splitParameters
@@ -510,6 +517,7 @@ export function splitWall(
       end: wallPointAt(wall, endT),
       curveOffset: segmentCurveOffset(wall, startT, endT),
       ...(wall.endHeightOffset ? slopedPieceTop(wall, nodes, startT, endT) : {}),
+      ...wallTrimPiece(wall, startT * wallLength(wall), endT * wallLength(wall)),
       children: [],
     })
   })

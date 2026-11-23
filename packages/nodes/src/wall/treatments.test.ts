@@ -80,6 +80,33 @@ function allPositions(geometry: NonNullable<ReturnType<typeof buildTrimGeometry>
 }
 
 describe('wall treatment miters', () => {
+  test('room-bound trims stop at the room boundary on an 8 m shared wall', () => {
+    const node = wall('shared', [0, 0], [8, 0])
+    // Two adjacent 4 m rooms share face a. The first room ends at station 4,
+    // not at the wall end. Supply the persisted input directly so this detects
+    // a renderer that ignores bounds independently of the operation writer.
+    const bounded: WallTrimConfig = {
+      ...trim,
+      sides: 'a',
+      spans: [{ face: 'a', u0: 0, u1: 4 }],
+    }
+    for (const kind of ['skirting', 'crown', 'chairRail'] as const) {
+      const geometry = buildTrimGeometry(
+        { ...node, [kind]: bounded },
+        'a',
+        bounded,
+        kind,
+        [],
+        treatmentLevelData([node]),
+      )
+      if (!geometry) throw new Error('expected room trim geometry')
+      const xs = allPositions(geometry).map((point) => point.x)
+      geometry.dispose()
+      expect(Math.min(...xs)).toBeCloseTo(0, 6)
+      expect(Math.max(...xs)).toBeCloseTo(4, 6)
+    }
+  })
+
   test('mount eligibility follows disabled defaults and each enabled trim kind', () => {
     const node = wall('A', [0, 0], [3, 0])
     expect(hasWallTreatments(node)).toBe(false)

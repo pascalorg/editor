@@ -16,6 +16,7 @@ import { createStair } from './create-stair'
 import { deleteNode } from './delete-node'
 import { designBrief, gatedByBrief } from './design-brief'
 import { placeDesign, validateDesignOperation } from './designs'
+import { dressRoom } from './dress-room'
 import { duplicateLevel } from './duplicate-level'
 import { duplicateNode } from './duplicate-node'
 import { findByType } from './find-by-type'
@@ -44,6 +45,7 @@ import { addTree } from './tree'
 import type { AgentOperation, AgentOperationSteps, AgentOperations } from './types'
 import { createUnit, listUnits, setUnitMembers } from './units'
 import { verifyScene, verifySceneSteps } from './verify-scene'
+import { setWallTrim } from './wall-skirting'
 import { setWallType } from './wall-type'
 import './rock-checks'
 import './room-checks'
@@ -75,6 +77,7 @@ export * from './delete-node'
 export * from './design-brief'
 export * from './designs'
 export * from './door-clearance'
+export * from './dress-room'
 export * from './duplicate-level'
 export * from './duplicate-node'
 export * from './find-by-type'
@@ -123,6 +126,7 @@ export * from './tree'
 export * from './types'
 export * from './units'
 export * from './verify-scene'
+export * from './wall-face-regions'
 export * from './wall-face-script'
 export * from './wall-object-observations'
 export * from './wall-opening'
@@ -148,6 +152,8 @@ const SINGLE_OPERATIONS = {
   design_brief: designBrief,
   add_wall: addWall,
   set_wall_type: setWallType,
+  set_wall_trim: setWallTrim,
+  dress_room: dressRoom,
   add_fence: addFence,
   add_hedge: addHedge,
   add_planting: addPlanting,

@@ -9,7 +9,10 @@ import { DoorNode } from './door'
 import { ItemNode } from './item'
 import { LeanToExtensionNode } from './lean-to-extension'
 import { RailingWallConfig } from './railing-wall'
+import { WallTrimProfile } from './wall-trim-profile'
 import { WindowNode } from './window'
+
+export { WallTrimProfile } from './wall-trim-profile'
 
 // Geometric faces: `a` is left of start → end, `b` is right (wall-frame convention).
 // `interior` / `exterior` are legacy semantic values the M1 load migration maps
@@ -18,26 +21,13 @@ import { WindowNode } from './window'
 export const WallTreatmentSide = z.enum(['a', 'b', 'both', 'interior', 'exterior'])
 export type WallTreatmentSide = z.infer<typeof WallTreatmentSide>
 
-export const WallTrimProfile = z.enum([
-  'flat',
-  'bevel',
-  'triangle',
-  'cove',
-  'bullnose',
-  'base-modern',
-  'base-colonial',
-  'base-shoe',
-  'base-ogee',
-  'crown-cove',
-  'crown-ogee',
-  'crown-craftsman',
-  'crown-layered',
-  'rail-rounded',
-  'rail-ogee',
-  'rail-picture',
-  'rail-stepped',
-])
-export type WallTrimProfile = z.infer<typeof WallTrimProfile>
+// Wall-local chord metres, like paint regions. Missing bounds follow the wall's ends.
+export const WallTrimSpan = z.object({
+  face: z.enum(['a', 'b']),
+  u0: z.number().finite().nonnegative().optional(),
+  u1: z.number().finite().nonnegative().optional(),
+})
+export type WallTrimSpan = z.infer<typeof WallTrimSpan>
 
 export const WallTrimConfig = z.object({
   enabled: z.boolean().default(false),
@@ -46,6 +36,8 @@ export const WallTrimConfig = z.object({
   proud: z.number().default(0.015),
   profile: WallTrimProfile.default('flat'),
   offsetY: z.number().optional(),
+  // Absent preserves legacy full-face trims; an empty list draws nothing.
+  spans: z.array(WallTrimSpan).optional(),
 })
 export type WallTrimConfig = z.infer<typeof WallTrimConfig>
 

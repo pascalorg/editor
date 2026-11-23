@@ -22,6 +22,7 @@ export const BATCHABLE_TOOLS = [
   'add_dormer',
   'add_wall',
   'set_wall_type',
+  'set_wall_trim',
   'add_fence',
   'add_rock',
   'add_tree',

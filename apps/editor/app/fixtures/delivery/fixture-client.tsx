@@ -43,6 +43,7 @@ import type { WebGPURenderer } from 'three/webgpu'
 import { z } from 'zod'
 import { BuildTab } from '@/components/build-tab'
 import { type RoofFixtureCase, roofFixture, roofFixtureCases } from './roof-scene'
+import { deliveryScene } from './scene'
 
 type Point = [number, number, number]
 type Pose = { position: Point; target: Point }
@@ -108,8 +109,7 @@ declare global {
 }
 
 // Stable identities: a new onLoad callback would reload the mounted editor.
-const defaultRoofScene = () => roofFixture('gable').scene
-const loadFixture = async () => defaultRoofScene()
+const loadFixture = async () => deliveryScene()
 const saveFixture = async (_scene: SceneGraph) => {}
 const snapshot = () => structuredClone(getSavedSceneDocument())
 
@@ -125,7 +125,7 @@ function clearSelection() {
   useViewer.getState().setHoveredId(null)
 }
 
-function reset(scene = defaultRoofScene()) {
+function reset(scene = deliveryScene()) {
   applySceneGraphToEditor(structuredClone(scene))
   useViewer.getState().setCameraMode('perspective')
   useViewer.getState().setShading('rendered')
@@ -133,7 +133,7 @@ function reset(scene = defaultRoofScene()) {
   useViewer.getState().setTextures(true)
   useViewer.getState().setWallMode('up')
   useViewer.getState().setUnit('metric')
-  clearSelection()
+  selectRoom('zone_salon')
 }
 
 function loadRoof(caseId: RoofFixtureCase) {

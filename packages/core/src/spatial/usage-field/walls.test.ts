@@ -91,6 +91,38 @@ describe('wall bodies', () => {
 })
 
 describe('wall trims', () => {
+  test('bounded trim prisms occupy only their requested room stretch and physical face', () => {
+    for (const kind of ['skirting', 'crown', 'chairRail'] as const) {
+      const node = wall({
+        end: [8, 0],
+        [kind]: {
+          enabled: true,
+          sides: 'both',
+          height: 0.12,
+          proud: 0.02,
+          spans: [{ face: 'a', u0: 1, u1: 4 }],
+        },
+      })
+      const { prisms } = wallTrims(scene([node]), 'level_1')
+      expect(prisms.length).toBeGreaterThan(0)
+      expect(prisms.every((p) => p.host?.face === 'a')).toBe(true)
+      const xs = prisms.flatMap((p) => p.outer.map(([x]) => x))
+      expect(Math.min(...xs)).toBeCloseTo(1, 6)
+      expect(Math.max(...xs)).toBeCloseTo(4, 6)
+    }
+  })
+
+  test('empty explicit coverage yields no trim prisms, unlike a legacy whole-face trim', () => {
+    const config = { enabled: true, sides: 'a', height: 0.12, proud: 0.02 }
+    expect(
+      wallTrims(scene([wall({ skirting: { ...config, spans: [] } })]), 'level_1').prisms,
+    ).toEqual([])
+    const legacy = wallTrims(scene([wall({ skirting: config })]), 'level_1').prisms
+    const xs = legacy.flatMap((p) => p.outer.map(([x]) => x))
+    expect(Math.min(...xs)).toBeCloseTo(0, 6)
+    expect(Math.max(...xs)).toBeCloseTo(6, 6)
+  })
+
   test('a skirting stands out of its face by its profile and stops at a door', () => {
     const w = wall({
       children: ['door_1'],

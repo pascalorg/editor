@@ -140,6 +140,29 @@ Do not mutate just to make a report unless the user authorizes a temporary or sa
 
 When a requested deliverable is unsupported, return `partial` or `failed` with the tool status and the next supported action. Do not substitute an invented file, URL, or capability.
 
+## Native wall trim
+
+`set_wall_trim({ kind, wallIds?, zoneIds?, roomId?, height?, depth?, offsetY?, profile?, faces?, finish?, enabled? })` edits native skirting, crown or chairRail. Wall and room targets form a union; an explicit wall covers its selected faces whole, while a room covers only its inward stretches of shared walls. `faces` filters a room's inward faces, never selects its outside. `offsetY: 0` is valid; `finish` uses `paint` semantics on only the targeted trim slots. Hiding preserves settings. Another retained stretch's shared dimensions or same-face finish cannot silently change (`trim_conflict`); target all affected rooms together or keep their settings. Curtain and railing walls refuse; bounded room trims on curves refuse. Select a wall's trim panel to edit the same settings and Start/End bounds manually.
+
+## Room dressing
+
+`dress_room({ zoneIds, layers, dryRun? })` dresses inward room stretches in one
+atomic operation. Build the complete ordered stack: skirting, chairRail, crown,
+wainscot (default to 0.9 m), tiles (to 1.2 m), splashback (from 0.9 m, rising
+0.6 m), and accent (name `where.walls`). Finish layers need `finish`; `to: "full"`
+reaches the ceiling. `where.around` names fixtures, with optional `margin`
+(default 0.1 m); `where.alongRun` follows a base cabinet's footprint and worktop,
+including nested rotated runs. Targets must share the room's level.
+Each call replaces only its rooms' `dress:<zoneId>:` regions, even on former
+boundary walls; hand paint, other owners and the base finish remain.
+`layers: []` removes those regions, not trims. Preview with `dryRun: true`.
+Trims use `set_wall_trim`'s bounded coverage and atomic `trim_conflict` refusal;
+include all affected rooms when changing shared settings. Eight regions per
+face includes retained paint; a full-height finish script owns its face.
+Partial curved finish stretches are skipped and reported, never expanded.
+The selected-room panel's **Dress room** controls provide the same layer
+options, preview/refusals and one-undo apply.
+
 ## Native roof accessories
 
 `add_roof_element({ kind, id, point, rows?, columns?, name? })` adds one

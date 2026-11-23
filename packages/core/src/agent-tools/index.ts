@@ -12,6 +12,7 @@ import { createRoomTool } from './create-room'
 import { designBriefTool } from './design-brief'
 import { placeDesignTool, validateDesignTool } from './designs'
 import { addDormerTool } from './dormers'
+import { dressRoomTool } from './dress-room'
 import { addFenceTool } from './fences'
 import { findByTypeTool } from './find-by-type'
 import { setFinishScriptTool } from './finish-script'
@@ -46,6 +47,7 @@ import { UNIT_TOOL_CONTRACTS } from './units'
 import { verifySceneTool } from './verify-scene'
 import { viewSceneTool } from './view-scene'
 import { addDoorTool, addWindowTool } from './wall-openings'
+import { setWallTrimTool } from './wall-trim'
 import { addWallTool, setWallTypeTool } from './walls'
 
 export * from './achieved'
@@ -59,6 +61,7 @@ export * from './contract'
 export * from './corner-window'
 export * from './create-room'
 export * from './dormers'
+export * from './dress-room'
 export * from './fences'
 export * from './find-by-type'
 export * from './finish-script'
@@ -92,6 +95,7 @@ export * from './units'
 export * from './verify-scene'
 export * from './view-scene'
 export * from './wall-openings'
+export * from './wall-trim'
 export * from './walls'
 export * from './write-target'
 
@@ -122,6 +126,8 @@ export const AGENT_TOOL_CONTRACTS = [
   validateDesignTool,
   addWallTool,
   setWallTypeTool,
+  setWallTrimTool,
+  dressRoomTool,
   addFenceTool,
   addHedgeTool,
   addPlantingTool,
