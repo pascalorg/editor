@@ -145,9 +145,14 @@ export type WallFaceRegion = z.infer<typeof WallFaceRegion>
  * `toHeight` (metres above the face's base) stops it there, as a dado does; absent, it covers the
  * whole face.
  */
+// A face script builds one stretch of a face: `u0`–`u1` metres from the wall start (an absent
+// bound runs to that end, as a paint region's does) up to `toHeight` metres above the face's
+// base — a room's wallCode covers that room's stretch of a wall that runs on past it.
 export const WallFaceScript = GeometryScriptSource.extend({
   inputs: z.string(),
   toHeight: z.number().positive().optional(),
+  u0: z.number().finite().optional(),
+  u1: z.number().finite().optional(),
 })
 export type WallFaceScript = z.infer<typeof WallFaceScript>
 

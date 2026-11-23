@@ -121,7 +121,7 @@ function fakeHost() {
 
 /** The south wall with a script on its face a (to `toHeight`), built once by `host`. */
 async function scripted(host: FinishScriptHost, toHeight?: number, nodes = room()) {
-  const inputs = wallFaceScriptInputs(nodes, SOUTH, 'a', toHeight)!
+  const inputs = wallFaceScriptInputs(nodes, SOUTH, 'a', { toHeight })!
   const compiled = await host.build({ nodeId: SOUTH, face: 'a', code: '', params: {}, inputs })
   const { changes } = setWallFaceScript(
     nodes,
@@ -165,10 +165,36 @@ describe("a wall face's script", () => {
       y1: 2.45,
     })
     // A dado to 1.2 m keeps the door, cut at its top, and the window's lower 0.2 m.
-    expect(wallFaceScriptInputs(nodes, SOUTH, 'a', 1.2)?.holes).toEqual([
+    expect(wallFaceScriptInputs(nodes, SOUTH, 'a', { toHeight: 1.2 })?.holes).toEqual([
       { x0: 1.55, y0: 0, x1: 2.45, y1: 1.2 },
       { x0: 4.4, y0: 1, x1: 5.6, y1: 1.2 },
     ])
+  })
+
+  test("builds one room's stretch of a face, the rest of the face left to its paint", async () => {
+    const nodes = room()
+    // A bathroom's 3 m at the start of the wall: its door, not the window further on.
+    const inputs = wallFaceScriptInputs(nodes, SOUTH, 'a', { u1: 3 })!
+    expect(inputs.outline).toEqual({ x0: 0.1, y0: 0, x1: 3, y1: 2.45 })
+    expect(inputs.holes).toEqual([{ x0: 1.55, y0: 0, x1: 2.45, y1: 2.1 }])
+    expect(inputs.base).toEqual([
+      [0.1, 0],
+      [3, 0],
+    ])
+    expect(wallFaceScriptInputs(nodes, SOUTH, 'a', { u0: 9 })).toBeNull()
+
+    const { host } = fakeHost()
+    const compiled = await host.build({ nodeId: SOUTH, face: 'a', code: '', params: {}, inputs })
+    const { changes } = setWallFaceScript(
+      nodes,
+      { wallId: SOUTH, face: 'a', compiled, inputs, u1: 3 },
+      { activeLevelId: LEVEL },
+    )
+    const built = applySceneChanges(nodes, changes) as SceneNodes
+    expect((built[SOUTH] as WallNode).finishScripts?.a?.u1).toBe(3)
+    // Not stale: the refresh reads the same stretch it was built for.
+    expect(staleFinishScripts(built)).toEqual([])
+    expect(wallFaceScriptPaintRefusal(built[SOUTH], 'a')).toBeUndefined()
   })
 
   test('is built once, and again only after an opening is added or the wall is lengthened', async () => {

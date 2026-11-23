@@ -238,8 +238,7 @@
     ],
     "packages/editor/src/components/editor/views/host-view.tsx": [
       "\"{label}\" crashed",
-      "Loading…",
-      "This view isn't available"
+      "Loading…"
     ],
     "packages/editor/src/components/editor/views/plugins-view.tsx": [
       "About",
@@ -750,6 +749,14 @@
       "Door",
       "Item"
     ],
+    "packages/viewer/src/components/viewer/live-walkthrough-controller.tsx": [
+      "Lights",
+      "door",
+      "door button",
+      "elevator button",
+      "item",
+      "window"
+    ],
     "packages/viewer/src/components/viewer/perf-panel.tsx": [
       "Dock panel to the side",
       "Performance",
@@ -792,14 +799,6 @@
     ],
     "packages/viewer/src/ui/floorplan/floorplan-dimension-renderer.tsx": [
       "override"
-    ],
-    "packages/viewer/src/components/viewer/live-walkthrough-controller.tsx": [
-      "Lights",
-      "door",
-      "door button",
-      "elevator button",
-      "item",
-      "window"
     ]
   }
 }

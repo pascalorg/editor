@@ -1,6 +1,6 @@
 'use client'
 
-import type { LazyComponent } from '@pascal-app/core'
+import { type LazyComponent, usePascalI18n } from '@pascal-app/core'
 import { type ComponentType, lazy, Suspense } from 'react'
 import type { EditorViewDescriptor } from '../../../lib/editor-views'
 import { ErrorBoundary } from '../../ui/primitives/error-boundary'
@@ -16,14 +16,56 @@ function resolveViewComponent(component: LazyComponent): ComponentType {
   return Lazy
 }
 
-function ViewMessage({ title, body }: { title: string; body: string }) {
+function ViewMessage({
+  title,
+  body,
+  action,
+}: {
+  title: string
+  body: string
+  action?: { label: string; onClick: () => void }
+}) {
   return (
     <div className="flex h-full w-full items-center justify-center bg-sidebar p-6 text-center">
       <div className="max-w-xs">
         <p className="font-medium text-sidebar-foreground text-sm">{title}</p>
         <p className="mt-1 text-sidebar-foreground/50 text-xs">{body}</p>
+        {action && (
+          <button
+            className="mt-4 rounded-full bg-sidebar-foreground px-4 py-1.5 font-medium text-sidebar text-xs transition-opacity hover:opacity-90"
+            onClick={action.onClick}
+            type="button"
+          >
+            {action.label}
+          </button>
+        )}
       </div>
     </div>
+  )
+}
+
+function UnavailableViewMessage({ onShowScene }: { onShowScene?: () => void }) {
+  const i18n = usePascalI18n()
+  return (
+    <ViewMessage
+      action={
+        onShowScene && {
+          label: i18n._({
+            id: 'editor.views.viewBar.closeUnavailableView',
+            message: 'Close this view',
+          }),
+          onClick: onShowScene,
+        }
+      }
+      body={i18n._({
+        id: 'editor.views.hostView.pluginNotInstalled',
+        message: "Its plugin isn't installed in this project.",
+      })}
+      title={i18n._({
+        id: 'editor.views.hostView.viewUnavailable',
+        message: "This view isn't available",
+      })}
+    />
   )
 }
 
@@ -34,15 +76,15 @@ function ViewMessage({ title, body }: { title: string; body: string }) {
  * registered yet — and the pane says so rather than silently swapping views,
  * so the choice comes back once the view does.
  */
-export function HostView({ view }: { view: EditorViewDescriptor | undefined }) {
-  if (!view?.component) {
-    return (
-      <ViewMessage
-        body="Its plugin isn't installed in this project. Pick another view above."
-        title="This view isn't available"
-      />
-    )
-  }
+export function HostView({
+  view,
+  onShowScene,
+}: {
+  view: EditorViewDescriptor | undefined
+  /** Leaves an unavailable view for the 3D scene. */
+  onShowScene?: () => void
+}) {
+  if (!view?.component) return <UnavailableViewMessage onShowScene={onShowScene} />
   const Component = resolveViewComponent(view.component)
   return (
     <ErrorBoundary

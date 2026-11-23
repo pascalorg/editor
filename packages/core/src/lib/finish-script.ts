@@ -50,7 +50,7 @@ function currentInputs(
   script: FinishScript,
 ): { inputs: FinishScriptInputs; key: string } | null {
   if (face) {
-    const inputs = wallFaceScriptInputs(nodes, nodeId, face, (script as WallFaceScript).toHeight)
+    const inputs = wallFaceScriptInputs(nodes, nodeId, face, script as WallFaceScript)
     return inputs && { inputs, key: wallFaceScriptInputsKey(inputs) }
   }
   const inputs =
@@ -120,7 +120,7 @@ export async function refreshFinishScripts(
             ? wallFaceScriptRecord(
                 compiled,
                 inputs as WallFaceScriptInputs,
-                (script as WallFaceScript).toHeight,
+                script as WallFaceScript,
                 script as WallFaceScript,
               )
             : floorScriptRecord(compiled, inputs as FloorScriptInputs, script as ZoneFloorScript),
