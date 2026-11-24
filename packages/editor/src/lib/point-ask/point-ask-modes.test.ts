@@ -575,4 +575,84 @@ describe('point-ask Walkthrough mode (DGS-141)', () => {
     expect(escMode.stopped).toBe(true)
     expect(usePointAsk.getState().active).toBe(false)
   })
+
+  test('Preview-mode Walkthrough and Drone allow C commenting across levels, while non-walkthrough Preview disables it', () => {
+    const upperLevel = LevelNode.parse({ id: 'level_upper', parentId: building.id, level: 1 })
+    const upperWall = WallNode.parse({
+      id: 'wall_upper',
+      parentId: upperLevel.id,
+      start: [-4, 0],
+      end: [4, 0],
+      height: 3,
+      thickness: 0.2,
+    })
+    upperLevel.children = [upperWall.id]
+    const upperMesh = new Mesh(new BoxGeometry(8, 3, 0.2), new MeshBasicMaterial())
+    upperMesh.position.set(0, 4.5, 0)
+    upperMesh.updateMatrixWorld(true)
+    sceneRegistry.nodes.set(upperWall.id, upperMesh)
+
+    try {
+      useScene.setState({
+        nodes: {
+          ...useScene.getState().nodes,
+          [building.id]: { ...building, children: [level.id, upperLevel.id] },
+          [upperLevel.id]: upperLevel,
+          [upperWall.id]: upperWall,
+        },
+      })
+      const camera = new PerspectiveCamera(60, 800 / 600, 0.1, 100)
+      camera.position.set(0, 4.5, 5)
+      camera.lookAt(0, 4.5, 0)
+      camera.updateMatrixWorld(true)
+      const canvas = makeCanvas({ left: 0, top: 0, width: 800, height: 600 })
+      setEditorThreeContext({ camera, raycaster: new Raycaster(), domElement: canvas })
+      setEditorFloorplanContext(null)
+
+      // Plain Preview (not in Walkthrough or Drone) keeps Comment disabled.
+      useEditor.setState({
+        isPreviewMode: true,
+        isFirstPersonMode: false,
+        firstPersonMovementMode: 'walk',
+      })
+      expect(canPoint()).toBe(false)
+
+      // Preview Walkthrough enables Comment via C.
+      useEditor.setState({
+        isPreviewMode: true,
+        isFirstPersonMode: true,
+        firstPersonMovementMode: 'walk',
+      })
+      expect(canPoint()).toBe(true)
+      stopSession = startPointAskSession({ freeClick: true, enrichedRegions: false })
+      const walkPress = dispatchKey('keydown', 'c')
+      expect(walkPress.prevented).toBe(true)
+      expect(usePointAsk.getState().active).toBe(true)
+      expect(usePointAsk.getState().latched).toBe(true)
+
+      // Leaving first-person back to Preview Orbit exits Comment mode automatically.
+      useEditor.setState({ isFirstPersonMode: false })
+      expect(usePointAsk.getState().active).toBe(false)
+
+      // Preview Drone enables Comment and picks upper-floor walls even when selection.levelId is level 0.
+      useEditor.setState({
+        isPreviewMode: true,
+        isFirstPersonMode: true,
+        firstPersonMovementMode: 'drone',
+      })
+      expect(canPoint()).toBe(true)
+      const dronePress = dispatchKey('keydown', 'c')
+      expect(dronePress.prevented).toBe(true)
+      expect(usePointAsk.getState().active).toBe(true)
+
+      dispatchPointer('pointerdown', canvas, 400, 300)
+      dispatchPointer('pointerup', canvas, 400, 300)
+      const bubble = usePointAsk.getState().bubble
+      expect(bubble).not.toBeNull()
+      expect(bubble?.targets[0]?.id).toBe(upperWall.id)
+      expect(bubble?.camera?.position).toEqual([0, 4.5, 5])
+    } finally {
+      sceneRegistry.nodes.delete(upperWall.id)
+    }
+  })
 })

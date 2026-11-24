@@ -8,7 +8,12 @@ import { cn } from '../lib/cn'
 import { displayRoomName } from '../lib/room-name-messages'
 
 /** A control shown in the HUD's key strip: its keys (as printed on the keycaps) and what they do. */
-export type WalkthroughHint = { keys: readonly string[]; action: string }
+export type WalkthroughHint = {
+  keys: readonly string[]
+  action: string
+  /** When set, the pill renders as an interactive button (useful when cursor is unlocked). */
+  onClick?: () => void
+}
 
 export type WalkthroughHudProps = {
   floorLabel?: string | null
@@ -78,6 +83,61 @@ export function WalkthroughHud({
     </>
   )
 
+  const exitPill = onExit ? (
+    <button
+      className={cn(
+        pillClass,
+        'pointer-events-auto cursor-pointer transition-colors hover:border-border/70 hover:bg-background/85 hover:text-foreground',
+      )}
+      onClick={(event) => {
+        event.stopPropagation()
+        onExit()
+      }}
+      type="button"
+    >
+      {exitContent}
+    </button>
+  ) : (
+    <div className={pillClass}>{exitContent}</div>
+  )
+  const renderExtraHints = () =>
+    extraHints?.map(({ keys, action, onClick }) => {
+      const content = (
+        <>
+          {keys.map((key, keyIndex) => (
+            <span className="flex items-center gap-1" key={key}>
+              {keyIndex > 0 && <span className="text-muted-foreground/60">/</span>}
+              <kbd className={kbdClass}>{key}</kbd>
+            </span>
+          ))}
+          {action}
+        </>
+      )
+      if (onClick) {
+        return (
+          <button
+            className={cn(
+              pillClass,
+              'pointer-events-auto cursor-pointer transition-colors hover:border-border/70 hover:bg-background/85 hover:text-foreground',
+            )}
+            key={action}
+            onClick={(event) => {
+              event.stopPropagation()
+              onClick()
+            }}
+            type="button"
+          >
+            {content}
+          </button>
+        )
+      }
+      return (
+        <div className={pillClass} key={action}>
+          {content}
+        </div>
+      )
+    })
+
   return (
     <div
       className="dark pointer-events-none absolute inset-0 z-30 text-foreground"
@@ -102,14 +162,16 @@ export function WalkthroughHud({
       {!touch && !hideBottomHints && (
         <div className="absolute bottom-6 left-1/2 flex -translate-x-1/2 items-center gap-2">
           {suspended ? (
-            <div className={pillClass}>
-              <span className="font-medium text-foreground">Click</span>
-              <span>or</span>
-              <kbd className={kbdClass}>P</kbd>
-              <span>to resume</span>
-              <span className="text-muted-foreground/60">·</span>
-              {exitContent}
-            </div>
+            <>
+              <div className={pillClass}>
+                <span className="font-medium text-foreground">Click</span>
+                <span>or</span>
+                <kbd className={kbdClass}>P</kbd>
+                <span>to resume</span>
+              </div>
+              {renderExtraHints()}
+              {exitPill}
+            </>
           ) : (
             <>
               {hints && hints.length > 0 ? (
@@ -128,32 +190,12 @@ export function WalkthroughHud({
                   ))}
                 </div>
               ) : null}
-              {extraHints?.map(({ keys, action }) => (
-                <div className={pillClass} key={action}>
-                  {keys.map((key, keyIndex) => (
-                    <span className="flex items-center gap-1" key={key}>
-                      {keyIndex > 0 && <span className="text-muted-foreground/60">/</span>}
-                      <kbd className={kbdClass}>{key}</kbd>
-                    </span>
-                  ))}
-                  {action}
-                </div>
-              ))}
+              {renderExtraHints()}
               <div className={pillClass}>
                 <kbd className={kbdClass}>P</kbd>
                 free cursor
               </div>
-              {onExit ? (
-                <button
-                  className={cn(pillClass, 'pointer-events-auto')}
-                  onClick={onExit}
-                  type="button"
-                >
-                  {exitContent}
-                </button>
-              ) : (
-                <div className={pillClass}>{exitContent}</div>
-              )}
+              {exitPill}
             </>
           )}
         </div>

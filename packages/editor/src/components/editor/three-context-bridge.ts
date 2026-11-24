@@ -28,8 +28,11 @@ export function EditorThreeContextBridge() {
   const domElement = useThree((s) => s.gl.domElement)
 
   useEffect(() => {
-    setEditorThreeContext({ camera, raycaster, domElement })
-    return () => setEditorThreeContext(null)
+    const next = { camera, raycaster, domElement }
+    setEditorThreeContext(next)
+    return () => {
+      if (current === next) setEditorThreeContext(null)
+    }
   }, [camera, raycaster, domElement])
 
   return null

@@ -125,7 +125,8 @@ let stopSession: (() => void) | null = null
 function pickFor(event: NodeEvent, alt: boolean, selectedTargetIds: readonly string[]) {
   const editor = useEditor.getState()
   const nodes = useScene.getState().nodes as Record<string, AnyNode>
-  const levelId = useViewer.getState().selection.levelId ?? null
+  // Walkthrough and Drone show the entire building, so elements on any floor are pickable.
+  const levelId = editor.isFirstPersonMode ? null : (useViewer.getState().selection.levelId ?? null)
   return resolvePointPick({
     event,
     alt,
@@ -257,7 +258,14 @@ let leaveOnClose = false
 export function canPoint(): boolean {
   if (!hasPointAskHandler()) return false
   const editor = useEditor.getState()
-  if (editor.isPreviewMode || editor.isCaptureMode || editor.workspaceMode !== 'edit') return false
+  // Preview walkthrough / drone stays commentable; non-walkthrough preview remains a clean showcase.
+  if (
+    (editor.isPreviewMode && !editor.isFirstPersonMode) ||
+    editor.isCaptureMode ||
+    editor.workspaceMode !== 'edit'
+  ) {
+    return false
+  }
   const can3d = isViewVisible(editor, VIEW_3D) && Boolean(getEditorThreeContext())
   const can2d =
     !editor.isFirstPersonMode &&
@@ -785,7 +793,9 @@ let regionPreviewAt = 0
 
 function candidatesForRegion() {
   const nodes = useScene.getState().nodes as Record<string, AnyNode>
-  const levelId = useViewer.getState().selection.levelId
+  const levelId = useEditor.getState().isFirstPersonMode
+    ? null
+    : useViewer.getState().selection.levelId
   const found: { id: string; box: WorldBox }[] = []
   for (const node of Object.values(nodes)) {
     if (!REGION_KINDS.has(node.type) || node.visible === false) continue
@@ -837,7 +847,9 @@ function updateRegionDrag(press: Down, event: PointerEvent) {
 /** The elements of the level in view that show inside the rectangle, the biggest first. */
 function elementsInRegion(rect: Rect, surface: PointViewport) {
   const nodes = useScene.getState().nodes as Record<string, AnyNode>
-  const levelId = useViewer.getState().selection.levelId
+  const levelId = useEditor.getState().isFirstPersonMode
+    ? null
+    : useViewer.getState().selection.levelId
   const candidates: { id: string; rect: Rect | null }[] = []
   for (const node of Object.values(nodes)) {
     if (!REGION_KINDS.has(node.type) || node.visible === false) continue
@@ -2022,7 +2034,7 @@ export function startPointAskSession(
       const hasScene = isViewVisible(state, VIEW_3D) || isViewVisible(state, VIEW_2D)
       if (
         !hasScene ||
-        state.isPreviewMode ||
+        (state.isPreviewMode && !state.isFirstPersonMode) ||
         state.isCaptureMode ||
         state.workspaceMode !== 'edit'
       ) {

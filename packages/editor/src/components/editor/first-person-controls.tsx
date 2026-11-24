@@ -4,6 +4,7 @@ import { useHasPointAskHandler, usePascalI18n, useScene } from '@pascal-app/core
 import { LiveWalkthroughController, useFirstPersonHud, useViewer } from '@pascal-app/viewer'
 import { DroneHud, WalkthroughHud } from '@pascal-app/viewer/ui'
 import { useCallback, useMemo } from 'react'
+import { enterPointMode } from '../../lib/point-ask/session'
 import useEditor from '../../store/use-editor'
 import { usePointAsk } from '../../store/use-point-ask'
 
@@ -46,20 +47,26 @@ export const FirstPersonOverlay = ({ onExit }: { onExit: () => void }) => {
   const interact = useFirstPersonHud((state) => state.interact)
   const suspended = useViewer((state) => state.walkthroughSuspended)
   const isDroneMode = useEditor((state) => state.firstPersonMovementMode === 'drone')
+  const isCaptureMode = useEditor((state) => state.isCaptureMode)
+  const workspaceMode = useEditor((state) => state.workspaceMode)
   const hasPointAsk = useHasPointAskHandler()
   const pointAskEngaged = usePointAsk(selectPointAskEngaged)
+  const canComment = hasPointAsk && !isCaptureMode && workspaceMode === 'edit'
 
   const extraHints = useMemo(
     () =>
-      hasPointAsk
+      canComment
         ? [
             {
               keys: ['C'],
               action: i18n._({ id: 'editor.walkthroughHud.comment', message: 'comment' }),
+              onClick: () => {
+                enterPointMode(true)
+              },
             },
           ]
         : undefined,
-    [hasPointAsk, i18n],
+    [canComment, i18n],
   )
 
   const handleExit = useCallback(() => {

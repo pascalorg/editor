@@ -97,6 +97,7 @@ function persistentMarkerPositions(now: number, viewport: PointViewport) {
     cache.positions = new Map()
     return cache.positions
   }
+  const wholeBuilding = useEditor.getState().isFirstPersonMode
   const levelId = useViewer.getState().selection.levelId
   const pins = state.pinOrder.flatMap((id) => {
     const pin = state.pins[id]
@@ -104,7 +105,7 @@ function persistentMarkerPositions(now: number, viewport: PointViewport) {
       pin?.behavior !== 'persistent' ||
       pin.supersededBy ||
       state.bubble?.changesAsk?.askId === id ||
-      (pin.levelId !== null && pin.levelId !== levelId)
+      (!wholeBuilding && pin.levelId !== null && pin.levelId !== levelId)
     )
       return []
     const at = projectWorldIn(pinWorld(pin), viewport)
@@ -282,7 +283,9 @@ function PinView({
       if (!(record && node)) return
       const at = projectWorldIn(pinWorld(record), viewport)
       const levelHidden =
-        record.levelId !== null && useViewer.getState().selection.levelId !== record.levelId
+        !useEditor.getState().isFirstPersonMode &&
+        record.levelId !== null &&
+        useViewer.getState().selection.levelId !== record.levelId
       // Out of the view: the pin gives way to an edge marker that points at it and offers to look.
       const frame = viewportRect(viewport)
       const away =
