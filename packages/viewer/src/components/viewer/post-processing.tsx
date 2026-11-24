@@ -59,6 +59,7 @@ import { LayerPassIndex, LayerPassNode } from '../../lib/layer-pass'
 import { OVERLAY_LAYER, SCENE_LAYER, scenePassLayers, ZONE_LAYER } from '../../lib/layers'
 import { isLiveFrameHeld } from '../../lib/live-frame-hold'
 import { mergedOutline } from '../../lib/merged-outline-node'
+import { setOverlaySceneDepth } from '../../lib/overlay-scene-depth'
 import { recordPerfSample, timeSpan } from '../../lib/perf-tracks'
 import { PostProcessingResources } from '../../lib/post-processing-resources'
 import { renderWithSceneMatrices } from '../../lib/scene-matrices'
@@ -371,6 +372,7 @@ const PostProcessingPasses = ({
   }, [])
 
   const disposePipeline = useCallback(() => {
+    setOverlaySceneDepth(null)
     resourcesRef.current?.dispose()
     resourcesRef.current = null
   }, [])
@@ -553,6 +555,13 @@ const PostProcessingPasses = ({
       // Scene depth is shared by AO, ink, and outlines.
       // The normal MRT is only built when the medium AO, TRAA or ink needs it.
       const scenePassDepth = scenePass.getTextureNode('depth')
+      // Overlay materials that hide or dim behind the scene read its depth (`overlay-scene-depth.ts`).
+      // Only expose a single-sampled depth texture so WGSL `textureSample` stays valid when MSAA is on.
+      const overlayDepth =
+        singleSampled || ((renderer as { samples?: number }).samples ?? 0) <= 1
+          ? scenePass.getTexture('depth')
+          : null
+      setOverlaySceneDepth(overlayDepth)
       const sampleEdgeDepth = createEdgeDepthSampler(scenePassDepth, camera)
       let scenePassNormal: any = null
       if (needsNormalMRT) {

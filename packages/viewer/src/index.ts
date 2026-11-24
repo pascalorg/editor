@@ -262,6 +262,11 @@ export * from './lib/measurement-label'
 export * from './lib/measurement-presentation'
 export { mergedOutline } from './lib/merged-outline-node'
 export { createNodeTopSurfaceHeightSampler } from './lib/node-top-surface-height'
+export {
+  getOverlaySceneDepth,
+  setOverlaySceneDepth,
+  subscribeOverlaySceneDepth,
+} from './lib/overlay-scene-depth'
 export * from './lib/perf-actions'
 export { type PerfBatchStats, publishPerfBatchStats } from './lib/perf-panel-store'
 export * from './lib/perf-tracks'
