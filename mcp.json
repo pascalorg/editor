@@ -2,9 +2,19 @@
   "$schema": "https://agent-plugins.org/schemas/1.0.0/mcp.schema.json",
   "mcpServers": {
     "pascal": {
-      "type": "stdio",
-      "command": "pascal",
-      "args": ["mcp", "connect"]
+      "type": "streamable-http",
+      "url": "https://editor.pascal.app/api/mcp",
+      "extensions": {
+        "com.openai": {
+          "auth": {
+            "type": "oauth",
+            "client": {
+              "mode": "cimd"
+            },
+            "baseScopes": ["offline_access", "scene:read", "scene:write"]
+          }
+        }
+      }
     }
   }
 }

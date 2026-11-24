@@ -26,6 +26,7 @@
           "Assess furniture footprints"
         ],
         "websiteURL": "https://editor.pascal.app/docs/developers/mcp",
+        "supportURL": "https://editor.pascal.app/capture/support",
         "privacyPolicyURL": "https://editor.pascal.app/privacy",
         "termsOfServiceURL": "https://editor.pascal.app/terms",
         "defaultPrompt": [
