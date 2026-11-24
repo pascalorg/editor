@@ -21,8 +21,13 @@ import {
 } from 'three'
 import RenderObject from 'three/src/renderers/common/RenderObject.js'
 import RenderObjects from 'three/src/renderers/common/RenderObjects.js'
-import { pass } from 'three/tsl'
-import { ClippingGroup, NodeFrame } from 'three/webgpu'
+import { float, instancedBufferAttribute, pass } from 'three/tsl'
+import {
+  ClippingGroup,
+  InstancedBufferAttribute,
+  NodeFrame,
+  SpriteNodeMaterial,
+} from 'three/webgpu'
 import { mergedOutline } from './merged-outline-node'
 
 describe('merged outline rendering', () => {
@@ -476,5 +481,29 @@ test('selection masks retain cutout coverage and release it when alpha testing i
   f.tick()
   expect(f.renderer.draws[0].material.alphaTest).toBe(0)
   map.dispose()
+  f.dispose()
+})
+
+test('an instanced sprite cloud is masked where its own nodes place and size each sprite', () => {
+  const f = makeOutlineFixture()
+  const cloud = new SpriteNodeMaterial()
+  cloud.positionNode = instancedBufferAttribute(
+    new InstancedBufferAttribute(new Float32Array(6), 3),
+  )
+  cloud.scaleNode = float(0.02)
+  cloud.opacityNode = float(1)
+  cloud.alphaTest = 0.5
+  const sprite = new Sprite(cloud)
+  sprite.count = 2
+  f.root.add(sprite)
+  f.tick()
+  const mask = f.renderer.draws.find((draw: any) => draw.object.isSprite)?.material
+  // Without these, every point is drawn as a 1 m quad at the origin.
+  expect(mask).not.toBe(cloud)
+  expect(mask.positionNode).toBe(cloud.positionNode)
+  expect(mask.scaleNode).toBe(cloud.scaleNode)
+  expect(mask.opacityNode).toBe(cloud.opacityNode)
+  expect(mask.alphaTest).toBe(0.5)
+  cloud.dispose()
   f.dispose()
 })
