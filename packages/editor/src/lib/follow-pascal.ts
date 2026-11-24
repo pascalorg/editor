@@ -112,9 +112,15 @@ export class Follower {
     const oldest = this.pending[0]
     if (!oldest || blocked) return null
     if (now - this.last < FOLLOW_DWELL_S || now - oldest.at < FOLLOW_GATHER_S) return null
-    const nextFloor = this.pending.findIndex((want) => want.levelId !== oldest.levelId)
-    const count = nextFloor < 0 ? this.pending.length : nextFloor
-    const merged = mergeWants(this.pending.splice(0, count))
+    const targetLevel = oldest.levelId
+    const batch: FollowWant[] = []
+    const remaining: FollowWant[] = []
+    for (const want of this.pending) {
+      if (want.levelId === targetLevel) batch.push(want)
+      else remaining.push(want)
+    }
+    this.pending = remaining
+    const merged = mergeWants(batch)
     this.last = now
     return merged
   }

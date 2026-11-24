@@ -1,11 +1,11 @@
-import type { WallMode } from '@pascal-app/viewer'
 import type { RoomKey } from '@pascal-app/viewer/ui'
 
 /**
- * Follow Pascal changes how the building is shown so the build it follows is in view: the walls cut
- * away when no eye sees its target, the floor it works on selected, the floors above it hidden. This
- * keeps what it changed, and what the person had before, so that when Follow ends it puts back exactly
- * that: a setting it changed and the person has not touched since goes back to what the person had.
+ * Follow Pascal changes how levels are shown so the build it follows is in view: the floor it
+ * works on selected, stacked display, and upper floors hidden above it — while never altering the
+ * person's wall display mode. This keeps what it changed and what the person had before, so when
+ * Follow ends it puts back exactly that: a setting it changed and the person has not touched since
+ * goes back to what the person had.
  *
  * A setting the person changes while Follow is on is theirs: it is not put back, and Follow does not
  * change it again until it has ended. Everything here is arithmetic on a port, so it is tested without
@@ -24,7 +24,6 @@ export type Floor = {
 }
 
 export type ViewPresentation = {
-  wall: WallMode
   levels: LevelMode
   /** The upper floors are hidden, above the selected one. */
   hideAbove: boolean
@@ -34,7 +33,6 @@ export type ViewPresentation = {
 /** What it needs of the viewer and the editor: read the view, and write one part of it. */
 export type PresentationPort = {
   read(): ViewPresentation
-  setWall(mode: WallMode): void
   setLevels(mode: LevelMode): void
   setHideAbove(hide: boolean): void
   /** Selects a floor in its building. The room and what was picked on the floor before are dropped. */
@@ -72,11 +70,6 @@ export class FollowPresentation {
 
   constructor(private port: PresentationPort) {}
 
-  /** The walls as `mode` shows them (cutaway, when no eye sees the target). */
-  wall(mode: WallMode): void {
-    this.change('wall', mode === this.port.read().wall, () => this.port.setWall(mode))
-  }
-
   levels(mode: LevelMode): void {
     this.change('levels', mode === this.port.read().levels, () => this.port.setLevels(mode))
   }
@@ -102,10 +95,9 @@ export class FollowPresentation {
    */
   restore(): void {
     const now = this.port.read()
-    const { wall, levels, hideAbove, floor } = this.held
+    const { levels, hideAbove, floor } = this.held
     this.held = {}
     this.theirs.clear()
-    if (wall && now.wall === wall.set) this.port.setWall(wall.before)
     if (levels && now.levels === levels.set) this.port.setLevels(levels.before)
     if (hideAbove && now.hideAbove === hideAbove.set) this.port.setHideAbove(hideAbove.before)
     if (floor && sameFloor(now.floor, floor.set)) this.port.putFloor(floor.before)

@@ -17,7 +17,7 @@ import {
   WallNode,
   WindowNode,
 } from '@pascal-app/core'
-import { isNodeRevealing, startConstructionReveal, useViewer } from '@pascal-app/viewer'
+import { startConstructionReveal, useViewer } from '@pascal-app/viewer'
 import { followBelowGrade, useFollowPascal } from '@pascal-app/viewer/ui'
 import { act, create } from '@react-three/test-renderer'
 import { BoxGeometry, DoubleSide, Group, Mesh, MeshBasicMaterial, Raycaster, Vector3 } from 'three'
@@ -313,9 +313,8 @@ test.each(['camera-controls:interaction-start', 'camera-controls:orbit-cw'] as c
   },
 )
 
-// The owner, 12 October, on 3114: after Follow Pascal stopped the walls looked invisible. It had
-// fallen back to cutaway when no eye saw its target, selected the floor being built and hidden the
-// floors above it, and nothing put them back.
+// Follow Pascal restores the floor and level display it changed when it ends while never changing the
+// person's wall display mode.
 const ENDS: { name: string; end: () => unknown }[] = [
   { name: 'it is switched off', end: () => useFollowPascal.getState().setOn(false) },
   {
@@ -330,17 +329,19 @@ const ENDS: { name: string; end: () => unknown }[] = [
 ]
 
 // The person is on the upper floor in the solo display, with the floors above not hidden; the build
-// is on the ground floor, which the solo display hides: it plays on show, and Follow takes the floor.
+// is on the ground floor, which the solo display hides: it plays on show, Follow takes the floor,
+// and their wallMode stays untouched even when the target is enclosed.
 test.each(ENDS)(
-  'when $name, the cutaway, the floor and the hidden floors are put back',
+  'when $name, the floor and the hidden floors are put back while wallMode never changes',
   async ({ end }) => {
+    useViewer.getState().setWallMode('up')
     usePointAsk.getState().setBusy(true)
     const { building } = await followItem(true, 'solo', {
       enclosed: true,
       hideAbove: false,
       playMs: 1500,
     })
-    expect(useViewer.getState().wallMode).toBe('cutaway')
+    expect(useViewer.getState().wallMode).toBe('up')
     expect(useViewer.getState().levelMode).toBe('stacked')
     expect(useViewer.getState().hideLevelsAboveSelection).toBe(true)
     expect(useViewer.getState().selection.levelId).toBe('level_ground')
@@ -357,29 +358,32 @@ test.each(ENDS)(
   },
 )
 
-test('leaving the editor puts them back', async () => {
+test('leaving the editor puts floor presentation back and keeps wallMode untouched', async () => {
+  useViewer.getState().setWallMode('up')
   await followItem(false, 'stacked', { enclosed: true })
-  expect(useViewer.getState().wallMode).toBe('cutaway')
+  expect(useViewer.getState().wallMode).toBe('up')
   await renderer!.unmount()
   renderer = null
   expect(useViewer.getState().wallMode).toBe('up')
   expect(useViewer.getState().selection.levelId).toBe('level_ground')
 })
 
-test('a wall mode the person picks while Follow is on is theirs, and Follow does not take it back', async () => {
-  usePointAsk.getState().setBusy(true)
-  await followItem(false, 'stacked', { enclosed: true })
-  expect(useViewer.getState().wallMode).toBe('cutaway')
-  useViewer.getState().setWallMode('translucent')
-  await act(async () => {
-    await renderer!.advanceFrames(40, 0.05)
-  })
-  expect(useViewer.getState().wallMode).toBe('translucent')
-  turnOver()
-  expect(useViewer.getState().wallMode).toBe('translucent')
-  // The floor was Follow's: it goes back all the same.
-  expect(useViewer.getState().selection.levelId).toBe('level_ground')
-})
+test.each(['up', 'cutaway', 'down', 'translucent'] as const)(
+  'Follow never alters wallMode when the person has %s',
+  async (mode) => {
+    useViewer.getState().setWallMode(mode)
+    const writes: string[] = []
+    const stop = useViewer.subscribe((state, before) => {
+      if (state.wallMode !== before.wallMode) writes.push(state.wallMode)
+    })
+    usePointAsk.getState().setBusy(true)
+    await followItem(false, 'stacked', { enclosed: true, playMs: 1500 })
+    turnOver()
+    stop()
+    expect(writes).toEqual([])
+    expect(useViewer.getState().wallMode).toBe(mode)
+  },
+)
 
 test('a floor the person picks while Follow is on is theirs, and Follow does not select over it', async () => {
   usePointAsk.getState().setBusy(true)
@@ -421,13 +425,14 @@ test('what Follow did not change is left as it was when it ends', async () => {
   })
 })
 
-// A turn runs several programs, with the agent thinking between them: the build is over for a few
-// seconds and then goes on. The view holds steady until the turn is over.
-test('a build that is over keeps the view while the turn goes on', async () => {
+// A turn runs several programs or sub-agents, with the agent thinking between them: the view holds
+// steady until the turn is over.
+test('a build that is over keeps the floor view while the turn goes on', async () => {
+  useViewer.getState().setWallMode('up')
   usePointAsk.getState().setBusy(true)
   await followItem(false, 'stacked', { enclosed: true })
   useFollowPascal.getState().endBuild()
-  expect(useViewer.getState().wallMode).toBe('cutaway')
+  expect(useViewer.getState().wallMode).toBe('up')
   expect(useViewer.getState().selection.levelId).toBe('level_upper')
   usePointAsk.getState().setBusy(false)
   expect(useViewer.getState().wallMode).toBe('up')
@@ -436,11 +441,12 @@ test('a build that is over keeps the view while the turn goes on', async () => {
 
 // The reveal can play on after the agent's turn: it is still followed, and ends with the build.
 test('a turn that ends while the reveal is still playing ends it with the reveal', async () => {
+  useViewer.getState().setWallMode('up')
   usePointAsk.getState().setBusy(true)
   await followItem(false, 'stacked', { enclosed: true })
   usePointAsk.getState().setBusy(false)
   expect(useFollowPascal.getState().building).toBe(true)
-  expect(useViewer.getState().wallMode).toBe('cutaway')
+  expect(useViewer.getState().wallMode).toBe('up')
   useFollowPascal.getState().endBuild()
   expect(useViewer.getState().wallMode).toBe('up')
   expect(useViewer.getState().selection.levelId).toBe('level_ground')
@@ -448,17 +454,15 @@ test('a turn that ends while the reveal is still playing ends it with the reveal
 
 // A host that does not say when a turn runs (a standalone editor, a build driven over MCP).
 test('without a host that says a turn is running, the build being over ends it', async () => {
+  useViewer.getState().setWallMode('up')
   await followItem(false, 'stacked', { enclosed: true })
-  expect(useViewer.getState().wallMode).toBe('cutaway')
+  expect(useViewer.getState().wallMode).toBe('up')
   useFollowPascal.getState().endBuild()
   expect(useViewer.getState().wallMode).toBe('up')
   expect(useViewer.getState().selection.levelId).toBe('level_ground')
 })
 
-// The owner, 15 October: the agent bent an exterior wall and moved a window, and the cutaway hid
-// exactly what moved. A change seen from outside is looked at from outdoors, with the walls up; an
-// interior one keeps the cutaway; a commit with one of each takes the outside view. What the person
-// had is theirs after.
+// DGS-138: following interior or exterior edits, or full builds, never overrides wallMode.
 async function followMoves(setup: {
   moveWindow?: boolean
   moveSofa?: boolean
@@ -512,7 +516,6 @@ async function followMoves(setup: {
       <FollowPascal />
     </>,
   )
-  // Walls all round: no eye sees the target, so an interior step falls back to the cutaway.
   shell = new Mesh(new BoxGeometry(6, 6, 6), new MeshBasicMaterial({ side: DoubleSide }))
   shell.position.set(2, 0.5, 2)
   renderer.scene.instance.getObjectByName('scene-renderer')!.add(shell)
@@ -537,46 +540,39 @@ async function followMoves(setup: {
   })
 }
 
-test('a window moved on an exterior wall is looked at from outside, and the person keeps their cutaway', async () => {
+test('a window moved on an exterior wall still leaves the user wallMode untouched', async () => {
   await followMoves({ moveWindow: true, personWall: 'cutaway' })
   expect(poses.length).toBeGreaterThan(0)
-  // The cutaway the person had is off while the change plays: it would hide the very wall.
-  expect(useViewer.getState().wallMode).toBe('up')
+  expect(useViewer.getState().wallMode).toBe('cutaway')
   turnOver()
   expect(useViewer.getState().wallMode).toBe('cutaway')
 })
 
-test('an exterior wall bent is looked at from outside too', async () => {
+test('an exterior wall bent still leaves the user wallMode untouched', async () => {
   await followMoves({ bendWall: true, personWall: 'cutaway' })
-  expect(useViewer.getState().wallMode).toBe('up')
+  expect(useViewer.getState().wallMode).toBe('cutaway')
   turnOver()
   expect(useViewer.getState().wallMode).toBe('cutaway')
 })
 
-test('a sofa moved inside is looked at through the cutaway, and the person gets their walls back', async () => {
+test('a sofa moved inside is framed without changing the user wallMode', async () => {
   await followMoves({ moveSofa: true, personWall: 'up' })
   expect(poses.length).toBeGreaterThan(0)
-  expect(useViewer.getState().wallMode).toBe('cutaway')
+  expect(useViewer.getState().wallMode).toBe('up')
   turnOver()
   expect(useViewer.getState().wallMode).toBe('up')
 })
 
-test('a commit with a window and a sofa in it takes the outside view', async () => {
+test('a commit with a window and a sofa in it preserves the user wallMode', async () => {
   await followMoves({ moveWindow: true, moveSofa: true, personWall: 'cutaway' })
-  expect(useViewer.getState().wallMode).toBe('up')
+  expect(useViewer.getState().wallMode).toBe('cutaway')
   turnOver()
   expect(useViewer.getState().wallMode).toBe('cutaway')
 })
 
-// The owner, 15 October: the outside view is for edits and moves only. A build is followed as it
-// always was: the cutaway once, when no eye sees the target, and never the walls up in between.
-test.each([
-  { person: 'up' as const, written: ['cutaway'] as string[] },
-  // The person already cuts the walls away: a build never puts them up in between.
-  { person: 'cutaway' as const, written: [] as string[] },
-])(
-  'a full build with Follow on (structure, openings, furnishing, roof) keeps the single cutaway, from $person',
-  async ({ person, written: expected }) => {
+test.each(['up', 'cutaway'] as const)(
+  'a full build with Follow on (structure, openings, furnishing, roof) never writes wallMode, from %s',
+  async (person) => {
     const building = BuildingNode.parse({ id: 'building_follow' })
     const level = LevelNode.parse({ id: 'level_ground', parentId: building.id, level: 0 })
     building.children = [level.id]
@@ -646,21 +642,18 @@ test.each([
       await renderer!.advanceFrames(10, 0.1)
     })
     stop()
-    // The build was followed (the camera moved) and the walls were cut away once, never put up between.
     expect(poses.length).toBeGreaterThan(0)
-    expect(written).toEqual(expected)
-    expect(useViewer.getState().wallMode).toBe('cutaway')
+    expect(written).toEqual([])
+    expect(useViewer.getState().wallMode).toBe(person)
     turnOver()
     expect(useViewer.getState().wallMode).toBe(person)
   },
 )
 
-// A commit's outside view is its own: an exterior edit another commit queued behind a build, or an
-// exterior commit before an interior one, does not take the build's walls up between its steps.
+// A commit's framing never alters wallMode when commits follow each other.
 async function followBuildAmid(setup: {
   first: 'build' | 'exterior'
   next: 'exterior' | 'build'
-  /** When the second commit lands, on the reveal clock; with the first when absent. */
   nextAtMs?: number
 }) {
   const building = BuildingNode.parse({ id: 'building_follow' })
@@ -729,7 +722,6 @@ async function followBuildAmid(setup: {
       dimensions: [2, 1, 1],
     },
   })
-  // Enough furniture that the build plays for seconds, in several steps.
   const buildSofa = () => {
     const pieces = Array.from({ length: 12 }, (_, index) =>
       ItemNode.parse({
@@ -743,19 +735,13 @@ async function followBuildAmid(setup: {
       sceneRegistry.nodes.set(piece.id, new Group())
     }
   }
-  // A commit with a window and a sofa in it: the window takes it outdoors.
   const moveWindow = () => {
     useScene.getState().updateNode('window_east', { position: [2.5, 1.2, 0] } as never)
     useScene.getState().updateNode(resting.id, { position: [2.5, 0, 2.5] } as never)
   }
-  const playing = () =>
-    Array.from({ length: 12 }, (_, i) => `item_sofa${i === 0 ? '' : i}`).some((id) =>
-      isNodeRevealing(id),
-    )
-  const upDuringBuild: number[] = []
-  let at = 0
+  const wallWrites: string[] = []
   const stop = useViewer.subscribe((state, before) => {
-    if (state.wallMode === 'up' && before.wallMode !== 'up' && playing()) upDuringBuild.push(at)
+    if (state.wallMode !== before.wallMode) wallWrites.push(state.wallMode)
   })
   driver = startConstructionReveal({ reveals: (commit) => commit.author === 'agent' })
   usePointAsk.getState().setBusy(true)
@@ -764,7 +750,7 @@ async function followBuildAmid(setup: {
       runAsSceneCommitAuthor('agent', kind === 'build' ? buildSofa : moveWindow)
     commit(setup.first)
     if (setup.nextAtMs === undefined) commit(setup.next)
-    for (at = 50; at <= 12000; at += 50) {
+    for (let at = 50; at <= 12000; at += 50) {
       if (at === setup.nextAtMs) commit(setup.next)
       driver!.tick(at)
       await renderer!.advanceFrames(1, 0.02)
@@ -772,27 +758,82 @@ async function followBuildAmid(setup: {
     await renderer!.advanceFrames(10, 0.1)
   })
   stop()
-  return { upDuringBuild }
+  return { wallWrites }
 }
 
-test('an exterior edit queued behind a build does not put the walls up while the build plays', async () => {
-  const { upDuringBuild } = await followBuildAmid({ first: 'build', next: 'exterior' })
+test('an exterior edit queued behind a build does not alter wallMode while or after the build plays', async () => {
+  const { wallWrites } = await followBuildAmid({ first: 'build', next: 'exterior' })
   expect(poses.length).toBeGreaterThan(0)
-  expect(upDuringBuild).toEqual([])
-  // The edit itself is looked at from outside once it plays.
-  expect(useViewer.getState().wallMode).toBe('up')
+  expect(wallWrites).toEqual([])
+  expect(useViewer.getState().wallMode).toBe('cutaway')
 })
 
-test('an exterior edit that has played does not take the next build outdoors', async () => {
-  const { upDuringBuild } = await followBuildAmid({
+test('an exterior edit that has played before a build does not alter wallMode either', async () => {
+  const { wallWrites } = await followBuildAmid({
     first: 'exterior',
     next: 'build',
     nextAtMs: 3000,
   })
   expect(poses.length).toBeGreaterThan(0)
-  expect(upDuringBuild).toEqual([])
-  // The walls the edit put up are cut away again for the build, once.
+  expect(wallWrites).toEqual([])
   expect(useViewer.getState().wallMode).toBe('cutaway')
+})
+
+test('a user or pin pause holds across sub-agent build gaps in the same turn, then resumes on the next turn', async () => {
+  usePointAsk.getState().setBusy(true)
+  await followItem(false, 'stacked', { playMs: 1200 })
+  expect(useViewer.getState().selection.levelId).toBe('level_upper')
+
+  await act(async () => {
+    useFollowPascal.getState().pause()
+  })
+  expect(useFollowPascal.getState().paused).toBe(true)
+  expect(useViewer.getState().selection.levelId).toBe('level_ground')
+
+  const posesAfterPause = poses.length
+  // Simulate the first sub-agent build finishing while the turn is still active, then a second sub-agent acting.
+  await act(async () => {
+    useFollowPascal.getState().endBuild()
+    runAsSceneCommitAuthor('agent', () =>
+      useScene
+        .getState()
+        .createNode(
+          ItemNode.parse({ ...useScene.getState().nodes.item_follow, id: 'item_subagent_2' }),
+          'level_roof',
+        ),
+    )
+    sceneRegistry.nodes.set('item_subagent_2', new Group())
+    for (let at = 50; at <= 4000; at += 50) {
+      driver!.tick(at)
+      await renderer!.advanceFrames(1, 0.02)
+    }
+    await renderer!.advanceFrames(10, 0.1)
+  })
+  expect(useFollowPascal.getState().paused).toBe(true)
+  expect(poses.length).toBe(posesAfterPause)
+  expect(useViewer.getState().selection.levelId).toBe('level_ground')
+
+  // Turn ends, next turn starts: automatic following resumes cleanly.
+  await act(async () => {
+    turnOver()
+    usePointAsk.getState().setBusy(true)
+    runAsSceneCommitAuthor('agent', () =>
+      useScene
+        .getState()
+        .createNode(
+          ItemNode.parse({ ...useScene.getState().nodes.item_follow, id: 'item_next_turn' }),
+          'level_roof',
+        ),
+    )
+    sceneRegistry.nodes.set('item_next_turn', new Group())
+    for (let at = 50; at <= 4000; at += 50) {
+      driver!.tick(at)
+      await renderer!.advanceFrames(1, 0.02)
+    }
+    await renderer!.advanceFrames(10, 0.1)
+  })
+  expect(useFollowPascal.getState().paused).toBe(false)
+  expect(poses.length).toBeGreaterThan(posesAfterPause)
 })
 
 // The owner, 20 October, on the underground PR: with Follow Pascal on, the basement's opening
