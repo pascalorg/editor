@@ -1496,6 +1496,7 @@ export async function sendBubble(
     askId,
     capturedAt: bubble.capturedAt,
     gesture: bubble.gesture,
+    ...(is2d ? { viewport: '2d' as const } : {}),
     nodes: nodes as Record<string, AnyNode>,
     levelId,
     targets: bubble.targets.map((t, i) => ({ id: t.id, ...(i === 0 ? { hit: bubble.hit } : {}) })),

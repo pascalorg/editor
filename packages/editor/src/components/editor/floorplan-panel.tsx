@@ -7428,7 +7428,12 @@ export function FloorplanPanel({
   const [pendingApplyPose, setPendingApplyPose] = useState<CameraPose | null>(null)
   useEffect(() => {
     const applyPose = (pose: CameraPose) => {
-      if (isFloorplanOpenRef.current && !isViewVisible(useEditor.getState(), VIEW_3D)) {
+      const editor = useEditor.getState()
+      if (
+        !editor.isFirstPersonMode &&
+        isViewVisible(editor, VIEW_2D) &&
+        !isViewVisible(editor, VIEW_3D)
+      ) {
         setPendingApplyPose(pose)
       }
     }
@@ -7437,7 +7442,7 @@ export function FloorplanPanel({
   }, [])
 
   useEffect(() => {
-    if (!pendingApplyPose) return
+    if (!(pendingApplyPose && isFloorplanOpen)) return
     setPendingApplyPose(null)
     const pose = pendingApplyPose
     const toLocal = (x: number, z: number) =>
@@ -7465,6 +7470,7 @@ export function FloorplanPanel({
         width = Math.max(0.6, 2 * dist * Math.tan(fovRadians / 2) * svgAspectRatio)
       }
     }
+    discardFloorplanNavigationSyncPresentation()
     latestViewportRef.current ??= latestFittedViewportRef.current
     applyFloorplanNavigationView(centre, userRotationDeg, width, {
       clampViewWidth: false,
@@ -7475,6 +7481,8 @@ export function FloorplanPanel({
     applyFloorplanNavigationView,
     buildingPosition,
     buildingRotationY,
+    discardFloorplanNavigationSyncPresentation,
+    isFloorplanOpen,
     pendingApplyPose,
     publishFloorplanNavigationPose,
     svgAspectRatio,
@@ -11801,6 +11809,7 @@ export function FloorplanPanel({
           backgroundColor: floorplanBridgeStateRef.current.paletteSurface,
         })
       },
+      applyPose: (pose) => setPendingApplyPose(pose),
     })
 
     return () => setEditorFloorplanContext(null)

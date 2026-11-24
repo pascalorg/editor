@@ -386,6 +386,7 @@ describe('point-ask 2D floorplan mode (DGS-142)', () => {
 
     await sendBubble('Add a door along this wall', { x: 400, y: 300, width: 10, height: 10 })
     expect(received).toHaveLength(1)
+    expect(received[0]?.context.viewport).toBe('2d')
     expect(received[0]?.context.camera.projection).toBe('orthographic')
     expect(received[0]?.context.image?.dataUrl).toBe('data:image/jpeg;base64,PLAN2D')
   })
@@ -508,7 +509,7 @@ describe('point-ask Split 2D+3D mode (DGS-142)', () => {
 })
 
 describe('point-ask Walkthrough mode (DGS-141)', () => {
-  test('C latches Comment mode, captures live first-person camera pose, and Escape unwinds with propagation stopped', () => {
+  test('C latches Comment mode, captures live first-person camera pose, and Escape unwinds with propagation stopped', async () => {
     const camera = new PerspectiveCamera(60, 800 / 600, 0.1, 100)
     camera.position.set(1, 1.65, 4)
     camera.lookAt(1, 1.65, 0)
@@ -549,6 +550,14 @@ describe('point-ask Walkthrough mode (DGS-141)', () => {
     expect(bubble?.viewport).toBe('3d')
     expect(bubble?.camera?.position).toEqual([1, 1.65, 4])
     expect(bubble?.camera?.target[2]).toBeLessThan(4)
+
+    await sendBubble('Wall defect in walkthrough', { x: 400, y: 300, width: 10, height: 10 })
+    expect(received).toHaveLength(1)
+    expect(received[0]?.context.viewport).toBeUndefined()
+
+    dispatchPointer('pointerdown', canvas, 400, 300)
+    dispatchPointer('pointerup', canvas, 400, 300)
+    expect(usePointAsk.getState().bubble).not.toBeNull()
 
     // Seed an open card, then verify Escape unwinds card -> bubble -> leave mode, stopping propagation.
     usePointAsk.setState({ cardFor: 'ask_fake' })

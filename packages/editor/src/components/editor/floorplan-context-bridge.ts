@@ -1,4 +1,4 @@
-import type { PointCamera } from '@pascal-app/core'
+import type { CameraPose, PointCamera } from '@pascal-app/core'
 import type { Rect } from '../../lib/point-ask/types'
 
 export type FloorplanRay = {
@@ -29,6 +29,7 @@ export type EditorFloorplanContext = {
     screenRect: Rect,
     options?: { pad?: number; signal?: AbortSignal },
   ) => Promise<{ dataUrl: string; width: number; height: number }>
+  applyPose?: (pose: CameraPose) => void
 }
 
 let current: EditorFloorplanContext | null = null
@@ -39,6 +40,12 @@ export function setEditorFloorplanContext(ctx: EditorFloorplanContext | null) {
 
 export function getEditorFloorplanContext(): EditorFloorplanContext | null {
   return current
+}
+
+export function applyFloorplanCameraPose(pose: CameraPose): boolean {
+  if (!current?.applyPose) return false
+  current.applyPose(pose)
+  return true
 }
 
 const CROP_LONG_SIDE_MIN = 512

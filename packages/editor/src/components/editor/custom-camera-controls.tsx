@@ -648,7 +648,7 @@ export const CustomCameraControls = ({
 
   useEffect(() => {
     const handleAppliedPose = (pose: CameraPose) => {
-      if (isFirstPersonMode) return
+      if (isFirstPersonMode || planOwnsNavigation()) return
       settleOpening()
 
       const plan = planCameraPoseApplication(pose)
