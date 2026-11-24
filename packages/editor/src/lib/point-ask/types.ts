@@ -3,6 +3,11 @@
 
 export type ScreenPoint = { x: number; y: number }
 
+export type PointViewport = '3d' | '2d'
+
+export const POINT_ASK_CURSOR =
+  "url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='26' height='26' viewBox='0 0 26 26'><path d='M13 3C18.523 3 23 7.477 23 13C23 18.523 18.523 23 13 23H4.5C3.672 23 3 22.328 3 21.5V13C3 7.477 7.477 3 13 3Z' fill='%2318191f' stroke='%23ffffff' stroke-width='1.75' stroke-linejoin='round'/><path d='M9.5 11.25H16.5M9.5 14.75H14' stroke='%23ffffff' stroke-width='1.65' stroke-linecap='round'/></svg>\") 4 22, crosshair"
+
 /** A screen rectangle by its edges. */
 export type Rect = { x0: number; y0: number; x1: number; y1: number }
 

@@ -2424,15 +2424,15 @@ msgstr "Commenter"
 msgid "editor.actionMenu.pointAskButton.pointAndAskC"
 msgstr "Commenter (C)"
 
-# Source-Hash: 0eba830970fafe39
-# Review: required
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Comment works in the 3D view"
+# English: "Comment works in 2D and 3D views"
+# Source-Hash: 89c8b644c569d305
+# Review: required
 #: packages/editor/src/components/ui/action-menu/point-ask-button.tsx
 #, fuzzy
 msgid "editor.actionMenu.pointAskButton.pointAndAskWorksInThe"
-msgstr "Commenter fonctionne dans la vue 3D"
+msgstr "Commenter fonctionne dans les vues 2D et 3D"
 
 # Source-Hash: e14858b33b6e2623
 # Review: required
@@ -13842,17 +13842,17 @@ msgstr "Longueur"
 msgid "editor.placementTyping.offset"
 msgstr "Décalage"
 
-# English: "Colour map & scene layers captured"
 # Source-Hash: 39096017e54e1b02
 # Review: required
+# English: "Colour map & scene layers captured"
 #: packages/editor/src/components/point-ask/bubble.tsx
 #, fuzzy
 msgid "editor.pointAsk.bubble.colourMapCaptured"
 msgstr "Carte des couleurs et calques de la scène capturés"
 
-# English: "Click anywhere or drag an area to comment"
 # Source-Hash: c0276310a9eaec76
 # Review: required
+# English: "Click anywhere or drag an area to comment"
 #: packages/editor/src/components/point-ask/mode-pill.tsx
 #, fuzzy
 msgid "editor.pointAsk.modePill.clickOrDragToComment"
@@ -18131,6 +18131,14 @@ msgstr "Voiler le sol au-dessus d’un niveau sous le terrain"
 #, fuzzy
 msgid "editor.views.viewBar.views"
 msgstr "Vues"
+
+# Source-Hash: 1ac494e5da5f59df
+# Review: required
+# English: "comment"
+#: packages/editor/src/components/editor/first-person-controls.tsx
+#, fuzzy
+msgid "editor.walkthroughHud.comment"
+msgstr "commenter"
 
 # Source-Hash: e33e472c5ffcf14d
 # Review: required

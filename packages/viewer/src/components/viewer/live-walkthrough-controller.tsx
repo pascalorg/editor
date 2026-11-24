@@ -3,6 +3,7 @@
 import {
   type AnyNode,
   type AnyNodeId,
+  type CameraPose,
   closeDoorOpenState,
   closeWindowOpenState,
   DOOR_SWING_OPEN_ANGLE,
@@ -770,6 +771,11 @@ export type LiveWalkthroughControllerProps = {
   /** Freeze movement and look while a host renders a still. */
   paused?: boolean
   /**
+   * Release pointer lock and freeze walkthrough input while a host overlay (e.g. Point and ask /
+   * comments) owns mouse, click, and Escape interactions.
+   */
+  externalOverlayActive?: boolean
+  /**
    * Whether the host owns camera FOV right now (e.g. a capture rig). Read when walkthrough
    * starts and when it ends, so the answer at teardown decides whether the orbit FOV returns.
    */
@@ -794,13 +800,28 @@ function LiveWalkthroughSession({
   speeds,
   seeDistance = WALKTHROUGH_SEE_DISTANCE,
   paused = false,
+  externalOverlayActive = false,
   externalFov = noExternalFov,
   pointerInteraction = true,
   suspendOnUnlock = false,
   onExit,
 }: LiveWalkthroughControllerProps) {
-  const hostRef = useRef({ paused, externalFov, pointerInteraction, suspendOnUnlock, onExit })
-  hostRef.current = { paused, externalFov, pointerInteraction, suspendOnUnlock, onExit }
+  const hostRef = useRef({
+    paused,
+    externalOverlayActive,
+    externalFov,
+    pointerInteraction,
+    suspendOnUnlock,
+    onExit,
+  })
+  hostRef.current = {
+    paused,
+    externalOverlayActive,
+    externalFov,
+    pointerInteraction,
+    suspendOnUnlock,
+    onExit,
+  }
   const exit = useCallback(() => {
     if (!useViewer.getState().walkthroughMode) return
     useViewer.getState().setWalkthroughMode(false)
@@ -1465,12 +1486,83 @@ function LiveWalkthroughSession({
   }, [toggleInteractableTarget])
 
   useEffect(() => {
+    const handleApplyPose = (pose: CameraPose) => {
+      const dx = pose.target[0] - pose.position[0]
+      const dy = pose.target[1] - pose.position[1]
+      const dz = pose.target[2] - pose.position[2]
+      const dist = Math.hypot(dx, dy, dz)
+      if (dist <= 1e-4) return
+
+      const setLookToward = (
+        from: readonly [number, number, number],
+        to: readonly [number, number, number],
+      ) => {
+        const lx = to[0] - from[0]
+        const ly = to[1] - from[1]
+        const lz = to[2] - from[2]
+        const lDist = Math.hypot(lx, ly, lz)
+        if (lDist <= 1e-4) return
+        const horiz = Math.hypot(lx, lz)
+        lookRef.current.yaw = Math.atan2(-lx, -lz)
+        lookRef.current.pitch = Math.max(
+          -(Math.PI / 2 - 0.05),
+          Math.min(Math.PI / 2 - 0.05, Math.atan2(ly, horiz)),
+        )
+      }
+
+      if (isDroneMode) {
+        camera.position.set(pose.position[0], pose.position[1], pose.position[2])
+        droneVelocityRef.current.set(0, 0, 0)
+        setLookToward(pose.position, pose.target)
+      } else if (
+        pose.projection === 'perspective' &&
+        Math.abs(dy / dist) < 0.92 &&
+        controllerRef.current?.group
+      ) {
+        controllerRef.current.group.position.set(
+          pose.position[0],
+          pose.position[1] - eyeOffsetRef.current,
+          pose.position[2],
+        )
+        controllerRef.current.resetLinVel()
+        setLookToward(pose.position, pose.target)
+        camera.position.set(pose.position[0], pose.position[1], pose.position[2])
+      } else {
+        setLookToward([camera.position.x, camera.position.y, camera.position.z], pose.target)
+      }
+
+      cameraEuler.set(lookRef.current.pitch, lookRef.current.yaw, 0, 'YXZ')
+      camera.quaternion.setFromEuler(cameraEuler)
+      camera.updateMatrixWorld(true)
+    }
+
+    emitter.on('camera-controls:apply-pose', handleApplyPose)
+    return () => emitter.off('camera-controls:apply-pose', handleApplyPose)
+  }, [camera, isDroneMode])
+
+  useEffect(() => {
+    if (!externalOverlayActive) return
+    suspendRef.current = true
+    useViewer.getState().setWalkthroughSuspended(true)
+    Object.assign(movementInputRef.current, inactiveMovementInput)
+    controllerRef.current?.setMovement({ ...inactiveMovementInput, joystick: { x: 0, y: 0 } })
+    crouchKeyRef.current = false
+    droneAscendKeyRef.current = false
+    droneDescendKeyRef.current = false
+    droneSlowKeyRef.current = false
+    droneVelocityRef.current.set(0, 0, 0)
+    if (document.pointerLockElement === gl.domElement) {
+      document.exitPointerLock()
+    }
+  }, [externalOverlayActive, gl])
+
+  useEffect(() => {
     if (touch) return
     const canvas = gl.domElement
     const handleMouseMove = (e: MouseEvent) => {
       if (document.pointerLockElement !== canvas) return
-      // A still render must retain the exact framed pose.
-      if (hostRef.current.paused) return
+      // A still render or active host overlay must retain the exact framed pose.
+      if (hostRef.current.paused || hostRef.current.externalOverlayActive) return
 
       turnFirstPersonLook(
         lookRef.current,
@@ -1483,6 +1575,7 @@ function LiveWalkthroughSession({
     }
 
     const handleClick = (event: MouseEvent) => {
+      if (hostRef.current.externalOverlayActive) return
       const target = event.target
       if (!(target instanceof HTMLElement)) return
       if (!canvas.contains(target)) return
@@ -1495,7 +1588,7 @@ function LiveWalkthroughSession({
       if (document.pointerLockElement !== canvas) return
       if (event.button !== 0) return
 
-      if (!hostRef.current.pointerInteraction) return
+      if (!hostRef.current.pointerInteraction || hostRef.current.externalOverlayActive) return
 
       event.preventDefault()
       event.stopPropagation()
@@ -1565,6 +1658,7 @@ function LiveWalkthroughSession({
     }
 
     const handleKeyDown = (event: KeyboardEvent) => {
+      if (hostRef.current.externalOverlayActive) return
       if (useViewer.getState().walkthroughInputMode === 'touch') {
         if (event.code === 'Escape') exit()
         return
@@ -1679,7 +1773,7 @@ function LiveWalkthroughSession({
   useFrame(() => {
     if (!touch || isDroneMode || !controllerRef.current) return
     const input = consumeWalkthroughFrame()
-    if (hostRef.current.paused) return
+    if (hostRef.current.paused || hostRef.current.externalOverlayActive) return
     crouchKeyRef.current = input.crouch
     input.jump = resolveJump(input.jump, characterStatus.isOnGround, characterStatus.linvel.y)
     controllerRef.current.setMovement(input)
@@ -1927,7 +2021,7 @@ function LiveWalkthroughSession({
   // axes, Space or E rises, Q (or Ctrl) sinks, Shift boosts, Alt slows.
   useFrame((_, delta) => {
     if (!isDroneMode) return
-    if (hostRef.current.paused) return
+    if (hostRef.current.paused || hostRef.current.externalOverlayActive) return
 
     const movement = movementInputRef.current
     droneInput.forward = movement.forward === true
@@ -1948,8 +2042,11 @@ function LiveWalkthroughSession({
     const group = controllerRef.current.group
 
     // Crouch follows the held key; standing back up waits for headroom.
-    // Frozen while the cursor pause is active.
-    if (!suspendRef.current && crouchKeyRef.current !== crouched) {
+    // Frozen while the cursor pause or an active host overlay is active.
+    if (
+      !(suspendRef.current || hostRef.current.externalOverlayActive) &&
+      crouchKeyRef.current !== crouched
+    ) {
       if (crouchKeyRef.current) setCrouched(true)
       else if (hasStandingClearance(group.position)) setCrouched(false)
     }
@@ -1988,6 +2085,19 @@ function LiveWalkthroughSession({
     syncElevatorRide(group)
     camera.position.copy(group.position).add(cameraOffset)
     camera.updateMatrixWorld(true)
+
+    if (hostRef.current.externalOverlayActive) {
+      if (interactableTargetRef.current) {
+        interactableTargetRef.current = null
+        useFirstPersonHud.getState().setHud({
+          seenInteract: null,
+          interact: null,
+          canClose: false,
+          shuttersInView: false,
+        })
+      }
+      return
+    }
 
     const nextInteractableTarget = resolveInteractableTarget()
     const previousInteractableTarget = interactableTargetRef.current
@@ -2087,7 +2197,7 @@ function LiveWalkthroughSession({
             maxWalkSpeed={
               crouched ? CROUCH_WALK_SPEED : (speeds?.walk ?? WALKTHROUGH_DEFAULT_SPEEDS.walk)
             }
-            paused={isElevatorRideLocked || paused}
+            paused={isElevatorRideLocked || paused || externalOverlayActive}
             position={controllerStart.position}
             ref={setControllerApi}
           />

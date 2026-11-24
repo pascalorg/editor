@@ -19,9 +19,15 @@ export type WalkthroughHudProps = {
   comeCloserLabel?: string
   /** Movement controls listed before the cursor and exit pills. */
   hints?: readonly WalkthroughHint[]
+  /** Extra single-key pills appended before P / Esc (e.g. "C comment"). */
+  extraHints?: readonly WalkthroughHint[]
   /** Pointer lock temporarily released (OS screenshot) — the pill flips to
    *  "Click to resume" and lets clicks fall through to the canvas. */
   suspended?: boolean
+  /** Hide the centered crosshair and interact prompt while an overlay owns the pointer. */
+  hideCrosshair?: boolean
+  /** Hide the bottom shortcut pills while another tool HUD owns the shortcuts. */
+  hideBottomHints?: boolean
   onExit?: () => void
   children?: ReactNode
 }
@@ -54,7 +60,10 @@ export function WalkthroughHud({
   seenInteract = null,
   comeCloserLabel,
   hints,
+  extraHints,
   suspended = false,
+  hideCrosshair = false,
+  hideBottomHints = false,
   onExit,
   children,
 }: WalkthroughHudProps) {
@@ -88,9 +97,9 @@ export function WalkthroughHud({
         {children}
       </div>
 
-      <WalkthroughCrosshair interact={interact} />
+      {!hideCrosshair && <WalkthroughCrosshair interact={interact} />}
 
-      {!touch && (
+      {!touch && !hideBottomHints && (
         <div className="absolute bottom-6 left-1/2 flex -translate-x-1/2 items-center gap-2">
           {suspended ? (
             <div className={pillClass}>
@@ -119,6 +128,17 @@ export function WalkthroughHud({
                   ))}
                 </div>
               ) : null}
+              {extraHints?.map(({ keys, action }) => (
+                <div className={pillClass} key={action}>
+                  {keys.map((key, keyIndex) => (
+                    <span className="flex items-center gap-1" key={key}>
+                      {keyIndex > 0 && <span className="text-muted-foreground/60">/</span>}
+                      <kbd className={kbdClass}>{key}</kbd>
+                    </span>
+                  ))}
+                  {action}
+                </div>
+              ))}
               <div className={pillClass}>
                 <kbd className={kbdClass}>P</kbd>
                 free cursor
@@ -139,13 +159,13 @@ export function WalkthroughHud({
         </div>
       )}
 
-      {!interact && seenInteract && comeCloserLabel && (
+      {!hideCrosshair && !interact && seenInteract && comeCloserLabel && (
         <div className="absolute top-1/2 left-1/2 mt-7 -translate-x-1/2 whitespace-nowrap text-xs">
           {seenInteract.label} · {comeCloserLabel}
         </div>
       )}
 
-      {interact && !touch && (
+      {!hideCrosshair && interact && !touch && (
         <div className="absolute top-1/2 left-1/2 mt-7 -translate-x-1/2 whitespace-nowrap">
           <div className="corner-smooth flex items-center gap-1.5 rounded-full border border-border/40 bg-background/80 px-3 py-1 text-xs shadow-elevation-3 backdrop-blur-xl">
             <kbd className="rounded border border-border/60 bg-white/10 px-1.5 py-0.5 font-mono text-[10px]">
@@ -194,12 +214,25 @@ function useDroneHints(): readonly WalkthroughHint[] {
 
 /** The walkthrough HUD for the drone: the plain pointer dot and the flight keys, no room or door prompts. */
 export function DroneHud({
+  extraHints,
+  hideBottomHints,
+  hideCrosshair,
   suspended,
   onExit,
   children,
-}: Pick<WalkthroughHudProps, 'suspended' | 'onExit' | 'children'>) {
+}: Pick<
+  WalkthroughHudProps,
+  'extraHints' | 'hideBottomHints' | 'hideCrosshair' | 'suspended' | 'onExit' | 'children'
+>) {
   return (
-    <WalkthroughHud hints={useDroneHints()} onExit={onExit} suspended={suspended}>
+    <WalkthroughHud
+      extraHints={extraHints}
+      hideBottomHints={hideBottomHints}
+      hideCrosshair={hideCrosshair}
+      hints={useDroneHints()}
+      onExit={onExit}
+      suspended={suspended}
+    >
       {children}
     </WalkthroughHud>
   )

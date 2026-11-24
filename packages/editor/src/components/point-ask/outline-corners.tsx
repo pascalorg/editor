@@ -3,7 +3,7 @@
 import { useEffect, useRef } from 'react'
 import { CORNER_SPRING } from '../../lib/point-ask/choreography'
 import { subscribeFrame } from '../../lib/point-ask/frame-loop'
-import { projectBox, unionRect } from '../../lib/point-ask/projector'
+import { preferredPointViewport, projectBoxIn, unionRect } from '../../lib/point-ask/projector'
 import { SpringPair } from '../../lib/point-ask/spring'
 import { usePointAsk } from '../../store/use-point-ask'
 import { pointMotionCalm } from './optional-motion'
@@ -36,8 +36,11 @@ export function OutlineCorners() {
       const state = usePointAsk.getState()
       // The pointer's next pick leads while it names one; with none under it the bubble's targets stay framed.
       const targets = state.hover ? [state.hover.target] : (state.bubble?.targets ?? [])
+      const vp = state.hover?.viewport ?? state.bubble?.viewport ?? preferredPointViewport() ?? '3d'
       const boxes = state.active
-        ? targets.flatMap((t) => (t.box ? [projectBox(t.box)] : [])).flatMap((r) => (r ? [r] : []))
+        ? targets
+            .flatMap((t) => (t.box ? [projectBoxIn(t.box, vp)] : []))
+            .flatMap((r) => (r ? [r] : []))
         : []
       const rect = unionRect(boxes)
       if (!rect) {

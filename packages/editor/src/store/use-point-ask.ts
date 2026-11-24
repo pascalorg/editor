@@ -5,7 +5,13 @@ import { create } from 'zustand'
 import type { EnrichedCapture } from '../lib/enriched-capture/enrich'
 import type { CompareRefusal } from '../lib/point-ask/compare'
 import { createPin, type PinEvent, type PinModel, reducePin } from '../lib/point-ask/pin-machine'
-import type { PointTarget, Rect, ScreenPoint, WorldFootprint } from '../lib/point-ask/types'
+import type {
+  PointTarget,
+  PointViewport,
+  Rect,
+  ScreenPoint,
+  WorldFootprint,
+} from '../lib/point-ask/types'
 
 // Point and ask's state (the owner, 8 October). Everything the overlay draws comes from here, and
 // everything that changes per frame (positions) is derived from it, not stored in it.
@@ -26,6 +32,7 @@ export type PointHover = {
   /** The surface the pick came through when it picked its room (the "⌥ the wall" line). */
   ambiguous: boolean
   hit: PointHit
+  viewport?: PointViewport
 }
 
 export type PointCrop = {
@@ -80,6 +87,7 @@ export type PointBubble = {
    * way while the bubble is open and goes when this ask is sent. The chips offer something else.
    */
   changesAsk?: { askId: string; after: string }
+  viewport?: PointViewport
 }
 
 export type PinRecord = {
@@ -129,6 +137,8 @@ type PointAskState = {
   behindQueue: boolean
   /** The pin whose card is open (hover or focus of the pin, or its own 4 s opening). */
   cardFor: string | null
+  /** Which viewport's pin opened the card (disambiguates Split 2D+3D). */
+  cardViewport: PointViewport | null
   /** The rectangle being dragged or just released. */
   region: RegionState | null
   /** The ask whose "before" is on screen while a compare control is held, or null. */
@@ -156,7 +166,7 @@ type PointAskState = {
   setPlayful: (playful: boolean) => void
   setBusy: (busy: boolean) => void
   setBehindQueue: (behindQueue: boolean) => void
-  openCard: (askId: string | null) => void
+  openCard: (askId: string | null, viewport?: PointViewport | null) => void
 }
 
 export const usePointAsk = create<PointAskState>((set) => ({
@@ -173,6 +183,7 @@ export const usePointAsk = create<PointAskState>((set) => ({
   busy: false,
   behindQueue: false,
   cardFor: null,
+  cardViewport: null,
   closeKind: 'dismiss',
   region: null,
   comparing: null,
@@ -243,13 +254,20 @@ export const usePointAsk = create<PointAskState>((set) => ({
         pins,
         pinOrder: state.pinOrder.filter((id) => id !== askId),
         cardFor: state.cardFor === askId ? null : state.cardFor,
+        cardViewport: state.cardFor === askId ? null : state.cardViewport,
       }
     }),
   setPlayful: (playful) => set((state) => (state.playful === playful ? state : { playful })),
   setBusy: (busy) => set((state) => (state.busy === busy ? state : { busy })),
   setBehindQueue: (behindQueue) =>
     set((state) => (state.behindQueue === behindQueue ? state : { behindQueue })),
-  openCard: (askId) => set((state) => (state.cardFor === askId ? state : { cardFor: askId })),
+  openCard: (askId, viewport = null) =>
+    set((state) => {
+      const nextViewport = askId ? (viewport ?? null) : null
+      return state.cardFor === askId && state.cardViewport === nextViewport
+        ? state
+        : { cardFor: askId, cardViewport: nextViewport }
+    }),
 }))
 
 /** Whether a new ask waits its turn: a turn runs, or messages already wait in the queue. */

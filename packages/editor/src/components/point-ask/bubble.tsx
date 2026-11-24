@@ -16,7 +16,13 @@ import {
 import { type Dictation, isDictationSupported, startDictation } from '../../lib/point-ask/dictation'
 import { subscribeFrame } from '../../lib/point-ask/frame-loop'
 import { type PlacementState, placeBubble } from '../../lib/point-ask/placement'
-import { freeViewport, projectBox, projectWorld, unionRect } from '../../lib/point-ask/projector'
+import {
+  freeViewportIn,
+  preferredPointViewport,
+  projectBoxIn,
+  projectWorldIn,
+  unionRect,
+} from '../../lib/point-ask/projector'
 import { regionLabel } from '../../lib/point-ask/region'
 import { closeBubble, sendBubble } from '../../lib/point-ask/session'
 import { SpringPair } from '../../lib/point-ask/spring'
@@ -162,14 +168,15 @@ function BubbleView({
       const current = bubbleRef.current
       const wrapEl = wrap.current
       const bubEl = bub.current
-      const viewport = freeViewport()
+      const vp = current.viewport ?? preferredPointViewport() ?? '3d'
+      const viewport = freeViewportIn(vp)
       if (!(wrapEl && bubEl && viewport)) return
       const area = current.area
       const click = area
         ? { x: area.click.x, y: area.click.y, ok: true }
-        : projectWorld(current.anchor)
+        : projectWorldIn(current.anchor, vp)
       const boxes = current.targets
-        .flatMap((t) => (t.box ? [projectBox(t.box)] : []))
+        .flatMap((t) => (t.box ? [projectBoxIn(t.box, vp)] : []))
         .flatMap((r) => (r ? [r] : []))
       const box = area?.rect ??
         unionRect(boxes) ?? { x0: click.x, y0: click.y, x1: click.x, y1: click.y }

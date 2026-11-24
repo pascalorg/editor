@@ -149,6 +149,7 @@ import { SelectionManager } from './selection-manager'
 import { SiteEdgeLabels } from './site-edge-labels'
 import { SlabHoleHighlights } from './slab-hole-highlights'
 import { SnapshotCaptureOverlay } from './snapshot-capture-overlay'
+import { EditorThreeContextBridge } from './three-context-bridge'
 import { type SnapshotCameraData, ThumbnailGenerator } from './thumbnail-generator'
 import { VectorEdgeExtractor } from './vector-edge-extractor'
 import { HostView } from './views/host-view'
@@ -1001,6 +1002,7 @@ const ViewerSceneContent = memo(function ViewerSceneContent({
       {isFirstPersonMode && <FirstPersonControls />}
       {isCaptureMode && !isXRMode && <CaptureCameraRig />}
       {!isXRMode && <CustomCameraControls sceneReady={!isLoading} />}
+      <EditorThreeContextBridge />
       {!isXRMode && <FollowPascal />}
       {!isXRMode && <ThumbnailGenerator onThumbnailCapture={onThumbnailCapture} />}
       {!isXRMode && <VectorEdgeExtractor />}
@@ -1355,6 +1357,12 @@ const ViewerCanvas = memo(function ViewerCanvas({
         {sceneDataPending ? <SceneDataPendingNotice /> : null}
         <QuickMeasurementHud />
         <DeleteConfirmationDialog />
+        {!isVersionPreviewMode && (
+          <PointAskLayer
+            enrichedRegions={pointAsk?.enrichedRegions}
+            freeClick={pointAsk?.freeClick}
+          />
+        )}
         <div
           className="absolute inset-0 grid"
           data-view-split={layout.split || undefined}
@@ -1399,12 +1407,6 @@ const ViewerCanvas = memo(function ViewerCanvas({
                 containerRef={viewer3dRef}
                 isVersionPreviewMode={isVersionPreviewMode}
               />
-              {!isVersionPreviewMode && (
-                <PointAskLayer
-                  enrichedRegions={pointAsk?.enrichedRegions}
-                  freeClick={pointAsk?.freeClick}
-                />
-              )}
               {!showLoader && isCameraControlsHintVisible && !isFirstPersonMode ? (
                 <ViewerCanvasControlsHint
                   belowTopMenu={hintBelowTopMenu}
