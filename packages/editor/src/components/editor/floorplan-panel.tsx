@@ -7400,6 +7400,7 @@ export function FloorplanPanel({
     return 0
   }, [levelId, movingNode])
   const floorplanGridWorldY = buildingPosition[1] + floorplanGridLocalY
+  const suppressSelfApplyPoseRef = useRef(false)
   const publishFloorplanNavigationPose = useCallback(
     (localCenter: SvgPoint, userRotationDeg: number, viewWidth?: number) => {
       const currentViewport = latestViewportRef.current ?? latestFittedViewportRef.current
@@ -7415,12 +7416,17 @@ export function FloorplanPanel({
       )
       const targetY = latestNavigationSyncPoseRef.current?.target[1] ?? floorplanGridWorldY
 
-      publishNavigationSyncPose({
-        source: '2d',
-        target: [worldCenter.x, targetY, worldCenter.z],
-        azimuth: cameraAzimuthFromFloorplanRotation(userRotationDeg),
-        viewWidth: resolvedViewWidth,
-      })
+      suppressSelfApplyPoseRef.current = true
+      try {
+        publishNavigationSyncPose({
+          source: '2d',
+          target: [worldCenter.x, targetY, worldCenter.z],
+          azimuth: cameraAzimuthFromFloorplanRotation(userRotationDeg),
+          viewWidth: resolvedViewWidth,
+        })
+      } finally {
+        suppressSelfApplyPoseRef.current = false
+      }
     },
     [buildingPosition, buildingRotationY, floorplanGridWorldY],
   )
@@ -7428,6 +7434,7 @@ export function FloorplanPanel({
   const [pendingApplyPose, setPendingApplyPose] = useState<CameraPose | null>(null)
   useEffect(() => {
     const applyPose = (pose: CameraPose) => {
+      if (suppressSelfApplyPoseRef.current) return
       const editor = useEditor.getState()
       if (
         !editor.isFirstPersonMode &&
@@ -7499,12 +7506,17 @@ export function FloorplanPanel({
       const northAzimuth = cameraAzimuthFromFloorplanRotation(
         nearestEquivalentDegrees(0, currentRotation),
       )
-      publishNavigationSyncPose({
-        source: '2d',
-        target: [...pose.target],
-        azimuth: northAzimuth,
-        viewWidth: pose.viewWidth,
-      })
+      suppressSelfApplyPoseRef.current = true
+      try {
+        publishNavigationSyncPose({
+          source: '2d',
+          target: [...pose.target],
+          azimuth: northAzimuth,
+          viewWidth: pose.viewWidth,
+        })
+      } finally {
+        suppressSelfApplyPoseRef.current = false
+      }
       return
     }
 
