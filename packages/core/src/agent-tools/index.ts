@@ -15,6 +15,7 @@ import { addFenceTool } from './fences'
 import { findByTypeTool } from './find-by-type'
 import { setFinishScriptTool } from './finish-script'
 import { furnishRoomTool } from './furnish-room'
+import { addHedgeTool } from './hedge'
 import {
   addLevelTool,
   duplicateLevelTool,
@@ -30,11 +31,15 @@ import { deleteNodeTool, getNodeTool } from './nodes'
 import { paintTool } from './paint'
 import { placeInRoomTool } from './place-in-room'
 import { placeItemsTool } from './place-items'
+import { addPlantingTool } from './planting'
+import { addRockTool } from './rock'
 import { createRoofTool, moveRoofsToRoofLevelTool } from './roofs'
 import { ROOM_TOOL_CONTRACTS } from './room-structure'
 import { searchMaterialsTool } from './search-materials'
 import { getSiteTool, placeBuildingTool } from './site'
+import { addSiteSurfaceTool, addStepsTool } from './site-works'
 import { createStairTool, fitStairTool, measureStairTool } from './stairs'
+import { addTreeTool } from './tree'
 import { UNIT_TOOL_CONTRACTS } from './units'
 import { verifySceneTool } from './verify-scene'
 import { viewSceneTool } from './view-scene'
@@ -55,6 +60,7 @@ export * from './fences'
 export * from './find-by-type'
 export * from './finish-script'
 export * from './furnish-room'
+export * from './hedge'
 export * from './hosted-services'
 export * from './levels'
 export * from './measurement'
@@ -65,15 +71,19 @@ export * from './nodes'
 export * from './notation-inventory'
 export * from './paint'
 export * from './place-items'
+export * from './planting'
 export * from './project-files'
 export * from './refusal'
 export * from './retired'
+export * from './rock'
 export * from './roofs'
 export * from './room-structure'
 export * from './search-materials'
 export * from './site'
+export * from './site-works'
 export { CATALOG_SOURCE, OTHER_SOURCES, OUTSIDE_SOURCES } from './sources'
 export * from './stairs'
+export * from './tree'
 export * from './units'
 export * from './verify-scene'
 export * from './view-scene'
@@ -107,6 +117,12 @@ export const AGENT_TOOL_CONTRACTS = [
   addWallTool,
   setWallTypeTool,
   addFenceTool,
+  addHedgeTool,
+  addPlantingTool,
+  addTreeTool,
+  addRockTool,
+  addSiteSurfaceTool,
+  addStepsTool,
   addCornerWindowTool,
   mergeWindowsTool,
   addLevelTool,

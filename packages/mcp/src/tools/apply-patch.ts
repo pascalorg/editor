@@ -23,6 +23,7 @@ export const applyPatchOutput = {
   createdIds: z.array(z.string()),
   /** What the server changed in the patch before writing it, one line each. */
   notes: z.array(z.string()).optional(),
+  lawnFacts: z.array(z.looseObject({ lawnId: z.string() })).optional(),
   ...liveSyncOutput,
 }
 
@@ -64,7 +65,7 @@ export function registerApplyPatch(server: McpServer, bridge: SceneOperations): 
         const notes = runPatchGuards(bridgePatches, bridge.getNodes() as Record<string, AnyNode>)
         const planDeletion = (bridge as { planDeletion?: SceneOperations['planDeletion'] })
           .planDeletion
-        assertPatchKeepsIdentity(
+        const lawnFacts = assertPatchKeepsIdentity(
           bridgePatches,
           bridge.getNodes(),
           bridge.getRootNodeIds(),
@@ -77,6 +78,7 @@ export function registerApplyPatch(server: McpServer, bridge: SceneOperations): 
           deletedIds: result.deletedIds as unknown as string[],
           createdIds: result.createdIds as unknown as string[],
           ...(notes.length ? { notes } : {}),
+          ...(lawnFacts.length ? { lawnFacts } : {}),
           ...persistencePayload(persistence),
         }
         return {

@@ -251,6 +251,10 @@ export function installMountedScene(options: MountedSceneOptions = {}): MountedS
   })
   afterEach(async () => {
     for (const renderer of [...mounted]) await renderer.unmount()
+    // Finish delayed interaction resets before replacing the virtual timer queue.
+    await act(async () => {
+      jest.runOnlyPendingTimers()
+    })
     restore()
   })
 

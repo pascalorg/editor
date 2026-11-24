@@ -27,6 +27,7 @@ import { PLACE_ITEMS_CASES } from './place-items-cases'
 import { FIND_BY_TYPE_CASES } from './find-by-type-cases'
 import { FINISH_CASES } from './finish-cases'
 import { LOT_INFO_CASES } from './lot-info-cases'
+import { LAWN_CASES } from './lawn-cases'
 import { CREATE_ROOF_CASES, MOVE_ROOFS_CASES } from './roof-cases'
 import { OUTDOOR_ROOM_READ_CASES, ROOM_CASES } from './room-cases'
 import { CHECK_ROOMS_CASES, VALIDATE_SCENE_CASES } from './scene-check-cases'
@@ -993,6 +994,7 @@ export const AGENT_TOOL_CASES: readonly AgentToolCase[] = [
   ...MERGE_WINDOWS_CASES,
   ...GET_SITE_CASES,
   ...LOT_INFO_CASES,
+  ...LAWN_CASES,
   ...PLACE_BUILDING_CASES,
   ...SITE_LINE_CASES,
   ...SITE_VERIFY_CASES,

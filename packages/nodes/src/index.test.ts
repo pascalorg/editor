@@ -66,8 +66,8 @@ describe('builtinPlugin', () => {
     expect(plugin.apiVersion).toBe(1)
     await loadPlugin(plugin)
     const kinds = plugin.nodes!.map((definition) => definition.kind)
-    expect(kinds).toHaveLength(56)
-    expect(new Set(kinds).size).toBe(56)
+    expect(kinds).toHaveLength(61)
+    expect(new Set(kinds).size).toBe(61)
     expect([...nodeRegistry.entries()].map(([kind]) => kind).sort()).toEqual(
       AnyNode.options.map(nodeKindOf).sort(),
     )
@@ -220,7 +220,17 @@ test.each([
     const { familyForNode } = await import('@pascal-app/viewer')
     const restore = nodeRegistry._snapshot()
     const taxonomy: Record<string, string[]> = {
-      site: ['site', 'fence', 'fence-gate', 'fence-opening'],
+      site: [
+        'site',
+        'fence',
+        'fence-gate',
+        'fence-opening',
+        'hedge',
+        'planting',
+        'rock',
+        'tree',
+        'lawn',
+      ],
       floors: ['slab'],
       walls: ['wall'],
       structure: ['beam', 'column', 'block'],

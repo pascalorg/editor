@@ -212,6 +212,7 @@ export {
   computeCeilingSurfaceCells,
   parseCeilingRegionRole,
 } from './lib/ceiling-surface'
+export { linearColor, type Rgb } from './lib/color-rgb'
 export { cornerPair, fusesAtCorner } from './lib/corner-pair'
 export {
   type CornerBlock,
@@ -280,6 +281,7 @@ export {
   isOperationDoorType,
   SECTIONAL_GARAGE_RENDER_OPEN_SCALE,
 } from './lib/door-operation'
+export { triangulatePlanPolygon } from './lib/earcut'
 export {
   resolveElevatorNodeSupportY,
   resolveElevatorSupportLevelId,
@@ -405,6 +407,13 @@ export {
 export { type LevelGradeStanding, levelGradeStanding } from './lib/grade-standing'
 export { type GroundLevel, groundLevelOf, levelUnderNamedGround } from './lib/ground-level'
 export {
+  FLAT_GROUND,
+  type GroundRead,
+  groundReadOf,
+  resolveSiteGround,
+  SITE_GROUND_DEPENDENCY_TYPES,
+} from './lib/ground-read'
+export {
   GROUND_SEAT_TOLERANCE,
   type GroundSeat,
   gradeUnderLevel,
@@ -417,7 +426,64 @@ export {
   levelStackGroundBox,
   terrainBetweenEyeAndBox,
 } from './lib/ground-window'
+export {
+  estimateHedge,
+  HEDGE_CHUNK_ROWS,
+  type HedgePlan,
+  hedgeBudgetOf,
+  hedgeColumnsOf,
+  planHedge,
+} from './lib/hedge-build'
+export { type HedgeFacts, hedgeFacts } from './lib/hedge-facts'
+export {
+  HEDGE_MAX_TRIANGLES,
+  type HedgeEstimate,
+  type HedgeFormInput,
+  type HedgeMesh,
+} from './lib/hedge-form'
+export {
+  HEDGE_EMBED,
+  type HedgeFootRun,
+  type HedgeFootStation,
+  hedgeGroundRange,
+  standHedgeLine,
+} from './lib/hedge-ground'
+export {
+  HEDGE_MAX_STATIONS,
+  type HedgeGapFact,
+  type HedgeLine,
+  type HedgeLineInput,
+  type HedgeRun,
+  type HedgeStation,
+  hedgeBands,
+  hedgeCentreline,
+  hedgeEndScale,
+  hedgeLateral,
+  hedgeLine,
+  hedgeNormal,
+} from './lib/hedge-line'
 export { hierarchyCycleErrors, wouldCreateHierarchyCycle } from './lib/hierarchy'
+export {
+  buildLawn,
+  buildLawnChunk,
+  buildLawnChunkFlowers,
+  LAWN_CHUNK_M,
+  type LawnBuild,
+  LawnBuildError,
+  type LawnChunk,
+  type LawnChunkBuild,
+  type LawnChunkContext,
+  type LawnFacts,
+  type LawnMesh,
+  type LawnPlan,
+  type LawnPlanMemo,
+  lawnChunkContext,
+  lawnChunksTouched,
+  lawnFacts,
+  lawnGroundChunkAt,
+  planLawn,
+  sampleLawnStrokes,
+} from './lib/lawn'
 export {
   type ExposedInterval,
   exposedIntervals,
@@ -493,6 +559,51 @@ export {
   PORCH_FLOOR_DROP,
 } from './lib/outdoor-room'
 export {
+  type BodyCount,
+  estimatePlanting,
+  type PlantingPlan,
+  planPlanting,
+  plantingBodyCount,
+  plantingBudgetOf,
+  plantingDetailCount,
+} from './lib/planting-build'
+export { type PlantingFacts, plantingFacts } from './lib/planting-facts'
+export {
+  PLANTING_CHUNK_PLANTS,
+  PLANTING_MAX_TRIANGLES,
+  type PlantingEstimate,
+  type PlantingFormInput,
+  type PlantingMesh,
+} from './lib/planting-form'
+export {
+  plantingGroundGeometry,
+  plantingGroundLift,
+  plantingSurfaceHeight,
+} from './lib/planting-ground'
+export {
+  type PlantingPoint,
+  plantingArea,
+  plantingAreaOutline,
+  plantingBounds,
+  plantingCentroid,
+  plantingContains,
+  plantingEdgeDistance,
+  plantingOrganicOutline,
+  plantingOutlineProblem,
+  plantingSimple,
+} from './lib/planting-outline'
+export {
+  type PlantingAccept,
+  type PlantingPlacement,
+  plantingSeenDepth,
+  scatterPlanting,
+} from './lib/planting-scatter'
+export {
+  PLANTING_SCENE_DEPENDENCY_TYPES,
+  resolvePlantingAccept,
+  resolvePlantingGround,
+} from './lib/planting-scene'
+export {
   classifyPlateSideAt,
   clearPlateSurfaceCaches,
   computePlateSurfacePartition,
@@ -559,6 +670,32 @@ export {
   porchFramingSettings,
 } from './lib/porch-framing'
 export { type PorchPartMetadata, porchPartOf } from './lib/porch-framing-sync'
+export { buildRock, planRock, type RockPlan } from './lib/rock-build'
+export { rockHolesIn, rockSlabHoles, rocksOf } from './lib/rock-cuts'
+export { type RockFacts, rockFacts } from './lib/rock-facts'
+export { rockFootprint } from './lib/rock-footprint'
+export {
+  ROCK_MAX_FAR_TRIANGLES,
+  ROCK_MAX_NEAR_TRIANGLES,
+  ROCK_MAX_TRIANGLES,
+  type RockEstimate,
+  type RockForm,
+  type RockFormInput,
+  type RockLevel,
+  type RockLevelEstimate,
+  type RockMesh,
+  type RockShapeInput,
+} from './lib/rock-form'
+export { rockSections } from './lib/rock-form-builder'
+export {
+  highestGroundUnder,
+  lowestGroundUnder,
+  ROCK_EMBED,
+  type RockSpan,
+  rockSpan,
+} from './lib/rock-ground'
+export { effectiveBuilding, effectiveRock } from './lib/rock-live'
+export { outlineProblem, rockCentre } from './lib/rock-outline'
 export {
   type EavePoint,
   eaveContains,
@@ -615,6 +752,7 @@ export {
   RoomTopologyIndex,
   type TopologyRoom,
 } from './lib/room-topology-index'
+export { fractalNoise3, hash3, hashSeed, randomStream, valueNoise3 } from './lib/seeded-noise'
 export { resolveSelectionProxyId, selectionProxyIdFromMetadata } from './lib/selection-proxy'
 export {
   arcRuns,
@@ -770,6 +908,24 @@ export {
   SITE_DATUM_Y,
   terrainSupportLift,
 } from './lib/terrain-support'
+export { type TreeFacts, treeFacts } from './lib/tree-facts'
+export {
+  defaultTreeSpread,
+  resolveTreeParameters,
+  TREE_FAR_MAX_TRIANGLES,
+  TREE_FORMS,
+  TREE_HABITS,
+  TREE_MAX_TRIANGLES,
+  type TreeBranch,
+  type TreeEstimate,
+  type TreeForm,
+  type TreeInput,
+  type TreeMesh,
+  type TreeParameters,
+  type TreeShoot,
+  type TreeSkeleton,
+} from './lib/tree-form'
+export { resolveTreeGround } from './lib/tree-scene'
 export {
   deriveUnit,
   type UnitDerivation,

@@ -16,7 +16,13 @@ const policy = (
 export const EXPECTED_OPENAI_TOOL_ANNOTATIONS = {
   add_door: policy(false, false, false),
   add_fence: policy(false, false, false),
+  add_hedge: policy(false, true, false),
   add_level: policy(false, false, false),
+  add_planting: policy(false, true, false),
+  add_rock: policy(false, true, false),
+  add_site_surface: policy(false, false, false),
+  add_steps: policy(false, false, false),
+  add_tree: policy(false, false, false),
   add_wall: policy(false, false, false),
   set_wall_type: policy(false, true, false),
   add_corner_window: policy(false, false, false),

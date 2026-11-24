@@ -91,6 +91,13 @@ type DragState = {
   initialPosition: [number, number]
   initialPolygon: Array<[number, number]>
   pointerId: number
+  /**
+   * From the ground point under the pointer at the press to the point grabbed
+   * (a corner, or the outline's centre). A handle stands above the ground the
+   * pointer is measured on, so those two differ; the drag keeps the difference
+   * instead of throwing the corner onto the ground point behind the handle.
+   */
+  grabOffset?: [number, number]
 }
 
 export type PolygonEditorPlanPointSnapContext = {
@@ -578,10 +585,25 @@ export const PolygonEditor: React.FC<PolygonEditorProps> = ({
 
   useEffect(() => () => onDragStateChangeRef.current?.(false), [])
 
+  // The ground point last reported under the pointer, unsnapped (plan metres).
+  const lastPointerPointRef = useRef<[number, number] | null>(null)
+
   const startDrag = useCallback((nextDragState: DragState) => {
     previousInputDraggingRef.current = useViewer.getState().inputDragging
     useViewer.getState().setInputDragging(true)
-    setDragState(nextDragState)
+    // An edge drag already works from the pointer's own travel.
+    const pointer = nextDragState.mode === 'edge' ? null : lastPointerPointRef.current
+    setDragState(
+      pointer
+        ? {
+            ...nextDragState,
+            grabOffset: [
+              nextDragState.initialPosition[0] - pointer[0],
+              nextDragState.initialPosition[1] - pointer[1],
+            ],
+          }
+        : nextDragState,
+    )
     onDragStartRef.current?.()
   }, [])
 
@@ -798,7 +820,13 @@ export const PolygonEditor: React.FC<PolygonEditorProps> = ({
   useEffect(() => {
     const onGridMove = (event: GridEvent) => {
       const point = levelNode ? event.localPosition : event.position
-      const rawPoint: [number, number] = [point[0], point[2]]
+      const pointerPoint: [number, number] = [point[0], point[2]]
+      lastPointerPointRef.current = pointerPoint
+      // What is dragged goes where the pointer went since the press, from where it was grabbed.
+      const grabOffset = dragState?.isDragging ? dragState.grabOffset : undefined
+      const rawPoint: [number, number] = grabOffset
+        ? [pointerPoint[0] + grabOffset[0], pointerPoint[1] + grabOffset[1]]
+        : pointerPoint
       // Snapping follows the active mode (snapToHalf returns raw in Off / non-grid);
       // no Shift bypass — Shift cycles the mode, Off is the bypass.
       const gridPoint: [number, number] = [snapToHalf(rawPoint[0]), snapToHalf(rawPoint[1])]

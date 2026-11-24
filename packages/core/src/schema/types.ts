@@ -23,9 +23,11 @@ import { FenceGateNode, FenceOpeningNode } from './nodes/fence-feature'
 import { FloorOpeningNode } from './nodes/floor-opening'
 import { GuideNode } from './nodes/guide'
 import { GutterNode } from './nodes/gutter'
+import { HedgeNode } from './nodes/hedge'
 import { HvacEquipmentNode } from './nodes/hvac-equipment'
 import { ImportedMeshNode } from './nodes/imported-mesh'
 import { ItemNode } from './nodes/item'
+import { LawnNode } from './nodes/lawn'
 import { LeanToExtensionNode } from './nodes/lean-to-extension'
 import { LevelNode } from './nodes/level'
 import { LinesetNode } from './nodes/lineset'
@@ -34,7 +36,9 @@ import { MeasurementNode } from './nodes/measurement'
 import { PipeFittingNode } from './nodes/pipe-fitting'
 import { PipeSegmentNode } from './nodes/pipe-segment'
 import { PipeTrapNode } from './nodes/pipe-trap'
+import { PlantingNode } from './nodes/planting'
 import { RidgeVentNode } from './nodes/ridge-vent'
+import { RockNode } from './nodes/rock'
 import { RoofNode } from './nodes/roof'
 import { RoofSegmentNode } from './nodes/roof-segment'
 import { ScanNode } from './nodes/scan'
@@ -48,6 +52,7 @@ import { SpawnNode } from './nodes/spawn'
 import { StairNode } from './nodes/stair'
 import { StairSegmentNode } from './nodes/stair-segment'
 import { StructuralGridNode } from './nodes/structural-grid'
+import { TreeNode } from './nodes/tree'
 import { TurbineVentNode } from './nodes/turbine-vent'
 import { UnitNode } from './nodes/unit'
 import { WallNode } from './nodes/wall'
@@ -113,6 +118,11 @@ export const AnyNode = nodeUnion([
   ImportedMeshNode,
   ZoneNode,
   SlabNode,
+  HedgeNode,
+  LawnNode,
+  PlantingNode,
+  TreeNode,
+  RockNode,
   CeilingNode,
   RoofNode,
   RoofSegmentNode,

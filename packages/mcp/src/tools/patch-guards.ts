@@ -1,4 +1,5 @@
 import {
+  type LawnFacts,
   type NodeDeletionPlan,
   type NodeDeletionScene,
   nodeRegistry,
@@ -8,9 +9,11 @@ import {
   wouldCreateHierarchyCycle,
 } from '@pascal-app/core'
 import {
+  lawnPatchFacts,
   scriptedFieldRefusal,
   unknownMaterialPresetRefusal,
 } from '@pascal-app/core/agent-operations'
+import { isAgentRefusal } from '@pascal-app/core/agent-tools'
 import { AnyNode, type AnyNodeId, nodeKindOf, parseNode } from '@pascal-app/core/schema'
 import type { Patch } from '../bridge/scene-bridge'
 
@@ -31,6 +34,14 @@ export type PatchRefusalCode =
   | 'roof_level'
   | 'roof_level_holds_storey'
   | 'roof_level_on_top'
+  | 'invalid_input'
+  | 'no_site'
+  | 'ambiguous_site'
+  | 'lawn_work_budget'
+  | 'lawn_empty'
+  | 'lawn_terrain_budget'
+
+export type LawnPatchFacts = LawnFacts & { lawnId: string }
 
 /**
  * A check apply_patch runs over the whole patch before applying it, registered by the module that
@@ -163,10 +174,11 @@ export function assertPatchKeepsIdentity(
   nodes: Readonly<Record<string, AnyNode>>,
   rootNodeIds: readonly AnyNodeId[],
   planDeletion?: (scene: NodeDeletionScene, ids: AnyNodeId[]) => NodeDeletionPlan,
-): void {
+): LawnPatchFacts[] {
   // What the patch writes, over the scene; the whole scene is copied only for a preview that reads
   // all of it (deletes, gutter refreshes, a reparent), so an edit reads only the ids it names.
   const written = new Map<string, AnyNode>()
+  const lawns = new Map<string, number>()
   let whole: NodeDeletionScene | null = null
   const scene = (): NodeDeletionScene => {
     if (!whole) {
@@ -223,9 +235,10 @@ export function assertPatchKeepsIdentity(
 
   patches.forEach((patch, index) => {
     if (patch.op === 'create') {
-      // Parse like the store does, so defaults such as an empty `children`
-      // list exist for later ops in the patch; the bridge reports schema errors.
+      // Keep parsed defaults, especially a minted id, on the patch the bridge applies.
+      // Invalid creates stay raw so the bridge reports their schema errors.
       const parsed = parseNode(patch.node)
+      if (parsed.success) patch.node = parsed.data
       const node = (parsed.success ? parsed.data : patch.node) as AnyNode & { id?: unknown }
       if (typeof node?.id !== 'string') return
       const preset = unknownMaterialPresetRefusal(node as Record<string, unknown>)
@@ -258,6 +271,7 @@ export function assertPatchKeepsIdentity(
         )
       }
       put({ ...node, parentId } as AnyNode)
+      if (node.type === 'lawn') lawns.set(node.id, index)
       const parent = parentId ? at(parentId) : undefined
       if (parent) put(withChild(parent, node.id))
       return
@@ -296,6 +310,7 @@ export function assertPatchKeepsIdentity(
       const preset = unknownMaterialPresetRefusal(data, current as Record<string, unknown>)
       if (preset) throw new PatchRefusedError('invalid_update', index, patch.id, preset)
       const merged = { ...current, ...data } as AnyNode
+      if (current.type === 'lawn') lawns.set(current.id, index)
       const issuesAfter = schemaIssues(merged as Record<string, unknown>)
       if (issuesAfter && issuesAfter.size > 0) {
         const issuesBefore = schemaIssues(current as Record<string, unknown>) ?? new Set<string>()
@@ -361,6 +376,18 @@ export function assertPatchKeepsIdentity(
       // call, and wall merges and kind cascades depend on the whole id list,
       // so plan the run together once it ends.
       if (patches[index + 1]?.op !== 'delete') flushDeletes(index)
+    }
+  })
+  // Read the final dry-run scene: a later op may add/remove the paving a brushed lawn clears.
+  return [...lawns].flatMap(([id, index]) => {
+    const node = at(id)
+    if (!node) return []
+    try {
+      const facts = lawnPatchFacts(node, {}, scene().nodes)
+      return facts ? [{ lawnId: id, ...facts }] : []
+    } catch (error) {
+      if (!isAgentRefusal(error)) throw error
+      throw new PatchRefusedError(error.code as PatchRefusalCode, index, id, error.message)
     }
   })
 }

@@ -49,6 +49,7 @@ describe('what is seen from outside', () => {
     'fence-gate',
     'fence-opening',
     'site',
+    'lawn',
   ])('%s always stands outdoors', (kind) => {
     expect(capabilitiesOf(kind)?.exterior).toBe(true)
   })

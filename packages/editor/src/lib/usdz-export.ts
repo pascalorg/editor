@@ -23,12 +23,17 @@ export async function exportSceneToUsdz(
   options: UsdzExportOptions = {},
 ): Promise<Uint8Array<ArrayBuffer>> {
   const textureUtils = createExportTextureUtils()
-  const preparation = preparePortableSceneFromViewer(sceneGroup, nodes, {
-    ...options,
-    textures: 'embed',
-    animations: 'none',
-    textureUtils,
-  })
+  const preparation = preparePortableSceneFromViewer(
+    sceneGroup,
+    nodes,
+    {
+      ...options,
+      textures: 'embed',
+      animations: 'none',
+      textureUtils,
+    },
+    'usdz',
+  )
   // Assigned inside the raced closure, so plain `let`s narrow to `never` in
   // the `finally`.
   const run: { prepared: GlbExport | null; scene: Object3D | null; abandoned: boolean } = {

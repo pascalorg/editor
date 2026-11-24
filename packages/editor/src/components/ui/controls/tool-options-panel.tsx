@@ -1,6 +1,6 @@
 'use client'
 
-import { nodeRegistry, type ToolOption } from '@pascal-app/core'
+import { type MessageDescriptor, nodeRegistry, type ToolOption, usePascalI18n } from '@pascal-app/core'
 import Image from 'next/image'
 import { useSyncExternalStore } from 'react'
 import { cn } from '../../../lib/utils'
@@ -22,6 +22,9 @@ function ToolOptionRow({
   getChoiceThumbnail?: (option: ToolOption, value: string) => string | undefined
   active?: boolean
 }) {
+  const i18n = usePascalI18n()
+  const text = (entry: string | MessageDescriptor) =>
+    typeof entry === 'string' ? entry : i18n._(entry)
   const visibility = option.visible ?? ALWAYS_VISIBLE
   const visible = useSyncExternalStore(visibility.subscribe, visibility.value, visibility.value)
   const value = useSyncExternalStore(option.subscribe, option.value, option.value)
@@ -33,12 +36,12 @@ function ToolOptionRow({
   const activeChoice = active && option.choices.find((choice) => choice.value === value)
   return (
     <div className="flex flex-col gap-2">
-      <div className="px-0.5 font-medium text-muted-foreground text-xs">{option.label}</div>
+      <div className="px-0.5 font-medium text-muted-foreground text-xs">{text(option.label)}</div>
       {option.input ? (
         <label className="flex items-center gap-2 rounded-lg border border-border px-2 py-1.5">
           <input
             key={value}
-            aria-label={option.label}
+            aria-label={text(option.label)}
             className="min-w-0 flex-1 bg-transparent text-xs outline-none focus-visible:ring-2 focus-visible:ring-ring"
             type="number"
             defaultValue={value}
@@ -102,7 +105,7 @@ function ToolOptionRow({
                     width={56}
                   />
                 )}
-                {choice.label}
+                {text(choice.label)}
               </button>
             )
           })}
@@ -110,7 +113,7 @@ function ToolOptionRow({
       )}
       {activeChoice && activeChoice.description ? (
         <p className="px-0.5 text-[11px] text-muted-foreground leading-relaxed">
-          {activeChoice.description}
+          {text(activeChoice.description)}
         </p>
       ) : null}
     </div>

@@ -1,6 +1,7 @@
 import type { ComponentType } from 'react'
 import type { AnimationClip, BufferGeometry, Object3D, Ray } from 'three'
 import type { ZodObject, z } from 'zod'
+import type { MessageDescriptor } from '../i18n'
 import type { CutIntent } from '../schema/cut'
 import type { MaterialSchema, MaterialTarget } from '../schema/material'
 import type { AssetInput, ItemNode } from '../schema/nodes/item'
@@ -80,8 +81,8 @@ export type GeometryContext = {
   materials?: Record<SceneMaterialId, SceneMaterial>
   /** Opaque host/plugin context. Core never interprets extension values. */
   extensions?: Readonly<Record<string, unknown>>
-  /** Read-only scene snapshot for pure floor-plan builders that need to
-   *  inspect cross-kind spatial relationships such as connected ports. */
+  /** Read-only scene snapshot for pure floor-plan and export builders that need to
+   *  inspect cross-kind spatial relationships such as connected ports or terrain. */
   sceneNodes?: Readonly<Record<AnyNodeId, AnyNode>>
   /**
    * Optional view state — only populated for `def.floorplan` builders. The
@@ -415,16 +416,16 @@ export type ToolOptionChoice = {
   /** Value token, e.g. 'draw'. */
   value: string
   /** Button label. Sentence case. */
-  label: string
+  label: string | MessageDescriptor
   /** Helper line shown under the row while this choice is active. */
-  description?: string
+  description?: string | MessageDescriptor
 }
 
 export type ToolOption = {
   /** Stable row id within the kind, e.g. 'footprintSource'. */
   id: string
   /** Row label. Sentence case, e.g. 'Create from'. */
-  label: string
+  label: string | MessageDescriptor
   choices: readonly ToolOptionChoice[]
   /** Optional exact numeric entry instead of choice buttons. */
   input?: { min?: number; max?: number; step?: number; unit?: string }
@@ -1314,6 +1315,12 @@ export type NodeDefinition<S extends ZodObject<any>> = {
    */
   floorplanScope?: FloorplanScope
   /**
+   * Opt site-scoped floor-plan geometry into automatic site-plan document
+   * contributions. Defaults to off; omit when a plugin registers its own
+   * site-plan contributor so the same geometry is not contributed twice.
+   */
+  readonly sitePlan?: boolean
+  /**
    * Levels other than its own whose plans also draw this node: a stair that
    * climbs to an upper floor shows on that floor's plan too. The plan builds
    * it with `ctx.parent` set to the drawn level.
@@ -1619,6 +1626,8 @@ export type Presentation = {
   description?: string
   /** Icon for palette buttons and tree views. */
   icon: IconRef
+  /** Show this kind's registry icon in the canvas/plan placement cursor bubble. */
+  cursorIcon?: boolean
   /** Tool palette section. Defaults to `category` when omitted. */
   paletteSection?: 'site' | 'structure' | 'furnish'
   /** Optional presentation-only subgroup used by palette surfaces. */

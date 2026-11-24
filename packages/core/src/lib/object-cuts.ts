@@ -1,8 +1,10 @@
 import type { GeometryContext } from '../registry/types'
-import type { AnyNode, CeilingNode, SlabNode } from '../schema'
+import type { AnyNode, CeilingNode, LevelNode, RockNode, SlabNode } from '../schema'
 import { getEffectiveNode } from '../store/use-live-node-overrides'
 import useLiveTransforms from '../store/use-live-transforms'
 import { resolveCutterHost } from './cutter-host'
+import { rockSlabHoles } from './rock-cuts'
+import { effectiveBuilding, effectiveRock } from './rock-live'
 
 type Surface = CeilingNode | SlabNode
 
@@ -21,20 +23,74 @@ export function getEffectiveCutterNode(node: AnyNode): AnyNode {
   }
 }
 
+/**
+ * What a slab needs from its Site: the building's storey construction for its height, the
+ * Site's terrain, and its rocks. Rocks cut slabs instead of climbing them.
+ */
+function rockNeighbourhood(surface: Surface, context: GeometryContext): Record<string, AnyNode> {
+  if (surface.type !== 'slab') return {}
+  const resolve = (id: string) =>
+    context.sceneNodes
+      ? context.sceneNodes[id as AnyNode['id']]
+      : context.resolve(id as AnyNode['id'])
+  const level = context.parent
+  const building = level?.parentId ? resolve(level.parentId) : undefined
+  const site = building?.parentId ? resolve(building.parentId) : undefined
+  if (building?.type !== 'building' || site?.type !== 'site') return {}
+  const rocks = site.children
+    .map(resolve)
+    .filter((node): node is RockNode => node?.type === 'rock')
+    .map((rock) => (context.sceneNodes ? rock : effectiveRock(rock)))
+  if (!rocks.length) return {}
+  const levels = building.children
+    .map(resolve)
+    .filter((node): node is LevelNode => node?.type === 'level')
+  // Upper storeys inherit lower footprint lifts. Their base slabs, room zones and
+  // boundaries must be present, not just the level records or this slab's siblings.
+  const construction = levels
+    .flatMap((storey) => storey.children.map(resolve))
+    .filter(
+      (node): node is AnyNode =>
+        node?.type === 'slab' ||
+        node?.type === 'zone' ||
+        node?.type === 'wall' ||
+        node?.type === 'separator' ||
+        node?.type === 'ceiling',
+    )
+  const zones = construction
+    .flatMap((node) => (node.type === 'slab' ? (node.zoneIds ?? []).map(resolve) : []))
+    .filter((node): node is AnyNode => node?.type === 'zone')
+  return Object.fromEntries(
+    [
+      context.sceneNodes ? building : effectiveBuilding(building),
+      site,
+      ...levels,
+      ...construction,
+      ...zones,
+      ...rocks,
+    ].map((node) => [node.id, node]),
+  )
+}
+
 /** Only the host's neighbourhood is needed; pure builders need no scene store. */
 export function cutterContextNodes(
   surface: Surface,
   context: GeometryContext,
 ): Record<string, AnyNode> {
-  const nodes: Record<string, AnyNode> = { [surface.id]: surface }
+  const nodes: Record<string, AnyNode> = {
+    ...rockNeighbourhood(surface, context),
+    [surface.id]: surface,
+  }
   const parent = context.parent
   if (parent) nodes[parent.id] = parent
   for (const id of [
     ...(parent && 'children' in parent ? parent.children : []),
     ...('children' in surface ? surface.children : []),
   ]) {
-    const node = context.resolve(id as AnyNode['id'])
-    if (node) nodes[node.id] = getEffectiveCutterNode(node)
+    const node = context.sceneNodes
+      ? context.sceneNodes[id as AnyNode['id']]
+      : context.resolve(id as AnyNode['id'])
+    if (node) nodes[node.id] = context.sceneNodes ? node : getEffectiveCutterNode(node)
   }
   return nodes
 }
@@ -68,6 +124,7 @@ export function hostedCutterHoles(
       )
     }
   }
+  if (surface.type === 'slab') holes.push(...rockSlabHoles(surface, nodes))
   return holes
 }
 

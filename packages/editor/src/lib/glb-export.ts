@@ -361,6 +361,7 @@ export async function preparePortableSceneFromViewer(
   sceneGroup: Object3D,
   nodes: Record<string, AnyNode>,
   options: GlbExportOptions = {},
+  format: 'glb' | 'usdz' = 'glb',
 ): Promise<GlbExport> {
   emitter.emit('thumbnail:before-capture', undefined)
   const restoreLevels = snapLevelsToTruePositions()
@@ -374,7 +375,7 @@ export async function preparePortableSceneFromViewer(
     restoreLevels()
     emitter.emit('thumbnail:after-capture', undefined)
   }
-  return completeSceneExportPreparation(preparation)
+  return completeSceneExportPreparation(preparation, format)
 }
 
 /** Serialise a prepared scene; callers own the deadline (see `exportSceneToGlb`). */
@@ -566,6 +567,7 @@ function resolveNormalMapDecompressor(options: GlbExportOptions): {
 
 async function completeSceneExportPreparation(
   preparation: SceneExportPreparation,
+  format: 'glb' | 'usdz' = 'glb',
 ): Promise<GlbExport> {
   const decompressor = resolveNormalMapDecompressor(preparation.options)
   try {
@@ -575,6 +577,7 @@ async function completeSceneExportPreparation(
     const { options } = preparation
     const byReference = (options.textures ?? 'embed') === 'reference'
     const normalizeOptions = {
+      format,
       preserveNormalMap: (texture: THREE.Texture) =>
         byReference && getPascalTextureRef(texture) !== null,
     }
@@ -826,6 +829,7 @@ function buildBakeGeometryContext(
 
   return {
     resolve,
+    sceneNodes: nodes,
     children,
     siblings,
     parent,

@@ -3,8 +3,10 @@
 import {
   type AnyNodeId,
   type BuildingNode,
+  getEffectiveNode,
   pauseSceneHistory,
   resumeSceneHistory,
+  useLiveNodeOverrides,
   useScene,
 } from '@pascal-app/core'
 import { FloorplanGeometryRenderer } from '@pascal-app/viewer/ui'
@@ -24,21 +26,26 @@ import { buildSitePlanDrawing } from './build-site-plan-drawing'
  * the lot line, envelope, footprint and yard dimensions are live.
  */
 export function FloorplanSitePlanLayer() {
-  // Subscribing to the whole node map is what the site plan actually depends
-  // on (walls, building placement, site fields); the drawing is cheap enough
-  // (tens of primitives) that memoising on the map identity is sufficient.
+  // Contributors can read other nodes too. One effective snapshot keeps their
+  // previews consistent without writing drag values into the scene.
   const nodes = useScene((s) => s.nodes)
+  const liveOverrides = useLiveNodeOverrides((s) => s.overrides)
 
   const drawing = useMemo(() => {
     const state = useScene.getState()
+    const effectiveNodes = liveOverrides.size ? { ...nodes } : nodes
+    for (const id of liveOverrides.keys()) {
+      const node = nodes[id as AnyNodeId]
+      if (node) effectiveNodes[node.id] = getEffectiveNode(node)
+    }
     return buildSitePlanDrawing({
-      nodes,
+      nodes: effectiveNodes,
       rootNodeIds: state.rootNodeIds,
       collections: state.collections,
       materials: state.materials,
       installedPlugins: state.installedPlugins,
     })
-  }, [nodes])
+  }, [nodes, liveOverrides])
 
   const dragRef = useRef<{
     id: AnyNodeId

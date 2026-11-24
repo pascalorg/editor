@@ -51,6 +51,31 @@ A building's levels stand on a ground line: the level at grade (`set_ground_leve
 
 If a live-sync version conflict occurs, call `load_scene`, inspect the newer graph, and rebase the requested edit. Do not retry an old whole-scene write blindly.
 
+## Native lawn
+
+`add_site_surface` with `kind: "lawn"` creates one editable core lawn, not a slab.
+Give exactly one `polygon` or two opposite `corners`. With `siteId`, outline and
+strokes use Site metres and level/building targets are refused; otherwise both
+transform once from the level/building frame. Driveway, path and patio retain
+their level-owned paving semantics. Lawn refuses `materialPreset`.
+
+Height defaults to 0.06 m, roughness to 0.2 and flowers to off. Choose explicit
+daisy, clover or yarrow species with relative shares, `flowerDensity` in heads/m²
+and saved `season` when flowers are requested. No recipe, authored object or
+Environment plugin is needed. The lawn follows Site ground, clearing buildings,
+paving and planting beds. Parameters and seed are saved, not meshes or images.
+
+Read the existing lawn with `get_node`, then `apply_patch` its parameters or
+complete ordered `strokes` list. The hand brush writes that same
+`{ points, radiusM, effect, strength }` form in Site metres: bare, grass, taller,
+shorter, more-flowers and fewer-flowers. all strokes share a 20,000-point budget; radius is 0.05–1000 m and strength 0–1; one point is a dab. Replace/remove older
+intent explicitly at the bound; no silent eviction. Refusals precede writes. Generic
+edits return `lawnFacts` with estimated touched area per effect, sampling
+resolution and union area; overlapping effects must not be added together.
+Preserve existing Environment lawns and flat lawn slabs unless replacement
+was requested; overlapping vegetation owners are not automatically hidden or
+cleared.
+
 ## Build a scripted object (hosted)
 
 `add_object`, and `add_window`, `add_door` or `add_column` with `code` or new params on a scripted node, compile in the user's open Pascal editor tab of the project (a `bpy` module builds in Pascal's Blender service instead, with no tab). When none is open the call answers `editor_tab_required` with `editorUrl` and `mutationApplied: false`; nothing changed. Show the user the link, wait until they confirm the tab is open, and repeat the same call. `editor_tab_busy` means a tab is open but busy or still loading: wait a few seconds and repeat the same call, without asking the user. Whether you may open the link yourself is the person's setting ("Agents may open the editor for me"; Ask first: ask the user to open the link (or bring the tab forward), or ask their permission before opening it yourself; Allow: you may open the link yourself, in a tab in front; Never: ask the user, and do not open or switch windows yourself); the refusal's words say which, so follow them. `editor_tab_timeout` means the tab stopped answering; ask whether it is still open, then retry. `script_failed` is the module's own error: fix the code.

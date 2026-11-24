@@ -20,6 +20,8 @@ export type FloorplanToolMode = 'default' | 'expert'
 export type FloorplanToolContext = {
   sceneApi: SceneApi
   activeLevelId: AnyNodeId | null
+  /** Effective drawing presented by the canvas, after availability fallback. */
+  drawingType?: 'floor-plan' | 'site-plan'
   unit: 'metric' | 'imperial'
   metricNotation: FloorplanMetricNotation
   gridSnapStep: number
