@@ -6,6 +6,7 @@ import {
   type NodeEvent,
 } from '@pascal-app/core'
 import type { ThreeEvent } from '@react-three/fiber'
+import { selectionClickAllowed } from '../lib/pointer-gesture'
 import useViewer from '../store/use-viewer'
 
 // Derive `{ node, event }` per kind directly from the `AnyNode`
@@ -62,7 +63,8 @@ export function useNodeEvents<K extends AnyNodeType>(node: NodeByKind<K>, type: 
       emit('pointerdown', e)
     },
     onPointerUp: (e: ThreeEvent<PointerEvent>) => {
-      if (selectionSuppressed()) return
+      const s = useViewer.getState()
+      if (!selectionClickAllowed(s.cameraDragging, s.inputDragging)) return
       if (e.button !== 0) return
       emit('pointerup', e)
       // Synthesize a click event on pointer up to be more forgiving than R3F's default onClick

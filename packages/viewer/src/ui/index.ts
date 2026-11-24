@@ -2,6 +2,7 @@ export {
   type FirstPersonHudState,
   useFirstPersonHud,
   type WalkthroughInteract,
+  type WalkthroughSeenInteract,
 } from '../store/use-first-person-hud'
 export { ActionButton } from './components/action-button'
 export {
@@ -34,6 +35,7 @@ export { SceneLoader, SceneLoadFailed } from './components/scene-loader'
 export { openSkyPanel, SKY_DOCK_HEIGHT, SkyControl, useSkyPanel } from './components/sky-control'
 export { useViewerCameraNavigationSync } from './components/use-viewer-camera-navigation-sync'
 export {
+  type CameraPointerAction,
   ViewerCameraControls,
   type ViewerCameraControlsProps,
 } from './components/viewer-camera-controls'
@@ -69,6 +71,10 @@ export {
   WalkthroughHud,
   type WalkthroughHudProps,
 } from './components/walkthrough-hud'
+export {
+  WalkthroughTouchControls,
+  type WalkthroughTouchControlsProps,
+} from './components/walkthrough-touch-controls'
 export {
   subscribeFloorplanCameraNavigation,
   useFloorplanCameraSyncBridge,

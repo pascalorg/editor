@@ -46,6 +46,7 @@ import villaAurelia from '../../lib/__fixtures__/owner-villa-aurelia-basement.js
 import {
   atCaptureSize,
   captureDimensions,
+  captureHiddenTypes,
   capturesOrthographically,
   exteriorGroundForCapture,
   interiorCutaway,
@@ -659,5 +660,28 @@ describe("a capture's projection", () => {
     expect(capturesOrthographically({}, user.ortho)).toBe(true)
     expect(capturesOrthographically({}, user.perspective)).toBe(false)
     expect(capturesOrthographically({ snapLevels: true }, user.ortho)).toBe(false)
+  })
+})
+
+describe('what a capture leaves out', () => {
+  const view: { position: [number, number, number]; target: [number, number, number] } = {
+    position: [0, 10, 10],
+    target: [0, 0, 0],
+  }
+
+  test("a picture of the person's own view keeps the scans it shows", () => {
+    // Else a project that holds only a scan saves an empty frame as its thumbnail.
+    expect(captureHiddenTypes({})).toEqual(['guide', 'spawn'])
+    expect(captureHiddenTypes({ hideTypes: ['site'] })).toEqual(['guide', 'spawn', 'site'])
+  })
+
+  test('a view the caller poses itself is of the built house alone', () => {
+    expect(captureHiddenTypes({ ortho: { ...view, viewWidth: 20 } })).toContain('scan')
+    expect(captureHiddenTypes({ perspective: view })).toContain('scan')
+    expect(
+      captureHiddenTypes({
+        cameraPose: { position: [0, 1, 0], quaternion: [0, 0, 0, 1], fov: 50 },
+      }),
+    ).toContain('scan')
   })
 })

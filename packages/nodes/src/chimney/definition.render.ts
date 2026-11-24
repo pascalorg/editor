@@ -21,6 +21,7 @@ export const chimneyRenderDefinition: NodeRenderDefinition<typeof ChimneyNode> &
   kind: 'chimney'
 } = {
   kind: 'chimney',
+  extensions: { 'pascal:viewer': { family: 'roofs' } },
   schemaVersion: 1,
   schema: ChimneyNode,
   category: 'structure',

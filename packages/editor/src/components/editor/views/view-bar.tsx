@@ -11,14 +11,33 @@ import {
   DropdownMenuTrigger,
   useIsMobile,
 } from '@pascal-app/viewer/ui'
-import { ArrowLeftRight, Check, Columns2, MoreHorizontal, Pin, PinOff, X } from 'lucide-react'
+import {
+  ArrowLeftRight,
+  Check,
+  Columns2,
+  MoreHorizontal,
+  Pin,
+  PinOff,
+  TriangleAlert,
+  X,
+} from 'lucide-react'
 import { type ReactNode, useEffect, useRef } from 'react'
-import { type EditorViewDescriptor, isSceneView, isViewPinned } from '../../../lib/editor-views'
+import {
+  type EditorViewDescriptor,
+  editorHostViewRegistry,
+  isSceneView,
+  isViewPinned,
+} from '../../../lib/editor-views'
 import { cn } from '../../../lib/utils'
 import useEditor from '../../../store/use-editor'
-import { VIEW_2D, VIEW_3D, type ViewPaneIndex } from '../../../store/view-layout'
+import { activeViewLayout, VIEW_2D, VIEW_3D, type ViewPaneIndex } from '../../../store/view-layout'
 import { IconRefGlyph } from '../../ui/icon-ref'
-import { PLUGINS_VIEW_ID, useActiveViewLayout, useEditorViews } from './use-editor-views'
+import {
+  PLUGINS_VIEW_ID,
+  useActiveViewLayout,
+  useEditorViews,
+  useViewsSettled,
+} from './use-editor-views'
 
 const GROUP = cn(
   'pointer-events-auto inline-flex h-8 shrink-0 items-stretch overflow-hidden rounded-[10px]',
@@ -46,7 +65,11 @@ export function ViewTabs({ pane, className }: { pane: ViewPaneIndex; className?:
   const pinnedViews = useEditor((s) => s.pinnedViews)
   const current = layout.panes[pane]
   const tabs = views.filter((view) => view.id === current || isViewPinned(view, pinnedViews))
-  const activeIndex = tabs.findIndex((view) => view.id === current)
+  // A restored layout can name a view this project cannot show (its plugin removed): it still
+  // gets a tab, marked as broken, so the person sees where they are and how to leave.
+  const settled = useViewsSettled()
+  const missing = settled && !tabs.some((view) => view.id === current)
+  const activeIndex = missing ? tabs.length : tabs.findIndex((view) => view.id === current)
   const tabList = useRef<HTMLDivElement>(null)
   useEffect(() => {
     const list = tabList.current
@@ -139,8 +162,66 @@ export function ViewTabs({ pane, className }: { pane: ViewPaneIndex; className?:
             )}
           </div>
         ))}
+        {missing && <MissingViewTab pane={pane} viewId={current} />}
       </div>
       <MoreViewsMenu current={current} pane={pane} views={views} />
+    </div>
+  )
+}
+
+/**
+ * Leave a view this project cannot show for the 3D scene — or the plan, when the other pane
+ * already shows 3D (taking 3D from it would move the broken view across instead).
+ */
+export function leaveUnavailableView(pane: ViewPaneIndex) {
+  const editor = useEditor.getState()
+  const layout = activeViewLayout(editor)
+  const other = layout.split ? layout.panes[pane === 0 ? 1 : 0] : null
+  editor.setPaneView(pane, other === VIEW_3D ? VIEW_2D : VIEW_3D)
+}
+
+/** The tab of a view this project cannot show: selected, flagged, and closing it returns to 3D. */
+function MissingViewTab({ pane, viewId }: { pane: ViewPaneIndex; viewId: string }) {
+  const i18n = usePascalI18n()
+  const known = editorHostViewRegistry.getSnapshot().find((view) => view.id === viewId)
+  const label =
+    known?.label ??
+    i18n._({ id: 'editor.views.viewBar.unavailableView', message: 'Unavailable view' })
+  return (
+    <div className="flex shrink-0 items-center bg-amber-500/12 text-amber-700 dark:text-amber-400">
+      <button
+        aria-selected
+        className={cn(
+          SEGMENT,
+          'pr-1 outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring',
+        )}
+        role="tab"
+        tabIndex={0}
+        title={i18n._({
+          id: 'editor.views.viewBar.unavailableViewTitle',
+          message: "{label} isn't available in this project",
+          values: { label },
+        })}
+        type="button"
+      >
+        <TriangleAlert className="size-3.5" />
+        <span className="max-w-36 truncate">{label}</span>
+      </button>
+      <button
+        aria-label={i18n._({
+          id: 'editor.views.viewBar.closeUnavailableView',
+          message: 'Close this view',
+        })}
+        className="mr-1 flex size-6 shrink-0 items-center justify-center rounded-full hover:bg-amber-500/20 focus-visible:ring-2 focus-visible:ring-ring"
+        onClick={() => leaveUnavailableView(pane)}
+        title={i18n._({
+          id: 'editor.views.viewBar.closeUnavailableView',
+          message: 'Close this view',
+        })}
+        type="button"
+      >
+        <X className="size-3" />
+      </button>
     </div>
   )
 }

@@ -154,6 +154,7 @@ import { VectorEdgeExtractor } from './vector-edge-extractor'
 import { HostView } from './views/host-view'
 import { SceneRegion } from './views/scene-region'
 import { useActiveViewLayout, useEditorViews } from './views/use-editor-views'
+import { leaveUnavailableView } from './views/view-bar'
 import { WallMeasurementLabel } from './wall-measurement-label'
 import { WallMoveSideHandles } from './wall-move-side-handles'
 import { WallOpeningHighlights } from './wall-opening-highlights'
@@ -1462,7 +1463,11 @@ const ViewerCanvas = memo(function ViewerCanvas({
                 onPointerDownCapture={focusPane(pane)}
                 style={paneStyle(pane)}
               >
-                <HostView key={viewId} view={views.find((view) => view.id === viewId)} />
+                <HostView
+                  key={viewId}
+                  onShowScene={() => leaveUnavailableView(pane)}
+                  view={views.find((view) => view.id === viewId)}
+                />
                 {/* A restored pane's plugin is known only once the project has loaded: until
                     then it would read "This view isn't available". */}
                 {isSceneDataLoading && loadingOverlay}

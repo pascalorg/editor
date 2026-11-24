@@ -22,7 +22,7 @@ import {
 import RenderObject from 'three/src/renderers/common/RenderObject.js'
 import RenderObjects from 'three/src/renderers/common/RenderObjects.js'
 import { pass } from 'three/tsl'
-import { NodeFrame } from 'three/webgpu'
+import { ClippingGroup, NodeFrame } from 'three/webgpu'
 import { mergedOutline } from './merged-outline-node'
 
 describe('merged outline rendering', () => {
@@ -274,6 +274,26 @@ describe('merged outline proxy bookkeeping', () => {
       } as any)
       expect(draw?.instanceCount ?? 0).toBe(count)
     }
+    f.dispose()
+  })
+
+  test('disabled clipping keeps the proxy fast path; enabled clipping uses the model context', () => {
+    const f = makeOutlineFixture()
+    const clipping = new ClippingGroup()
+    f.scene.add(clipping)
+    clipping.add(f.root)
+    clipping.enabled = false
+    f.tick()
+    expect(f.renderer.renders).toContain(f.internals._maskSceneB)
+    clipping.enabled = true
+    f.renderer.renders.length = 0
+    f.tick()
+    expect(f.renderer.renders).not.toContain(f.internals._maskSceneB)
+    expect(f.renderer.renders.filter((root) => root === f.scene)).toHaveLength(2)
+    clipping.enabled = false
+    f.renderer.renders.length = 0
+    f.tick()
+    expect(f.renderer.renders).toContain(f.internals._maskSceneB)
     f.dispose()
   })
 

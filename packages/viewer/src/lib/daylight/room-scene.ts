@@ -2,13 +2,17 @@ import {
   type AnyNode,
   type AnyNodeId,
   getLevelElevations,
+  isOpenAirRoom,
+  openPlanRoomGroups,
   sceneRegistry,
   useInteractive,
   useScene,
+  type ZoneNode,
 } from '@pascal-app/core'
 import { Box3, Color, type Material, MathUtils, type Mesh, type Object3D, Vector3 } from 'three'
 import { materialEmissive, smoothstep, uniform, vec3 } from 'three/tsl'
 import { MeshStandardNodeMaterial } from 'three/webgpu'
+import { bakedLevelBaseY } from '../../systems/level/level-utils'
 import { isHighlight } from '../editor-highlight'
 import { setSurfaceRaycastLayers } from '../layers'
 import type { MapLevel } from './room-map'
@@ -139,6 +143,7 @@ export function liveRoomScene(virtualLampsOn: boolean): RoomSceneInput | null {
   const { ids, levels } = liveLevels()
   const levelIndex = new Map<string, number>(ids.map((id, index) => [id, index]))
 
+  const groups = openPlanRoomGroups(nodes)
   const zones: RoomZone[] = []
   const point = new Vector3()
   for (const id of zoneIds) {
@@ -163,6 +168,8 @@ export function liveRoomScene(virtualLampsOn: boolean): RoomSceneInput | null {
       polygon: toWorld(node.polygon),
       holes: (node.holes ?? []).filter((hole) => hole.length >= 3).map(toWorld),
       levelIndex: levelIndex.get(node.parentId ?? '') ?? 0,
+      open: isOpenAirRoom(nodes, node as unknown as ZoneNode),
+      group: groups.get(id),
     })
   }
   if (!zones.length) return null
@@ -237,6 +244,30 @@ export function bakedLevelObjects(root: Object3D | null): Object3D[] {
   return root ? bakedLevels(root).objects : []
 }
 
+/**
+ * Room rays and fed lamp positions must share the assembled frame in every presentation mode.
+ * Restore presentation (including descendant matrices) synchronously, before the hook sends the
+ * live level offsets or anything renders.
+ */
+export function restRoomLevels(live: boolean, root: Object3D | null): () => void {
+  const elevations = live ? getLevelElevations(useScene.getState().nodes) : null
+  const ids = live ? liveLevels().ids : []
+  const objects = live ? ids.map((id) => sceneRegistry.nodes.get(id)) : bakedLevelObjects(root)
+  const moved: { object: Object3D; y: number }[] = []
+  for (const [index, object] of objects.entries()) {
+    if (!object) continue
+    const y = elevations ? (elevations.get(ids[index]!)?.baseY ?? 0) : bakedLevelBaseY(object)
+    if (object.position.y === y) continue
+    moved.push({ object, y: object.position.y })
+    object.position.y = y
+  }
+  for (const { object } of moved) object.updateWorldMatrix(true, true)
+  return () => {
+    for (const { object, y } of moved) object.position.y = y
+    for (const { object } of moved) object.updateWorldMatrix(true, true)
+  }
+}
+
 /** How open a live door is (0 closed … 1 fully open), the transient state first. */
 export function liveDoorOpenness(id: string): number {
   const node = useScene.getState().nodes[id as AnyNodeId] as
@@ -258,6 +289,10 @@ type BakedExtras = {
   pascalId?: string
   polygon?: [number, number][]
   holes?: [number, number][][]
+  /** Open to the outside — stamped by the GLB export (core `isOpenAirRoom`). */
+  open?: boolean
+  /** Open-plan group id — stamped by the GLB export (core `openPlanRoomGroups`). */
+  group?: string
 }
 
 /** A baked artifact's identity tree (levels, zones, covers, walls, openings), or null. */
@@ -314,6 +349,8 @@ export function bakedRoomScene(root: Object3D, virtualLampsOn: boolean): RoomSce
       polygon: toWorld(polygon),
       holes: (holes ?? []).filter((hole) => hole.length >= 3).map(toWorld),
       levelIndex: level.index,
+      open: (object.userData as BakedExtras).open === true,
+      group: (object.userData as BakedExtras).group,
     })
   }
   if (!zones.length) return null

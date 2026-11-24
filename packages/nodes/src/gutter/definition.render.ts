@@ -6,6 +6,7 @@ import { GutterNode } from './schema'
 export const gutterRenderDefinition: NodeRenderDefinition<typeof GutterNode> & { kind: 'gutter' } =
   {
     kind: 'gutter',
+    extensions: { 'pascal:viewer': { family: 'roof-services' } },
     schemaVersion: 4,
     schema: GutterNode,
     category: 'structure',

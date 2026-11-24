@@ -7,6 +7,7 @@ export const separatorRenderDefinition: NodeRenderDefinition<typeof SeparatorNod
   kind: 'separator'
 } = {
   kind: 'separator',
+  extensions: { 'pascal:viewer': { family: null } },
   bake: 'strip',
   schemaVersion: 1,
   schema: SeparatorNode,

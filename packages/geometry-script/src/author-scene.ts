@@ -146,21 +146,22 @@ export async function compileAuthorScene(
       })
     }
   }
-  for (const { wallId, face, nodeId, code, toHeight } of authorSceneFaceScripts(
+  for (const { wallId, face, nodeId, code, toHeight, u0, u1 } of authorSceneFaceScripts(
     input.payload,
     outcome.result,
     candidate,
   )) {
     signal?.throwIfAborted()
     try {
-      const inputs = wallFaceScriptInputs(candidate, nodeId, face, toHeight)
+      const extent = { toHeight, u0, u1 }
+      const inputs = wallFaceScriptInputs(candidate, nodeId, face, extent)
       if (!inputs) throw new Error('The face has nothing to build on.')
       const built = await compile({ code, kind: 'wall-face', nodeId, inputs })
       candidate = applySceneChanges(
         candidate,
         setWallFaceScript(
           candidate,
-          { wallId: nodeId, face, compiled: built, inputs, toHeight },
+          { wallId: nodeId, face, compiled: built, inputs, ...extent },
           context,
         ).changes,
       )

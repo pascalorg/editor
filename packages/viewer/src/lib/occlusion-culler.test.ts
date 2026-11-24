@@ -115,11 +115,13 @@ describe('occlusion culler', () => {
     const world = new THREE.Scene()
     world.add(s.root)
     const pipeline = { isCulled: (_object: THREE.Object3D, _camera: THREE.Camera) => false }
+    let enabled = true
     const detach = attachOcclusionCuller({
       scene: world,
       pipeline,
       culler: createOcclusionCuller(s.root),
       getCamera: () => s.camera,
+      isEnabled: () => enabled,
     })
     const render = (camera: THREE.Camera) => {
       const args = [null, world, camera, null, null, null] as unknown as Parameters<
@@ -138,6 +140,10 @@ describe('occlusion culler', () => {
     expect(pipeline.isCulled(behind, s.camera)).toBe(false)
     expect(render(s.camera.clone()).behind).toBe(false)
     expect(behind.layers.isEnabled(SCENE_LAYER)).toBe(true)
+    enabled = false
+    expect(render(s.camera).behind).toBe(false)
+    enabled = true
+    expect(render(s.camera).behind).toBe(true)
     detach()
     expect(render(s.camera).behind).toBe(false)
   })

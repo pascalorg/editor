@@ -11,6 +11,7 @@ import { DormerNode } from './schema'
 export const dormerRenderDefinition: NodeRenderDefinition<typeof DormerNode> & { kind: 'dormer' } =
   {
     kind: 'dormer',
+    extensions: { 'pascal:viewer': { family: 'roofs' } },
     schemaVersion: 4,
     schema: DormerNode,
     category: 'structure',

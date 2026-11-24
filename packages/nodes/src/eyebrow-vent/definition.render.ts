@@ -7,6 +7,7 @@ export const eyebrowVentRenderDefinition: NodeRenderDefinition<typeof EyebrowVen
   kind: 'eyebrow-vent'
 } = {
   kind: 'eyebrow-vent',
+  extensions: { 'pascal:viewer': { family: 'roof-services' } },
   schemaVersion: 3,
   schema: EyebrowVentNode,
   category: 'structure',

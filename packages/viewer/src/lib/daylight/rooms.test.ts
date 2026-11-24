@@ -163,6 +163,30 @@ describe('room lighting', () => {
     expect(rooms.meter(1, 0)).toBeLessThan(lit)
   })
 
+  test('a lamp switch reaches every room of an open-plan group', () => {
+    // Open-plan rooms share one pooled lamp list; it must sit once in the data texture, or a
+    // switch rewrites only one room's copy and the other keeps shining (a seam at the threshold).
+    const input = twoRooms()
+    const rooms = new RoomLighting()
+    rooms.build({ ...input, zones: input.zones.map((zone) => ({ ...zone, group: 'open' })) })
+    const data = () => (rooms as unknown as { data: Float32Array }).data
+    const header = (room: number) => [data()[room * 3 * 4 + 1]!, data()[room * 3 * 4 + 2]!]
+    expect(header(0)).toEqual(header(1))
+    const lampRadiance = (room: number) => {
+      const [start, count] = header(room)
+      let sum = 0
+      for (let k = 0; k < count!; k++) {
+        const t = (start! + k * 2 + 1) * 4
+        sum += data()[t]! + data()[t + 1]! + data()[t + 2]!
+      }
+      return sum
+    }
+    expect(lampRadiance(0)).toBeGreaterThan(0)
+    rooms.setLampStates(() => false)
+    expect(lampRadiance(0)).toBe(0)
+    expect(lampRadiance(1)).toBe(0)
+  })
+
   test('a camera in a hidden level is outdoors', () => {
     const rooms = new RoomLighting()
     rooms.build(twoRooms())

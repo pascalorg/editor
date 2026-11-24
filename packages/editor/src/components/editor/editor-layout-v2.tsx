@@ -3,7 +3,7 @@
 import { usePascalI18n } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { useIsMobile } from '@pascal-app/viewer/ui'
-import { PanelLeftOpen, X } from 'lucide-react'
+import { X } from 'lucide-react'
 import { type ReactNode, useCallback, useEffect, useLayoutEffect, useRef } from 'react'
 import {
   openSidebarPanel,
@@ -67,6 +67,7 @@ function MenuColumn({
   const activePanel = useShownSidebarPanel(tabs)
   const setActivePanel = useEditor((s) => s.setActiveSidebarPanel)
   const setIsMenuHidden = useSidebarStore((s) => s.setIsMenuHidden)
+  const isMenuHidden = useSidebarStore((s) => s.isMenuHidden)
 
   // Menu click: open a closed panel (at a usable width), close it when
   // re-clicking the open entry, otherwise switch panels.
@@ -105,7 +106,8 @@ function MenuColumn({
       activeTab={columnShown ? columnTabId : activePanel}
       collapsed={toolClosed && !columnShown}
       footer={footer}
-      onHide={() => setIsMenuHidden(true)}
+      menuHidden={isMenuHidden}
+      onToggle={() => setIsMenuHidden(!isMenuHidden)}
       onTabClick={handleTabClick}
       tabs={tabs}
     />
@@ -398,10 +400,7 @@ function RightColumn({
   children,
   overlays,
   stageOverlay,
-  menuButton,
 }: {
-  /** Shown first in the view bar row (or over the stage without one): brings a hidden menu back. */
-  menuButton?: ReactNode
   toolbarLeft?: ReactNode
   toolbarRight?: ReactNode
   viewBar: boolean
@@ -413,7 +412,7 @@ function RightColumn({
     <div className="relative flex min-w-0 flex-1 flex-col overflow-hidden">
       {/* The view bar row sits above the stage, one bar per pane; the host's
           left toolbar rides after the first pane's views. */}
-      {viewBar && <ViewBarRow leading={toolbarLeft} start={menuButton} />}
+      {viewBar && <ViewBarRow leading={toolbarLeft} />}
       <div
         className="relative flex min-h-0 flex-1 flex-col overflow-hidden"
         style={{
@@ -422,16 +421,9 @@ function RightColumn({
           boxShadow: '-4px -2px 16px rgba(0, 0, 0, 0.08), -1px 0 4px rgba(0, 0, 0, 0.04)',
         }}
       >
-        {((!viewBar && (toolbarLeft || menuButton)) || toolbarRight) && (
+        {((!viewBar && toolbarLeft) || toolbarRight) && (
           <StageToolbar
-            toolbarLeft={
-              viewBar ? undefined : (
-                <>
-                  {menuButton}
-                  {toolbarLeft}
-                </>
-              )
-            }
+            toolbarLeft={viewBar ? undefined : toolbarLeft}
             toolbarRight={toolbarRight}
           />
         )}
@@ -461,24 +453,6 @@ function RightColumn({
         )}
       </div>
     </div>
-  )
-}
-
-/** Brings a hidden side menu back, ahead of the view tabs. */
-function ShowMenuButton() {
-  const i18n = usePascalI18n()
-  const setIsMenuHidden = useSidebarStore((s) => s.setIsMenuHidden)
-  const label = i18n._({ id: 'editor.sidebar.sideMenu.show', message: 'Menu' })
-  return (
-    <button
-      aria-label={i18n._({ id: 'editor.sidebar.sideMenu.showLabel', message: 'Show menu' })}
-      className="flex h-8 shrink-0 items-center gap-1.5 rounded-full border border-border/60 px-3 font-medium text-muted-foreground text-sm transition-colors hover:bg-sidebar-accent hover:text-foreground"
-      onClick={() => setIsMenuHidden(false)}
-      type="button"
-    >
-      <PanelLeftOpen aria-hidden className="size-4" />
-      {label}
-    </button>
   )
 }
 
@@ -527,7 +501,6 @@ export function EditorLayoutV2({
   // A host with only the column's tab still gets the column (and the menu that lists it).
   const showSideColumns =
     !(isMobile || isCaptureMode) && (toolTabs.length > 0 || columnTab !== undefined)
-  const isMenuHidden = useSidebarStore((s) => s.isMenuHidden)
   // On a phone the column tab is one more sheet, so it stays a pickable tab.
   const isCollapsed = useSidebarStore((s) => s.isCollapsed)
   // The column tab picked before its column was there to take it (a host
@@ -562,7 +535,6 @@ export function EditorLayoutV2({
   }
 
   const tool = showSideColumns ? openTool : undefined
-  const menuButton = showSideColumns && isMenuHidden ? <ShowMenuButton /> : null
   return (
     <div className="flex h-full w-full flex-col bg-sidebar text-foreground">
       {/* Top navbar */}
@@ -570,7 +542,7 @@ export function EditorLayoutV2({
 
       {/* Main content: side menu, the chat or the open tool, work area */}
       <div className="flex min-h-0 flex-1">
-        {showSideColumns && !isMenuHidden && (
+        {showSideColumns && (
           <MenuColumn
             columnTabId={columnTab?.id}
             toolClosed={toolClosed}
@@ -594,7 +566,6 @@ export function EditorLayoutV2({
         <RightColumn
           overlays={overlays}
           stageOverlay={stageOverlay}
-          menuButton={isCaptureMode ? undefined : menuButton}
           toolbarLeft={isCaptureMode ? undefined : viewerToolbarLeft}
           toolbarRight={isCaptureMode ? undefined : viewerToolbarRight}
           viewBar={viewBar && !isCaptureMode && !stageOverlay}

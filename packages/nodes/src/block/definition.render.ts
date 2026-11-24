@@ -62,6 +62,7 @@ function footprintPosition(node: BlockNodeType, center: [number, number, number]
 
 export const blockRenderDefinition: NodeRenderDefinition<typeof BlockNode> & { kind: 'block' } = {
   kind: 'block',
+  extensions: { 'pascal:viewer': { family: 'structure' } },
   schemaVersion: 5,
   schema: BlockNode,
   category: 'structure',

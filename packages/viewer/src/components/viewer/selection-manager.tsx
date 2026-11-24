@@ -21,6 +21,7 @@ import {
 import { useThree } from '@react-three/fiber'
 import { useEffect, useRef } from 'react'
 import { Vector3 } from 'three'
+import { selectionClickAllowed } from '../../lib/pointer-gesture'
 import useViewer from '../../store/use-viewer'
 
 const tempWorldPos = new Vector3()
@@ -415,7 +416,7 @@ const PointerMissedHandler = ({
     const handleClick = (event: MouseEvent) => {
       // Only handle left clicks
       const viewerState = useViewer.getState()
-      if (viewerState.cameraDragging || viewerState.inputDragging) return
+      if (!selectionClickAllowed(viewerState.cameraDragging, viewerState.inputDragging)) return
       if (viewerState.walkthroughMode) return
       if (event.button !== 0) return
 

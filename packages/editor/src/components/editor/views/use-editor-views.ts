@@ -2,6 +2,7 @@
 
 import { useScene } from '@pascal-app/core'
 import { useSyncExternalStore } from 'react'
+import { create } from 'zustand'
 import {
   availableViews,
   type EditorViewDescriptor,
@@ -50,6 +51,36 @@ export function useEditorViews(): EditorViewDescriptor[] {
     workspaceMode,
     installedPlugins,
   })
+}
+
+/**
+ * How long after a project loads its plugins have to register their views. A plugin registers
+ * its views as it loads, some only once the project says it is installed, so a view missing in
+ * that window is most likely still on its way.
+ */
+export const VIEW_SETTLE_MS = 600
+
+/** The hydration whose plugins have had `VIEW_SETTLE_MS` to register their views. */
+export const useViewSettle = create<{ settled: object | null }>(() => ({ settled: null }))
+
+let settleTimer: ReturnType<typeof setTimeout> | undefined
+useScene.subscribe((state, previous) => {
+  if (state.hydrationId === previous.hydrationId) return
+  clearTimeout(settleTimer)
+  const hydration = state.hydrationId
+  if (hydration)
+    settleTimer = setTimeout(() => useViewSettle.setState({ settled: hydration }), VIEW_SETTLE_MS)
+})
+
+/**
+ * Whether the views a layout names can be judged: the project has loaded and its plugins have had
+ * `VIEW_SETTLE_MS` to register theirs. Until then a view the layout names but no plugin offers yet
+ * is loading, not unavailable.
+ */
+export function useViewsSettled(): boolean {
+  const hydration = useScene((s) => s.hydrationId)
+  const settled = useViewSettle((s) => s.settled)
+  return hydration !== null && settled === hydration
 }
 
 export function useActiveViewLayout(): ViewLayout {

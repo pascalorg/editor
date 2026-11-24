@@ -85,23 +85,56 @@ const PATTERNS: readonly (readonly [RegExp, RoomUse])[] = [
   [/garage|carport|parking/, 'garage'],
 ]
 
+// Explicit bedroom nouns, rather than ambiguous words for any room (habitación, Zimmer, camera).
+// Unicode letter boundaries also accept numbered names in Cyrillic; CJK names need no spaces.
+const TRANSLATED_BEDROOM =
+  /(?<!\p{L})(?:dormitorios?|schlafzimmer|camera da letto|camere da letto|quartos?|slaapkamers?|спальн(?:я|и|е|ю))(?!\p{L})|卧室|臥室|寝室/u
+// クローゼット folds to クロセット: the existing fold removes voicing and vowel-length marks.
+const TRANSLATED_BEDROOM_ANNEXES: readonly (readonly [RegExp, RoomUse])[] = [
+  [
+    /(?<!\p{L})(?:bano|aseo|banho|badezimmer|bad|bagno|banheiro|casa de banho|badkamer|ванная|ваннои|санузел)(?!\p{L})|浴室|卫生间|衛生間|洗手间|洗手間|風呂|トイレ/u,
+    'bathroom',
+  ],
+  [
+    /(?<!\p{L})(?:pasillo|flur|gang|corridoio|corredor|overloop|коридор|прихожая)(?!\p{L})|走廊|过道|過道|廊下/u,
+    'hallway',
+  ],
+  [
+    /(?<!\p{L})(?:armario|vestidor|schrank|kleiderschrank|ankleide|ankleidezimmer|armadio|guardaroba|guardarropa|guarda-roupa|roupeiro|closet|kast|kledingkast|inloopkast|гардероб|гардеробная|шкаф)(?!\p{L})|衣柜|衣櫃|衣帽间|衣帽間|クロセット|押し?入/u,
+    'other',
+  ],
+]
+
 /** The use a room's name gives it; `other` when the name says none. */
-export function roomUseOfName(name: string): RoomUse {
-  const folded = foldRoomName(name)
+function originalRoomUse(folded: string): RoomUse | undefined {
   if (CIRCULATION_FIRST.test(folded) || CIRCULATION_LAST.test(folded)) return 'hallway'
   if (STORAGE_LAST.test(folded)) return 'other'
   if (BED_ANNEX.test(folded) && folded.match(BED_WORD)) {
-    const beside = roomUseOfName(
+    const beside = originalRoomUse(
       folded
         .replace(BED_WORD, ' ')
         .replace(/\b\d+\b/g, ' ')
         .replace(/\s+/g, ' ')
         .trim(),
     )
-    if (beside !== 'bedroom') return beside
+    if (beside !== 'bedroom') return beside ?? 'other'
   }
   for (const [pattern, use] of PATTERNS) if (pattern.test(folded)) return use
-  return 'other'
+  return undefined
+}
+
+/** Original matches, including explicit storage, always precede the new bedroom vocabulary. */
+export function roomUseOfName(name: string): RoomUse {
+  const folded = foldRoomName(name)
+  const original = originalRoomUse(folded)
+  if (original !== undefined) return original
+  if (/\bguest room\b|\bkids'? room\b/.test(folded)) return 'bedroom'
+  const translatedBedroom = TRANSLATED_BEDROOM.test(folded)
+  if (translatedBedroom) {
+    for (const [pattern, use] of TRANSLATED_BEDROOM_ANNEXES) if (pattern.test(folded)) return use
+    if (BED_ANNEX.test(folded)) return roomUseOfName(folded.replace(TRANSLATED_BEDROOM, ' '))
+  }
+  return translatedBedroom ? 'bedroom' : 'other'
 }
 
 const OUTDOOR_USE =

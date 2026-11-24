@@ -6290,11 +6290,7 @@ msgstr "Hide menu"
 msgid "editor.sidebar.sideMenu.plugins"
 msgstr "Plugins"
 
-#: packages/editor/src/components/editor/editor-layout-v2.tsx
-msgid "editor.sidebar.sideMenu.show"
-msgstr "Menu"
-
-#: packages/editor/src/components/editor/editor-layout-v2.tsx
+#: packages/editor/src/components/ui/sidebar/tab-bar.tsx
 msgid "editor.sidebar.sideMenu.showLabel"
 msgstr "Show menu"
 
@@ -7102,6 +7098,18 @@ msgstr "Target elevation: {elevation} m · click or Enter to place"
 msgid "editor.tools.distribution.distributionRunTool.typeALength"
 msgstr "type a length"
 
+#: packages/editor/src/components/editor/views/host-view.tsx
+msgid "editor.views.hostView.loading"
+msgstr "Loading…"
+
+#: packages/editor/src/components/editor/views/host-view.tsx
+msgid "editor.views.hostView.pluginNotInstalled"
+msgstr "Its plugin isn't installed in this project."
+
+#: packages/editor/src/components/editor/views/host-view.tsx
+msgid "editor.views.hostView.viewUnavailable"
+msgstr "This view isn't available"
+
 #: packages/editor/src/components/editor/views/view-bar.tsx
 msgid "editor.views.plugins"
 msgstr "Plugins"
@@ -7129,6 +7137,11 @@ msgstr "Close {label}"
 #: packages/editor/src/components/editor/views/view-bar.tsx
 msgid "editor.views.viewBar.closeSplit"
 msgstr "Close split (\\)"
+
+#: packages/editor/src/components/editor/views/host-view.tsx
+#: packages/editor/src/components/editor/views/view-bar.tsx
+msgid "editor.views.viewBar.closeUnavailableView"
+msgstr "Close this view"
 
 #: packages/editor/src/components/editor/views/view-bar.tsx
 msgid "editor.views.viewBar.ground"
@@ -7177,6 +7190,14 @@ msgstr "Split"
 #: packages/editor/src/components/editor/views/view-bar.tsx
 msgid "editor.views.viewBar.swapPanes"
 msgstr "Swap panes"
+
+#: packages/editor/src/components/editor/views/view-bar.tsx
+msgid "editor.views.viewBar.unavailableView"
+msgstr "Unavailable view"
+
+#: packages/editor/src/components/editor/views/view-bar.tsx
+msgid "editor.views.viewBar.unavailableViewTitle"
+msgstr "{label} isn't available in this project"
 
 #: packages/editor/src/components/editor/views/view-bar.tsx
 msgid "editor.views.viewBar.unpinFromTheViewBar"
@@ -15632,6 +15653,11 @@ msgstr "Blue hour"
 
 #: packages/viewer/src/ui/components/render-settings-menu.tsx
 #: packages/viewer/src/ui/components/sky-control.tsx
+msgid "viewer.daylight.time.dawn"
+msgstr "Dawn"
+
+#: packages/viewer/src/ui/components/render-settings-menu.tsx
+#: packages/viewer/src/ui/components/sky-control.tsx
 msgid "viewer.daylight.time.golden"
 msgstr "Golden hour"
 
@@ -15860,8 +15886,29 @@ msgstr "Walkthrough: {state}"
 
 #: packages/viewer/src/components/viewer/glb-scene.tsx
 #: packages/viewer/src/systems/interactive/callout-actions.ts
+#: packages/viewer/src/ui/components/walkthrough-touch-controls.tsx
 msgid "viewer.walkthrough.shutters"
 msgstr "Shutters"
+
+#: packages/viewer/src/ui/components/walkthrough-touch-controls.tsx
+msgid "viewer.walkthroughTouch.close"
+msgstr "Close"
+
+#: packages/viewer/src/ui/components/walkthrough-touch-controls.tsx
+msgid "viewer.walkthroughTouch.crouch"
+msgstr "Crouch"
+
+#: packages/viewer/src/ui/components/walkthrough-touch-controls.tsx
+msgid "viewer.walkthroughTouch.exit"
+msgstr "Exit"
+
+#: packages/viewer/src/ui/components/walkthrough-touch-controls.tsx
+msgid "viewer.walkthroughTouch.interact"
+msgstr "Interact"
+
+#: packages/viewer/src/ui/components/walkthrough-touch-controls.tsx
+msgid "viewer.walkthroughTouch.jump"
+msgstr "Jump"
 
 #: packages/viewer/src/ui/components/viewer-controls-bar.tsx
 msgid "viewer.walls.cutaway"

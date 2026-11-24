@@ -2,7 +2,8 @@
 
 import { usePascalI18n } from '@pascal-app/core'
 import { type ReactNode, useMemo } from 'react'
-import type { WalkthroughInteract } from '../../store/use-first-person-hud'
+import type { WalkthroughInteract, WalkthroughSeenInteract } from '../../store/use-first-person-hud'
+import useViewer from '../../store/use-viewer'
 import { cn } from '../lib/cn'
 import { displayRoomName } from '../lib/room-name-messages'
 
@@ -13,6 +14,9 @@ export type WalkthroughHudProps = {
   floorLabel?: string | null
   zoneLabel?: string | null
   interact?: WalkthroughInteract
+  /** Opt in by passing the controller's seenInteract and a localized prompt, e.g. "Come a little closer". */
+  seenInteract?: WalkthroughSeenInteract
+  comeCloserLabel?: string
   /** Movement controls listed before the cursor and exit pills. */
   hints?: readonly WalkthroughHint[]
   /** Pointer lock temporarily released (OS screenshot) — the pill flips to
@@ -47,11 +51,14 @@ export function WalkthroughHud({
   floorLabel,
   zoneLabel,
   interact = null,
+  seenInteract = null,
+  comeCloserLabel,
   hints,
   suspended = false,
   onExit,
   children,
 }: WalkthroughHudProps) {
+  const touch = useViewer((state) => state.walkthroughInputMode === 'touch')
   const kbdClass = 'rounded border border-border/60 bg-white/10 px-1.5 py-0.5 font-mono text-[10px]'
   const pillClass =
     'flex items-center gap-1.5 rounded-full border border-border/40 bg-background/70 px-3 py-1 text-muted-foreground text-xs backdrop-blur-xl'
@@ -83,54 +90,62 @@ export function WalkthroughHud({
 
       <WalkthroughCrosshair interact={interact} />
 
-      <div className="absolute bottom-6 left-1/2 flex -translate-x-1/2 items-center gap-2">
-        {suspended ? (
-          <div className={pillClass}>
-            <span className="font-medium text-foreground">Click</span>
-            <span>or</span>
-            <kbd className={kbdClass}>P</kbd>
-            <span>to resume</span>
-            <span className="text-muted-foreground/60">·</span>
-            {exitContent}
-          </div>
-        ) : (
-          <>
-            {hints && hints.length > 0 ? (
-              <div className={pillClass}>
-                {hints.map(({ keys, action }, index) => (
-                  <span className="flex items-center gap-1.5" key={action}>
-                    {index > 0 && <span className="text-muted-foreground/60">·</span>}
-                    {keys.map((key, keyIndex) => (
-                      <span className="flex items-center gap-1" key={key}>
-                        {keyIndex > 0 && <span className="text-muted-foreground/60">/</span>}
-                        <kbd className={kbdClass}>{key}</kbd>
-                      </span>
-                    ))}
-                    {action}
-                  </span>
-                ))}
-              </div>
-            ) : null}
+      {!touch && (
+        <div className="absolute bottom-6 left-1/2 flex -translate-x-1/2 items-center gap-2">
+          {suspended ? (
             <div className={pillClass}>
+              <span className="font-medium text-foreground">Click</span>
+              <span>or</span>
               <kbd className={kbdClass}>P</kbd>
-              free cursor
+              <span>to resume</span>
+              <span className="text-muted-foreground/60">·</span>
+              {exitContent}
             </div>
-            {onExit ? (
-              <button
-                className={cn(pillClass, 'pointer-events-auto')}
-                onClick={onExit}
-                type="button"
-              >
-                {exitContent}
-              </button>
-            ) : (
-              <div className={pillClass}>{exitContent}</div>
-            )}
-          </>
-        )}
-      </div>
+          ) : (
+            <>
+              {hints && hints.length > 0 ? (
+                <div className={pillClass}>
+                  {hints.map(({ keys, action }, index) => (
+                    <span className="flex items-center gap-1.5" key={action}>
+                      {index > 0 && <span className="text-muted-foreground/60">·</span>}
+                      {keys.map((key, keyIndex) => (
+                        <span className="flex items-center gap-1" key={key}>
+                          {keyIndex > 0 && <span className="text-muted-foreground/60">/</span>}
+                          <kbd className={kbdClass}>{key}</kbd>
+                        </span>
+                      ))}
+                      {action}
+                    </span>
+                  ))}
+                </div>
+              ) : null}
+              <div className={pillClass}>
+                <kbd className={kbdClass}>P</kbd>
+                free cursor
+              </div>
+              {onExit ? (
+                <button
+                  className={cn(pillClass, 'pointer-events-auto')}
+                  onClick={onExit}
+                  type="button"
+                >
+                  {exitContent}
+                </button>
+              ) : (
+                <div className={pillClass}>{exitContent}</div>
+              )}
+            </>
+          )}
+        </div>
+      )}
 
-      {interact && (
+      {!interact && seenInteract && comeCloserLabel && (
+        <div className="absolute top-1/2 left-1/2 mt-7 -translate-x-1/2 whitespace-nowrap text-xs">
+          {seenInteract.label} · {comeCloserLabel}
+        </div>
+      )}
+
+      {interact && !touch && (
         <div className="absolute top-1/2 left-1/2 mt-7 -translate-x-1/2 whitespace-nowrap">
           <div className="corner-smooth flex items-center gap-1.5 rounded-full border border-border/40 bg-background/80 px-3 py-1 text-xs shadow-elevation-3 backdrop-blur-xl">
             <kbd className="rounded border border-border/60 bg-white/10 px-1.5 py-0.5 font-mono text-[10px]">

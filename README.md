@@ -214,6 +214,10 @@ docker run -d -p 3000:3000 -v pascal-data:/data \
 See [SETUP.md, "Self-hosting"](SETUP.md#self-hosting) for the compose file, the variables, agent
 access and public embeds.
 
+To have the container hosted and managed for you, deploy it on Elestio:
+
+<a href="https://dash.elest.io/deploy?soft=Pascal&id=595"><img src="https://elest.io/images/logos/deploy-to-elestio-btn.svg" alt="Deploy on Elestio" height="32"></a>
+
 ## Use the published packages
 
 Install the full built-in viewer set, then load the built-in plugin once before mounting

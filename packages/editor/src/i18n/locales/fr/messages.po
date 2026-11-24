@@ -14656,6 +14656,7 @@ msgstr "Atelier"
 # Source-Hash: 4323751093d4c560
 # Review: required
 # AI-Provider: claude-code
+# English: "Still loading the project. Editing is paused until it finishes."
 #: packages/editor/src/components/editor/index.tsx
 #, fuzzy
 msgid "editor.sceneData.pending"
@@ -15601,25 +15602,25 @@ msgstr "Mettre à jour l’instantané"
 msgid "editor.sidebar.panels.zonePanel.viewSnapshot"
 msgstr "Voir l’instantané"
 
-# English: "Browse plugins"
 # Source-Hash: 7890c110650ad1e5
 # Review: required
+# English: "Browse plugins"
 #: packages/editor/src/components/ui/sidebar/plugins-menu-panel.tsx
 #, fuzzy
 msgid "editor.sidebar.pluginsMenu.browse"
 msgstr "Parcourir les plugins"
 
-# English: "No plugins in this project yet."
 # Source-Hash: fd7380e83e3c88b3
 # Review: required
+# English: "No plugins in this project yet."
 #: packages/editor/src/components/ui/sidebar/plugins-menu-panel.tsx
 #, fuzzy
 msgid "editor.sidebar.pluginsMenu.empty"
 msgstr "Aucun plugin dans ce projet pour l’instant."
 
-# English: "Hide menu"
 # Source-Hash: 8284b6d9e4c05fb1
 # Review: required
+# English: "Hide menu"
 #: packages/editor/src/components/ui/sidebar/tab-bar.tsx
 #, fuzzy
 msgid "editor.sidebar.sideMenu.hide"
@@ -15636,18 +15637,10 @@ msgstr "Masquer le menu"
 msgid "editor.sidebar.sideMenu.plugins"
 msgstr "Plugins"
 
-# English: "Menu"
-# Source-Hash: 1340afc2c56c0229
-# Review: required
-#: packages/editor/src/components/editor/editor-layout-v2.tsx
-#, fuzzy
-msgid "editor.sidebar.sideMenu.show"
-msgstr "Menu"
-
-# English: "Show menu"
 # Source-Hash: 5e1ae5cd25820c60
 # Review: required
-#: packages/editor/src/components/editor/editor-layout-v2.tsx
+# English: "Show menu"
+#: packages/editor/src/components/ui/sidebar/tab-bar.tsx
 #, fuzzy
 msgid "editor.sidebar.sideMenu.showLabel"
 msgstr "Afficher le menu"
@@ -17662,6 +17655,36 @@ msgstr "Altitude cible : {elevation} m · cliquez ou appuyez sur Entrée pour pl
 msgid "editor.tools.distribution.distributionRunTool.typeALength"
 msgstr "saisir une longueur"
 
+# Source-Hash: 9e84d6d7b9885c4f
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Loading…"
+#: packages/editor/src/components/editor/views/host-view.tsx
+#, fuzzy
+msgid "editor.views.hostView.loading"
+msgstr "Chargement…"
+
+# Source-Hash: 82135a9b9cb5b990
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Its plugin isn't installed in this project."
+#: packages/editor/src/components/editor/views/host-view.tsx
+#, fuzzy
+msgid "editor.views.hostView.pluginNotInstalled"
+msgstr "Son plugin n'est pas installé dans ce projet."
+
+# Source-Hash: 28c0cec10097d476
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "This view isn't available"
+#: packages/editor/src/components/editor/views/host-view.tsx
+#, fuzzy
+msgid "editor.views.hostView.viewUnavailable"
+msgstr "Cette vue n'est pas disponible"
+
 # Source-Hash: 9fc7a39bc32f287a
 # Review: required
 # AI-Provider: claude-code
@@ -17731,6 +17754,17 @@ msgstr "Fermer {label}"
 #, fuzzy
 msgid "editor.views.viewBar.closeSplit"
 msgstr "Fermer la vue partagée (\\)"
+
+# Source-Hash: cfde21b205adf4e2
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Close this view"
+#: packages/editor/src/components/editor/views/host-view.tsx
+#: packages/editor/src/components/editor/views/view-bar.tsx
+#, fuzzy
+msgid "editor.views.viewBar.closeUnavailableView"
+msgstr "Fermer cette vue"
 
 # Source-Hash: 94cc8e9f1ee16edb
 # Review: required
@@ -17851,6 +17885,26 @@ msgstr "Partager"
 #, fuzzy
 msgid "editor.views.viewBar.swapPanes"
 msgstr "Inverser les volets"
+
+# Source-Hash: 4f9e7d62de22491d
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Unavailable view"
+#: packages/editor/src/components/editor/views/view-bar.tsx
+#, fuzzy
+msgid "editor.views.viewBar.unavailableView"
+msgstr "Vue indisponible"
+
+# Source-Hash: ff96a36780310b0b
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "{label} isn't available in this project"
+#: packages/editor/src/components/editor/views/view-bar.tsx
+#, fuzzy
+msgid "editor.views.viewBar.unavailableViewTitle"
+msgstr "{label} n'est pas disponible dans ce projet"
 
 # Source-Hash: 9781bcdb7a8549e2
 # Review: required
@@ -38937,6 +38991,15 @@ msgstr "Ciel"
 msgid "viewer.daylight.time.blue"
 msgstr "Heure bleue"
 
+# Source-Hash: bbe32d215ec26c48
+# Review: required
+# English: "Dawn"
+#: packages/viewer/src/ui/components/render-settings-menu.tsx
+#: packages/viewer/src/ui/components/sky-control.tsx
+#, fuzzy
+msgid "viewer.daylight.time.dawn"
+msgstr "Aube"
+
 # Source-Hash: cbeb868b31e2efcb
 # Review: required
 # AI-Provider: claude-code
@@ -39365,9 +39428,50 @@ msgstr "Visite : {state}"
 # English: "Shutters"
 #: packages/viewer/src/components/viewer/glb-scene.tsx
 #: packages/viewer/src/systems/interactive/callout-actions.ts
+#: packages/viewer/src/ui/components/walkthrough-touch-controls.tsx
 #, fuzzy
 msgid "viewer.walkthrough.shutters"
 msgstr "Volets"
+
+# Source-Hash: d7cf5045c01b2eb9
+# Review: required
+# English: "Close"
+#: packages/viewer/src/ui/components/walkthrough-touch-controls.tsx
+#, fuzzy
+msgid "viewer.walkthroughTouch.close"
+msgstr "Fermer"
+
+# Source-Hash: f6bb8786828d83ab
+# Review: required
+# English: "Crouch"
+#: packages/viewer/src/ui/components/walkthrough-touch-controls.tsx
+#, fuzzy
+msgid "viewer.walkthroughTouch.crouch"
+msgstr "S’accroupir"
+
+# Source-Hash: 938aacb119b29dc1
+# Review: required
+# English: "Exit"
+#: packages/viewer/src/ui/components/walkthrough-touch-controls.tsx
+#, fuzzy
+msgid "viewer.walkthroughTouch.exit"
+msgstr "Quitter"
+
+# Source-Hash: 8f7bdd564c509359
+# Review: required
+# English: "Interact"
+#: packages/viewer/src/ui/components/walkthrough-touch-controls.tsx
+#, fuzzy
+msgid "viewer.walkthroughTouch.interact"
+msgstr "Interagir"
+
+# Source-Hash: d2be4c4b179a0f21
+# Review: required
+# English: "Jump"
+#: packages/viewer/src/ui/components/walkthrough-touch-controls.tsx
+#, fuzzy
+msgid "viewer.walkthroughTouch.jump"
+msgstr "Sauter"
 
 # Source-Hash: 4da8b3678ed77b45
 # Review: human

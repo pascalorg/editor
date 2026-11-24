@@ -23,6 +23,7 @@ export const proceduralItemRenderDefinition: NodeRenderDefinition<typeof Procedu
   kind: 'procedural-item'
 } = {
   kind: 'procedural-item',
+  extensions: { 'pascal:viewer': { family: 'items' } },
   schemaVersion: 1,
   schema: ProceduralItemNode,
   category: 'furnish',

@@ -37,7 +37,7 @@ import { roundFloorElevation } from '../lib/room-floor-feasibility'
 import type { BoundaryNode } from '../lib/room-topology-index'
 import { detectSpacesForLevel } from '../lib/space-detection'
 import { reconcileSceneStructure } from '../lib/structure-reconcile'
-import { wallFaceScriptInputs } from '../lib/wall-face-script'
+import { type WallFaceScriptExtent, wallFaceScriptInputs } from '../lib/wall-face-script'
 import { nodeSlotDeclarations } from '../node-slots'
 import { nearestLibraryColorRef } from '../procedural-items/library-colors'
 import {
@@ -529,13 +529,17 @@ export type AuthorSceneFaceScript = {
   nodeId: string
   code: string
   toHeight?: number
+  /** A room's stretch of a face that runs on past it, metres along the wall; absent, the whole face. */
+  u0?: number
+  u1?: number
 }
 
 /**
  * Which faces the payload's face modules build on, and why the others cannot be: a wall's own
  * `faceLeft` (face a) and `faceRight` (face b), its `faceOutside` on the faces no room of its level
- * looks into, then each room's `wallCode` on the faces its floor meets (the spans of the room the
- * zone was derived from, the faces `setWallSkirting` runs along), where a wall's own module wins.
+ * looks into, then each room's `wallCode` on the stretch of each face its floor meets (the spans of
+ * the room the zone was derived from, the faces `setWallSkirting` runs along) — a bathroom's tile
+ * stops where the bathroom does on a wall that runs on past it — where a wall's own module wins.
  * A face with nothing to build on (a curved or curtain wall), a left or right face no room looks
  * into, or an outside module on a wall with rooms on both faces is a `no_face` defect.
  */
@@ -552,8 +556,19 @@ function resolveFaceScripts(
   const defects: AuthorSceneDefect[] = []
   const warnings: AuthorSceneDefect[] = []
   const side = (face: WallFace) => (face === 'a' ? 'left' : 'right')
-  const add = (wallId: string, face: WallFace, nodeId: string, code: string, toHeight?: number) =>
-    scripts.push({ wallId, face, nodeId, code, ...(toHeight === undefined ? {} : { toHeight }) })
+  const add = (
+    wallId: string,
+    face: WallFace,
+    nodeId: string,
+    code: string,
+    extent: WallFaceScriptExtent = {},
+  ): AuthorSceneFaceScript => {
+    const script: AuthorSceneFaceScript = { wallId, face, nodeId, code }
+    for (const key of ['toHeight', 'u0', 'u1'] as const)
+      if (extent[key] !== undefined) script[key] = extent[key]
+    scripts.push(script)
+    return script
+  }
   const flat = 'is curved, a curtain wall or has no height'
   payload.levels.forEach((level, index) => {
     const walls = (level.walls ?? []).flatMap((spec) => {
@@ -569,7 +584,7 @@ function resolveFaceScripts(
         if (!module) continue
         owned.add(`${nodeId}/${face}`)
         const id = `${spec.id}/${face}`
-        if (!wallFaceScriptInputs(nodes, nodeId, face, module.toHeight))
+        if (!wallFaceScriptInputs(nodes, nodeId, face, { toHeight: module.toHeight }))
           defects.push({
             id,
             code: 'no_face',
@@ -581,11 +596,11 @@ function resolveFaceScripts(
             code: 'no_face',
             message: `No room looks into the ${side(face)} face of wall ${spec.id} (left and right as seen from its start to its end): its face script was not written.`,
           })
-        else add(spec.id, face, nodeId, module.code, module.toHeight)
+        else add(spec.id, face, nodeId, module.code, { toHeight: module.toHeight })
       }
       const outside = spec.faceOutside
       if (!outside) continue
-      if (!wallFaceScriptInputs(nodes, nodeId, 'a', outside.toHeight)) {
+      if (!wallFaceScriptInputs(nodes, nodeId, 'a', { toHeight: outside.toHeight })) {
         defects.push({
           id: `${spec.id}/outside`,
           code: 'no_face',
@@ -601,9 +616,18 @@ function resolveFaceScripts(
           code: 'no_face',
           message: `Rooms look into both faces of wall ${spec.id}: it has no outside face, so its faceOutside was not written.`,
         })
-      for (const face of faces) add(spec.id, face, nodeId, outside.code, outside.toHeight)
+      for (const face of faces)
+        add(spec.id, face, nodeId, outside.code, { toHeight: outside.toHeight })
     }
-    const byRoom = new Map<string, { name: string; code: string; toHeight?: number }>()
+    type FaceRoom = {
+      name: string
+      code: string
+      toHeight?: number
+      t0: number
+      t1: number
+      script?: AuthorSceneFaceScript
+    }
+    const byRoom = new Map<string, FaceRoom>()
     for (const [i, room] of level.rooms.entries()) {
       const roomId = `room/${index}/${i}`
       const zone = nodes[ids[roomId] ?? '']
@@ -619,11 +643,17 @@ function resolveFaceScripts(
             .sort()
             .join() === zoneWalls && pointInPolygon(room.seed as Vec2, r.referencePolygon),
       )
-      const faces = new Set(
-        (derived?.spans ?? [])
-          .filter((s) => s.kind === 'wall' && s.t1 > s.t0)
-          .map((s) => `${s.boundaryId}/${s.face}`),
-      )
+      // The room's stretch of each face, as fractions of the wall's chord.
+      const faces = new Map<string, { t0: number; t1: number }>()
+      for (const s of derived?.spans ?? []) {
+        if (s.kind !== 'wall' || s.t1 <= s.t0) continue
+        const key = `${s.boundaryId}/${s.face}`
+        const seen = faces.get(key)
+        faces.set(key, {
+          t0: Math.min(s.t0, seen?.t0 ?? s.t0),
+          t1: Math.max(s.t1, seen?.t1 ?? s.t1),
+        })
+      }
       if (!faces.size) {
         defects.push({
           id: roomId,
@@ -635,31 +665,63 @@ function resolveFaceScripts(
       for (const { spec, nodeId } of walls) {
         for (const face of ['a', 'b'] as const) {
           const key = `${nodeId}/${face}`
-          if (!faces.has(key) || owned.has(key)) continue
+          const stretch = faces.get(key)
+          if (!stretch || owned.has(key)) continue
+          const wall = nodes[nodeId] as WallNode
+          const length = Math.hypot(wall.end[0] - wall.start[0], wall.end[1] - wall.start[1])
+          const along = (t0: number, t1: number): WallFaceScriptExtent => ({
+            toHeight: room.wallToHeight,
+            u0: t0 > WHOLE_FACE ? t0 * length : undefined,
+            u1: t1 < 1 - WHOLE_FACE ? t1 * length : undefined,
+          })
+          const extent = along(stretch.t0, stretch.t1)
           const other = byRoom.get(key)
           if (other) {
-            if (other.code !== room.wallCode || other.toHeight !== room.wallToHeight)
+            if (other.code === room.wallCode && other.toHeight === room.wallToHeight) {
+              // Rooms that share a finish share one build, from the first room's stretch to the last's.
+              other.t0 = Math.min(other.t0, stretch.t0)
+              other.t1 = Math.max(other.t1, stretch.t1)
+              if (other.script) {
+                const { u0, u1 } = along(other.t0, other.t1)
+                delete other.script.u0
+                delete other.script.u1
+                Object.assign(
+                  other.script,
+                  u0 === undefined ? {} : { u0 },
+                  u1 === undefined ? {} : { u1 },
+                )
+              }
+            } else
               warnings.push({
                 id: `${spec.id}/${face}`,
                 code: 'face_shared',
-                message: `The ${side(face)} face of wall ${spec.id} looks into "${other.name}" and "${room.name}": it is built by "${other.name}"'s wallCode.`,
+                message: `The ${side(face)} face of wall ${spec.id} looks into "${other.name}" and "${room.name}": one face takes one module, so only "${other.name}"'s stretch is built by its wallCode and "${room.name}"'s stretch keeps its paint. Give that wall a faceLeft / faceRight, or split it where the rooms meet.`,
               })
             continue
           }
-          byRoom.set(key, { name: room.name, code: room.wallCode, toHeight: room.wallToHeight })
-          if (!wallFaceScriptInputs(nodes, nodeId, face, room.wallToHeight))
+          const entry: FaceRoom = {
+            name: room.name,
+            code: room.wallCode,
+            toHeight: room.wallToHeight,
+            ...stretch,
+          }
+          byRoom.set(key, entry)
+          if (!wallFaceScriptInputs(nodes, nodeId, face, extent))
             defects.push({
               id: `${spec.id}/${face}`,
               code: 'no_face',
               message: `Wall ${spec.id} ${flat}: "${room.name}"'s wallCode was not written on its ${side(face)} face, which keeps its paint.`,
             })
-          else add(spec.id, face, nodeId, room.wallCode, room.wallToHeight)
+          else entry.script = add(spec.id, face, nodeId, room.wallCode, extent)
         }
       }
     }
   })
   return { scripts, defects, warnings }
 }
+
+/** A room's stretch within this share of a wall's end runs to that end: the whole face. */
+const WHOLE_FACE = 1e-3
 
 /** Below this share a floor or face finish leaves enough of its host bare to be worth a warning. */
 const FINISH_COVERED = 0.98

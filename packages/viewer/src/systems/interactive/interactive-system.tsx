@@ -8,9 +8,12 @@ import {
   useScene,
 } from '@pascal-app/core'
 import { useFrame } from '@react-three/fiber'
-import { useCallback, useState } from 'react'
+import { type ReactNode, useCallback, useState } from 'react'
 import type { Object3D } from 'three'
-import { SelectionCallout } from '../../components/viewer/selection-callout'
+import {
+  SelectionCallout,
+  type SelectionCalloutProps,
+} from '../../components/viewer/selection-callout'
 import useViewer from '../../store/use-viewer'
 import { calloutSubtitle, hasCallout, nodeCalloutActions } from './callout-actions'
 
@@ -26,7 +29,11 @@ function calloutTitle(node: AnyNode): string {
  * The parametric viewer's callout on the one selected element: its name, what
  * it is, and what it can do (open a door, switch a lamp, close the shutters).
  */
-export const InteractiveSystem = () => {
+export type InteractiveSystemProps = {
+  renderCallout?: (props: SelectionCalloutProps) => ReactNode
+}
+
+export const InteractiveSystem = ({ renderCallout }: InteractiveSystemProps = {}) => {
   const selectedIds = useViewer((s) => s.selection.selectedIds)
   const walkthrough = useViewer((s) => s.walkthroughMode)
   const node = useScene((s) =>
@@ -35,10 +42,16 @@ export const InteractiveSystem = () => {
       : undefined,
   )
   if (walkthrough || !node || !hasCallout(node.type)) return null
-  return <NodeCallout key={node.id} node={node} />
+  return <NodeCallout key={node.id} node={node} renderCallout={renderCallout} />
 }
 
-function NodeCallout({ node }: { node: AnyNode }) {
+function NodeCallout({
+  node,
+  renderCallout = (props) => <SelectionCallout {...props} />,
+}: {
+  node: AnyNode
+  renderCallout?: (props: SelectionCalloutProps) => ReactNode
+}) {
   const [object, setObject] = useState<Object3D | null>(null)
   // The renderer registers the object a frame or more after selection lands,
   // and may swap it for a new one when the element rebuilds (a sash opening).
@@ -56,13 +69,11 @@ function NodeCallout({ node }: { node: AnyNode }) {
   }, [node.id])
 
   if (!object) return null
-  return (
-    <SelectionCallout
-      actions={actions}
-      object={object}
-      onDismiss={dismiss}
-      subtitle={calloutSubtitle(node, title)}
-      title={title}
-    />
-  )
+  return renderCallout({
+    actions,
+    object,
+    onDismiss: dismiss,
+    subtitle: calloutSubtitle(node, title),
+    title,
+  })
 }

@@ -8,6 +8,7 @@ import { ShelfNode } from './schema'
 
 export const shelfRenderDefinition: NodeRenderDefinition<typeof ShelfNode> & { kind: 'shelf' } = {
   kind: 'shelf',
+  extensions: { 'pascal:viewer': { family: 'items' } },
   schemaVersion: 2,
   schema: ShelfNode,
   category: 'furnish',
@@ -119,7 +120,9 @@ export const shelfRenderDefinition: NodeRenderDefinition<typeof ShelfNode> & { k
     description: 'A configurable shelving unit. Items host on each row.',
     icon: { kind: 'url', src: '/icons/shelf.webp' },
     paletteSection: 'furnish',
-    paletteOrder: 30,
+    // Furnishing, not structure: sit below the structural "Add to rooms" tiles
+    // (door/window/roof/stair) so it lands next to Kitchen rather than first.
+    paletteOrder: 115,
   },
   mcp: {
     description:

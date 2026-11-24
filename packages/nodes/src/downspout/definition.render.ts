@@ -6,6 +6,7 @@ export const downspoutRenderDefinition: NodeRenderDefinition<typeof DownspoutNod
   kind: 'downspout'
 } = {
   kind: 'downspout',
+  extensions: { 'pascal:viewer': { family: 'roof-services' } },
   schemaVersion: 3,
   schema: DownspoutNode,
   category: 'structure',

@@ -7,6 +7,7 @@ import { ZoneNode } from './schema'
 
 export const zoneRenderDefinition: NodeRenderDefinition<typeof ZoneNode> & { kind: 'zone' } = {
   kind: 'zone',
+  extensions: { 'pascal:viewer': { family: null } },
   schemaVersion: 2,
   schema: ZoneNode,
   category: 'site',
