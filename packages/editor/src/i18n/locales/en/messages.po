@@ -972,15 +972,15 @@ msgstr "Volume"
 
 #: packages/editor/src/components/ui/action-menu/point-ask-button.tsx
 msgid "editor.actionMenu.pointAskButton.pointAndAsk"
-msgstr "Point and ask"
+msgstr "Comment"
 
 #: packages/editor/src/components/ui/action-menu/point-ask-button.tsx
 msgid "editor.actionMenu.pointAskButton.pointAndAskC"
-msgstr "Point and ask (C)"
+msgstr "Comment (C)"
 
 #: packages/editor/src/components/ui/action-menu/point-ask-button.tsx
 msgid "editor.actionMenu.pointAskButton.pointAndAskWorksInThe"
-msgstr "Point and ask works in the 3D view"
+msgstr "Comment works in the 3D view"
 
 #: packages/editor/src/components/ui/action-menu/structure-tools.tsx
 msgid "editor.actionMenu.structureTools.beam"
@@ -1854,12 +1854,24 @@ msgid "editor.helpers.contextualHelperPanel.straightSingle"
 msgstr "Straight: Single"
 
 #: packages/editor/src/components/ui/helpers/helper-manager.tsx
+msgid "editor.helpers.helperManager.addOrRemoveElement"
+msgstr "Add or remove element"
+
+#: packages/editor/src/components/ui/helpers/helper-manager.tsx
 msgid "editor.helpers.helperManager.addPoint"
 msgstr "Add point"
 
 #: packages/editor/src/components/ui/helpers/helper-manager.tsx
 msgid "editor.helpers.helperManager.addPointClickTheFirstTo"
 msgstr "Add point · click the first to close"
+
+#: packages/editor/src/components/ui/helpers/helper-manager.tsx
+msgid "editor.helpers.helperManager.anyObjectWallOrSpace"
+msgstr "Any object, wall, or space"
+
+#: packages/editor/src/components/ui/helpers/helper-manager.tsx
+msgid "editor.helpers.helperManager.askArchitect"
+msgstr "Ask Architect"
 
 #: packages/editor/src/components/ui/helpers/helper-manager.tsx
 msgid "editor.helpers.helperManager.brushSize"
@@ -1882,6 +1894,10 @@ msgid "editor.helpers.helperManager.detachTheJoint"
 msgstr "Detach the joint"
 
 #: packages/editor/src/components/ui/helpers/helper-manager.tsx
+msgid "editor.helpers.helperManager.dismiss"
+msgstr "Dismiss"
+
+#: packages/editor/src/components/ui/helpers/helper-manager.tsx
 msgid "editor.helpers.helperManager.done"
 msgstr "Done"
 
@@ -1898,6 +1914,10 @@ msgid "editor.helpers.helperManager.drawTheTerrace"
 msgstr "Draw the terrace"
 
 #: packages/editor/src/components/ui/helpers/helper-manager.tsx
+msgid "editor.helpers.helperManager.exitComment"
+msgstr "Exit comment"
+
+#: packages/editor/src/components/ui/helpers/helper-manager.tsx
 msgid "editor.helpers.helperManager.exitSmartMeasure"
 msgstr "Exit smart measure"
 
@@ -1908,6 +1928,14 @@ msgstr "Finish"
 #: packages/editor/src/components/ui/helpers/helper-manager.tsx
 msgid "editor.helpers.helperManager.finishAtTheEdge"
 msgstr "Finish at the edge"
+
+#: packages/editor/src/components/ui/helpers/helper-manager.tsx
+msgid "editor.helpers.helperManager.frameAnAreaOfTheView"
+msgstr "Frame an area of the view"
+
+#: packages/editor/src/components/ui/helpers/helper-manager.tsx
+msgid "editor.helpers.helperManager.frameAnAreaWithColourMap"
+msgstr "Frame an area with colour map"
 
 #: packages/editor/src/components/ui/helpers/helper-manager.tsx
 msgid "editor.helpers.helperManager.freeMove"
@@ -1926,6 +1954,10 @@ msgid "editor.helpers.helperManager.inspectSurfaceDimensions"
 msgstr "Inspect surface dimensions"
 
 #: packages/editor/src/components/ui/helpers/helper-manager.tsx
+msgid "editor.helpers.helperManager.objectWallOrRoom"
+msgstr "Object, wall, or room"
+
+#: packages/editor/src/components/ui/helpers/helper-manager.tsx
 msgid "editor.helpers.helperManager.paintWithThisMaterial"
 msgstr "Paint with this material"
 
@@ -1934,8 +1966,16 @@ msgid "editor.helpers.helperManager.pickTargetHeight"
 msgstr "Pick target height"
 
 #: packages/editor/src/components/ui/helpers/helper-manager.tsx
+msgid "editor.helpers.helperManager.pinAComment"
+msgstr "Pin a comment"
+
+#: packages/editor/src/components/ui/helpers/helper-manager.tsx
 msgid "editor.helpers.helperManager.pinMeasurementLens"
 msgstr "Pin measurement lens"
+
+#: packages/editor/src/components/ui/helpers/helper-manager.tsx
+msgid "editor.helpers.helperManager.pinWithoutAskingArchitect"
+msgstr "Pin without asking Architect"
 
 #: packages/editor/src/components/ui/helpers/helper-manager.tsx
 msgid "editor.helpers.helperManager.place"
@@ -1974,8 +2014,32 @@ msgid "editor.helpers.helperManager.rotateTheSelection45"
 msgstr "Rotate the selection ±45°"
 
 #: packages/editor/src/components/ui/helpers/helper-manager.tsx
+msgid "editor.helpers.helperManager.saveComment"
+msgstr "Save comment"
+
+#: packages/editor/src/components/ui/helpers/helper-manager.tsx
+msgid "editor.helpers.helperManager.send"
+msgstr "Send"
+
+#: packages/editor/src/components/ui/helpers/helper-manager.tsx
 msgid "editor.helpers.helperManager.setOneCornerThenTheOpposite"
 msgstr "Set one corner, then the opposite"
+
+#: packages/editor/src/components/ui/helpers/helper-manager.tsx
+msgid "editor.helpers.helperManager.smartCapture"
+msgstr "Smart capture"
+
+#: packages/editor/src/components/ui/helpers/helper-manager.tsx
+msgid "editor.helpers.helperManager.startAnAiThreadHere"
+msgstr "Start an AI thread here"
+
+#: packages/editor/src/components/ui/helpers/helper-manager.tsx
+msgid "editor.helpers.helperManager.targetDeeperSurface"
+msgstr "Target deeper surface"
+
+#: packages/editor/src/components/ui/helpers/helper-manager.tsx
+msgid "editor.helpers.helperManager.wallOrFloorBehindARoom"
+msgstr "Wall or floor behind a room"
 
 #: packages/editor/src/components/ui/helpers/item-helper.tsx
 msgid "editor.helpers.itemHelper.cancel"
@@ -4123,6 +4187,10 @@ msgid "editor.lib.continuation.walls"
 msgstr "Walls"
 
 #: packages/editor/src/lib/hud-title.ts
+msgid "editor.lib.hudTitle.comment"
+msgstr "Comment"
+
+#: packages/editor/src/lib/hud-title.ts
 msgid "editor.lib.hudTitle.cutOpening"
 msgstr "Cut opening"
 
@@ -5499,6 +5567,14 @@ msgstr "Length"
 #: packages/editor/src/store/use-placement-typing.ts
 msgid "editor.placementTyping.offset"
 msgstr "Offset"
+
+#: packages/editor/src/components/point-ask/bubble.tsx
+msgid "editor.pointAsk.bubble.colourMapCaptured"
+msgstr "Colour map & scene layers captured"
+
+#: packages/editor/src/components/point-ask/mode-pill.tsx
+msgid "editor.pointAsk.modePill.clickOrDragToComment"
+msgstr "Click anywhere or drag an area to comment"
 
 #: packages/editor/src/components/procedural-items/inspector.tsx
 msgid "editor.proceduralItems.inspector.adjustDesign"

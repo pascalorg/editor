@@ -43,6 +43,7 @@ import { useCallback, useEffect, useRef } from 'react'
 import * as THREE from 'three'
 import { CanvasTarget, ClippingGroup, type WebGPURenderer } from 'three/webgpu'
 import { EDITOR_LAYER } from '../../lib/constants'
+import { isIdPassCancelled, takeIdPass } from '../../lib/enriched-capture/requests'
 import {
   applySnapshotCapturePose,
   captureSnapshotScene,
@@ -1131,14 +1132,36 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
               return
             }
 
+            if (isIdPassCancelled(requestId)) return
+            const idPass = takeIdPass(requestId)
+            const runIdPass = () => {
+              if (!idPass) return
+              if (captureMode !== 'area' || !cropRegion) {
+                idPass.fail('An id buffer needs an area capture')
+                return
+              }
+              const rect = gl.domElement.getBoundingClientRect()
+              idPass.run({
+                renderer: gl,
+                scene,
+                camera: thumbnailCamera,
+                target: cameraData.target,
+                width,
+                height,
+                cropRegion,
+                canvasRect: { left: rect.left, top: rect.top },
+              })
+            }
             const capturePromise = captureSnapshotScene((restore) => {
               setUp(restore)
               if (pipeline) {
                 trace('capture:start', { ortho: wantOrtho, pipeline: true, width, height })
                 advanceNodeFrame()
-                return atCaptureSize(gl as unknown as WebGPURenderer, width, height, () =>
+                const shot = atCaptureSize(gl as unknown as WebGPURenderer, width, height, () =>
                   pipeline.capture({ captureMode, cropRegion, standardSize: encodeSize, mime }),
                 )
+                runIdPass()
+                return shot
               }
               // a sheet's picture (or a supersampled one) is never drawn into
               // the live canvas the viewport shows
@@ -1160,6 +1183,7 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
               }
               trace('canvas:render', { ortho: wantOrtho })
               gl.render(scene, thumbnailCamera)
+              runIdPass()
               return undefined
             })
 

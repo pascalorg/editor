@@ -2404,35 +2404,35 @@ msgstr "Intelligente"
 msgid "editor.actionMenu.measurementControl.volume"
 msgstr "Volume"
 
-# Source-Hash: 64f3eb5e1936906d
+# Source-Hash: af3f2a0025aa014b
 # Review: required
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Point and ask"
+# English: "Comment"
 #: packages/editor/src/components/ui/action-menu/point-ask-button.tsx
 #, fuzzy
 msgid "editor.actionMenu.pointAskButton.pointAndAsk"
-msgstr "Pointer et demander"
+msgstr "Commenter"
 
-# Source-Hash: d86d31e83f6f0888
+# Source-Hash: d6de3c6d126430d6
 # Review: required
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Point and ask (C)"
+# English: "Comment (C)"
 #: packages/editor/src/components/ui/action-menu/point-ask-button.tsx
 #, fuzzy
 msgid "editor.actionMenu.pointAskButton.pointAndAskC"
-msgstr "Pointer et demander (C)"
+msgstr "Commenter (C)"
 
-# Source-Hash: 65622d2ef53c1f3b
+# Source-Hash: 0eba830970fafe39
 # Review: required
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Point and ask works in the 3D view"
+# English: "Comment works in the 3D view"
 #: packages/editor/src/components/ui/action-menu/point-ask-button.tsx
 #, fuzzy
 msgid "editor.actionMenu.pointAskButton.pointAndAskWorksInThe"
-msgstr "Pointer et demander fonctionne dans la vue 3D"
+msgstr "Commenter fonctionne dans la vue 3D"
 
 # Source-Hash: e14858b33b6e2623
 # Review: required
@@ -4565,6 +4565,16 @@ msgstr "Enchaînement de clôture droite — cliquez ou appuyez sur C pour bascu
 msgid "editor.helpers.contextualHelperPanel.straightSingle"
 msgstr "Droite : simple"
 
+# Source-Hash: 583d310ace346957
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Add or remove element"
+#: packages/editor/src/components/ui/helpers/helper-manager.tsx
+#, fuzzy
+msgid "editor.helpers.helperManager.addOrRemoveElement"
+msgstr "Ajouter ou retirer un élément"
+
 # Source-Hash: 9a56d90d461b4bca
 # Review: required
 # AI-Provider: claude-code
@@ -4584,6 +4594,26 @@ msgstr "Ajouter un point"
 #, fuzzy
 msgid "editor.helpers.helperManager.addPointClickTheFirstTo"
 msgstr "Ajouter un point · cliquez sur le premier pour fermer"
+
+# Source-Hash: 01e9f3254eb244eb
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Any object, wall, or space"
+#: packages/editor/src/components/ui/helpers/helper-manager.tsx
+#, fuzzy
+msgid "editor.helpers.helperManager.anyObjectWallOrSpace"
+msgstr "Tout objet, mur ou espace"
+
+# Source-Hash: a4e5aaf60c57ffd7
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Ask Architect"
+#: packages/editor/src/components/ui/helpers/helper-manager.tsx
+#, fuzzy
+msgid "editor.helpers.helperManager.askArchitect"
+msgstr "Demander à Architect"
 
 # Source-Hash: d8cf72d482d56cd7
 # Review: required
@@ -4635,6 +4665,16 @@ msgstr "Annuler le tracé"
 msgid "editor.helpers.helperManager.detachTheJoint"
 msgstr "Détacher la jonction"
 
+# Source-Hash: a2bd204e93e90598
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Dismiss"
+#: packages/editor/src/components/ui/helpers/helper-manager.tsx
+#, fuzzy
+msgid "editor.helpers.helperManager.dismiss"
+msgstr "Fermer"
+
 # Source-Hash: 16552c2580bbe8b8
 # Review: required
 # AI-Provider: claude-code
@@ -4675,6 +4715,16 @@ msgstr "Dessiner l’ouverture"
 msgid "editor.helpers.helperManager.drawTheTerrace"
 msgstr "Dessiner la terrasse"
 
+# Source-Hash: 0b1ca52008a3c70e
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Exit comment"
+#: packages/editor/src/components/ui/helpers/helper-manager.tsx
+#, fuzzy
+msgid "editor.helpers.helperManager.exitComment"
+msgstr "Quitter Commenter"
+
 # Source-Hash: e092e803eb60af69
 # Review: required
 # AI-Provider: claude-code
@@ -4704,6 +4754,26 @@ msgstr "Terminer"
 #, fuzzy
 msgid "editor.helpers.helperManager.finishAtTheEdge"
 msgstr "Terminer au bord"
+
+# Source-Hash: ae14a2eb26809952
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Frame an area of the view"
+#: packages/editor/src/components/ui/helpers/helper-manager.tsx
+#, fuzzy
+msgid "editor.helpers.helperManager.frameAnAreaOfTheView"
+msgstr "Encadrer une zone de la vue"
+
+# Source-Hash: 9c80dc3706e50e11
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Frame an area with colour map"
+#: packages/editor/src/components/ui/helpers/helper-manager.tsx
+#, fuzzy
+msgid "editor.helpers.helperManager.frameAnAreaWithColourMap"
+msgstr "Encadrer une zone avec carte couleur"
 
 # Source-Hash: 21029cf1c45697cc
 # Review: required
@@ -4745,6 +4815,16 @@ msgstr "Maintenez pour prélever un matériau"
 msgid "editor.helpers.helperManager.inspectSurfaceDimensions"
 msgstr "Inspecter les dimensions de la surface"
 
+# Source-Hash: a76193a09fb3dd72
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Object, wall, or room"
+#: packages/editor/src/components/ui/helpers/helper-manager.tsx
+#, fuzzy
+msgid "editor.helpers.helperManager.objectWallOrRoom"
+msgstr "Objet, mur ou pièce"
+
 # Source-Hash: 63f1f7006ae14177
 # Review: required
 # AI-Provider: claude-code
@@ -4765,6 +4845,16 @@ msgstr "Peindre avec ce matériau"
 msgid "editor.helpers.helperManager.pickTargetHeight"
 msgstr "Choisir la hauteur cible"
 
+# Source-Hash: 93253401c349aec2
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Pin a comment"
+#: packages/editor/src/components/ui/helpers/helper-manager.tsx
+#, fuzzy
+msgid "editor.helpers.helperManager.pinAComment"
+msgstr "Épingler un commentaire"
+
 # Source-Hash: 2880fc9752eababa
 # Review: required
 # AI-Provider: claude-code
@@ -4774,6 +4864,16 @@ msgstr "Choisir la hauteur cible"
 #, fuzzy
 msgid "editor.helpers.helperManager.pinMeasurementLens"
 msgstr "Épingler la loupe de mesure"
+
+# Source-Hash: fe11989d83afa8fb
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Pin without asking Architect"
+#: packages/editor/src/components/ui/helpers/helper-manager.tsx
+#, fuzzy
+msgid "editor.helpers.helperManager.pinWithoutAskingArchitect"
+msgstr "Épingler sans demander à Architect"
 
 # Source-Hash: 722741535b346e09
 # Review: required
@@ -4865,6 +4965,26 @@ msgstr "Pivoter de ±45°"
 msgid "editor.helpers.helperManager.rotateTheSelection45"
 msgstr "Pivoter la sélection de ±45°"
 
+# Source-Hash: 689cc4eafbe8924b
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Save comment"
+#: packages/editor/src/components/ui/helpers/helper-manager.tsx
+#, fuzzy
+msgid "editor.helpers.helperManager.saveComment"
+msgstr "Enregistrer le commentaire"
+
+# Source-Hash: 31d32c960114af1d
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Send"
+#: packages/editor/src/components/ui/helpers/helper-manager.tsx
+#, fuzzy
+msgid "editor.helpers.helperManager.send"
+msgstr "Envoyer"
+
 # Source-Hash: c93ae898b4d59f6f
 # Review: required
 # AI-Provider: claude-code
@@ -4874,6 +4994,46 @@ msgstr "Pivoter la sélection de ±45°"
 #, fuzzy
 msgid "editor.helpers.helperManager.setOneCornerThenTheOpposite"
 msgstr "Placez un angle, puis l’angle opposé"
+
+# Source-Hash: 5111a19670b1de6b
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Smart capture"
+#: packages/editor/src/components/ui/helpers/helper-manager.tsx
+#, fuzzy
+msgid "editor.helpers.helperManager.smartCapture"
+msgstr "Capture intelligente"
+
+# Source-Hash: a2e3d89262c974c0
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Start an AI thread here"
+#: packages/editor/src/components/ui/helpers/helper-manager.tsx
+#, fuzzy
+msgid "editor.helpers.helperManager.startAnAiThreadHere"
+msgstr "Démarrer un fil IA ici"
+
+# Source-Hash: beebaf15d47e596d
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Target deeper surface"
+#: packages/editor/src/components/ui/helpers/helper-manager.tsx
+#, fuzzy
+msgid "editor.helpers.helperManager.targetDeeperSurface"
+msgstr "Cibler la surface derrière"
+
+# Source-Hash: 16cbc61997ce85fb
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Wall or floor behind a room"
+#: packages/editor/src/components/ui/helpers/helper-manager.tsx
+#, fuzzy
+msgid "editor.helpers.helperManager.wallOrFloorBehindARoom"
+msgstr "Mur ou sol derrière une pièce"
 
 # Source-Hash: c0774c185060fc13
 # Review: required
@@ -10230,6 +10390,16 @@ msgstr "Clôture simple"
 msgid "editor.lib.continuation.walls"
 msgstr "Murs"
 
+# Source-Hash: af3f2a0025aa014b
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Comment"
+#: packages/editor/src/lib/hud-title.ts
+#, fuzzy
+msgid "editor.lib.hudTitle.comment"
+msgstr "Commenter"
+
 # Source-Hash: 4e4f1a24e4a9d61e
 # Review: required
 # AI-Provider: claude-code
@@ -13671,6 +13841,22 @@ msgstr "Longueur"
 #, fuzzy
 msgid "editor.placementTyping.offset"
 msgstr "Décalage"
+
+# English: "Colour map & scene layers captured"
+# Source-Hash: 39096017e54e1b02
+# Review: required
+#: packages/editor/src/components/point-ask/bubble.tsx
+#, fuzzy
+msgid "editor.pointAsk.bubble.colourMapCaptured"
+msgstr "Carte des couleurs et calques de la scène capturés"
+
+# English: "Click anywhere or drag an area to comment"
+# Source-Hash: c0276310a9eaec76
+# Review: required
+#: packages/editor/src/components/point-ask/mode-pill.tsx
+#, fuzzy
+msgid "editor.pointAsk.modePill.clickOrDragToComment"
+msgstr "Cliquez n'importe où ou tracez une zone pour commenter"
 
 # Source-Hash: 89ee318aad485f83
 # Review: required

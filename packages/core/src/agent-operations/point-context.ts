@@ -19,8 +19,14 @@ export type PointContext = {
   level: { id: string; name: string }
   /** Every pointed element, with no cap: a preview limit is for display, not for the agent. */
   targets: PointTarget[]
-  /** A region's visible elements, by screen area, top 12; `more` counts the rest. */
-  inRegion?: { ids: string[]; more: number }
+  /** Legacy screen-box candidates; `visible`, when present, is the authoritative pixel evidence. */
+  inRegion?: {
+    ids: string[]
+    more: number
+    visible?: PointVisible[]
+    world?: PointWorld
+    rooms?: PointRoom[]
+  }
   camera: PointCamera
   /** [left, top, right, bottom], each 0–1 of the full frame. */
   region?: [number, number, number, number]
@@ -71,6 +77,44 @@ export type PointImage = {
   width: number
   height: number
   marked: boolean
+  segmented?: PointSegmentedImage
+  legend?: PointLegend[]
+  legendText?: string
+}
+
+/** Shares of the region's pixels, 0–1, including surfaces that are not semantic nodes. */
+export type PointVisible = (
+  | { id: string; class?: 'glass' }
+  | { class: 'background' | 'ground' | 'glass' | 'unknown'; id?: never }
+) & { share: number }
+
+export type PointWorld = {
+  center: [number, number, number] | null
+  topLeft: [number, number, number] | null
+  topRight: [number, number, number] | null
+  bottomLeft: [number, number, number] | null
+  bottomRight: [number, number, number] | null
+}
+
+export type PointRoom = { id: string; name: string; share: number }
+
+export type PointSegmentedImage = {
+  url?: string
+  dataUrl?: string
+  width: number
+  height: number
+}
+
+export type PointLegend = {
+  n: number
+  colour: string
+  colourName: string
+  kind: 'node' | 'background' | 'ground' | 'glass' | 'unknown'
+  nodeId?: string
+  nodeType?: string
+  label: string
+  percent: number
+  world: [number, number, number] | null
 }
 
 /** What the editor hands the chat when the person sends an ask. */

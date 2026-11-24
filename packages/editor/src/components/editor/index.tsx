@@ -226,10 +226,14 @@ function initializeEditorRuntime(): () => void {
 export interface EditorProps {
   /** UI locale. Hosts may also call `setLocale` before mounting. */
   locale?: string
+  /** Opt-in pixel evidence for regions and optional free-click / note-composer comment mode. */
+  pointAsk?: { enrichedRegions?: boolean; freeClick?: boolean; noteComposer?: boolean }
   // Layout version — 'v1' (default) or 'v2' (navbar + two-column)
   layoutVersion?: 'v1' | 'v2'
   // Viewport edge the tool menu docks to (desktop only; mobile stays at the bottom)
   actionMenuPlacement?: ActionMenuPlacement
+  /** Host-owned glyph for Point and ask, matching the dock's other tool icons. */
+  pointAskIcon?: ReactNode
 
   // UI slots (v1)
   appMenuButton?: ReactNode
@@ -1233,6 +1237,7 @@ const ViewerCanvas = memo(function ViewerCanvas({
   disablePostFx = false,
   immersive,
   hintBelowTopMenu = false,
+  pointAsk,
 }: {
   isVersionPreviewMode: boolean
   isLoading: boolean
@@ -1253,6 +1258,7 @@ const ViewerCanvas = memo(function ViewerCanvas({
   disablePostFx?: boolean
   immersive?: ViewerImmersiveSession
   hintBelowTopMenu?: boolean
+  pointAsk?: EditorProps['pointAsk']
 }) {
   const layout = useActiveViewLayout()
   const views = useEditorViews()
@@ -1393,7 +1399,12 @@ const ViewerCanvas = memo(function ViewerCanvas({
                 containerRef={viewer3dRef}
                 isVersionPreviewMode={isVersionPreviewMode}
               />
-              {!isVersionPreviewMode && <PointAskLayer />}
+              {!isVersionPreviewMode && (
+                <PointAskLayer
+                  enrichedRegions={pointAsk?.enrichedRegions}
+                  freeClick={pointAsk?.freeClick}
+                />
+              )}
               {!showLoader && isCameraControlsHintVisible && !isFirstPersonMode ? (
                 <ViewerCanvasControlsHint
                   belowTopMenu={hintBelowTopMenu}
@@ -1555,8 +1566,10 @@ function PreviewStage({
 
 function EditorContent({
   guardAgainstSceneWipe,
+  pointAsk,
   layoutVersion = 'v1',
   actionMenuPlacement,
+  pointAskIcon,
   appMenuButton,
   sidebarTop,
   navbarSlot,
@@ -1944,6 +1957,7 @@ function EditorContent({
   const viewerCanvas = (
     <ViewerCanvas
       disablePostFx={disablePostFx}
+      pointAsk={pointAsk}
       hintBelowTopMenu={topMenuShown}
       hasLoadedInitialScene={hasLoadedInitialScene}
       isFirstPersonMode={isFirstPersonMode}
@@ -2076,12 +2090,12 @@ function EditorContent({
                         // No transform: the menu's fixed pill must anchor to the scene region.
                         <div className="pointer-events-none absolute inset-x-0 top-14 z-10 flex justify-center">
                           <div className="pointer-events-auto">
-                            <ActionMenu inline placement="top" />
+                            <ActionMenu inline placement="top" pointAskIcon={pointAskIcon} />
                           </div>
                         </div>
                       ) : (
                         <div className="pointer-events-auto">
-                          <ActionMenu placement={actionMenuPlacement} />
+                          <ActionMenu placement={actionMenuPlacement} pointAskIcon={pointAskIcon} />
                         </div>
                       ))}
                     {sceneOverlay}
@@ -2090,7 +2104,7 @@ function EditorContent({
                   <RightStack
                     belowTopMenu={topMenuShown}
                     reserveBottomMenu={!dockMenuOnTop}
-                    helper={isCaptureMode ? null : <HelperManager />}
+                    helper={isCaptureMode ? null : <HelperManager pointAsk={pointAsk} />}
                     inspector={
                       isVersionPreviewMode || isCaptureMode || isStudioMode ? null : (
                         <PanelManager
@@ -2171,10 +2185,10 @@ function EditorContent({
           {/* Fixed UI overlays scoped to the viewer area */}
           <ViewerOverlays left={overlayLeft}>
             <div className="pointer-events-auto">
-              <ActionMenu placement={actionMenuPlacement} />
+              <ActionMenu placement={actionMenuPlacement} pointAskIcon={pointAskIcon} />
             </div>
             <RightStack
-              helper={<HelperManager />}
+              helper={<HelperManager pointAsk={pointAsk} />}
               inspector={<PanelManager />}
               reserveBottomMenu={actionMenuPlacement !== 'top' || isMobile}
             />

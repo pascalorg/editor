@@ -4,6 +4,7 @@ import {
   type SnapshotCaptureFailedEvent,
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
+import { cancelIdPass, type EnrichedIdPass, expectIdPass } from '../enriched-capture/requests'
 import { canvasRect } from './projector'
 import type { Rect } from './types'
 
@@ -15,7 +16,13 @@ const CROP_LONG_SIDE_MIN = 512
 const CROP_LONG_SIDE_MAX = 768
 const CAPTURE_TIMEOUT_MS = 12_000
 
-export type CapturedCrop = { dataUrl: string; width: number; height: number }
+export type CapturedCrop = {
+  dataUrl: string
+  width: number
+  height: number
+  idPass?: EnrichedIdPass
+  cropRect?: Rect
+}
 
 /** The target's box padded by `pad` of its size on every side, and kept inside the canvas. */
 export function paddedCropRect(
@@ -73,18 +80,34 @@ const BUSY_RETRY_MS = 1_500
  */
 export async function captureViewCrop(
   screenRect: Rect,
-  options: { pad?: number } = {},
+  options: { pad?: number; idPass?: boolean; signal?: AbortSignal } = {},
 ): Promise<CapturedCrop> {
+  if (options.signal?.aborted) throw new Error('Capture cancelled')
   try {
     return await captureOnce(screenRect, options)
   } catch (error) {
     if (!(error instanceof Error && error.message.startsWith(BUSY))) throw error
-    await new Promise((resolve) => setTimeout(resolve, BUSY_RETRY_MS))
+    if (options.signal?.aborted) throw new Error('Capture cancelled')
+    await new Promise<void>((resolve, reject) => {
+      const onAbort = () => {
+        clearTimeout(timer)
+        reject(new Error('Capture cancelled'))
+      }
+      const timer = setTimeout(() => {
+        options.signal?.removeEventListener('abort', onAbort)
+        resolve()
+      }, BUSY_RETRY_MS)
+      options.signal?.addEventListener('abort', onAbort, { once: true })
+    })
     return captureOnce(screenRect, options)
   }
 }
 
-function captureOnce(screenRect: Rect, options: { pad?: number }): Promise<CapturedCrop> {
+function captureOnce(
+  screenRect: Rect,
+  options: { pad?: number; idPass?: boolean; signal?: AbortSignal },
+): Promise<CapturedCrop> {
+  if (options.signal?.aborted) return Promise.reject(new Error('Capture cancelled'))
   const rect = canvasRect()
   const projectId = useViewer.getState().projectId
   if (!rect || !projectId) return Promise.reject(new Error('The 3D view is not ready'))
@@ -94,13 +117,23 @@ function captureOnce(screenRect: Rect, options: { pad?: number }): Promise<Captu
     x1: screenRect.x1 - rect.left,
     y1: screenRect.y1 - rect.top,
   }
-  const cropRegion = toCropRegion(paddedCropRect(local, rect, options.pad ?? 0.25), rect)
+  const cropRect = paddedCropRect(local, rect, options.pad ?? 0.25)
+  const cropRegion = toCropRegion(cropRect, rect)
   const requestId = `point-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`
-  return new Promise((resolve, reject) => {
+  const idPass = options.idPass ? expectIdPass(requestId) : null
+  // The picture can fail first; both correlated promises have a rejection observer immediately.
+  idPass?.catch(() => {})
+  const picture = new Promise<CapturedCrop>((resolve, reject) => {
     const stop = () => {
       clearTimeout(timer)
+      options.signal?.removeEventListener('abort', onAbort)
       emitter.off('snapshot:captured', onCaptured)
       emitter.off('snapshot:capture-failed', onFailed)
+    }
+    const onAbort = () => {
+      stop()
+      if (options.idPass) cancelIdPass(requestId, 'Capture cancelled')
+      reject(new Error('Capture cancelled'))
     }
     const onCaptured = (event: SnapshotCapturedEvent) => {
       if (event.requestId !== requestId) return
@@ -116,6 +149,7 @@ function captureOnce(screenRect: Rect, options: { pad?: number }): Promise<Captu
       stop()
       reject(new Error('No picture came back from the 3D view'))
     }, CAPTURE_TIMEOUT_MS)
+    options.signal?.addEventListener('abort', onAbort, { once: true })
     emitter.on('snapshot:captured', onCaptured)
     emitter.on('snapshot:capture-failed', onFailed)
     emitter.emit('camera-controls:generate-thumbnail', {
@@ -126,4 +160,26 @@ function captureOnce(screenRect: Rect, options: { pad?: number }): Promise<Captu
       cropRegion,
     })
   })
+  if (!idPass) return picture
+  return picture.then(
+    async (crop) => {
+      if (options.signal?.aborted) {
+        cancelIdPass(requestId, 'Capture cancelled')
+        throw new Error('Capture cancelled')
+      }
+      const onAbort = () => cancelIdPass(requestId, 'Capture cancelled')
+      options.signal?.addEventListener('abort', onAbort, { once: true })
+      try {
+        const resolvedIdPass = await idPass.catch(() => undefined)
+        if (options.signal?.aborted) throw new Error('Capture cancelled')
+        return { ...crop, ...(resolvedIdPass ? { idPass: resolvedIdPass } : {}), cropRect }
+      } finally {
+        options.signal?.removeEventListener('abort', onAbort)
+      }
+    },
+    (error) => {
+      cancelIdPass(requestId, 'The picture failed')
+      throw error
+    },
+  )
 }

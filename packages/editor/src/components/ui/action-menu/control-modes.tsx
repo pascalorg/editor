@@ -6,7 +6,7 @@ import type { MessageDescriptor } from '@pascal-app/core'
 import { Icon } from '@iconify/react'
 import { type LucideIcon, Trash2 } from 'lucide-react'
 import Image from 'next/image'
-import { Fragment } from 'react'
+import { Fragment, type ReactNode } from 'react'
 import { cn } from './../../../lib/utils'
 import useEditor from './../../../store/use-editor'
 import { ActionButton } from '@pascal-app/viewer/ui'
@@ -46,7 +46,7 @@ const controls: ControlConfig[] = [
   },
 ]
 
-export function ControlModes() {
+export function ControlModes({ pointAskIcon }: { pointAskIcon?: ReactNode }) {
   const i18n = usePascalI18n()
   const mode = useEditor((state) => state.mode)
   const selectionTool = useEditor((state) => state.floorplanSelectionTool)
@@ -82,7 +82,7 @@ export function ControlModes() {
           <Fragment key={c.id}>
             {c.id === 'delete' ? (
               <>
-                <PointAskButton />
+                <PointAskButton icon={pointAskIcon} />
                 <MeasurementControl />
               </>
             ) : null}

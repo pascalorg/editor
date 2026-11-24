@@ -597,6 +597,7 @@ export {
   resolveStructuralElevationSnap,
 } from './lib/elevation-guides'
 export { resolveCurrentBuildingId } from './lib/elevator-support'
+export { captureEnrichedRegion, type EnrichedCapture } from './lib/enriched-capture/enrich'
 export type { ExportTextureUtils } from './lib/export-texture-utils'
 export { getFloatingMenuScale } from './lib/floating-menu-scale'
 export { startOpeningDraft } from './lib/floor-opening-draft'
@@ -865,11 +866,15 @@ export {
   setPluginInstallLocks,
 } from './lib/plugin-panels'
 export {
+  closePointAskBubble,
+  lookAtPointAsk,
   retryPointAsk,
+  sendPointAskBubble,
   setPointAskBehindQueue,
   setPointAskBusy,
   setPointAskPlayful,
 } from './lib/point-ask/host-api'
+export type { WorldFootprint as PointFootprint } from './lib/point-ask/types'
 export { buildPrintableRoofSegmentSolids } from './lib/print-roof-solids'
 export { configureManifoldRuntime } from './lib/print-shell-compiler-manifold-worker'
 export type { ManifoldRuntimeOptions } from './lib/print-shell-compiler-protocol'

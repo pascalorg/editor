@@ -26,6 +26,7 @@ import { getContextualHelpNodeExtension } from '../../../lib/contextual-help-ext
 import { continuationContextOf, keyCyclableContinuationContext } from '../../../lib/continuation'
 import { canDirectMoveNode, canDirectRotateNode } from '../../../lib/direct-manipulation'
 import {
+  COMMENT_HUD_TITLE,
   DIVIDE_ROOM_HUD_TITLE,
   MEZZANINE_HUD_TITLE,
   OPENING_HUD_TITLE,
@@ -75,6 +76,7 @@ import useInteractionScope, {
   useMovingNode,
   useReshapingNode,
 } from '../../../store/use-interaction-scope'
+import { usePointAsk } from '../../../store/use-point-ask'
 import { BuildingHelper } from './building-helper'
 import { ContextualHelperPanel } from './contextual-helper-panel'
 import { transientDraftId, usePlacementNotice } from '../../../hooks/use-placement-notice'
@@ -349,8 +351,145 @@ export function toolHintsOwnPlacing(
   )
 }
 
-export function HelperManager() {
+/**
+ * Contextual shortcut hints for the Comment (`point-ask`) tool: pointing & smart region capture
+ * before clicking, and composing / Architect actions once a bubble is open.
+ */
+export function commentToolHints({
+  altPressed,
+  shiftPressed,
+  composing,
+  enrichedRegions = false,
+  freeClick = false,
+  noteComposer = false,
+}: {
+  altPressed: boolean
+  shiftPressed: boolean
+  composing: boolean
+  enrichedRegions?: boolean
+  freeClick?: boolean
+  noteComposer?: boolean
+}): ContextualShortcutHint[] {
+  if (composing) {
+    if (noteComposer) {
+      return [
+        {
+          keys: ['Enter'],
+          label: /* i18n */ { id: 'editor.helpers.helperManager.saveComment', message: 'Save comment' },
+          subtitle: /* i18n */ {
+            id: 'editor.helpers.helperManager.pinWithoutAskingArchitect',
+            message: 'Pin without asking Architect',
+          },
+          pinned: true,
+        },
+        {
+          keys: ['Cmd/Ctrl', 'Enter'],
+          label: /* i18n */ { id: 'editor.helpers.helperManager.askArchitect', message: 'Ask Architect' },
+          subtitle: /* i18n */ {
+            id: 'editor.helpers.helperManager.startAnAiThreadHere',
+            message: 'Start an AI thread here',
+          },
+          pinned: true,
+        },
+        {
+          keys: ['Shift', 'Click'],
+          label: /* i18n */ {
+            id: 'editor.helpers.helperManager.addOrRemoveElement',
+            message: 'Add or remove element',
+          },
+          active: shiftPressed,
+          pinned: true,
+        },
+        {
+          keys: ['Esc'],
+          label: /* i18n */ { id: 'editor.helpers.helperManager.dismiss', message: 'Dismiss' },
+        },
+      ]
+    }
+    return [
+      {
+        keys: ['Enter'],
+        label: /* i18n */ { id: 'editor.helpers.helperManager.send', message: 'Send' },
+        pinned: true,
+      },
+      {
+        keys: ['Shift', 'Click'],
+        label: /* i18n */ {
+          id: 'editor.helpers.helperManager.addOrRemoveElement',
+          message: 'Add or remove element',
+        },
+        active: shiftPressed,
+        pinned: true,
+      },
+      {
+        keys: ['Esc'],
+        label: /* i18n */ { id: 'editor.helpers.helperManager.dismiss', message: 'Dismiss' },
+      },
+    ]
+  }
+  return [
+    {
+      keys: ['Click'],
+      label: /* i18n */ { id: 'editor.helpers.helperManager.pinAComment', message: 'Pin a comment' },
+      subtitle: freeClick
+        ? /* i18n */ {
+            id: 'editor.helpers.helperManager.anyObjectWallOrSpace',
+            message: 'Any object, wall, or space',
+          }
+        : /* i18n */ {
+            id: 'editor.helpers.helperManager.objectWallOrRoom',
+            message: 'Object, wall, or room',
+          },
+      pinned: true,
+    },
+    {
+      keys: ['Drag'],
+      label: /* i18n */ { id: 'editor.helpers.helperManager.smartCapture', message: 'Smart capture' },
+      subtitle: enrichedRegions
+        ? /* i18n */ {
+            id: 'editor.helpers.helperManager.frameAnAreaWithColourMap',
+            message: 'Frame an area with colour map',
+          }
+        : /* i18n */ {
+            id: 'editor.helpers.helperManager.frameAnAreaOfTheView',
+            message: 'Frame an area of the view',
+          },
+      pinned: true,
+    },
+    {
+      keys: ['Alt'],
+      label: /* i18n */ {
+        id: 'editor.helpers.helperManager.targetDeeperSurface',
+        message: 'Target deeper surface',
+      },
+      subtitle: /* i18n */ {
+        id: 'editor.helpers.helperManager.wallOrFloorBehindARoom',
+        message: 'Wall or floor behind a room',
+      },
+      active: altPressed,
+      pinned: true,
+    },
+    {
+      keys: ['Esc'],
+      label: /* i18n */ { id: 'editor.helpers.helperManager.exitComment', message: 'Exit comment' },
+    },
+  ]
+}
+
+export function HelperManager({
+  pointAsk,
+}: {
+  pointAsk?: { enrichedRegions?: boolean; freeClick?: boolean; noteComposer?: boolean }
+} = {}) {
   const i18n = usePascalI18n()
+  const pointAskActive = usePointAsk((s) => s.active)
+  const pointAskComposing = usePointAsk((s) => Boolean(s.bubble))
+  const pointAskCardOpen = usePointAsk((s) => {
+    if (!s.cardFor) return false
+    const pin = s.pins[s.cardFor]
+    // Ephemeral pins open on hover; only a persistent thread card (or a synthetic card without a pin record) hides the Comment HUD.
+    return !pin || pin.behavior === 'persistent'
+  })
   const mode = useEditor((s) => s.mode)
   const tool = useEditor((s) => s.tool)
   const terrainVerb = useEditor((s) => s.terrainVerb)
@@ -459,6 +598,23 @@ export function HelperManager() {
   // The studio workspace (compose panel / gallery) has no scene selection or
   // tools — editor shortcut hints would only mislead there.
   if (workspaceMode === 'studio') return null
+
+  if (pointAskActive) {
+    if (pointAskCardOpen && !pointAskComposing) return null
+    return (
+      <ContextualHelperPanel
+        hints={commentToolHints({
+          altPressed: modifiers.alt,
+          shiftPressed: modifiers.shift,
+          composing: pointAskComposing,
+          enrichedRegions: pointAsk?.enrichedRegions === true,
+          freeClick: pointAsk?.freeClick === true,
+          noteComposer: pointAsk?.noteComposer === true,
+        })}
+        title={COMMENT_HUD_TITLE}
+      />
+    )
+  }
 
   if (
     activeHandleDrag?.label === ROTATE_HANDLE_DRAG_LABEL ||

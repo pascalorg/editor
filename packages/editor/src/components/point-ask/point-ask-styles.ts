@@ -26,7 +26,10 @@ export const POINT_ASK_CSS = `
 .pa-tail{position:absolute;left:0;top:0;width:12px;height:12px;border-radius:2px;background:rgba(32,33,39,.95)}
 .pa-ctx{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-bottom:10px;cursor:grab;position:relative}
 .pa-ctx:active{cursor:grabbing}
-.pa-thumb{width:40px;height:40px;border-radius:8px;object-fit:cover;margin-left:auto;background:#0f1013}
+.pa-thumb-wrap{position:relative;margin-left:auto;width:42px;height:42px;flex:none}
+.pa-thumb{width:42px;height:42px;border-radius:9px;object-fit:cover;display:block;background:#0f1013;box-shadow:inset 0 0 0 1px rgba(255,255,255,.1)}
+.pa-thumb-mapbadge{position:absolute;right:2px;bottom:2px;display:inline-flex;gap:1.5px;padding:2px 3px;border-radius:999px;background:rgba(16,17,22,.86);box-shadow:0 0 0 1px rgba(255,255,255,.16)}
+.pa-thumb-mapbadge i{width:3.5px;height:3.5px;border-radius:50%;display:block}
 .pa-nopic{margin-left:auto;font-size:11px;color:var(--pa-tx3);font-weight:500}
 .pa-tchip{display:inline-flex;align-items:center;gap:6px;height:24px;padding:0 6px 0 8px;border-radius:999px;background:rgba(169,155,255,.16);color:#d9d2ff;font-weight:600;font-size:12px;font-variant-numeric:tabular-nums;white-space:nowrap;max-width:210px}
 .pa-tchip i{width:6px;height:6px;border-radius:50%;background:var(--pa-accent);flex:none}
@@ -56,14 +59,24 @@ export const POINT_ASK_CSS = `
 .pa-btn.ghost{background:transparent;box-shadow:inset 0 0 0 1px rgba(255,255,255,.14)}
 .pa-err{margin:8px 2px 0;font-size:12px;color:var(--pa-warm);display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 .pa-pin{position:absolute;left:0;top:0;width:32px;height:32px;margin:-38px 0 0 -16px;pointer-events:auto;cursor:pointer;display:grid;place-items:center;will-change:transform}
-.pa-pin::after{content:"";position:absolute;left:50%;top:28px;width:2px;height:8px;margin-left:-1px;border-radius:1px;background:var(--pa-accent);opacity:.85}
-.pa-pdisc{width:24px;height:24px;border-radius:50%;background:rgba(24,25,30,.92);box-shadow:inset 0 0 0 1.5px rgba(169,155,255,.9),0 6px 16px -6px rgba(0,0,0,.7);display:grid;place-items:center;transition:box-shadow 240ms ease}
-.pa-pdisc svg{width:20px;height:20px;overflow:visible}
+.pa-pin::after{content:"";position:absolute;left:50%;top:35px;width:5px;height:5px;margin-left:-2.5px;border-radius:50%;background:var(--pa-accent);box-shadow:0 0 0 1.5px var(--pa-ink);opacity:.9;transition:background 180ms ease,transform 180ms var(--pa-ease)}
+.pa-pin[role="button"]:hover .pa-pdisc,.pa-pin[role="button"]:focus-visible .pa-pdisc{transform:scale(1.08);box-shadow:inset 0 0 0 2px var(--pa-accent),0 0 0 4px rgba(169,155,255,.16),0 8px 20px -6px rgba(0,0,0,.78)}
+.pa-pin[role="button"]:focus-visible{outline:2px solid var(--pa-accent);outline-offset:2px;border-radius:999px}
+.pa-pin-link{position:absolute;left:0;top:0;width:1px;height:1px;overflow:visible;pointer-events:none}
+.pa-pin-link line{stroke:var(--pa-accent);stroke-width:1;opacity:.5}
+.pa-pin-link circle{fill:var(--pa-accent);stroke:var(--pa-ink);stroke-width:1}
+.pa-footprint{position:absolute;inset:0;width:100%;height:100%;overflow:visible;pointer-events:none}
+.pa-footprint polygon{fill:rgba(169,155,255,.10);stroke:var(--pa-accent);stroke-width:1.5;stroke-dasharray:6 4;stroke-linecap:round;stroke-linejoin:round}
+.pa-pdisc{width:28px;height:28px;border-radius:50% 50% 50% 4px;background:rgba(20,21,26,.94);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);box-shadow:inset 0 0 0 1.5px rgba(169,155,255,.92),0 8px 18px -6px rgba(0,0,0,.72);display:grid;place-items:center;transition:box-shadow 220ms ease,transform 180ms var(--pa-ease)}
+.pa-pdisc svg{width:15px;height:15px;overflow:visible}
+.pa-cm{fill:none;stroke:var(--pa-tx);stroke-width:1.85;stroke-linecap:round;opacity:0;transition:opacity 160ms ease}
+.pa-pin[data-comment-glyph="lines"] .pa-cm{opacity:1}
+.pa-pin[data-comment-glyph="lines"] .pa-pq,.pa-pin[data-comment-glyph="lines"] .pa-sg{opacity:0}
 .pa-pq,.pa-pa{fill:none;stroke:#a99bff;stroke-width:1.8;opacity:0;transition:opacity 160ms ease}
 .pa-pq{stroke-dasharray:2.4 2.4}
 .pa-pa{stroke-width:2;stroke-linecap:round}
 .pa-pk{fill:none;stroke:var(--pa-ok);stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:14;stroke-dashoffset:14;transition:stroke-dashoffset 240ms var(--pa-ease) 80ms}
-.pa-sg{fill:none;stroke:var(--pa-accent);stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;opacity:0;transition:opacity 160ms ease}
+.pa-sg,.pa-ic{fill:none;stroke:var(--pa-accent);stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round;opacity:0;transition:opacity 160ms ease}
 .pa-pin.queued .pa-pq,.pa-pin.working .pa-pa{opacity:1}
 .pa-pin.needs-input .pa-pdisc{box-shadow:inset 0 0 0 1.5px rgba(246,184,102,.95),0 0 14px 1px rgba(246,184,102,.45),0 6px 16px -6px rgba(0,0,0,.7)}
 .pa-pin.needs-input .pa-pa{opacity:1;stroke:var(--pa-warm)}
@@ -75,6 +88,7 @@ export const POINT_ASK_CSS = `
 .pa-pin.no-change .pa-pk{stroke:var(--pa-tx3);stroke-dashoffset:0;opacity:.8}
 .pa-pin.no-change::after{background:var(--pa-tx3)}
 .pa-pin.error .pa-pdisc{box-shadow:inset 0 0 0 1.5px rgba(255,138,128,.95),0 6px 16px -6px rgba(0,0,0,.7)}
+.pa-pin.error .pa-ic-wrong{opacity:1;stroke:var(--pa-bad)}
 .pa-pin.error::after{background:var(--pa-bad)}
 .pa-pin.undone .pa-pq{opacity:.7;stroke:var(--pa-tx3)}
 .pa-pin.undone .pa-pdisc{box-shadow:inset 0 0 0 1.5px rgba(255,255,255,.25),0 6px 16px -6px rgba(0,0,0,.7)}

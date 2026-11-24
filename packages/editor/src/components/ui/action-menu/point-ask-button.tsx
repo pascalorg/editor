@@ -1,6 +1,7 @@
 'use client'
 
 import { useHasPointAskHandler, usePascalI18n } from '@pascal-app/core'
+import type { ReactNode } from 'react'
 import { canPoint, enterPointMode, leavePointMode } from '../../../lib/point-ask/session'
 import { cn } from '../../../lib/utils'
 import useEditor from '../../../store/use-editor'
@@ -13,7 +14,7 @@ import { ActionButton } from '@pascal-app/viewer/ui'
  * be told about and a click opens a bubble to ask. Offered only where a host answers asks. In
  * the 2D plan and the walkthrough it is disabled and says so (v1 works in the 3D view).
  */
-export function PointAskButton() {
+export function PointAskButton({ icon }: { icon?: ReactNode }) {
   const i18n = usePascalI18n()
   const available = useHasPointAskHandler()
   const active = usePointAsk((s) => s.active)
@@ -32,7 +33,7 @@ export function PointAskButton() {
       data-guide-target="mode-point-ask"
       disabled={unavailable}
       isActive={active}
-      label={i18n._({ id: 'editor.actionMenu.pointAskButton.pointAndAsk', message: 'Point and ask' })}
+      label={i18n._({ id: 'editor.actionMenu.pointAskButton.pointAndAsk', message: 'Comment' })}
       onClick={() => {
         if (active) leavePointMode()
         else if (canPoint()) enterPointMode(true)
@@ -40,14 +41,26 @@ export function PointAskButton() {
       shortcut="C"
       size="icon"
       tooltipContent={
-        unavailable ? <p>{i18n._({ id: 'editor.actionMenu.pointAskButton.pointAndAskWorksInThe', message: 'Point and ask works in the 3D view' })}</p> : <p>{i18n._({ id: 'editor.actionMenu.pointAskButton.pointAndAskC', message: 'Point and ask (C)' })}</p>
+        unavailable ? <p>{i18n._({ id: 'editor.actionMenu.pointAskButton.pointAndAskWorksInThe', message: 'Comment works in the 3D view' })}</p> : <p>{i18n._({ id: 'editor.actionMenu.pointAskButton.pointAndAskC', message: 'Comment (C)' })}</p>
       }
       variant="ghost"
     >
-      <svg aria-hidden className="h-5 w-5" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.6" viewBox="0 0 24 24">
-        <path d="M4.5 3.5l8.2 3.7-3.4 1.3-1.3 3.4z" fill="currentColor" fillOpacity="0.25" />
-        <path d="M12.5 12.5h6.5a2 2 0 012 2v3a2 2 0 01-2 2h-2.2l-2.3 2v-2h-2a2 2 0 01-2-2v-3a2 2 0 012-2z" />
-      </svg>
+      {icon ?? (
+        <svg
+          aria-hidden
+          className="size-4"
+          fill="none"
+          stroke="currentColor"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          strokeWidth="2"
+          viewBox="0 0 24 24"
+        >
+          <path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z" />
+          <path d="M12 8v6" />
+          <path d="M9 11h6" />
+        </svg>
+      )}
     </ActionButton>
   )
 }
