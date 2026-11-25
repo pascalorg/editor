@@ -208,6 +208,18 @@ describe('SlabNode slope schema & pure plane math', () => {
     }
   })
 
+  test('clamps elevation queries outside the slab span to [minTop, maxTop]', () => {
+    const ramp = SlabNode.parse({
+      polygon: RECT_4X2,
+      elevation: 0.1,
+      slope: { direction: 0, pitch: 45 }, // span [0, 4] → top [0.1, 4.1]
+    })
+    // Item origin slightly past the low edge (x = -0.2) stays at low-edge elevation 0.1
+    expect(getSlabElevationAtPoint(ramp, -0.2, 1)).toBeCloseTo(0.1, 6)
+    // Item origin slightly past the high edge (x = 4.2) stays at high-edge elevation 4.1
+    expect(getSlabElevationAtPoint(ramp, 4.2, 1)).toBeCloseTo(4.1, 6)
+  })
+
   test('slabSlopeEqual compares direction and pitch', () => {
     expect(slabSlopeEqual(undefined, undefined)).toBe(true)
     expect(slabSlopeEqual({ direction: 0, pitch: 5 }, { direction: 0, pitch: 5 })).toBe(true)

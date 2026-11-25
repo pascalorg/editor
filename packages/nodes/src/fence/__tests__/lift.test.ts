@@ -14,6 +14,7 @@ import {
 } from '@pascal-app/core'
 import { Box3, Mesh } from 'three'
 import { fenceDefinition } from '../definition'
+import { fenceBaseElevation } from '../definition.render'
 import { resolveFenceLiftElevation, resolveFenceLiftElevationForNodes } from '../lift'
 
 const LEVEL_ID = 'level-1'
@@ -293,4 +294,38 @@ test('a railing hosted on a sloped slab lifts and slopes along the ramp surface'
   group.traverse((object) => {
     if (object instanceof Mesh) object.geometry.dispose()
   })
+})
+
+test('a level-mode railing on a sloped slab keeps fenceBaseElevation flat at start', () => {
+  const level = LevelNode.parse({ id: 'level_ramp_flat', children: [] })
+  const ramp = SlabNode.parse({
+    id: 'slab_ramp_flat',
+    parentId: level.id,
+    polygon: [
+      [0, 0],
+      [4, 0],
+      [4, 2],
+      [0, 2],
+    ],
+    elevation: 0.2,
+    thickness: 0.1,
+    slope: { direction: 0, pitch: 45 },
+  })
+  const railing = FenceNode.parse({
+    id: 'fence_level_on_ramp',
+    parentId: level.id,
+    supportSlabId: ramp.id,
+    surfaceMode: 'level',
+    start: [1, 0],
+    end: [3, 0],
+    height: 1.0,
+    style: 'rail',
+    baseStyle: 'floating',
+    baseHeight: 0,
+  })
+  level.children = [ramp.id, railing.id]
+  const nodes = Object.fromEntries([level, ramp, railing].map((n) => [n.id, n]))
+  const sceneApi = createSceneApi({ getState: () => ({ nodes }) } as never)
+  expect(fenceBaseElevation(railing, sceneApi, railing.start)).toBeCloseTo(1.2, 4)
+  expect(fenceBaseElevation(railing, sceneApi, railing.end)).toBeCloseTo(1.2, 4)
 })

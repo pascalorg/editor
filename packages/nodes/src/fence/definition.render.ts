@@ -25,7 +25,8 @@ export function fenceBaseElevation(
 ): number {
   const nodes = sceneApi?.nodes()
   if (!nodes) return resolveFenceLiftElevation(n, () => undefined)
-  if (n.supportSlabId) return resolveFenceLiftElevationForNodes(n, nodes, point)
+  if (n.supportSlabId)
+    return resolveFenceLiftElevationForNodes(n, nodes, n.surfaceMode === 'level' ? n.start : point)
   const levelId = findLevelAncestorId(n.id as AnyNodeId, nodes)
   if (levelId && ((n.path?.length ?? 0) >= 2 || Math.abs(n.curveOffset ?? 0) > 1e-4)) {
     const selectedHost =

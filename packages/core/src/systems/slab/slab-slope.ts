@@ -112,7 +112,8 @@ export function getSlabSlopePlane(slab: SlabSlopeInput): SlabSlopePlane {
 export function getSlabElevationAtPoint(slab: SlabSlopeInput, x: number, z: number): number {
   const plane = getSlabSlopePlane(slab)
   if (!plane.sloped) return plane.minTop
-  return plane.minTop + (x * plane.dirX + z * plane.dirZ - plane.minProj) * plane.grade
+  const proj = Math.min(Math.max(x * plane.dirX + z * plane.dirZ, plane.minProj), plane.maxProj)
+  return plane.minTop + (proj - plane.minProj) * plane.grade
 }
 
 export function getSlabBottomElevationAtPoint(slab: SlabSlopeInput, x: number, z: number): number {
