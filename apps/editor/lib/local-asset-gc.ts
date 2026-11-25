@@ -1,5 +1,5 @@
 import {
-  collectGraphAssetUrlsFromParts,
+  collectLocalAssetUrls,
   collectNodeAssetUrls,
   sweepLocalAssetsExcept,
 } from '@pascal-app/core'
@@ -13,9 +13,11 @@ type SceneGraphLike = {
   materials?: unknown
 }
 
-function collectGraphAssetUrls(graph: SceneGraphLike | null | undefined): string[] {
-  if (!graph?.nodes && !graph?.materials) return []
-  return collectGraphAssetUrlsFromParts(graph.nodes as never, graph.materials)
+function collectGraphAssetUrls(graph: unknown): string[] | null {
+  if (!graph || typeof graph !== 'object' || !('nodes' in graph)) return null
+  const nodes = graph.nodes
+  if (!nodes || typeof nodes !== 'object' || Array.isArray(nodes)) return null
+  return collectLocalAssetUrls(graph)
 }
 
 /** Asset URLs still referenced by the browser's localStorage scene, if any. */
@@ -23,8 +25,8 @@ export function collectLocalStorageSceneAssetUrls(): string[] | null {
   if (typeof localStorage === 'undefined') return []
   try {
     const raw = localStorage.getItem(LOCAL_STORAGE_SCENE_KEY)
-    if (!raw) return []
-    return collectGraphAssetUrls(JSON.parse(raw) as SceneGraphLike)
+    if (raw === null) return []
+    return collectGraphAssetUrls(JSON.parse(raw))
   } catch {
     return null
   }
@@ -38,7 +40,9 @@ export function collectLocalStorageSceneAssetUrls(): string[] | null {
 export async function collectAllPersistedAssetUrls(
   currentGraph: SceneGraphLike,
 ): Promise<string[] | null> {
-  const keep = new Set<string>(collectGraphAssetUrls(currentGraph))
+  const currentUrls = collectGraphAssetUrls(currentGraph)
+  if (currentUrls === null) return null
+  const keep = new Set(currentUrls)
   const localUrls = collectLocalStorageSceneAssetUrls()
   if (localUrls === null) return null
   for (const url of localUrls) keep.add(url)
@@ -74,8 +78,9 @@ export async function collectAllPersistedAssetUrls(
         graph?: SceneGraphLike
       }
       const graph = body.data?.graph ?? body.data?.scene?.graph ?? body.graph ?? null
-      if (!graph || typeof graph !== 'object') return null
-      for (const url of collectGraphAssetUrls(graph)) keep.add(url)
+      const urls = collectGraphAssetUrls(graph)
+      if (urls === null) return null
+      for (const url of urls) keep.add(url)
     } catch {
       return null
     }
@@ -92,6 +97,7 @@ export async function collectAllPersistedAssetUrls(
  * not yet on a node; a sequential GET per scene also burns the shared API rate
  * bucket used by autosave (#733 review). Call only when the host can prove:
  * no in-flight writes, a complete scene inventory, and spare rate budget.
+ * Pass references from any other recoverable snapshots in extraKeepUrls.
  *
  * `getLiveGraph` is re-read immediately before sweeping so both nodes and
  * unsaved material texture references survive.
@@ -105,7 +111,9 @@ export async function runLocalAssetGc(
   if (keep === null) return null
 
   const finalKeep = new Set<string>(keep)
-  for (const url of collectGraphAssetUrls(getLiveGraph())) {
+  const liveUrls = collectGraphAssetUrls(getLiveGraph())
+  if (liveUrls === null) return null
+  for (const url of liveUrls) {
     finalKeep.add(url)
   }
   for (const url of extraKeepUrls) {

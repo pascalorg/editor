@@ -499,6 +499,7 @@ export {
 export { getDefaultLevelName, getLevelDisplayName } from './lib/level-name'
 export {
   collectGraphAssetUrlsFromParts,
+  collectLocalAssetUrls,
   collectNodeAssetUrls,
   collectSceneAssetUrls,
 } from './lib/local-asset-lifecycle'

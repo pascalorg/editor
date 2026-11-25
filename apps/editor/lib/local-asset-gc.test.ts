@@ -80,6 +80,45 @@ describe('runLocalAssetGc safety', () => {
     }
   })
 
+  test('skips a graph with a missing or malformed node map', async () => {
+    const asset = await saveAsset(new File(['keep'], 'keep.txt'))
+    try {
+      for (const graph of [{}, { nodes: null }, { nodes: [] }]) {
+        const restore = mockFetch((url) =>
+          url.includes('/api/scenes?') ? json({ scenes: [{ id: 'scene-1' }] }) : json({ graph }),
+        )
+        try {
+          expect(await runLocalAssetGc(() => ({ nodes: {} }))).toBeNull()
+          expect(await loadAssetUrl(asset)).not.toBeNull()
+        } finally {
+          restore()
+        }
+      }
+    } finally {
+      await deleteAsset(asset)
+    }
+  })
+
+  test('keeps deeply nested references and references outside nodes and materials', async () => {
+    const deepAsset = await saveAsset(new File(['deep'], 'deep.txt'))
+    const collectionAsset = await saveAsset(new File(['collection'], 'collection.txt'))
+    let nested: unknown = deepAsset
+    for (let depth = 0; depth < 12; depth++) nested = { nested }
+    const graph = { nodes: { plugin: { nested } }, collections: { preview: collectionAsset } }
+    const restore = mockFetch((url) =>
+      url.includes('/api/scenes?') ? json({ scenes: [{ id: 'scene-1' }] }) : json({ graph }),
+    )
+    try {
+      await runLocalAssetGc(() => ({ nodes: {} }))
+      expect(await loadAssetUrl(deepAsset)).not.toBeNull()
+      expect(await loadAssetUrl(collectionAsset)).not.toBeNull()
+    } finally {
+      restore()
+      await deleteAsset(deepAsset)
+      await deleteAsset(collectionAsset)
+    }
+  })
+
   test('skips GC when the local scene cannot be parsed', async () => {
     const previous = Object.getOwnPropertyDescriptor(globalThis, 'localStorage')
     Object.defineProperty(globalThis, 'localStorage', {

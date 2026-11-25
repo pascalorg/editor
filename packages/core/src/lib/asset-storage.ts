@@ -49,8 +49,9 @@ export async function loadAssetUrl(url: string): Promise<string | null> {
   if (url.startsWith(ARTIFACT_URL_PREFIX)) return resolveArtifactUrl(url)
 
   // Handle our custom asset protocol
-  const id = assetIdFromUrl(url)
-  if (id) {
+  if (url.startsWith('asset://')) {
+    const id = url.replace('asset://', '')
+
     // Check cache first
     if (urlCache.has(id)) {
       return urlCache.get(id)!
