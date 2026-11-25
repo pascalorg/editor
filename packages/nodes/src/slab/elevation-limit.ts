@@ -205,12 +205,22 @@ export function clampSlabSlope(
 
   const candidate: SlabNode = { ...slab, slope: { direction, pitch } }
   const plane = getSlabSlopePlane(candidate)
-  if (plane.span <= 1e-6 || plane.maxTop <= flatUpper + 1e-9) {
+  if (plane.span <= 1e-6) return { direction, pitch }
+
+  const slopedUpper = slabElevationUpperBound(nodes, candidate)
+  const currentElevation = slab.elevation ?? 0.05
+  if (!Number.isFinite(slopedUpper) || currentElevation <= slopedUpper + 1e-9) {
     return { direction, pitch }
   }
 
-  const maxRise = Math.max(0, flatUpper - (slab.elevation ?? 0.05))
-  const maxPitch = (Math.atan(maxRise / plane.span) * 180) / Math.PI
+  // Derive the exact span along the uphill direction to the highest overlapping
+  // plane-bound wall rather than capping against the slab's full polygon span.
+  const wallLocalRise = Math.max(0, flatUpper - slopedUpper)
+  const wallSpan = plane.grade > 1e-9 ? wallLocalRise / plane.grade : 0
+  if (wallSpan <= 1e-6) return { direction, pitch }
+
+  const maxRise = Math.max(0, flatUpper - currentElevation)
+  const maxPitch = (Math.atan(maxRise / wallSpan) * 180) / Math.PI
   // Floor to 0.01° so rounding never overshoots flatUpper.
   const clampedPitch = Math.floor(Math.min(pitch, maxPitch) * 100) / 100
   if (clampedPitch <= 1e-4) return undefined

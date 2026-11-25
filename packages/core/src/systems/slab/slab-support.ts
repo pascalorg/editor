@@ -53,8 +53,8 @@ export function clampSlabElevationForWalls(
   nodes?: Readonly<Record<string, AnyNode>>,
 ): SlabElevationClamp {
   const rise = getSlabSlopePlane(slab).rise
-  const bound = storeyHeight - MIN_WALL_HEIGHT - rise
-  if (proposedElevation <= bound) return { elevation: proposedElevation, clamped: false }
+  const flatBound = storeyHeight - MIN_WALL_HEIGHT
+  if (proposedElevation <= flatBound - rise) return { elevation: proposedElevation, clamped: false }
   if (slab.polygon.length < 3) return { elevation: proposedElevation, clamped: false }
 
   // Probed below the storey plane: a wall electing the slab there elects it at
@@ -65,10 +65,16 @@ export function clampSlabElevationForWalls(
   const probed = Math.min(proposedElevation, storeyHeight - MIN_WALL_HEIGHT / 2)
   const substituted = levelSlabs.some((candidate) => candidate.id === slab.id)
     ? levelSlabs.map((candidate) =>
-        candidate.id === slab.id ? { ...candidate, elevation: probed } : candidate,
+        candidate.id === slab.id ? { ...slab, elevation: probed } : candidate,
       )
     : [...levelSlabs, { ...slab, elevation: probed }]
+  const hasBasePlate = Boolean(nodes && substituted.some((s) => s.plateRole === 'base'))
+  const effectiveProbed =
+    hasBasePlate && nodes
+      ? liftedManualSlab(nodes, { ...slab, elevation: probed }).elevation
+      : probed
 
+  let tightestBound = Number.POSITIVE_INFINITY
   for (const wall of levelWalls) {
     if (!wallFollowsStorey(wall, storeyHeight)) continue
     const wallLike: WallOverlapInput = {
@@ -92,10 +98,19 @@ export function clampSlabElevationForWalls(
     )
     if (
       support.electedSlabId === slab.id ||
-      Math.abs(support.elevation - probed) <= WALL_SLAB_ELEVATION_POOL_EPSILON
+      Math.abs(support.elevation - effectiveProbed) <= WALL_SLAB_ELEVATION_POOL_EPSILON
     ) {
-      return { elevation: bound, clamped: true }
+      // Subtract only the rise actually reached along this overlapping wall
+      // (so a wall meeting only the low end of a long ramp does not over-clamp).
+      const wallLocalRise =
+        rise > 0 ? Math.max(0, Math.min(rise, support.elevation - effectiveProbed)) : 0
+      const wallBound = flatBound - wallLocalRise
+      if (wallBound < tightestBound) tightestBound = wallBound
     }
+  }
+
+  if (Number.isFinite(tightestBound) && proposedElevation > tightestBound) {
+    return { elevation: tightestBound, clamped: true }
   }
 
   return { elevation: proposedElevation, clamped: false }
@@ -105,7 +120,7 @@ export function clampSlabElevationForWalls(
  * Static upper bound for a slab-elevation drag: probe the election with
  * the slab raised above every sibling and the storey plane. If any
  * plane-bound wall would elect it there, the drag may not pass
- * `storeyHeight - MIN_WALL_HEIGHT`; otherwise it is unbounded above.
+ * `storeyHeight - MIN_WALL_HEIGHT - maxWallLocalRise`; otherwise unbounded.
  */
 export function getSlabElevationUpperBound(
   slab: SlabNode,
@@ -116,10 +131,15 @@ export function getSlabElevationUpperBound(
 ): number {
   const probe =
     Math.max(storeyHeight, ...levelSlabs.map((candidate) => getSlabMaxElevation(candidate))) + 1
-  return clampSlabElevationForWalls(probe, slab, levelWalls, levelSlabs, storeyHeight, nodes)
-    .clamped
-    ? storeyHeight - MIN_WALL_HEIGHT - getSlabSlopePlane(slab).rise
-    : Number.POSITIVE_INFINITY
+  const result = clampSlabElevationForWalls(
+    probe,
+    slab,
+    levelWalls,
+    levelSlabs,
+    storeyHeight,
+    nodes,
+  )
+  return result.clamped ? result.elevation : Number.POSITIVE_INFINITY
 }
 
 /**

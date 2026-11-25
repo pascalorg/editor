@@ -224,5 +224,37 @@ describe('anchor-relative slab presets', () => {
       { direction: -30, pitch: 45 },
     )
     expect(free).toEqual({ direction: 330, pitch: 45 })
+
+    // A wall touching only the low end (x = 0) of a long 10m ramp should not over-clamp pitch.
+    const longRamp = SlabNode.parse({
+      id: 'slab_long',
+      parentId: level.id,
+      polygon: [
+        [0, 0],
+        [10, 0],
+        [10, 2],
+        [0, 2],
+      ],
+      elevation: 0.2,
+      thickness: 0.1,
+    })
+    const lowWall = WallNode.parse({
+      id: 'wall_low',
+      parentId: level.id,
+      start: [0, 0.2],
+      end: [0, 1.8],
+      thickness: 0.1,
+    })
+    const lowLevel = LevelNode.parse({
+      id: level.id,
+      height: 2.5,
+      children: [longRamp.id, lowWall.id],
+    })
+    const lowClamped = clampSlabSlope(
+      { [lowLevel.id]: lowLevel, [longRamp.id]: longRamp, [lowWall.id]: lowWall },
+      longRamp,
+      { direction: 0, pitch: 20 },
+    )
+    expect(lowClamped).toEqual({ direction: 0, pitch: 20 })
   })
 })

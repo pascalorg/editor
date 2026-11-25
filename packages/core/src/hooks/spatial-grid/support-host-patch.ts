@@ -1,8 +1,9 @@
+import { getSlabMinElevationForFootprint } from '../../lib/item-slab-support'
 import { levelBaseElevationAt, terrainSupportLift } from '../../lib/terrain-support'
 import { nodeRegistry } from '../../registry'
 import type { AnyNode, AnyNodeId, FenceNode, SlabNode, WallNode } from '../../schema'
 import { DEFAULT_LEVEL_HEIGHT } from '../../services/level-height'
-import { getSlabElevationAtPoint } from '../../systems/slab/slab-slope'
+import { getSlabElevationAtPoint, hasSlabSlope } from '../../systems/slab/slab-slope'
 import { getWallCurveFrameAt, isCurvedWall } from '../../systems/wall/wall-curve'
 import {
   GROUND_SUPPORT_ID,
@@ -62,18 +63,31 @@ export function resolveSupportSlabPatch(
     for (const footprint of footprints) {
       const position = footprint.position ?? (node as { position?: unknown }).position
       if (!Array.isArray(position) || position.length !== 3) continue
+      const pos = position as [number, number, number]
       const elevation = activeSpatialGrid().getHostSlabElevationForFootprint(
         parent.id,
         options.preferredSlabId,
-        position as [number, number, number],
+        pos,
         footprint.dimensions,
         footprint.rotation,
       )
-      if (
-        elevation !== null &&
-        (maxElevation == null || elevation <= maxElevation + SUPPORT_ELEVATION_EPSILON)
-      ) {
-        return { supportSlabId: options.preferredSlabId }
+      if (elevation !== null) {
+        const preferredNode = nodes[options.preferredSlabId]
+        const slopeDrop =
+          preferredNode?.type === 'slab' && hasSlabSlope(preferredNode)
+            ? getSlabElevationAtPoint(preferredNode, pos[0], pos[2]) -
+              getSlabMinElevationForFootprint(preferredNode, {
+                position: pos,
+                dimensions: footprint.dimensions,
+                rotation: footprint.rotation,
+              })
+            : 0
+        if (
+          maxElevation == null ||
+          elevation - slopeDrop <= maxElevation + SUPPORT_ELEVATION_EPSILON
+        ) {
+          return { supportSlabId: options.preferredSlabId }
+        }
       }
     }
   }
@@ -332,11 +346,19 @@ export function resolveFenceSupportSlabPatch(
         dimensions,
         rotation,
       )
-      if (
-        preferredElevation !== null &&
-        (maxElevation == null || preferredElevation <= maxElevation + SUPPORT_ELEVATION_EPSILON)
-      ) {
-        return { supportSlabId: options.preferredSlabId }
+      if (preferredElevation !== null) {
+        const preferredNode = nodes[options.preferredSlabId]
+        const slopeDrop =
+          preferredNode?.type === 'slab' && hasSlabSlope(preferredNode)
+            ? getSlabElevationAtPoint(preferredNode, position[0], position[2]) -
+              getSlabMinElevationForFootprint(preferredNode, { position, dimensions, rotation })
+            : 0
+        if (
+          maxElevation == null ||
+          preferredElevation - slopeDrop <= maxElevation + SUPPORT_ELEVATION_EPSILON
+        ) {
+          return { supportSlabId: options.preferredSlabId }
+        }
       }
     }
 

@@ -300,7 +300,8 @@ describe('sloped slab support, raycasting, dirtying, usage-field & authoring', (
     })
     const clamped = clampSlabElevationForWalls(0.2, steepRamp, [wall], [flatFloor, steepRamp], 2.5)
     expect(clamped.clamped).toBe(true)
-    expect(clamped.elevation + 4).toBeLessThanOrEqual(2.5)
+    // Wall spans x = [1, 3], so the ramp reaches elevation + 3.0 along the wall.
+    expect(clamped.elevation + 3).toBeLessThanOrEqual(2.5)
   })
 
   test('stairs on sloped slabs sample point elevation for both base and deck landing rise', () => {
@@ -409,5 +410,74 @@ describe('sloped slab support, raycasting, dirtying, usage-field & authoring', (
       { activeLevelId: null },
     )
     expect(outcome.result.defects.some((d) => d.code === 'slab_over_wall')).toBe(true)
+  })
+
+  test('pointer cap keeps a sloped host slab when cursor grabs downhill within the item footprint', () => {
+    const ramp = makeRamp({
+      elevation: 0.1,
+      slope: { direction: 0, pitch: 20 }, // grade ≈ 0.364
+    })
+    const mgr = new SpatialGridManager()
+    mgr.handleNodeCreated(ramp, 'level_0')
+    const grade = Math.tan((20 * Math.PI) / 180)
+    // Item 1.2m wide centered at x = 2.0 (origin elevation = 0.1 + 2.0*grade ≈ 0.828)
+    // Downhill footprint corner sits at x = 1.4 (elevation ≈ 0.610).
+    // Cursor hit slightly downhill at x = 1.6 gives maxElevation = 0.1 + 1.6*grade ≈ 0.682.
+    const cursorCap = 0.1 + 1.6 * grade
+    const support = mgr.getSlabSupportForItem(
+      'level_0',
+      [2.0, 0, 1.0],
+      [1.2, 0.8, 0.8],
+      [0, 0, 0],
+      cursorCap,
+    )
+    expect(support.slabId).toBe(ramp.id)
+    expect(support.elevation).toBeCloseTo(0.1 + 2.0 * grade, 4)
+
+    // Meanwhile, aiming at the ground floor (maxElevation = 0.05) below a raised ramp still rejects the ramp
+    const raisedRamp = makeRamp({
+      id: 'slab_overhead_ramp',
+      elevation: 2.0,
+      slope: { direction: 0, pitch: 15 },
+    })
+    const mgr2 = new SpatialGridManager()
+    mgr2.handleNodeCreated(raisedRamp, 'level_0')
+    const belowCap = mgr2.getSlabSupportForItem(
+      'level_0',
+      [2.0, 0, 1.0],
+      [1.2, 0.8, 0.8],
+      [0, 0, 0],
+      0.05,
+    )
+    expect(belowCap.slabId).toBeNull()
+  })
+
+  test('wall clamp subtracts only the rise along overlapping plane-bound walls, not full-ramp rise', () => {
+    // 10m ramp rising 15° (full rise ≈ 2.68m > storeyHeight 2.5m)
+    const longRamp = SlabNode.parse({
+      id: 'slab_long_ramp',
+      parentId: 'level_0',
+      polygon: [
+        [0, 0],
+        [10, 0],
+        [10, 2],
+        [0, 2],
+      ],
+      elevation: 0.2,
+      thickness: 0.1,
+      slope: { direction: 0, pitch: 15 },
+    })
+    // Plane-bound wall ONLY along the low edge (x = 0)
+    const lowEndWall = WallNode.parse({
+      id: 'wall_low_end',
+      parentId: 'level_0',
+      start: [0, 0.2],
+      end: [0, 1.8],
+      thickness: 0.1,
+    })
+    const clamped = clampSlabElevationForWalls(0.5, longRamp, [lowEndWall], [longRamp], 2.5)
+    // At x = 0, wall sees nearly 0 rise, so elevation 0.5 is well below 2.5 - MIN_WALL_HEIGHT and stays unclamped.
+    expect(clamped.clamped).toBe(false)
+    expect(clamped.elevation).toBeCloseTo(0.5, 4)
   })
 })
