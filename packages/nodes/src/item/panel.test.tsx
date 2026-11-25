@@ -115,7 +115,7 @@ describe('ItemPanel editable dimensions (#1307)', () => {
     useScene.temporal.getState().undo()
     expect(liveItem(item.id).scale).toEqual([1, 1, 1])
 
-    // Dragging (temporal paused) followed by commit records a single undo step back to origin.
+    // Dragging (temporal paused + onDragStart) followed by commit records a single undo step back to origin.
     useScene.temporal.getState().pause()
     const dragWidthCtrl = control(
       renderPanelControls(<ItemPanel />),
@@ -123,6 +123,7 @@ describe('ItemPanel editable dimensions (#1307)', () => {
       'Dimensions',
       'Width',
     )
+    dragWidthCtrl.onDragStart?.()
     dragWidthCtrl.onChange(1.2)
     dragWidthCtrl.onChange(0.9)
     useScene.temporal.getState().resume()
@@ -152,6 +153,7 @@ describe('ItemPanel editable dimensions (#1307)', () => {
       'Dimensions',
       'Width',
     )
+    cancelCtrl.onDragStart?.()
     cancelCtrl.onChange(0.9)
     expect(liveItem(item.id).scale).toEqual([0.5, 0.5, 0.5])
     useScene.temporal.getState().resume()
@@ -174,6 +176,7 @@ describe('ItemPanel editable dimensions (#1307)', () => {
         'Dimensions',
         'Width',
       )
+      dragCtrl.onDragStart?.()
       dragCtrl.onChange(1.2)
       // Mid-drag wheel or arrow-key nudge fires onChange + onCommit while history is still paused.
       dragCtrl.onChange(1.25)
@@ -203,6 +206,7 @@ describe('ItemPanel editable dimensions (#1307)', () => {
         'Dimensions',
         'Width',
       )
+      cancelCtrl.onDragStart?.()
       cancelCtrl.onChange(1.2)
       cancelCtrl.onChange(1.25)
       cancelCtrl.onCommit?.(1.25)
@@ -212,6 +216,84 @@ describe('ItemPanel editable dimensions (#1307)', () => {
       cancelCtrl.onCancel?.()
       expect(liveItem(item.id).scale).toEqual([1, 1, 1])
       expect(useScene.temporal.getState().pastStates.length).toBe(beforeCancelPast)
+    } finally {
+      useScene.temporal.getState().resume()
+    }
+  })
+
+  test('paused history from another slider does not latch a stale dimension origin', () => {
+    const item = makeItem({ scale: [1, 1, 1] })
+    selectItem(item)
+
+    try {
+      const widthCtrl = control(
+        renderPanelControls(<ItemPanel />),
+        'SliderControl',
+        'Dimensions',
+        'Width',
+      )
+      // Simulate another slider pausing temporal history (no widthCtrl.onDragStart).
+      useScene.temporal.getState().pause()
+      widthCtrl.onChange(1.5)
+      widthCtrl.onCommit?.(1.5)
+      // Other slider ends and resumes history.
+      useScene.temporal.getState().resume()
+
+      // Scale is later set to [2, 1, 1]; a fresh aspect-locked edit on Width must use [2, 1, 1].
+      useScene.getState().updateNode(item.id, { scale: [2, 1, 1] })
+      const freshWidthCtrl = control(
+        renderPanelControls(<ItemPanel />),
+        'SliderControl',
+        'Dimensions',
+        'Width',
+      )
+      const beforePast = useScene.temporal.getState().pastStates.length
+      // Even if the earlier control instance receives a commit, it must not restore stale [1, 1, 1].
+      widthCtrl.onCommit?.(1.8)
+      expect(liveItem(item.id).scale).toEqual([2, 1, 1])
+
+      // Halving width (3.6 m -> 1.8 m) from [2, 1, 1] yields [1, 0.5, 0.5] and undoes to [2, 1, 1].
+      freshWidthCtrl.onChange(1.8)
+      freshWidthCtrl.onCommit?.(1.8)
+      expect(liveItem(item.id).scale).toEqual([1, 0.5, 0.5])
+      expect(useScene.temporal.getState().pastStates.length).toBe(beforePast + 1)
+
+      useScene.temporal.getState().undo()
+      expect(liveItem(item.id).scale).toEqual([2, 1, 1])
+    } finally {
+      useScene.temporal.getState().resume()
+    }
+  })
+
+  test('zero-movement label click does not record a spurious undo step', () => {
+    const item = makeItem({
+      id: 'item_float_click',
+      scale: [0.3, 0.3, 0.3],
+      asset: {
+        id: 'desk-float',
+        category: 'furniture',
+        name: 'Float Desk',
+        thumbnail: '',
+        src: '/models/desk.glb',
+        dimensions: [1.4, 0.75, 0.9],
+      },
+    })
+    selectItem(item)
+    const beforePast = useScene.temporal.getState().pastStates.length
+
+    try {
+      useScene.temporal.getState().pause()
+      const clickCtrl = control(
+        renderPanelControls(<ItemPanel />),
+        'SliderControl',
+        'Dimensions',
+        'Width',
+      )
+      clickCtrl.onDragStart?.()
+      useScene.temporal.getState().resume()
+      clickCtrl.onCommit?.(0.42)
+      expect(liveItem(item.id).scale).toEqual([0.3, 0.3, 0.3])
+      expect(useScene.temporal.getState().pastStates.length).toBe(beforePast)
     } finally {
       useScene.temporal.getState().resume()
     }

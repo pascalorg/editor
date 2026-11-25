@@ -58,11 +58,11 @@ export default function ItemPanel() {
   const [uniformScale, setUniformScale] = useState(true)
   const nodeRef = useRef(node)
   nodeRef.current = node
-  const dragOriginScaleRef = useRef<Vec3Tuple | null>(null)
+  const dragStateRef = useRef<{ origin: Vec3Tuple; changed: boolean } | null>(null)
   const lastSelectedIdRef = useRef(selectedId)
   if (lastSelectedIdRef.current !== selectedId) {
     lastSelectedIdRef.current = selectedId
-    dragOriginScaleRef.current = null
+    dragStateRef.current = null
   }
 
   const handleUpdate = useCallback(
@@ -83,16 +83,21 @@ export default function ItemPanel() {
     [selectedId],
   )
 
+  const handleDimensionDragStart = useCallback(() => {
+    const n = nodeRef.current
+    if (!n) return
+    dragStateRef.current = {
+      origin: [n.scale[0], n.scale[1], n.scale[2]],
+      changed: false,
+    }
+  }, [])
+
   const handleDimensionChange = useCallback(
     (axis: DimensionAxis, requestedDimension: number) => {
       const n = nodeRef.current
       if (!n) return
-      const isDragging = !useScene.temporal.getState().isTracking
-      if (isDragging && !dragOriginScaleRef.current) {
-        dragOriginScaleRef.current = [n.scale[0], n.scale[1], n.scale[2]]
-      }
-      const baseScale =
-        isDragging && dragOriginScaleRef.current ? dragOriginScaleRef.current : n.scale
+      const drag = dragStateRef.current
+      const baseScale = drag ? drag.origin : n.scale
       const nextScale = computeScaleForDimension(
         n.asset.dimensions,
         baseScale,
@@ -106,6 +111,7 @@ export default function ItemPanel() {
       ) {
         return
       }
+      if (drag) drag.changed = true
       handleUpdate({ scale: nextScale })
     },
     [handleUpdate, uniformScale],
@@ -113,16 +119,15 @@ export default function ItemPanel() {
 
   const handleDimensionCommit = useCallback(
     (axis: DimensionAxis, finalDimension: number) => {
-      // Only finalize a drag once SliderControl has resumed temporal tracking
-      // (on pointerup). Wheel and arrow-key nudges also fire onCommit while a
-      // label drag is still captured and history is paused; ignoring those
-      // keeps dragOriginScaleRef intact until the drag actually ends.
+      // Only finalize an active dimension drag once SliderControl has resumed
+      // temporal tracking (on pointerup).
       if (!useScene.temporal.getState().isTracking) return
-      const origin = dragOriginScaleRef.current
-      dragOriginScaleRef.current = null
-      if (!origin) return
+      const drag = dragStateRef.current
+      dragStateRef.current = null
+      if (!drag?.changed) return
       const n = nodeRef.current
       if (!n) return
+      const { origin } = drag
       const nextScale = computeScaleForDimension(
         n.asset.dimensions,
         origin,
@@ -150,12 +155,12 @@ export default function ItemPanel() {
   )
 
   const handleDimensionCancel = useCallback(() => {
-    const origin = dragOriginScaleRef.current
-    dragOriginScaleRef.current = null
-    if (!origin) return
+    const drag = dragStateRef.current
+    dragStateRef.current = null
+    if (!drag?.changed) return
     const wasTracking = useScene.temporal.getState().isTracking
     if (wasTracking) useScene.temporal.getState().pause()
-    handleUpdate({ scale: origin })
+    handleUpdate({ scale: drag.origin })
     if (wasTracking) useScene.temporal.getState().resume()
   }, [handleUpdate])
 
@@ -453,6 +458,7 @@ export default function ItemPanel() {
                 onCancel={handleDimensionCancel}
                 onChange={(value) => handleDimensionChange(axis, value)}
                 onCommit={(value) => handleDimensionCommit(axis, value)}
+                onDragStart={handleDimensionDragStart}
                 precision={2}
                 restoreOnCommit={false}
                 step={0.01}

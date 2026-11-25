@@ -10,6 +10,7 @@ interface SliderControlProps {
   label: React.ReactNode
   value: number
   onChange: (value: number) => void
+  onDragStart?: () => void
   onCommit?: (value: number) => void
   onCancel?: () => void
   previewWhileTyping?: boolean
@@ -59,6 +60,7 @@ export function SliderControl({
   label,
   value,
   onChange,
+  onDragStart,
   onCommit,
   onCancel,
   previewWhileTyping = false,
@@ -140,7 +142,7 @@ export function SliderControl({
     const el = labelRef.current
     if (!el) return
     const handleWheel = (e: WheelEvent) => {
-      if (isEditing) return
+      if (isEditing || dragRef.current || !useScene.temporal.getState().isTracking) return
       e.preventDefault()
       const direction = e.deltaY < 0 ? 1 : -1
       const s = getAdjustedStep(step, e)
@@ -154,8 +156,9 @@ export function SliderControl({
 
   // Arrow key support while hovered
   useEffect(() => {
-    if (!isHovered || isEditing) return
+    if (!isHovered || isEditing || isDragging) return
     const handleKeyDown = (e: KeyboardEvent) => {
+      if (dragRef.current || !useScene.temporal.getState().isTracking) return
       let direction = 0
       if (e.key === 'ArrowUp' || e.key === 'ArrowRight') direction = 1
       else if (e.key === 'ArrowDown' || e.key === 'ArrowLeft') direction = -1
@@ -169,11 +172,11 @@ export function SliderControl({
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [isHovered, isEditing, step, applyDisplayDelta, onChange, onCommit])
+  }, [isHovered, isEditing, isDragging, step, applyDisplayDelta, onChange, onCommit])
 
   const handleLabelPointerDown = useCallback(
     (e: React.PointerEvent<HTMLDivElement>) => {
-      if (isEditing) return
+      if (isEditing || dragRef.current || !useScene.temporal.getState().isTracking) return
       e.preventDefault()
       e.currentTarget.setPointerCapture(e.pointerId)
       dragRef.current = {
@@ -184,8 +187,9 @@ export function SliderControl({
       }
       setIsDragging(true)
       useScene.temporal.getState().pause()
+      onDragStart?.()
     },
-    [isEditing],
+    [isEditing, onDragStart],
   )
 
   const handleLabelPointerMove = useCallback(
