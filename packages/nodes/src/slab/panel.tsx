@@ -45,6 +45,7 @@ import {
   applySlabThicknessChange,
   applySlabTopChange,
   clampSlabElevation,
+  clampSlabSlope,
   getSlabAnchorElevation,
   getSlabBaseElevation,
   getSlabRecessDepth,
@@ -176,13 +177,12 @@ export function SlabPanel() {
     (proposed: number) => {
       const current = nodeRef.current
       if (!current || current.recessed) return
-      const pitch = Math.min(Math.max(proposed, 0), MAX_SLAB_SLOPE_DEGREES)
-      if (pitch <= 1e-6) {
-        handleUpdate({ slope: undefined })
-        return
-      }
       const direction = normalizeSlabSlopeDirection(current.slope?.direction ?? 0)
-      handleUpdate({ slope: { direction, pitch } })
+      const clamped = clampSlabSlope(useScene.getState().nodes, current, {
+        direction,
+        pitch: proposed,
+      })
+      handleUpdate({ slope: clamped })
     },
     [handleUpdate],
   )
@@ -191,12 +191,11 @@ export function SlabPanel() {
     (proposed: number) => {
       const current = nodeRef.current
       if (!current || current.recessed || !hasSlabSlope(current)) return
-      handleUpdate({
-        slope: {
-          direction: normalizeSlabSlopeDirection(proposed),
-          pitch: current.slope!.pitch,
-        },
+      const clamped = clampSlabSlope(useScene.getState().nodes, current, {
+        direction: proposed,
+        pitch: current.slope!.pitch,
       })
+      handleUpdate({ slope: clamped })
     },
     [handleUpdate],
   )
@@ -205,12 +204,11 @@ export function SlabPanel() {
     (deltaDegrees: number) => {
       const current = nodeRef.current
       if (!current || current.recessed || !hasSlabSlope(current)) return
-      handleUpdate({
-        slope: {
-          direction: normalizeSlabSlopeDirection((current.slope?.direction ?? 0) + deltaDegrees),
-          pitch: current.slope!.pitch,
-        },
+      const clamped = clampSlabSlope(useScene.getState().nodes, current, {
+        direction: (current.slope?.direction ?? 0) + deltaDegrees,
+        pitch: current.slope!.pitch,
       })
+      handleUpdate({ slope: clamped })
     },
     [handleUpdate],
   )
@@ -520,8 +518,6 @@ export function SlabPanel() {
             <>
               <SliderControl
                 label={i18n._({ id: 'node.slab.panel.direction', message: 'Direction' })}
-                max={360}
-                min={0}
                 onChange={handleSlopeDirectionChange}
                 precision={0}
                 step={1}

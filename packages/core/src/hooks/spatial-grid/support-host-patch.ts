@@ -2,6 +2,7 @@ import { levelBaseElevationAt, terrainSupportLift } from '../../lib/terrain-supp
 import { nodeRegistry } from '../../registry'
 import type { AnyNode, AnyNodeId, FenceNode, SlabNode, WallNode } from '../../schema'
 import { DEFAULT_LEVEL_HEIGHT } from '../../services/level-height'
+import { getSlabElevationAtPoint } from '../../systems/slab/slab-slope'
 import { getWallCurveFrameAt, isCurvedWall } from '../../systems/wall/wall-curve'
 import {
   GROUND_SUPPORT_ID,
@@ -407,7 +408,7 @@ export function resolveFenceConstructionSupport(
   const host = supportPatch.supportSlabId ? nodes[supportPatch.supportSlabId] : null
   const baseElevation =
     host?.type === 'slab'
-      ? host.elevation
+      ? getSlabElevationAtPoint(host, fence.start[0], fence.start[1])
       : levelBaseElevationAt(nodes, levelId, fence.start[0], fence.start[1])
   const supportOffset =
     options?.constructionElevation == null

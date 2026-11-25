@@ -468,3 +468,98 @@ test('45-degree sloped slab splits surface vs side slots cleanly, drops sloped t
   // Body path + uphill direction arrow path
   expect(paths.length).toBe(2)
 })
+
+test('inline railing on a sloped slab follows the ramp surface', () => {
+  const slab = SlabNode.parse({
+    id: 'slab_sloped_rail',
+    polygon: [
+      [0, 0],
+      [4, 0],
+      [4, 2],
+      [0, 2],
+    ],
+    elevation: 0.1,
+    thickness: 0.1,
+    slope: { direction: 0, pitch: 45 }, // y(x) = 0.1 + x
+    railing: [{ start: [0, 0], end: [4, 0] }],
+  })
+  const ctx = geometryContext(SiteNode.parse({ id: 'site_rail' }))
+  const group = buildSlabGeometry(slab, ctx, 'rendered', true)
+  const edgeMeshes = group.children.filter((child) => child.userData.slotId === 'edge') as Mesh[]
+  expect(edgeMeshes.length).toBeGreaterThan(0)
+  let maxY = Number.NEGATIVE_INFINITY
+  for (const mesh of edgeMeshes) {
+    const pos = mesh.geometry.getAttribute('position')
+    for (let i = 0; i < pos.count; i++) maxY = Math.max(maxY, pos.getY(i))
+  }
+  // At x=4, slab top is 4.1 and railing height is 1.1 → top rail reaches ~5.2 (flat would stay ~1.2).
+  expect(maxY).toBeGreaterThan(4.8)
+})
+
+test('2D floorplan slope arrow avoids interior holes and stays inside concave L-shaped slabs', () => {
+  const parseArrowEndpoints = (d: string) => {
+    const m = /^M ([-\d.e+]+) ([-\d.e+]+) L ([-\d.e+]+) ([-\d.e+]+)/.exec(d)
+    if (!m) throw new Error(`Unexpected arrow path: ${d}`)
+    return {
+      start: [Number(m[1]), Number(m[2])] as [number, number],
+      end: [Number(m[3]), Number(m[4])] as [number, number],
+    }
+  }
+  const ctx = geometryContext(SiteNode.parse({ id: 'site_fp' }))
+
+  // Slab with a big centered hole covering the polygon's vertex average (2, 2)
+  const withHole = SlabNode.parse({
+    id: 'slab_cutout',
+    polygon: [
+      [0, 0],
+      [4, 0],
+      [4, 4],
+      [0, 4],
+    ],
+    holes: [
+      [
+        [1.2, 1.2],
+        [2.8, 1.2],
+        [2.8, 2.8],
+        [1.2, 2.8],
+      ],
+    ],
+    elevation: 0.1,
+    thickness: 0.1,
+    slope: { direction: 0, pitch: 15 },
+  })
+  const holePlan = buildSlabFloorplan(withHole, ctx)
+  const holePaths =
+    holePlan?.kind === 'group' ? holePlan.children.filter((c) => c.kind === 'path') : []
+  expect(holePaths.length).toBe(2)
+  const holeArrow = parseArrowEndpoints(holePaths[1]!.d)
+  const midX = (holeArrow.start[0] + holeArrow.end[0]) / 2
+  const midZ = (holeArrow.start[1] + holeArrow.end[1]) / 2
+  const insideCenterHole = midX > 1.2 && midX < 2.8 && midZ > 1.2 && midZ < 2.8
+  expect(insideCenterHole).toBe(false)
+
+  // Concave L-shaped slab whose vertex average lies in the missing upper-right quadrant
+  const lShape = SlabNode.parse({
+    id: 'slab_l_shape',
+    polygon: [
+      [0, 0],
+      [4, 0],
+      [4, 1],
+      [1, 1],
+      [1, 4],
+      [0, 4],
+    ],
+    elevation: 0.1,
+    thickness: 0.1,
+    slope: { direction: 0, pitch: 10 },
+  })
+  const lPlan = buildSlabFloorplan(lShape, ctx)
+  const lPaths = lPlan?.kind === 'group' ? lPlan.children.filter((c) => c.kind === 'path') : []
+  expect(lPaths.length).toBe(2)
+  const lArrow = parseArrowEndpoints(lPaths[1]!.d)
+  for (const [ax, az] of [lArrow.start, lArrow.end]) {
+    const inBottomArm = ax >= 0 && ax <= 4 && az >= 0 && az <= 1
+    const inLeftArm = ax >= 0 && ax <= 1 && az >= 0 && az <= 4
+    expect(inBottomArm || inLeftArm).toBe(true)
+  }
+})

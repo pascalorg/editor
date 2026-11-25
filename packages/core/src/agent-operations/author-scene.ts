@@ -72,6 +72,7 @@ import { DEFAULT_LEVEL_HEIGHT, resolveCeilingHeight } from '../services/level-he
 import { planRoofLevel } from '../services/roof-level'
 import { CEILING_DRAW_OFFSET } from '../services/storey'
 import { resolveRoofElevation } from '../systems/roof/roof-elevation'
+import { getSlabMaxElevation } from '../systems/slab/slab-slope'
 import { stairArrivalOpening } from '../systems/stair/stair-footprint'
 import {
   getMaxWallCurveOffset,
@@ -1317,11 +1318,19 @@ export function authorScene(
       const id = `slab/${index}/${i}`
       const label = s.name ? `"${s.name}"` : `slab ${i}`
       const polygon = s.polygon as Vec2[]
+      const slabMaxTop = getSlabMaxElevation({
+        polygon,
+        elevation: s.top,
+        thickness: s.thickness,
+        recessed: false,
+        autoFromWalls: false,
+        slope: s.slope && s.slope.pitch > 0 ? s.slope : undefined,
+      })
       // A slab over a wall's footprint, higher than half the wall: a cap, which would lift the
       // wall onto it. Pascal caps its walls itself.
       const lifted = [...wallNodes.values()].find(
         (w) =>
-          s.top > w.height / 2 &&
+          slabMaxTop > w.height / 2 &&
           polygonsOverlap(
             polygon,
             wallFootprint({
@@ -1335,7 +1344,7 @@ export function authorScene(
         defect(
           id,
           'slab_over_wall',
-          `${label} overlaps wall ${lifted.spec.id} with its top at ${metres(s.top)}, above half the wall's ${metres(lifted.height)}: it would lift the wall onto it. Pascal builds a wall's cap itself; fold it into the wall.`,
+          `${label} overlaps wall ${lifted.spec.id} with its top at ${metres(slabMaxTop)}, above half the wall's ${metres(lifted.height)}: it would lift the wall onto it. Pascal builds a wall's cap itself; fold it into the wall.`,
         )
         return
       }

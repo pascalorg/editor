@@ -50,7 +50,7 @@ export function slabSlopeEqual(a: SlabSlope | undefined, b: SlabSlope | undefine
 export function hasSlabSlope(
   slab: Pick<SlabNode, 'slope' | 'recessed' | 'plateRole' | 'autoFromWalls' | 'boundary'>,
 ): boolean {
-  if (slab.recessed || slab.plateRole === 'base' || slab.autoFromWalls || slab.boundary === 'auto')
+  if (slab.recessed || slab.plateRole || slab.autoFromWalls || slab.boundary === 'auto')
     return false
   const pitch = slab.slope?.pitch
   return typeof pitch === 'number' && Number.isFinite(pitch) && pitch > SLOPE_PITCH_EPSILON

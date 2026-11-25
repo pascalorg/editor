@@ -1,5 +1,13 @@
 import { describe, expect, test } from 'bun:test'
-import { MIN_SLAB_THICKNESS, SlabNode } from '@pascal-app/core'
+import {
+  type AnyNode,
+  type AnyNodeId,
+  getSlabMaxElevation,
+  LevelNode,
+  MIN_SLAB_THICKNESS,
+  SlabNode,
+  WallNode,
+} from '@pascal-app/core'
 import {
   applySlabAnchorElevationChange,
   applySlabBaseElevationChange,
@@ -7,6 +15,7 @@ import {
   applySlabRecessDepthChange,
   applySlabThicknessChange,
   applySlabTopChange,
+  clampSlabSlope,
   getSlabAnchorElevation,
   getSlabBaseElevation,
   getSlabRecessDepth,
@@ -170,5 +179,50 @@ describe('anchor-relative slab presets', () => {
     expect(applySlabElevationPreset(sloped, -0.15).recessed).toBe(true)
     expect(applySlabTopChange(sloped, -0.1).slope).toBeUndefined()
     expect(applySlabTopChange(sloped, -0.1).recessed).toBe(true)
+  })
+
+  test('clampSlabSlope caps pitch so high edge stays under plane-bound wall storey clearance', () => {
+    const level = LevelNode.parse({
+      id: 'level_0',
+      height: 2.5,
+      children: ['slab_0', 'wall_0'],
+    })
+    const wall = WallNode.parse({
+      id: 'wall_0',
+      parentId: level.id,
+      start: [0, 1],
+      end: [4, 1],
+    })
+    const sloped = SlabNode.parse({
+      id: 'slab_0',
+      parentId: level.id,
+      polygon: [
+        [0, 0],
+        [4, 0],
+        [4, 2],
+        [0, 2],
+      ],
+      elevation: 0.5,
+      thickness: 0.1,
+    })
+    const nodes: Record<AnyNodeId, AnyNode> = {
+      [level.id]: level,
+      [wall.id]: wall,
+      [sloped.id]: sloped,
+    }
+
+    // 45° over 4m would reach 4.5m (> 2.5 - MIN_WALL_HEIGHT); clampSlabSlope must cap it.
+    const clamped = clampSlabSlope(nodes, sloped, { direction: 0, pitch: 45 })
+    expect(clamped).toBeDefined()
+    expect(clamped!.pitch).toBeLessThan(45)
+    expect(getSlabMaxElevation({ ...sloped, slope: clamped })).toBeLessThanOrEqual(2.5)
+
+    // Without a level wall, 45° passes through unchanged and normalizes negative direction.
+    const free = clampSlabSlope(
+      { [sloped.id]: { ...sloped, parentId: null } },
+      { ...sloped, parentId: null },
+      { direction: -30, pitch: 45 },
+    )
+    expect(free).toEqual({ direction: 330, pitch: 45 })
   })
 })

@@ -195,6 +195,19 @@ describe('SlabNode slope schema & pure plane math', () => {
     expect(intersectRayWithSlabPlane(ramp, [0, 2.1, 1], [-1, 0, 0])).toBeNull()
   })
 
+  test('ignores slope on all reconciler-owned plateRole values (base, platform, sunken)', () => {
+    for (const plateRole of ['base', 'platform', 'sunken'] as const) {
+      const plate = SlabNode.parse({
+        polygon: RECT_4X2,
+        elevation: 0.2,
+        plateRole,
+        slope: { direction: 0, pitch: 15 },
+      })
+      expect(hasSlabSlope(plate)).toBe(false)
+      expect(getSlabElevationAtPoint(plate, 4, 1)).toBeCloseTo(0.2, 6)
+    }
+  })
+
   test('slabSlopeEqual compares direction and pitch', () => {
     expect(slabSlopeEqual(undefined, undefined)).toBe(true)
     expect(slabSlopeEqual({ direction: 0, pitch: 5 }, { direction: 0, pitch: 5 })).toBe(true)

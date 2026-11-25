@@ -247,3 +247,50 @@ test('curved hosted fence geometry and handles retain the lifted slab datum', ()
     if (object instanceof Mesh) object.geometry.dispose()
   })
 })
+
+test('a railing hosted on a sloped slab lifts and slopes along the ramp surface', () => {
+  const level = LevelNode.parse({ id: 'level_ramp', children: [] })
+  const ramp = SlabNode.parse({
+    id: 'slab_ramp',
+    parentId: level.id,
+    polygon: [
+      [0, 0],
+      [4, 0],
+      [4, 2],
+      [0, 2],
+    ],
+    elevation: 0.2,
+    thickness: 0.1,
+    slope: { direction: 0, pitch: 45 }, // y(x, z) = 0.2 + x
+  })
+  const railing = FenceNode.parse({
+    id: 'fence_on_ramp',
+    parentId: level.id,
+    supportSlabId: ramp.id,
+    start: [1, 0],
+    end: [3, 0],
+    height: 1.0,
+    style: 'rail',
+    baseStyle: 'floating',
+    baseHeight: 0,
+  })
+  level.children = [ramp.id, railing.id]
+  const nodes = Object.fromEntries([level, ramp, railing].map((n) => [n.id, n]))
+  const ctx: GeometryContext = {
+    resolve: (id) => nodes[id] as never,
+    parent: level,
+    children: [],
+    siblings: [],
+    levelBaseAt: () => 0,
+  }
+  expect(resolveFenceLiftElevationForNodes(railing, nodes)).toBeCloseTo(1.2, 4)
+  expect(resolveFenceLiftElevationForNodes(railing, nodes, railing.end)).toBeCloseTo(3.2, 4)
+  const group = fenceDefinition.geometry!(railing, ctx, 'rendered', false)
+  const box = new Box3().setFromObject(group)
+  // At x=1 slab top is 1.2; at x=3 slab top is 3.2 + 1.0 rail height = 4.2
+  expect(box.min.y).toBeCloseTo(1.2, 2)
+  expect(box.max.y).toBeGreaterThan(4.1)
+  group.traverse((object) => {
+    if (object instanceof Mesh) object.geometry.dispose()
+  })
+})

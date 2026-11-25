@@ -1,12 +1,26 @@
 import { describe, expect, test } from 'bun:test'
 import { authorScene } from '../../agent-operations/author-scene'
 import { authorScenePayload } from '../../agent-tools/author-scene'
-import { BuildingNode, ItemNode, LevelNode, SiteNode, SlabNode, WallNode } from '../../schema'
+import { getRenderableSlabPolygon } from '../../lib/slab-polygon'
+import {
+  BuildingNode,
+  FenceNode,
+  ItemNode,
+  LevelNode,
+  SiteNode,
+  SlabNode,
+  StairNode,
+  StairSegmentNode,
+  WallNode,
+} from '../../schema'
 import { levelFloors } from '../../spatial/usage-field/floors'
 import { floorUnder, type SupportCache } from '../../spatial/usage-field/support'
-import { clampSlabElevationForWalls } from '../../systems/slab/slab-support'
-import { SpatialGridManager } from './spatial-grid-manager'
+import { clampSlabElevationForWalls, computeWallSlabSupport } from '../../systems/slab/slab-support'
+import { stairBaseElevation } from '../../systems/stair/stair-base-elevation'
+import { resolveStairTotalRise } from '../../systems/stair/stair-rise-query'
+import { SpatialGridManager, spatialGridManager } from './spatial-grid-manager'
 import { countBulkSlabChanges, markSlabChangeDependents } from './spatial-grid-sync'
+import { resolveFenceConstructionSupport } from './support-host-patch'
 
 const RAMP_POLYGON: Array<[number, number]> = [
   [0, 0],
@@ -198,5 +212,202 @@ describe('sloped slab support, raycasting, dirtying, usage-field & authoring', (
     const created = outcome.changes.create?.find((entry) => entry.node.id === slabId)?.node
     expect(created?.type).toBe('slab')
     expect((created as SlabNode).slope).toEqual({ direction: 90, pitch: 4.8 })
+  })
+
+  test('grounded sloped slabs keep their authored polygon instead of expanding into adjacent walls', () => {
+    const groundedRamp = SlabNode.parse({
+      id: 'slab_grounded_ramp',
+      parentId: 'level_0',
+      polygon: RAMP_POLYGON,
+      elevation: 0.05,
+      thickness: 0.05,
+      slope: { direction: 0, pitch: 10 },
+    })
+    const adjacentWall = WallNode.parse({
+      id: 'wall_edge',
+      parentId: 'level_0',
+      start: [0, 0],
+      end: [0, 2],
+      thickness: 0.2,
+    })
+    const rendered = getRenderableSlabPolygon(groundedRamp, {
+      walls: [adjacentWall],
+      siblingSlabs: [],
+    })
+    expect(rendered).toEqual(RAMP_POLYGON)
+  })
+
+  test('walls along a sloped slab receive sloped baseSegments and faceDatum matching the ramp plane', () => {
+    const ramp = makeRamp({
+      elevation: 0.1,
+      slope: { direction: 0, pitch: 15 }, // grade = tan(15°) ≈ 0.26795
+    })
+    const uphillWall = WallNode.parse({
+      id: 'wall_uphill',
+      parentId: 'level_0',
+      start: [0.5, 1],
+      end: [3.5, 1],
+    })
+    const crossWall = WallNode.parse({
+      id: 'wall_high_end',
+      parentId: 'level_0',
+      start: [3.5, 0.2],
+      end: [3.5, 1.8],
+    })
+
+    const uphillSupport = computeWallSlabSupport(uphillWall, [ramp], [uphillWall])
+    expect(uphillSupport.electedSlabId).toBe(ramp.id)
+    expect(uphillSupport.baseSegments.length).toBe(1)
+    const seg = uphillSupport.baseSegments[0]!
+    const grade = Math.tan((15 * Math.PI) / 180)
+    expect(seg.elevation).toBeCloseTo(0.1 + 0.5 * grade, 4)
+    expect(seg.endElevation).toBeCloseTo(0.1 + 3.5 * grade, 4)
+    expect(uphillSupport.baseElevation).toBeCloseTo(0.1 + 0.5 * grade, 4)
+    expect(uphillSupport.elevation).toBeCloseTo(0.1 + 3.5 * grade, 4)
+
+    const crossSupport = computeWallSlabSupport(crossWall, [ramp], [crossWall])
+    expect(crossSupport.electedSlabId).toBe(ramp.id)
+    // Cross-wall thickness is 0.1m (faces at x = 3.45 and 3.55); base takes the lower downhill face
+    // so the wall never floats above the ramp, while faceDatum tracks each face independently.
+    expect(crossSupport.baseSegments[0]!.elevation).toBeCloseTo(0.1 + 3.45 * grade, 4)
+    expect(crossSupport.baseSegments[0]!.endElevation).toBeUndefined()
+    expect(crossSupport.faceDatum.a[0]!.elevation).toBeCloseTo(0.1 + 3.45 * grade, 4)
+    expect(crossSupport.faceDatum.b[0]!.elevation).toBeCloseTo(0.1 + 3.55 * grade, 4)
+  })
+
+  test('steep sloped slab with rise > storeyHeight still clamps when overlapping a plane-bound wall and sibling slab', () => {
+    const steepRamp = makeRamp({
+      elevation: 0.2,
+      slope: { direction: 0, pitch: 45 }, // rise = 4.0m > 2.5m storey height
+    })
+    const flatFloor = SlabNode.parse({
+      id: 'slab_flat_sibling',
+      parentId: 'level_0',
+      polygon: [
+        [-2, -2],
+        [6, -2],
+        [6, 4],
+        [-2, 4],
+      ],
+      elevation: 0.05,
+      thickness: 0.05,
+    })
+    const wall = WallNode.parse({
+      id: 'wall_plane_bound',
+      parentId: 'level_0',
+      start: [1, 1],
+      end: [3, 1],
+    })
+    const clamped = clampSlabElevationForWalls(0.2, steepRamp, [wall], [flatFloor, steepRamp], 2.5)
+    expect(clamped.clamped).toBe(true)
+    expect(clamped.elevation + 4).toBeLessThanOrEqual(2.5)
+  })
+
+  test('stairs on sloped slabs sample point elevation for both base and deck landing rise', () => {
+    const ramp = makeRamp({
+      elevation: 0.1,
+      slope: { direction: 0, pitch: 45 }, // y(x, z) = 0.1 + x
+    })
+    const deck = SlabNode.parse({
+      id: 'slab_upper_deck',
+      parentId: 'level_0',
+      polygon: [
+        [2, 0],
+        [6, 0],
+        [6, 2],
+        [2, 2],
+      ],
+      elevation: 2.0,
+      thickness: 0.1,
+      slope: { direction: 0, pitch: 45 }, // y(x, z) = 2.0 + (x - 2)
+    })
+    const level = LevelNode.parse({
+      id: 'level_0',
+      children: [ramp.id, deck.id, 'stair_0'],
+    })
+    const seg = StairSegmentNode.parse({
+      id: 'sseg_0',
+      parentId: 'stair_0',
+      length: 1,
+      width: 1,
+      stepCount: 5,
+    })
+    const stair = StairNode.parse({
+      id: 'stair_0',
+      parentId: level.id,
+      position: [2.5, 0, 0.5],
+      supportSlabId: ramp.id,
+      deckSlabId: deck.id,
+      children: [seg.id],
+    })
+    const nodes = {
+      [level.id]: level,
+      [ramp.id]: ramp,
+      [deck.id]: deck,
+      [stair.id]: stair,
+      [seg.id]: seg,
+    }
+    // Base sits at x = 2.5 on ramp (0.1 + 2.5 = 2.6)
+    expect(stairBaseElevation(stair, nodes, level.id)).toBeCloseTo(2.6, 4)
+    // Landing centroid is at x = 2.5 on deck (2.0 + 0.5 = 2.5) — wait, elevate deck so rise > 0
+    const higherDeck = { ...deck, elevation: 5.0 }
+    const rise = resolveStairTotalRise(stair, { ...nodes, [deck.id]: higherDeck })
+    // Deck at x = 2.5 sits at 5.0 + 0.5 = 5.5; rise = 5.5 - 2.6 = 2.9 (not flat 5.0 - 2.6 = 2.4)
+    expect(rise).toBeCloseTo(2.9, 2)
+  })
+
+  test('resolveFenceConstructionSupport computes supportOffset against sloped slab surface at fence start', () => {
+    const ramp = makeRamp({
+      elevation: 0.1,
+      slope: { direction: 0, pitch: 45 }, // y(2, 1) = 2.1
+    })
+    const level = LevelNode.parse({ id: 'level_0', children: [ramp.id] })
+    const fence = FenceNode.parse({
+      id: 'fence_ramp',
+      parentId: level.id,
+      start: [2, 1],
+      end: [3, 1],
+    })
+    const nodes = { [level.id]: level, [ramp.id]: ramp }
+    spatialGridManager.clearLevel(level.id)
+    spatialGridManager.handleNodeCreated(ramp, level.id)
+    try {
+      const patched = resolveFenceConstructionSupport(fence, level.id, nodes, {
+        constructionElevation: 2.1,
+        preferredSupportSlabId: ramp.id,
+      })
+      expect(patched.supportSlabId).toBe(ramp.id)
+      expect(patched.supportOffset).toBeUndefined()
+    } finally {
+      spatialGridManager.clearLevel(level.id)
+    }
+  })
+
+  test('authorScene flags slab_over_wall when a sloped slab high end exceeds half the wall height', () => {
+    const payload = authorScenePayload.parse({
+      levels: [
+        {
+          name: 'Ground',
+          walls: [{ id: 'w1', start: [0, 1], end: [4, 1], height: 2.4, thickness: 0.15 }],
+          slabs: [
+            {
+              name: 'Steep Ramp',
+              polygon: RAMP_POLYGON,
+              top: 0.1,
+              thickness: 0.15,
+              slope: { direction: 0, pitch: 30 }, // rise ≈ 2.31m → maxTop ≈ 2.41m > 1.2m
+            },
+          ],
+        },
+      ],
+    })
+    const building = BuildingNode.parse({ id: 'building_0', parentId: 'site_0', children: [] })
+    const site = SiteNode.parse({ id: 'site_0', children: [building.id] })
+    const outcome = authorScene(
+      { [site.id]: site, [building.id]: building },
+      { payload },
+      { activeLevelId: null },
+    )
+    expect(outcome.result.defects.some((d) => d.code === 'slab_over_wall')).toBe(true)
   })
 })

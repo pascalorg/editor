@@ -14,6 +14,7 @@ import {
   getMaterialPresetByRef,
   getRenderableSlabPolygon,
   getSlabBottomElevationAtPoint,
+  getSlabElevationAtPoint,
   hasSlabSlope,
   intersection,
   isDeckSlab,
@@ -586,6 +587,9 @@ export function buildSlabGeometry(
       )
     }
   }
+  const railingGroundAt = hasSlabSlope(node)
+    ? (x: number, z: number) => getSlabElevationAtPoint(node, x, z) - elevation
+    : undefined
   for (const [index, segment] of (node.railing ?? []).entries()) {
     const geometries = generateFenceSlotGeometries(
       FenceNode.parse({
@@ -597,6 +601,7 @@ export function buildSlabGeometry(
         baseHeight: 0,
         postCap: 'none',
       }),
+      railingGroundAt,
     )
     for (const geometry of Object.values(geometries)) {
       if (!geometry.getAttribute('position')) {

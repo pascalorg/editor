@@ -16,7 +16,7 @@ import {
   type WallJustification,
 } from '../wall/wall-frame'
 import { MIN_WALL_HEIGHT, wallFollowsStorey } from '../wall/wall-top'
-import { getSlabSlopePlane } from './slab-slope'
+import { getSlabElevationAtPoint, getSlabSlopePlane, hasSlabSlope } from './slab-slope'
 
 export type SlabElevationClamp = {
   elevation: number
@@ -52,10 +52,12 @@ export function clampSlabElevationForWalls(
   if (proposedElevation <= bound) return { elevation: proposedElevation, clamped: false }
   if (slab.polygon.length < 3) return { elevation: proposedElevation, clamped: false }
 
-  // Probed just past the bound: a wall electing the slab there elects it at any
-  // height above, whereas a slab past the storey plane reads as resting on the
-  // wall — the state this clamp exists to prevent.
-  const probed = Math.min(proposedElevation, bound + MIN_WALL_HEIGHT / 2)
+  // Probed below the storey plane: a wall electing the slab there elects it at
+  // any height above, whereas a slab past the storey plane reads as resting on
+  // the wall — the state this clamp exists to prevent. Capping against
+  // `storeyHeight - MIN_WALL_HEIGHT / 2` (instead of subtracting `rise`) keeps
+  // steep sloped slabs from dropping below flat sibling slabs during the probe.
+  const probed = Math.min(proposedElevation, storeyHeight - MIN_WALL_HEIGHT / 2)
   const substituted = levelSlabs.some((candidate) => candidate.id === slab.id)
     ? levelSlabs.map((candidate) =>
         candidate.id === slab.id ? { ...candidate, elevation: probed } : candidate,
@@ -83,7 +85,10 @@ export function clampSlabElevationForWalls(
       0,
       nodes,
     )
-    if (Math.abs(support.elevation - probed) <= WALL_SLAB_ELEVATION_POOL_EPSILON) {
+    if (
+      support.electedSlabId === slab.id ||
+      Math.abs(support.elevation - probed) <= WALL_SLAB_ELEVATION_POOL_EPSILON
+    ) {
       return { elevation: bound, clamped: true }
     }
   }
@@ -271,6 +276,27 @@ function polylineLength(points: Array<{ x: number; y: number }>): number {
     total += Math.hypot(points[i]!.x - points[i - 1]!.x, points[i]!.y - points[i - 1]!.y)
   }
   return total
+}
+
+function polylinePointAt(
+  points: Array<{ x: number; y: number }>,
+  distance: number,
+): { x: number; y: number } {
+  if (points.length === 0) return { x: 0, y: 0 }
+  if (points.length === 1 || distance <= 0) return points[0]!
+  let remaining = distance
+  for (let i = 1; i < points.length; i++) {
+    const a = points[i - 1]!
+    const b = points[i]!
+    const segLen = Math.hypot(b.x - a.x, b.y - a.y)
+    if (segLen < 1e-12) continue
+    if (remaining <= segLen) {
+      const t = remaining / segLen
+      return { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t }
+    }
+    remaining -= segLen
+  }
+  return points[points.length - 1]!
 }
 
 /**
@@ -697,6 +723,35 @@ function appendBaseSegment(
   else segments.push({ start, end, elevation })
 }
 
+function appendSlopedBaseSegment(
+  segments: WallSlabSupportSegment[],
+  start: number,
+  end: number,
+  elevation: number,
+  endElevation: number,
+) {
+  if (end - start < 1e-7) return
+  if (Math.abs(elevation - endElevation) <= 1e-6) {
+    appendBaseSegment(segments, start, end, (elevation + endElevation) / 2)
+    return
+  }
+  const previous = segments.at(-1)
+  if (
+    previous?.endElevation !== undefined &&
+    Math.abs(previous.end - start) <= 1e-7 &&
+    Math.abs(previous.endElevation - elevation) <= 1e-6 &&
+    Math.abs(
+      (previous.endElevation - previous.elevation) / (previous.end - previous.start) -
+        (endElevation - elevation) / (end - start),
+    ) <= 1e-5
+  ) {
+    previous.end = end
+    previous.endElevation = endElevation
+  } else {
+    segments.push({ start, end, elevation, endElevation })
+  }
+}
+
 type RoomFaceBases = Record<'a' | 'b', Array<WallSlabSupportSegment & { thickness: number }>>
 
 type SupportMemo = {
@@ -901,7 +956,9 @@ export function computeWallSlabSupport(
     support = {
       elevation,
       electedSlabId: ground ? null : raw.electedSlabId,
-      baseElevation: Math.min(...baseSegments.map((run) => run.elevation)),
+      baseElevation: Math.min(
+        ...baseSegments.map((run) => Math.min(run.elevation, run.endElevation ?? run.elevation)),
+      ),
       baseSegments,
       faceDatum,
       faceBottom: {
@@ -1039,10 +1096,12 @@ function computeWallSlabSupportUncached(
 
   type Candidate = {
     slab: SlabNode
+    effectiveSlab: SlabNode
     elevation: number
     perPolyline: LengthInterval[][]
     polygon: MultiPolygon
   }
+  const hasBasePlate = Boolean(nodes && slabs.some((s) => s.plateRole === 'base'))
   const candidates: Candidate[] = []
   for (const slab of slabs) {
     if (
@@ -1079,11 +1138,9 @@ function computeWallSlabSupportUncached(
     })
     if (supported < minSupport) continue
 
-    const elevation =
-      nodes && slabs.some((slab) => slab.plateRole === 'base')
-        ? liftedManualSlab(nodes, slab).elevation
-        : (slab.elevation ?? 0.05)
-    candidates.push({ slab, elevation, perPolyline, polygon: renderedPolygon })
+    const effectiveSlab = hasBasePlate && nodes ? liftedManualSlab(nodes, slab) : slab
+    const elevation = effectiveSlab.elevation ?? 0.05
+    candidates.push({ slab, effectiveSlab, elevation, perPolyline, polygon: renderedPolygon })
   }
 
   // A slab lying on the wall body with its underside at the wall's own top is
@@ -1097,200 +1154,485 @@ function computeWallSlabSupportUncached(
     ...wallLike,
     thickness: Math.max(wallLike.thickness ?? DEFAULT_WALL_THICKNESS, 0),
   })
-  for (const { slab, elevation, perPolyline, polygon } of candidates) {
-    if (
-      slab.id !== preferredSlabId &&
-      elevation - slab.thickness >= wallTop - 1e-6 &&
-      footprintOnWallBody(polygon, polylines[0]!, offsets)
-    )
-      continue
-    if (preferredSlabId != null && slab.id === preferredSlabId) {
-      preferredElevation = elevation
-      preferredElectedSlabId = slab.id
-    }
-    let group = groups.find(
-      (candidate) => Math.abs(candidate.elevation - elevation) <= WALL_SLAB_ELEVATION_POOL_EPSILON,
-    )
-    if (!group) {
-      group = { elevation, slabIds: [], perPolyline: polylines.map(() => []) }
-      groups.push(group)
-    }
-    group.slabIds.push(slab.id)
-    for (let i = 0; i < perPolyline.length; i++) {
-      group.perPolyline[i]!.push(...perPolyline[i]!)
-    }
-  }
-
-  type EvaluatedGroup = ElevationGroup & {
-    mergedPerPolyline: LengthInterval[][]
-  }
-  const evaluatedGroups: EvaluatedGroup[] = groups.map((group) => ({
-    ...group,
-    mergedPerPolyline: group.perPolyline.map(mergeIntervals),
-  }))
-
-  const normalizedIntervals = (group: EvaluatedGroup, polylineIndex: number) => {
-    const lineLength = polylineLengths[polylineIndex]!
-    if (lineLength < 1e-9) return []
-    return group.mergedPerPolyline[polylineIndex]!.map(
-      ([intervalStart, intervalEnd]) =>
-        [intervalStart / lineLength, intervalEnd / lineLength] as LengthInterval,
-    )
-  }
-
-  const normalizedByGroup = evaluatedGroups.map((group) => ({
-    elevation: group.elevation,
-    perPolyline: group.mergedPerPolyline.map((_, index) => normalizedIntervals(group, index)),
-  }))
-  const breakpoints = [0, 1]
-  for (const group of normalizedByGroup) {
-    for (const intervals of group.perPolyline) {
-      for (const [intervalStart, intervalEnd] of intervals) {
-        breakpoints.push(intervalStart, intervalEnd)
-      }
-    }
-  }
-  breakpoints.sort((left, right) => left - right)
-  const uniqueBreakpoints = breakpoints.filter(
-    (value, index) => index === 0 || value - breakpoints[index - 1]! > 1e-7,
+  const activeCandidates = candidates.filter(
+    ({ slab, elevation, polygon }) =>
+      slab.id === preferredSlabId ||
+      !(
+        elevation - slab.thickness >= wallTop - 1e-6 &&
+        footprintOnWallBody(polygon, polylines[0]!, offsets)
+      ),
   )
-
-  const highestAt = (groupList: typeof normalizedByGroup, polylineIndex: number, t: number) => {
-    let highest = Number.NEGATIVE_INFINITY
-    for (const group of groupList) {
-      if (
-        group.perPolyline[polylineIndex]?.some(
-          ([intervalStart, intervalEnd]) => t >= intervalStart - 1e-7 && t <= intervalEnd + 1e-7,
-        )
-      ) {
-        highest = Math.max(highest, group.elevation)
-      }
-    }
-    return highest
-  }
-
-  // The pointer cap filters the ELECTION's carrying profile, not the base
-  // profile: with a deck capped away, the floor that also carries the wall
-  // must still win (geometry fill-down stays uncapped).
-  const electableNormalizedGroups =
-    maxElevation == null
-      ? normalizedByGroup
-      : normalizedByGroup.filter(
-          (group) => group.elevation <= maxElevation + SUPPORT_ELEVATION_EPSILON,
-        )
 
   const faceDatum: WallSlabSupport['faceDatum'] = { a: [], b: [] }
   const baseSegments: WallSlabSupportSegment[] = []
-  type CarryCandidate = { elevation: number; length: number }
-  const carryCandidates: CarryCandidate[] = []
-  const accumulateCarry = (elevation: number, length: number) => {
-    let candidate = carryCandidates.find(
-      (existing) => Math.abs(existing.elevation - elevation) <= WALL_SLAB_ELEVATION_POOL_EPSILON,
-    )
-    if (!candidate) {
-      candidate = { elevation, length: 0 }
-      carryCandidates.push(candidate)
-    }
-    candidate.length += length
-  }
-  for (let index = 1; index < uniqueBreakpoints.length; index++) {
-    const start = uniqueBreakpoints[index - 1]!
-    const end = uniqueBreakpoints[index]!
-    if (end - start < 1e-7) continue
-    const midpoint = (start + end) / 2
-    const centerElevation = highestAt(normalizedByGroup, 0, midpoint)
-    const leftElevation =
-      polylines.length >= 3 ? highestAt(normalizedByGroup, 1, midpoint) : Number.NEGATIVE_INFINITY
-    const rightElevation =
-      polylines.length >= 3 ? highestAt(normalizedByGroup, 2, midpoint) : Number.NEGATIVE_INFINITY
-    const faceElevations = [leftElevation, rightElevation].filter(Number.isFinite)
-    const segmentElevation =
-      faceElevations.length > 0 ? Math.min(...faceElevations) : Math.max(centerElevation, levelBase)
+  let elevation = levelBase
+  let electedSlabId: string | null = null
 
-    for (const [face, value] of [
-      ['a', leftElevation],
-      ['b', rightElevation],
-    ] as const) {
-      appendBaseSegment(
-        faceDatum[face],
-        start,
-        end,
-        Number.isFinite(value) ? value : segmentElevation,
+  if (activeCandidates.some((candidate) => hasSlabSlope(candidate.effectiveSlab))) {
+    // Sloped-slab path: sample slab plane elevations directly along wall
+    // polylines and emit sloped `WallSlabSupportSegment` runs (`endElevation`)
+    // so walls sitting on or crossing a ramp follow the slab surface cleanly.
+    const normCandidates = activeCandidates.map((candidate) => ({
+      ...candidate,
+      sloped: hasSlabSlope(candidate.effectiveSlab),
+      normIntervals: candidate.perPolyline.map((intervals, polylineIndex) => {
+        const lineLength = polylineLengths[polylineIndex]!
+        if (lineLength < 1e-9) return [] as LengthInterval[]
+        return intervals.map(
+          ([intervalStart, intervalEnd]) =>
+            [intervalStart / lineLength, intervalEnd / lineLength] as LengthInterval,
+        )
+      }),
+    }))
+
+    const rawCuts = [0, 1]
+    for (const candidate of normCandidates) {
+      for (const intervals of candidate.normIntervals) {
+        for (const [s, e] of intervals) rawCuts.push(s, e)
+      }
+    }
+    // Include interior vertices of curved wall polylines so each sub-interval
+    // is linear in plan space.
+    for (let pi = 0; pi < polylines.length; pi++) {
+      const pts = polylines[pi]!
+      const total = polylineLengths[pi]!
+      if (pts.length <= 2 || total < 1e-9) continue
+      let acc = 0
+      for (let i = 1; i < pts.length - 1; i++) {
+        acc += Math.hypot(pts[i]!.x - pts[i - 1]!.x, pts[i]!.y - pts[i - 1]!.y)
+        rawCuts.push(acc / total)
+      }
+    }
+    rawCuts.sort((a, b) => a - b)
+    const coarseCuts = rawCuts.filter((v, i) => i === 0 || v - rawCuts[i - 1]! > 1e-7)
+
+    const coversAt = (candidate: (typeof normCandidates)[number], pi: number, t: number) =>
+      candidate.normIntervals[pi]?.some(([s, e]) => t >= s - 1e-7 && t <= e + 1e-7) ?? false
+
+    const elevAt = (candidate: (typeof normCandidates)[number], pi: number, t: number) => {
+      if (!candidate.sloped) return candidate.elevation
+      const pt = polylinePointAt(polylines[pi]!, t * polylineLengths[pi]!)
+      return getSlabElevationAtPoint(candidate.effectiveSlab, pt.x, pt.y)
+    }
+
+    const linearCrossing = (
+      a: number,
+      b: number,
+      a0: number,
+      a1: number,
+      b0: number,
+      b1: number,
+    ) => {
+      const denom = a1 - a0 - (b1 - b0)
+      if (Math.abs(denom) < 1e-9) return null
+      const frac = (b0 - a0) / denom
+      if (frac <= 1e-6 || frac >= 1 - 1e-6) return null
+      return a + (b - a) * frac
+    }
+
+    type SlabCarry = { slabId: string; length: number; maxElevation: number }
+    const slabCarry = new Map<string, SlabCarry>()
+    const recordCarry = (slabId: string, length: number, maxElev: number) => {
+      const existing = slabCarry.get(slabId)
+      if (existing) {
+        existing.length += length
+        existing.maxElevation = Math.max(existing.maxElevation, maxElev)
+      } else {
+        slabCarry.set(slabId, { slabId, length, maxElevation: maxElev })
+      }
+    }
+
+    let prefMaxElev = Number.NEGATIVE_INFINITY
+    let prefFound = false
+
+    const pickHighest = (
+      pool: typeof normCandidates,
+      pi: number,
+      u: number,
+      v: number,
+      mid: number,
+    ): { slabId: string; e0: number; e1: number } | null => {
+      let best: { slabId: string; e0: number; e1: number; midElev: number } | null = null
+      for (const c of pool) {
+        if (!coversAt(c, pi, mid)) continue
+        const midElev = elevAt(c, pi, mid)
+        if (
+          !best ||
+          midElev > best.midElev + 1e-9 ||
+          (Math.abs(midElev - best.midElev) <= 1e-9 && c.slab.id < best.slabId)
+        ) {
+          best = { slabId: c.slab.id, e0: elevAt(c, pi, u), e1: elevAt(c, pi, v), midElev }
+        }
+      }
+      return best ? { slabId: best.slabId, e0: best.e0, e1: best.e1 } : null
+    }
+
+    for (let idx = 1; idx < coarseCuts.length; idx++) {
+      const segA = coarseCuts[idx - 1]!
+      const segB = coarseCuts[idx]!
+      if (segB - segA < 1e-7) continue
+      const segMid = (segA + segB) / 2
+
+      // Sub-split at any pairwise height crossing between active candidates or levelBase.
+      const subCuts = [segA, segB]
+      const activeByPoly = polylines.map((_, pi) =>
+        normCandidates.filter((c) => coversAt(c, pi, segMid)),
+      )
+      for (let pi = 0; pi < polylines.length; pi++) {
+        const list = activeByPoly[pi]!
+        const lines = list.map((c) => [elevAt(c, pi, segA), elevAt(c, pi, segB)] as const)
+        for (let i = 0; i < lines.length; i++) {
+          const [a0, a1] = lines[i]!
+          const cutBase = linearCrossing(segA, segB, a0, a1, levelBase, levelBase)
+          if (cutBase !== null) subCuts.push(cutBase)
+          if (maxElevation != null) {
+            const cutCap = linearCrossing(segA, segB, a0, a1, maxElevation, maxElevation)
+            if (cutCap !== null) subCuts.push(cutCap)
+          }
+          for (let j = i + 1; j < lines.length; j++) {
+            const [b0, b1] = lines[j]!
+            const cut = linearCrossing(segA, segB, a0, a1, b0, b1)
+            if (cut !== null) subCuts.push(cut)
+          }
+        }
+      }
+      if (polylines.length >= 3) {
+        for (const l of activeByPoly[1]!) {
+          const l0 = elevAt(l, 1, segA)
+          const l1 = elevAt(l, 1, segB)
+          for (const r of activeByPoly[2]!) {
+            const r0 = elevAt(r, 2, segA)
+            const r1 = elevAt(r, 2, segB)
+            const cut = linearCrossing(segA, segB, l0, l1, r0, r1)
+            if (cut !== null) subCuts.push(cut)
+          }
+        }
+      }
+      subCuts.sort((a, b) => a - b)
+      const microCuts = subCuts.filter((v, i) => i === 0 || v - subCuts[i - 1]! > 1e-7)
+
+      for (let m = 1; m < microCuts.length; m++) {
+        const u = microCuts[m - 1]!
+        const v = microCuts[m]!
+        if (v - u < 1e-7) continue
+        const mid = (u + v) / 2
+
+        const center = pickHighest(normCandidates, 0, u, v, mid)
+        const left = polylines.length >= 3 ? pickHighest(normCandidates, 1, u, v, mid) : null
+        const right = polylines.length >= 3 ? pickHighest(normCandidates, 2, u, v, mid) : null
+
+        let segE0: number
+        let segE1: number
+        let segWinner: string | null = null
+        if (left && right) {
+          const leftMid = (left.e0 + left.e1) / 2
+          const rightMid = (right.e0 + right.e1) / 2
+          if (leftMid <= rightMid) {
+            segE0 = left.e0
+            segE1 = left.e1
+            segWinner = left.slabId
+          } else {
+            segE0 = right.e0
+            segE1 = right.e1
+            segWinner = right.slabId
+          }
+        } else if (left) {
+          segE0 = left.e0
+          segE1 = left.e1
+          segWinner = left.slabId
+        } else if (right) {
+          segE0 = right.e0
+          segE1 = right.e1
+          segWinner = right.slabId
+        } else if (center) {
+          segE0 = Math.max(center.e0, levelBase)
+          segE1 = Math.max(center.e1, levelBase)
+          segWinner = center.slabId
+        } else {
+          segE0 = levelBase
+          segE1 = levelBase
+        }
+
+        appendSlopedBaseSegment(faceDatum.a, u, v, left ? left.e0 : segE0, left ? left.e1 : segE1)
+        appendSlopedBaseSegment(
+          faceDatum.b,
+          u,
+          v,
+          right ? right.e0 : segE0,
+          right ? right.e1 : segE1,
+        )
+        appendSlopedBaseSegment(baseSegments, u, v, segE0, segE1)
+
+        if (preferredSlabId != null) {
+          const pref = normCandidates.find((c) => c.slab.id === preferredSlabId)
+          if (pref) {
+            for (let pi = 0; pi < polylines.length; pi++) {
+              if (coversAt(pref, pi, mid)) {
+                prefFound = true
+                prefMaxElev = Math.max(prefMaxElev, elevAt(pref, pi, u), elevAt(pref, pi, v))
+              }
+            }
+          }
+        }
+
+        const electPool =
+          maxElevation == null
+            ? normCandidates
+            : normCandidates.filter((c) => {
+                for (let pi = 0; pi < polylines.length; pi++) {
+                  if (
+                    coversAt(c, pi, mid) &&
+                    elevAt(c, pi, mid) <= maxElevation + SUPPORT_ELEVATION_EPSILON
+                  ) {
+                    return true
+                  }
+                }
+                return false
+              })
+
+        if (electPool === normCandidates) {
+          if (segWinner) recordCarry(segWinner, v - u, Math.max(segE0, segE1))
+        } else {
+          const eCenter = pickHighest(electPool, 0, u, v, mid)
+          const eLeft = polylines.length >= 3 ? pickHighest(electPool, 1, u, v, mid) : null
+          const eRight = polylines.length >= 3 ? pickHighest(electPool, 2, u, v, mid) : null
+          if (eLeft && eRight) {
+            const pick = (eLeft.e0 + eLeft.e1) / 2 <= (eRight.e0 + eRight.e1) / 2 ? eLeft : eRight
+            recordCarry(pick.slabId, v - u, Math.max(pick.e0, pick.e1))
+          } else if (eLeft) {
+            recordCarry(eLeft.slabId, v - u, Math.max(eLeft.e0, eLeft.e1))
+          } else if (eRight) {
+            recordCarry(eRight.slabId, v - u, Math.max(eRight.e0, eRight.e1))
+          } else if (eCenter) {
+            recordCarry(eCenter.slabId, v - u, Math.max(eCenter.e0, eCenter.e1, levelBase))
+          }
+        }
+      }
+    }
+
+    if (prefFound && preferredSlabId != null) {
+      electedSlabId = preferredSlabId
+      elevation = prefMaxElev
+    } else {
+      let majority: SlabCarry | null = null
+      let best: SlabCarry | null = null
+      for (const carry of slabCarry.values()) {
+        if (carry.length >= WALL_SLAB_SUPPORT_MAJORITY - 1e-6) {
+          if (!majority || carry.maxElevation > majority.maxElevation) majority = carry
+        }
+        if (
+          !best ||
+          carry.length > best.length + 1e-6 ||
+          (Math.abs(carry.length - best.length) <= 1e-6 && carry.maxElevation > best.maxElevation)
+        ) {
+          best = carry
+        }
+      }
+      const winner = majority ?? best
+      if (winner) {
+        electedSlabId = winner.slabId
+        elevation = winner.maxElevation
+      } else {
+        electedSlabId = null
+        elevation = levelBase
+      }
+    }
+  } else {
+    for (const { slab, elevation: candElevation, perPolyline } of activeCandidates) {
+      if (preferredSlabId != null && slab.id === preferredSlabId) {
+        preferredElevation = candElevation
+        preferredElectedSlabId = slab.id
+      }
+      let group = groups.find(
+        (candidate) =>
+          Math.abs(candidate.elevation - candElevation) <= WALL_SLAB_ELEVATION_POOL_EPSILON,
+      )
+      if (!group) {
+        group = { elevation: candElevation, slabIds: [], perPolyline: polylines.map(() => []) }
+        groups.push(group)
+      }
+      group.slabIds.push(slab.id)
+      for (let i = 0; i < perPolyline.length; i++) {
+        group.perPolyline[i]!.push(...perPolyline[i]!)
+      }
+    }
+
+    type EvaluatedGroup = ElevationGroup & {
+      mergedPerPolyline: LengthInterval[][]
+    }
+    const evaluatedGroups: EvaluatedGroup[] = groups.map((group) => ({
+      ...group,
+      mergedPerPolyline: group.perPolyline.map(mergeIntervals),
+    }))
+
+    const normalizedIntervals = (group: EvaluatedGroup, polylineIndex: number) => {
+      const lineLength = polylineLengths[polylineIndex]!
+      if (lineLength < 1e-9) return []
+      return group.mergedPerPolyline[polylineIndex]!.map(
+        ([intervalStart, intervalEnd]) =>
+          [intervalStart / lineLength, intervalEnd / lineLength] as LengthInterval,
       )
     }
 
-    if (electableNormalizedGroups === normalizedByGroup) {
-      if (faceElevations.length > 0 || Number.isFinite(centerElevation)) {
-        accumulateCarry(segmentElevation, end - start)
+    const normalizedByGroup = evaluatedGroups.map((group) => ({
+      elevation: group.elevation,
+      perPolyline: group.mergedPerPolyline.map((_, index) => normalizedIntervals(group, index)),
+    }))
+    const breakpoints = [0, 1]
+    for (const group of normalizedByGroup) {
+      for (const intervals of group.perPolyline) {
+        for (const [intervalStart, intervalEnd] of intervals) {
+          breakpoints.push(intervalStart, intervalEnd)
+        }
       }
-    } else {
-      const electCenter = highestAt(electableNormalizedGroups, 0, midpoint)
-      const electLeft =
-        polylines.length >= 3
-          ? highestAt(electableNormalizedGroups, 1, midpoint)
-          : Number.NEGATIVE_INFINITY
-      const electRight =
-        polylines.length >= 3
-          ? highestAt(electableNormalizedGroups, 2, midpoint)
-          : Number.NEGATIVE_INFINITY
-      const electFaces = [electLeft, electRight].filter(Number.isFinite)
-      if (electFaces.length > 0 || Number.isFinite(electCenter)) {
-        accumulateCarry(
-          electFaces.length > 0 ? Math.min(...electFaces) : Math.max(electCenter, levelBase),
-          end - start,
+    }
+    breakpoints.sort((left, right) => left - right)
+    const uniqueBreakpoints = breakpoints.filter(
+      (value, index) => index === 0 || value - breakpoints[index - 1]! > 1e-7,
+    )
+
+    const highestAt = (groupList: typeof normalizedByGroup, polylineIndex: number, t: number) => {
+      let highest = Number.NEGATIVE_INFINITY
+      for (const group of groupList) {
+        if (
+          group.perPolyline[polylineIndex]?.some(
+            ([intervalStart, intervalEnd]) => t >= intervalStart - 1e-7 && t <= intervalEnd + 1e-7,
+          )
+        ) {
+          highest = Math.max(highest, group.elevation)
+        }
+      }
+      return highest
+    }
+
+    // The pointer cap filters the ELECTION's carrying profile, not the base
+    // profile: with a deck capped away, the floor that also carries the wall
+    // must still win (geometry fill-down stays uncapped).
+    const electableNormalizedGroups =
+      maxElevation == null
+        ? normalizedByGroup
+        : normalizedByGroup.filter(
+            (group) => group.elevation <= maxElevation + SUPPORT_ELEVATION_EPSILON,
+          )
+
+    type CarryCandidate = { elevation: number; length: number }
+    const carryCandidates: CarryCandidate[] = []
+    const accumulateCarry = (candElevation: number, length: number) => {
+      let candidate = carryCandidates.find(
+        (existing) =>
+          Math.abs(existing.elevation - candElevation) <= WALL_SLAB_ELEVATION_POOL_EPSILON,
+      )
+      if (!candidate) {
+        candidate = { elevation: candElevation, length: 0 }
+        carryCandidates.push(candidate)
+      }
+      candidate.length += length
+    }
+    for (let index = 1; index < uniqueBreakpoints.length; index++) {
+      const segStart = uniqueBreakpoints[index - 1]!
+      const segEnd = uniqueBreakpoints[index]!
+      if (segEnd - segStart < 1e-7) continue
+      const midpoint = (segStart + segEnd) / 2
+      const centerElevation = highestAt(normalizedByGroup, 0, midpoint)
+      const leftElevation =
+        polylines.length >= 3 ? highestAt(normalizedByGroup, 1, midpoint) : Number.NEGATIVE_INFINITY
+      const rightElevation =
+        polylines.length >= 3 ? highestAt(normalizedByGroup, 2, midpoint) : Number.NEGATIVE_INFINITY
+      const faceElevations = [leftElevation, rightElevation].filter(Number.isFinite)
+      const segmentElevation =
+        faceElevations.length > 0
+          ? Math.min(...faceElevations)
+          : Math.max(centerElevation, levelBase)
+
+      for (const [face, value] of [
+        ['a', leftElevation],
+        ['b', rightElevation],
+      ] as const) {
+        appendBaseSegment(
+          faceDatum[face],
+          segStart,
+          segEnd,
+          Number.isFinite(value) ? value : segmentElevation,
         )
       }
+
+      if (electableNormalizedGroups === normalizedByGroup) {
+        if (faceElevations.length > 0 || Number.isFinite(centerElevation)) {
+          accumulateCarry(segmentElevation, segEnd - segStart)
+        }
+      } else {
+        const electCenter = highestAt(electableNormalizedGroups, 0, midpoint)
+        const electLeft =
+          polylines.length >= 3
+            ? highestAt(electableNormalizedGroups, 1, midpoint)
+            : Number.NEGATIVE_INFINITY
+        const electRight =
+          polylines.length >= 3
+            ? highestAt(electableNormalizedGroups, 2, midpoint)
+            : Number.NEGATIVE_INFINITY
+        const electFaces = [electLeft, electRight].filter(Number.isFinite)
+        if (electFaces.length > 0 || Number.isFinite(electCenter)) {
+          accumulateCarry(
+            electFaces.length > 0 ? Math.min(...electFaces) : Math.max(electCenter, levelBase),
+            segEnd - segStart,
+          )
+        }
+      }
+
+      const previous = baseSegments[baseSegments.length - 1]
+      if (
+        previous &&
+        Math.abs(previous.elevation - segmentElevation) <= WALL_SLAB_ELEVATION_POOL_EPSILON
+      ) {
+        previous.end = segEnd
+      } else {
+        baseSegments.push({ start: segStart, end: segEnd, elevation: segmentElevation })
+      }
     }
 
-    const previous = baseSegments[baseSegments.length - 1]
-    if (
-      previous &&
-      Math.abs(previous.elevation - segmentElevation) <= WALL_SLAB_ELEVATION_POOL_EPSILON
-    ) {
-      previous.end = end
-    } else {
-      baseSegments.push({ start, end, elevation: segmentElevation })
+    let majorityElevation = Number.NEGATIVE_INFINITY
+    let bestElevation = Number.NEGATIVE_INFINITY
+    let bestCoverage = -1
+    for (const candidate of carryCandidates) {
+      if (candidate.length >= WALL_SLAB_SUPPORT_MAJORITY - 1e-6) {
+        majorityElevation = Math.max(majorityElevation, candidate.elevation)
+      }
+      if (
+        candidate.length > bestCoverage + 1e-6 ||
+        (Math.abs(candidate.length - bestCoverage) <= 1e-6 && candidate.elevation > bestElevation)
+      ) {
+        bestCoverage = candidate.length
+        bestElevation = candidate.elevation
+      }
     }
+
+    elevation =
+      preferredElevation === null
+        ? majorityElevation === Number.NEGATIVE_INFINITY
+          ? bestElevation === Number.NEGATIVE_INFINITY
+            ? levelBase
+            : bestElevation
+          : majorityElevation
+        : preferredElevation
+    electedSlabId =
+      preferredElectedSlabId ??
+      evaluatedGroups
+        .filter(
+          (group) =>
+            maxElevation == null || group.elevation <= maxElevation + SUPPORT_ELEVATION_EPSILON,
+        )
+        .find((group) => Math.abs(group.elevation - elevation) <= WALL_SLAB_ELEVATION_POOL_EPSILON)
+        ?.slabIds.slice()
+        .sort()[0] ??
+      null
   }
-
-  let majorityElevation = Number.NEGATIVE_INFINITY
-  let bestElevation = Number.NEGATIVE_INFINITY
-  let bestCoverage = -1
-  for (const candidate of carryCandidates) {
-    if (candidate.length >= WALL_SLAB_SUPPORT_MAJORITY - 1e-6) {
-      majorityElevation = Math.max(majorityElevation, candidate.elevation)
-    }
-    if (
-      candidate.length > bestCoverage + 1e-6 ||
-      (Math.abs(candidate.length - bestCoverage) <= 1e-6 && candidate.elevation > bestElevation)
-    ) {
-      bestCoverage = candidate.length
-      bestElevation = candidate.elevation
-    }
-  }
-
-  const elevation =
-    preferredElevation === null
-      ? majorityElevation === Number.NEGATIVE_INFINITY
-        ? bestElevation === Number.NEGATIVE_INFINITY
-          ? levelBase
-          : bestElevation
-        : majorityElevation
-      : preferredElevation
-  const electedSlabId =
-    preferredElectedSlabId ??
-    evaluatedGroups
-      .filter(
-        (group) =>
-          maxElevation == null || group.elevation <= maxElevation + SUPPORT_ELEVATION_EPSILON,
-      )
-      .find((group) => Math.abs(group.elevation - elevation) <= WALL_SLAB_ELEVATION_POOL_EPSILON)
-      ?.slabIds.slice()
-      .sort()[0] ??
-    null
 
   if (baseSegments.length === 0) baseSegments.push({ start: 0, end: 1, elevation })
-  const baseElevation = Math.min(...baseSegments.map((segment) => segment.elevation))
+  const baseElevation = Math.min(
+    ...baseSegments.map((segment) =>
+      Math.min(segment.elevation, segment.endElevation ?? segment.elevation),
+    ),
+  )
   let resolvedFaceDatum: WallSlabSupport['faceDatum'] | undefined
   const resolveFaceDatum = () => {
     const wall = levelWalls.find(
@@ -1374,6 +1716,14 @@ function computeWallSlabSupportUncached(
                 } else result.push({ start: from, end: to, elevation, endElevation })
               }
             }
+          } else if (!room && elected.endElevation !== undefined) {
+            const span = elected.end - elected.start
+            const interp = (t: number) =>
+              span > 1e-9
+                ? elected.elevation +
+                  ((t - elected.start) / span) * (elected.endElevation! - elected.elevation)
+                : elected.elevation
+            appendSlopedBaseSegment(result, start, end, interp(start), interp(end))
           } else
             appendBaseSegment(
               result,
