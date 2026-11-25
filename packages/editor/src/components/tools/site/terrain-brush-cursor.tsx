@@ -7,6 +7,7 @@ import {
   surfaceHeightAt,
   type TerrainField,
   terrainFieldOf,
+  terrainSlopeDirectionVector,
   useLiveTerrain,
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
@@ -23,12 +24,14 @@ import {
 } from 'three'
 import { EDITOR_LAYER } from '../../../lib/constants'
 import { sculptFieldForSite, terrainPointInsideSite } from '../../../lib/terrain-sculpt'
-import { brushRingColor } from '../../../lib/terrain-verb-color'
-import useEditor from '../../../store/use-editor'
+import { brushRingColor, TERRAIN_SAMPLING_COLOR } from '../../../lib/terrain-verb-color'
+import useEditor, { selectActiveTerrainVerb } from '../../../store/use-editor'
 import { formatMeasurement } from '../../editor/measurement-pill'
 
 /** Segments in the cursor ring. 64 reads as a circle at any usable brush size. */
 const RING_SEGMENTS = 64
+const ARROW_POINTS = 5
+const PICK_LINE_SEGMENTS = 16
 
 /**
  * Lift above the surface, so the ring is not z-fighting the ground it traces.
@@ -75,13 +78,17 @@ export const TerrainBrushCursor: React.FC<{
   // The ring is the only thing at the point of action that can say what the next
   // drag will do — its geometry is identical for all four verbs, so colour is the
   // one channel left. Keep the mapping centralized in `lib/terrain-verb-color`.
-  const verb = useEditor((state) => state.terrainVerb)
+  const verb = useEditor(selectActiveTerrainVerb)
   const sampling = useEditor((state) => state.terrainSampling)
+  const slopeDirection = useEditor((state) => state.terrainSlope.direction)
+  const slopePickStart = useEditor((state) => state.terrainSlopePickStart)
   const color = brushRingColor(verb, sampling)
   const unit = useViewer((state) => state.unit)
   const metricNotation = useViewer((state) => state.metricNotation)
 
   const lineRef = useRef<Line>(null)
+  const arrowLineRef = useRef<Line>(null)
+  const pickLineRef = useRef<Line>(null)
   const centerRef = useRef<Group>(null)
   const heightRef = useRef<HTMLSpanElement>(null)
   const lastHeightLabelRef = useRef('')
@@ -95,7 +102,25 @@ export const TerrainBrushCursor: React.FC<{
     buffer.setAttribute('position', new Float32BufferAttribute(positions, 3))
     return buffer
   }, [])
-  useEffect(() => () => geometry.dispose(), [geometry])
+  const arrowGeometry = useMemo(() => {
+    const positions = new Float32Array(ARROW_POINTS * 3)
+    const buffer = new BufferGeometry()
+    buffer.setAttribute('position', new Float32BufferAttribute(positions, 3))
+    return buffer
+  }, [])
+  const pickLineGeometry = useMemo(() => {
+    const positions = new Float32Array((PICK_LINE_SEGMENTS + 1) * 3)
+    const buffer = new BufferGeometry()
+    buffer.setAttribute('position', new Float32BufferAttribute(positions, 3))
+    return buffer
+  }, [])
+  useEffect(() => {
+    return () => {
+      geometry.dispose()
+      arrowGeometry.dispose()
+      pickLineGeometry.dispose()
+    }
+  }, [geometry, arrowGeometry, pickLineGeometry])
 
   useEffect(() => {
     const canvas = gl.domElement
@@ -119,11 +144,15 @@ export const TerrainBrushCursor: React.FC<{
 
   useFrame(() => {
     const line = lineRef.current
+    const arrowLine = arrowLineRef.current
+    const pickLine = pickLineRef.current
     const center = centerRef.current
     const pointer = pointerRef.current
     if (!(line && center)) return
     if (!(pointer || focusRef.current)) {
       line.visible = false
+      if (arrowLine) arrowLine.visible = false
+      if (pickLine) pickLine.visible = false
       center.visible = false
       if (heightRef.current) heightRef.current.style.display = 'none'
       return
@@ -161,6 +190,8 @@ export const TerrainBrushCursor: React.FC<{
     }
     if (!hit) {
       line.visible = false
+      if (arrowLine) arrowLine.visible = false
+      if (pickLine) pickLine.visible = false
       center.visible = false
       if (heightRef.current) heightRef.current.style.display = 'none'
       return
@@ -194,6 +225,68 @@ export const TerrainBrushCursor: React.FC<{
     attribute.needsUpdate = true
     line.geometry.computeBoundingSphere()
 
+    // Uphill direction arrow inside the brush ring when in slope mode (not while picking).
+    if (arrowLine) {
+      if (verb === 'slope' && !sampling) {
+        const { dx, dz } = terrainSlopeDirectionVector(slopeDirection)
+        const perpX = -dz
+        const perpZ = dx
+        const halfLen = drawn * 0.55
+        const headLen = drawn * 0.25
+        const headHalfWidth = drawn * 0.2
+        const tailX = hit.x - dx * halfLen
+        const tailZ = hit.z - dz * halfLen
+        const tipX = hit.x + dx * halfLen
+        const tipZ = hit.z + dz * halfLen
+        const leftX = tipX - dx * headLen - perpX * headHalfWidth
+        const leftZ = tipZ - dz * headLen - perpZ * headHalfWidth
+        const rightX = tipX - dx * headLen + perpX * headHalfWidth
+        const rightZ = tipZ - dz * headLen + perpZ * headHalfWidth
+
+        const pts: Array<[number, number]> = [
+          [tailX, tailZ],
+          [tipX, tipZ],
+          [leftX, leftZ],
+          [tipX, tipZ],
+          [rightX, rightZ],
+        ]
+        const arrowAttr = arrowLine.geometry.getAttribute('position')
+        const arrowArr = arrowAttr.array as Float32Array
+        for (let i = 0; i < pts.length; i++) {
+          const [px, pz] = pts[i]!
+          arrowArr[i * 3] = px
+          arrowArr[i * 3 + 1] = surfaceHeightAt(surface, px, pz) + RING_LIFT
+          arrowArr[i * 3 + 2] = pz
+        }
+        arrowAttr.needsUpdate = true
+        arrowLine.geometry.computeBoundingSphere()
+        arrowLine.visible = true
+      } else {
+        arrowLine.visible = false
+      }
+    }
+
+    // Two-point A -> B guide line while picking the second slope point.
+    if (pickLine) {
+      if (verb === 'slope' && sampling && slopePickStart) {
+        const pickAttr = pickLine.geometry.getAttribute('position')
+        const pickArr = pickAttr.array as Float32Array
+        for (let i = 0; i <= PICK_LINE_SEGMENTS; i++) {
+          const t = i / PICK_LINE_SEGMENTS
+          const px = slopePickStart[0] + (hit.x - slopePickStart[0]) * t
+          const pz = slopePickStart[1] + (hit.z - slopePickStart[1]) * t
+          pickArr[i * 3] = px
+          pickArr[i * 3 + 1] = surfaceHeightAt(surface, px, pz) + RING_LIFT
+          pickArr[i * 3 + 2] = pz
+        }
+        pickAttr.needsUpdate = true
+        pickLine.geometry.computeBoundingSphere()
+        pickLine.visible = true
+      } else {
+        pickLine.visible = false
+      }
+    }
+
     const centerHeight = surfaceHeightAt(surface, hit.x, hit.z)
     center.position.set(hit.x, centerHeight + RING_LIFT, hit.z)
     const heightLabel = `H ${formatMeasurement(centerHeight, unit, metricNotation)}`
@@ -218,6 +311,35 @@ export const TerrainBrushCursor: React.FC<{
         renderOrder={13}
       >
         <lineBasicNodeMaterial color={color} depthTest={false} depthWrite={false} linewidth={2} />
+      </line>
+      <line
+        frustumCulled={false}
+        geometry={arrowGeometry}
+        layers={EDITOR_LAYER}
+        raycast={NO_RAYCAST}
+        // @ts-expect-error R3F <line> element conflicts with SVG <line> type
+        ref={arrowLineRef}
+        renderOrder={13}
+        visible={false}
+      >
+        <lineBasicNodeMaterial color={color} depthTest={false} depthWrite={false} linewidth={2} />
+      </line>
+      <line
+        frustumCulled={false}
+        geometry={pickLineGeometry}
+        layers={EDITOR_LAYER}
+        raycast={NO_RAYCAST}
+        // @ts-expect-error R3F <line> element conflicts with SVG <line> type
+        ref={pickLineRef}
+        renderOrder={13}
+        visible={false}
+      >
+        <lineBasicNodeMaterial
+          color={TERRAIN_SAMPLING_COLOR}
+          depthTest={false}
+          depthWrite={false}
+          linewidth={2}
+        />
       </line>
       <group ref={centerRef} visible={false}>
         <mesh

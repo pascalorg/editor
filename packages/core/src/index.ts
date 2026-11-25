@@ -849,6 +849,7 @@ export {
 } from './lib/structure-reconcile'
 export {
   advanceStroke,
+  type BaseTerrainVerb,
   type BrushSettings,
   type BrushShape,
   beginStroke,
@@ -893,6 +894,24 @@ export {
   type TerrainField,
 } from './lib/terrain-field'
 export { raycastTerrain, type TerrainHit } from './lib/terrain-raycast'
+export {
+  buildSlopedTerrainField,
+  clampTerrainSlopePitch,
+  DEFAULT_TERRAIN_SLOPE_SPEC,
+  type DerivedTerrainSlope,
+  deriveTerrainSlopeFromPoints,
+  evaluateTerrainSlopePlane,
+  MAX_TERRAIN_SLOPE_PITCH,
+  normalizeTerrainSlopeDirection,
+  resolveLotSlopePlane,
+  type TerrainSlopeAnchor,
+  type TerrainSlopePlane,
+  type TerrainSlopePoint,
+  type TerrainSlopeSpec,
+  terrainSlopeDirectionVector,
+  terrainSlopeElevationRange,
+  terrainSlopeGradePercent,
+} from './lib/terrain-slope'
 export {
   commitTerrainField,
   persistedTerrainFieldOf,

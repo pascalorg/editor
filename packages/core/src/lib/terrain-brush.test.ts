@@ -455,3 +455,39 @@ describe('highestOver', () => {
     expect(highestOver(raised, -8, -8, -6, -6)).toBeCloseTo(0, 6)
   })
 })
+
+describe('slope verb', () => {
+  test('grades brushed samples toward the target inclined plane without compounding', () => {
+    const base = field()
+    const slope = {
+      anchorX: 0,
+      anchorZ: 0,
+      anchorY: 0,
+      direction: 0,
+      pitch: Math.atan(0.2) * (180 / Math.PI),
+    }
+
+    const once = stroke(
+      base,
+      { verb: 'slope', slope, settings: { radius: 4, strength: 1, falloff: 0 } },
+      [[0, 0]],
+    )
+    expect(heightAt(once, 0, 0)).toBeCloseTo(0, 2)
+    expect(heightAt(once, 2, 0)).toBeCloseTo(0.4, 2)
+    expect(heightAt(once, -2, 0)).toBeCloseTo(-0.4, 2)
+    // Untouched area outside brush radius remains flat at datum.
+    expect(heightAt(once, 8, 8)).toBeCloseTo(0, 6)
+
+    // Re-crossing the same area within one stroke never overshoots or compounds.
+    const recrossed = stroke(
+      base,
+      { verb: 'slope', slope, settings: { radius: 4, strength: 0.5, falloff: 0 } },
+      [
+        [0, 0],
+        [2, 0],
+        [0, 0],
+      ],
+    )
+    expect(heightAt(recrossed, 2, 0)).toBeCloseTo(0.2, 2)
+  })
+})

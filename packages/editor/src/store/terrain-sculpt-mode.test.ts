@@ -216,3 +216,37 @@ describe('isBrushMode', () => {
     expect(modes.filter(isBrushMode)).toEqual(held)
   })
 })
+
+describe('terrain slope editor state', () => {
+  test('clamps pitch, wraps direction, and clears slope picking on verb or mode change', () => {
+    const editor = useEditor.getState()
+    editor.setMode('terrain-sculpt')
+    editor.setActiveTerrainVerb('slope')
+    editor.setTerrainSlope({ pitch: 60, direction: -90, baseElevation: 1.5, anchor: 'low-edge' })
+
+    expect(useEditor.getState().terrainSlope).toEqual({
+      pitch: 45,
+      direction: 270,
+      baseElevation: 1.5,
+      anchor: 'low-edge',
+    })
+
+    editor.setTerrainSampling(true)
+    editor.setTerrainSlopePickStart([1, 2, 0.5])
+    expect(useEditor.getState().terrainSampling).toBe(true)
+    expect(useEditor.getState().terrainSlopePickStart).toEqual([1, 2, 0.5])
+
+    // Switching verbs clears sampling and in-progress A -> B start point.
+    editor.setTerrainVerb('flatten')
+    expect(useEditor.getState().terrainSampling).toBe(false)
+    expect(useEditor.getState().terrainSlopePickStart).toBeNull()
+
+    // Leaving terrain-sculpt mode also clears sampling and pick start.
+    editor.setActiveTerrainVerb('slope')
+    editor.setTerrainSampling(true)
+    editor.setTerrainSlopePickStart([3, 4, 1])
+    editor.setMode('select')
+    expect(useEditor.getState().terrainSampling).toBe(false)
+    expect(useEditor.getState().terrainSlopePickStart).toBeNull()
+  })
+})

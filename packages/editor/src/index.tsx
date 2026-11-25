@@ -974,7 +974,9 @@ export {
   flattenSite,
   resetSiteTerrain,
   resolveFlattenTarget,
+  resolveSlopeStrokePlane,
   sculptFieldForSite,
+  slopeSite,
   terrainPointInsideSite,
 } from './lib/terrain-sculpt'
 export {

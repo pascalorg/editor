@@ -70,6 +70,7 @@ const TERRAIN_LOOP_BY_VERB = {
   lower: 'terrainLower',
   flatten: 'terrainFlatten',
   smooth: 'terrainSmooth',
+  slope: 'terrainFlatten',
 } as const satisfies Record<TerrainVerb, LoopSFXName>
 const handleTerrainSculptStart = (verb: TerrainVerb) => startLoopSFX(TERRAIN_LOOP_BY_VERB[verb])
 const handleTerrainSculptStop = () => stopLoopSFX()

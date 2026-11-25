@@ -4,18 +4,23 @@ import type { AssetInput } from '@pascal-app/core'
 import {
   type AnyNode,
   type AnyNodeId,
+  type BaseTerrainVerb,
   type BrushSettings,
   type BuildingNode,
   type CameraPose,
   type ChimneyMaterialRole,
+  clampTerrainSlopePitch,
   DEFAULT_BRUSH_SETTINGS,
+  DEFAULT_TERRAIN_SLOPE_SPEC,
   type DormerSurfaceMaterialRole,
   isMoveLocked,
   type LevelNode,
   nodeRegistry,
+  normalizeTerrainSlopeDirection,
   type RoofSurfaceMaterialRole,
   type Space,
   type StairSurfaceMaterialRole,
+  type TerrainSlopeSpec,
   type TerrainVerb,
   useScene,
   type WallSurfaceSide,
@@ -390,8 +395,17 @@ type EditorState = {
    * bottom-bar HUD, the keyboard shortcuts, and the brush all read one source —
    * the same reason the paint mode's material/scope/eraser live here.
    */
-  terrainVerb: TerrainVerb
-  setTerrainVerb: (verb: TerrainVerb) => void
+  /**
+   * Base sculpt verb kept narrowed to the four original verbs so external
+   * consumers (such as `@webxr/plugin`'s wand model) keep indexing cleanly.
+   * Use `selectActiveTerrainVerb` / `setActiveTerrainVerb` for the full 5-verb
+   * set including `slope`.
+   */
+  terrainVerb: BaseTerrainVerb
+  setTerrainVerb: (verb: BaseTerrainVerb) => void
+  /** True when the 5th `slope` grading verb is active instead of `terrainVerb`. */
+  terrainSlopeActive: boolean
+  setActiveTerrainVerb: (verb: TerrainVerb) => void
   terrainBrush: BrushSettings
   setTerrainBrush: (settings: Partial<BrushSettings>) => void
   /**
@@ -403,11 +417,23 @@ type EditorState = {
   terrainFlattenTarget: number | null
   setTerrainFlattenTarget: (metres: number | null) => void
   /**
-   * True while the next click should sample a flatten target instead of
-   * sculpting. One-shot: sampling clears it.
+   * True while the next click(s) should sample the ground instead of sculpting:
+   * one click for `flatten` target height, two clicks (A -> B) for `slope`.
    */
   terrainSampling: boolean
   setTerrainSampling: (sampling: boolean) => void
+  /** Active slope parameters for the `slope` brush and whole-lot grading. */
+  terrainSlope: TerrainSlopeSpec
+  setTerrainSlope: (patch: Partial<TerrainSlopeSpec>) => void
+  /**
+   * Optional locked 3D anchor `[x, z, y]` set by two-point A -> B sampling so
+   * subsequent slope strokes stay flush with the picked start/end elevations.
+   */
+  terrainSlopeAnchor: [number, number, number] | null
+  setTerrainSlopeAnchor: (anchor: [number, number, number] | null) => void
+  /** First clicked point `[x, z, y]` during a two-point A -> B slope pick. */
+  terrainSlopePickStart: [number, number, number] | null
+  setTerrainSlopePickStart: (point: [number, number, number] | null) => void
   // What the cursor is over in paint mode: the scopes it offers + labels for the
   // HUD chip. `null` when not over a paintable surface (drives the "hover a
   // surface" hint). Set by the selection-manager paint hover; not persisted.
@@ -1175,6 +1201,9 @@ const useEditor = create<EditorState>()(
           mode: next.mode,
           tool: nextTool,
           ...(endsSelection ? { room: null, hoveredRoom: null, selectedReferenceId: null } : {}),
+          ...(next.mode !== 'terrain-sculpt'
+            ? { terrainSampling: false, terrainSlopePickStart: null }
+            : {}),
           ...(phaseChanged ? { phase } : {}),
         })
         // The brush works on the 3D canvas, so arming it opens 3D beside the plan.
@@ -1353,20 +1382,61 @@ const useEditor = create<EditorState>()(
       paintHover: null,
       setPaintHover: (info) => set({ paintHover: info }),
       terrainVerb: 'flatten',
-      setTerrainVerb: (verb) =>
+      terrainSlopeActive: false,
+      setTerrainVerb: (verb) => {
+        const unchanged = !get().terrainSlopeActive && verb === get().terrainVerb
         set({
           terrainVerb: verb,
-          // Switching away from flatten drops the sampling arm — an eyedropper
-          // that survives into the raise brush would swallow its first click.
-          terrainSampling: verb === 'flatten' ? get().terrainSampling : false,
-        }),
+          terrainSlopeActive: false,
+          // Switching verbs drops any armed eyedropper or in-progress A -> B pick
+          // so a sampling click never leaks across brushes.
+          terrainSampling: unchanged ? get().terrainSampling : false,
+          terrainSlopePickStart: unchanged ? get().terrainSlopePickStart : null,
+        })
+      },
+      setActiveTerrainVerb: (verb) => {
+        if (verb === 'slope') {
+          const unchanged = get().terrainSlopeActive
+          set({
+            terrainSlopeActive: true,
+            terrainSampling: unchanged ? get().terrainSampling : false,
+            terrainSlopePickStart: unchanged ? get().terrainSlopePickStart : null,
+          })
+          return
+        }
+        get().setTerrainVerb(verb)
+      },
       terrainBrush: DEFAULT_BRUSH_SETTINGS,
       setTerrainBrush: (settings) => set({ terrainBrush: { ...get().terrainBrush, ...settings } }),
       terrainFlattenTarget: null,
       setTerrainFlattenTarget: (metres) =>
         set({ terrainFlattenTarget: metres, terrainSampling: false }),
       terrainSampling: false,
-      setTerrainSampling: (sampling) => set({ terrainSampling: sampling }),
+      setTerrainSampling: (sampling) =>
+        set({
+          terrainSampling: sampling,
+          ...(sampling ? {} : { terrainSlopePickStart: null }),
+        }),
+      terrainSlope: DEFAULT_TERRAIN_SLOPE_SPEC,
+      setTerrainSlope: (patch) => {
+        const prev = get().terrainSlope
+        set({
+          terrainSlope: {
+            ...prev,
+            ...patch,
+            pitch: clampTerrainSlopePitch(patch.pitch ?? prev.pitch),
+            direction: normalizeTerrainSlopeDirection(patch.direction ?? prev.direction),
+            baseElevation: Number.isFinite(patch.baseElevation ?? prev.baseElevation)
+              ? (patch.baseElevation ?? prev.baseElevation)
+              : 0,
+            anchor: patch.anchor ?? prev.anchor ?? 'center',
+          },
+        })
+      },
+      terrainSlopeAnchor: null,
+      setTerrainSlopeAnchor: (anchor) => set({ terrainSlopeAnchor: anchor }),
+      terrainSlopePickStart: null,
+      setTerrainSlopePickStart: (point) => set({ terrainSlopePickStart: point }),
       canFindNode: false,
       setCanFindNode: (canFind) => set({ canFindNode: canFind }),
       selectedReferenceId: null,
@@ -1861,3 +1931,9 @@ usePaintRegionMode.subscribe((state) => {
 subscribeNavigationSyncPose((navigationSyncPose) => useEditor.setState({ navigationSyncPose }))
 
 export default useEditor
+
+export function selectActiveTerrainVerb(
+  state: Pick<EditorState, 'terrainVerb' | 'terrainSlopeActive'>,
+): TerrainVerb {
+  return state.terrainSlopeActive ? 'slope' : state.terrainVerb
+}

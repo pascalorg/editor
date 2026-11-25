@@ -1572,6 +1572,98 @@ msgstr "Edit {label}"
 msgid "editor.controls.sliderControl.mixed"
 msgstr "Mixed"
 
+#: packages/editor/src/components/ui/controls/terrain-sculpt-panel.tsx
+msgid "editor.controls.terrainSculptPanel.anchorCenter"
+msgstr "Anchor: Center"
+
+#: packages/editor/src/components/ui/controls/terrain-sculpt-panel.tsx
+msgid "editor.controls.terrainSculptPanel.anchoredAt"
+msgstr "Anchored at {elevation}"
+
+#: packages/editor/src/components/ui/controls/terrain-sculpt-panel.tsx
+msgid "editor.controls.terrainSculptPanel.anchoredBrushHint"
+msgstr "Brush strokes grade onto the picked A → B plane. Clear anchor to grade from click height."
+
+#: packages/editor/src/components/ui/controls/terrain-sculpt-panel.tsx
+msgid "editor.controls.terrainSculptPanel.anchorLowEdge"
+msgstr "Low edge"
+
+#: packages/editor/src/components/ui/controls/terrain-sculpt-panel.tsx
+msgid "editor.controls.terrainSculptPanel.clearAnchor"
+msgstr "Clear"
+
+#: packages/editor/src/components/ui/controls/terrain-sculpt-panel.tsx
+msgid "editor.controls.terrainSculptPanel.clearSlopeAnchorAria"
+msgstr "Clear picked slope anchor"
+
+#: packages/editor/src/components/ui/controls/terrain-sculpt-panel.tsx
+msgid "editor.controls.terrainSculptPanel.direction"
+msgstr "Direction"
+
+#: packages/editor/src/components/ui/controls/terrain-sculpt-panel.tsx
+msgid "editor.controls.terrainSculptPanel.elevation"
+msgstr "Elevation"
+
+#: packages/editor/src/components/ui/controls/terrain-sculpt-panel.tsx
+msgid "editor.controls.terrainSculptPanel.flip180"
+msgstr "Flip 180°"
+
+#: packages/editor/src/components/ui/controls/terrain-sculpt-panel.tsx
+msgid "editor.controls.terrainSculptPanel.flipSlope180Aria"
+msgstr "Flip slope direction 180 degrees"
+
+#: packages/editor/src/components/ui/controls/terrain-sculpt-panel.tsx
+msgid "editor.controls.terrainSculptPanel.freeBrushHint"
+msgstr "Brush strokes start from the height where you click, or apply this grade across the whole lot."
+
+#: packages/editor/src/components/ui/controls/terrain-sculpt-panel.tsx
+msgid "editor.controls.terrainSculptPanel.gradeReadout"
+msgstr "Grade {percent}%"
+
+#: packages/editor/src/components/ui/controls/terrain-sculpt-panel.tsx
+msgid "editor.controls.terrainSculptPanel.pickEndHint"
+msgstr "Click a second point on the ground to match its slope and direction."
+
+#: packages/editor/src/components/ui/controls/terrain-sculpt-panel.tsx
+msgid "editor.controls.terrainSculptPanel.pickSlopePointsAria"
+msgstr "Pick two points on the ground to match slope"
+
+#: packages/editor/src/components/ui/controls/terrain-sculpt-panel.tsx
+msgid "editor.controls.terrainSculptPanel.pickSlopeTitle"
+msgstr "Pick A → B slope"
+
+#: packages/editor/src/components/ui/controls/terrain-sculpt-panel.tsx
+msgid "editor.controls.terrainSculptPanel.pickStartHint"
+msgstr "Click a start point on the ground for the slope."
+
+#: packages/editor/src/components/ui/controls/terrain-sculpt-panel.tsx
+msgid "editor.controls.terrainSculptPanel.pitch"
+msgstr "Pitch"
+
+#: packages/editor/src/components/ui/controls/terrain-sculpt-panel.tsx
+msgid "editor.controls.terrainSculptPanel.presetFlat"
+msgstr "Flat"
+
+#: packages/editor/src/components/ui/controls/terrain-sculpt-panel.tsx
+msgid "editor.controls.terrainSculptPanel.rotate90"
+msgstr "Rotate 90°"
+
+#: packages/editor/src/components/ui/controls/terrain-sculpt-panel.tsx
+msgid "editor.controls.terrainSculptPanel.rotateSlope90Aria"
+msgstr "Rotate slope direction 90 degrees"
+
+#: packages/editor/src/components/ui/controls/terrain-sculpt-panel.tsx
+msgid "editor.controls.terrainSculptPanel.slope"
+msgstr "Slope"
+
+#: packages/editor/src/components/ui/controls/terrain-sculpt-panel.tsx
+msgid "editor.controls.terrainSculptPanel.slopeHint"
+msgstr "Drag to grade the ground along an inclined plane, pick A → B to match two points, or apply the slope to the whole lot."
+
+#: packages/editor/src/components/ui/controls/terrain-sculpt-panel.tsx
+msgid "editor.controls.terrainSculptPanel.slopeLot"
+msgstr "Slope lot"
+
 #: packages/editor/src/components/editor/index.tsx
 msgid "editor.dismiss"
 msgstr "Dismiss"
@@ -1976,6 +2068,14 @@ msgstr "Object, wall, or room"
 #: packages/editor/src/components/ui/helpers/helper-manager.tsx
 msgid "editor.helpers.helperManager.paintWithThisMaterial"
 msgstr "Paint with this material"
+
+#: packages/editor/src/components/ui/helpers/helper-manager.tsx
+msgid "editor.helpers.helperManager.pickSlopeEndPoint"
+msgstr "Pick end point to match slope"
+
+#: packages/editor/src/components/ui/helpers/helper-manager.tsx
+msgid "editor.helpers.helperManager.pickSlopeStartPoint"
+msgstr "Pick start point"
 
 #: packages/editor/src/components/ui/helpers/helper-manager.tsx
 msgid "editor.helpers.helperManager.pickTargetHeight"
@@ -4489,6 +4589,10 @@ msgstr "Rotate"
 #: packages/editor/src/lib/hud-title.ts
 msgid "editor.lib.hudTitle.select"
 msgstr "Select"
+
+#: packages/editor/src/lib/hud-title.ts
+msgid "editor.lib.hudTitle.slopeTerrain"
+msgstr "Slope terrain"
 
 #: packages/editor/src/lib/hud-title.ts
 msgid "editor.lib.hudTitle.smartMeasure"

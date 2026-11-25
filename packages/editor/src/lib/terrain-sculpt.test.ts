@@ -17,7 +17,9 @@ import {
   flattenSite,
   resetSiteTerrain,
   resolveFlattenTarget,
+  resolveSlopeStrokePlane,
   sculptFieldForSite,
+  slopeSite,
   terrainPointInsideSite,
 } from './terrain-sculpt'
 
@@ -425,5 +427,85 @@ describe('lot-wide terrain writes vs a stroke in flight', () => {
 
     expect(useLiveTerrain.getState().fieldOf(lotSiteId)).toBeUndefined()
     expect(terrainFieldOf(useScene.getState().nodes[lotSiteId] as SiteNode)).toBeNull()
+  })
+})
+
+describe('slopeSite & resolveSlopeStrokePlane', () => {
+  const lotSiteId = 'site_slope_test' as SiteNode['id']
+
+  function rectSite(): SiteNode {
+    return {
+      id: lotSiteId,
+      type: 'site',
+      children: [],
+      polygon: {
+        type: 'polygon',
+        points: [
+          [-10, -20],
+          [10, -20],
+          [10, 20],
+          [-10, 20],
+        ],
+      },
+    } as unknown as SiteNode
+  }
+
+  beforeEach(() => {
+    useLiveTerrain.getState().endAll()
+    useScene.setState({ nodes: {}, rootNodeIds: [], dirtyNodes: new Set() } as never)
+    useScene.temporal.getState().clear()
+    useScene.temporal.getState().resume()
+  })
+
+  test('grades the whole lot cleanly, abandons live strokes, and undoes in one step', () => {
+    const target = rectSite()
+    useScene.setState({ nodes: { [lotSiteId]: target }, rootNodeIds: [lotSiteId] } as never)
+    useLiveTerrain.getState().begin(lotSiteId, sculptFieldForSite(target))
+
+    slopeSite(target, {
+      pitch: Math.atan(0.05) * (180 / Math.PI),
+      direction: 90,
+      baseElevation: 0,
+      anchor: 'center',
+    })
+
+    expect(useLiveTerrain.getState().fieldOf(lotSiteId)).toBeUndefined()
+    const written = useScene.getState().nodes[lotSiteId] as SiteNode
+    const writtenField = terrainFieldOf(written)
+    expect(writtenField).not.toBeNull()
+    expect(heightAt(writtenField!, 0, 0)).toBeCloseTo(0, 2)
+    expect(heightAt(writtenField!, 0, 20)).toBeCloseTo(1, 2)
+    expect(heightAt(writtenField!, 0, -20)).toBeCloseTo(-1, 2)
+
+    // Single undo step restores virgin flat terrain.
+    useScene.temporal.getState().undo()
+    expect(terrainFieldOf(useScene.getState().nodes[lotSiteId] as SiteNode)).toBeNull()
+  })
+
+  test('low-edge anchor keeps the entire lot at or above baseElevation', () => {
+    const target = rectSite()
+    useScene.setState({ nodes: { [lotSiteId]: target }, rootNodeIds: [lotSiteId] } as never)
+
+    slopeSite(target, {
+      pitch: Math.atan(0.1) * (180 / Math.PI),
+      direction: 0,
+      baseElevation: 0.5,
+      anchor: 'low-edge',
+    })
+
+    const writtenField = terrainFieldOf(useScene.getState().nodes[lotSiteId] as SiteNode)!
+    expect(heightAt(writtenField, -10, 0)).toBeCloseTo(0.5, 2)
+    expect(heightAt(writtenField, 10, 0)).toBeCloseTo(2.5, 2)
+  })
+
+  test('resolveSlopeStrokePlane respects locked anchor or falls back to clicked height', () => {
+    const field = createTerrainField({ cols: 33, rows: 33, spacing: 0.5, origin: [-8, -8] })
+    field.heights.fill(200) // +2.00 m everywhere
+
+    const free = resolveSlopeStrokePlane(field, { pitch: 10, direction: 45 }, 1, -2, null)
+    expect(free).toEqual({ anchorX: 1, anchorZ: -2, anchorY: 2, direction: 45, pitch: 10 })
+
+    const locked = resolveSlopeStrokePlane(field, { pitch: 10, direction: 45 }, 1, -2, [3, 4, 1.25])
+    expect(locked).toEqual({ anchorX: 3, anchorZ: 4, anchorY: 1.25, direction: 45, pitch: 10 })
   })
 })
