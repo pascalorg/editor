@@ -1,18 +1,23 @@
 import { refuse } from '../agent-tools/refusal'
+import { ceilingRegionsOwner } from '../lib/ceiling-surface'
 import { wallSupportForNodes } from '../lib/opening-floor-datum'
 import { wallFaceBaseOffset } from '../lib/wall-face-script'
 import type { MaterialSurface } from '../material-kinds'
 import { nearestLibraryColorRef } from '../procedural-items/library-colors'
 import { queryNodes } from '../runtime/node-queries'
-import type {
-  AnyNode,
-  CeilingNode,
-  WallFace,
-  WallFaceRegion,
-  WallNode,
-  WallTrimKind,
-  WallTrimProfile,
-  ZoneNode,
+import {
+  type AnyNode,
+  CeilingFrameConfig,
+  type CeilingFrameStyle,
+  CeilingMedallionConfig,
+  type CeilingMedallionStyle,
+  type CeilingNode,
+  type WallFace,
+  type WallFaceRegion,
+  type WallNode,
+  type WallTrimKind,
+  type WallTrimProfile,
+  type ZoneNode,
 } from '../schema'
 import { dressLevel, fixtureTarget, runTargets, standsAgainst } from './dress-targets'
 import { requireMaterialRef } from './material-refs'
@@ -38,12 +43,32 @@ export type DressLayer = {
   profile?: WallTrimProfile
   where?: { walls?: string[]; around?: string[]; margin?: number; alongRun?: string }
 }
+export type DressCeilingMedallionInput = {
+  enabled?: boolean
+  style?: CeilingMedallionStyle
+  diameter?: number
+  relief?: number
+  offset?: [number, number]
+  at?: [number, number]
+  finish?: string
+}
+export type DressCeilingFrameInput = {
+  enabled?: boolean
+  style?: CeilingFrameStyle
+  inset?: number
+  width?: number
+  relief?: number
+  notchedCorners?: boolean
+  finish?: string
+}
 export type DressRoomInput = {
   zoneIds: string[]
   layers?: DressLayer[]
   wallFinish?: string
   ceilingFinish?: string
   ceilingHeight?: number
+  ceilingMedallion?: DressCeilingMedallionInput | null
+  ceilingFrame?: DressCeilingFrameInput | null
   floorFinish?: string
   replaceScripts?: boolean
   dryRun?: boolean
@@ -68,6 +93,8 @@ export type DressedRoom = {
   wallFinish?: string
   ceilingFinish?: string
   ceilingHeight?: number
+  ceilingMedallion?: CeilingMedallionConfig | null
+  ceilingFrame?: CeilingFrameConfig | null
   floorFinish?: string
   clearedScripts?: number
 }
@@ -245,6 +272,8 @@ export const dressRoom: AgentOperation<DressRoomInput> = (nodes, input, context)
     input.wallFinish !== undefined ||
     input.ceilingFinish !== undefined ||
     input.ceilingHeight !== undefined ||
+    input.ceilingMedallion !== undefined ||
+    input.ceilingFrame !== undefined ||
     input.floorFinish !== undefined
   if (input.layers !== undefined) {
     if (!Array.isArray(input.layers) || input.layers.length > 8)
@@ -253,7 +282,7 @@ export const dressRoom: AgentOperation<DressRoomInput> = (nodes, input, context)
   } else if (!hasRoomChange) {
     refuse(
       'invalid_layer',
-      'Supply layers or at least one room finish (wallFinish, ceilingFinish, ceilingHeight, floorFinish).',
+      'Supply layers or at least one room finish/ornament (wallFinish, ceilingFinish, ceilingHeight, ceilingMedallion, ceilingFrame, floorFinish).',
     )
   }
   if (
@@ -261,6 +290,59 @@ export const dressRoom: AgentOperation<DressRoomInput> = (nodes, input, context)
     !(Number.isFinite(input.ceilingHeight) && input.ceilingHeight >= 0.1)
   )
     refuse('invalid_size', 'ceilingHeight must be at least 0.1 m.', { field: 'ceilingHeight' })
+  let medallionSpec: CeilingMedallionConfig | null | undefined
+  let medallionNote: string | undefined
+  if (input.ceilingMedallion !== undefined) {
+    if (input.ceilingMedallion === null || input.ceilingMedallion.enabled === false) {
+      medallionSpec = null
+    } else {
+      const finishResolved =
+        input.ceilingMedallion.finish !== undefined
+          ? resolveSlotFinish(
+              input.ceilingMedallion.finish,
+              'ceilingMedallion.finish',
+              'ceiling',
+              context,
+            )
+          : undefined
+      medallionNote = finishResolved?.note
+      const parsed = CeilingMedallionConfig.safeParse({
+        ...input.ceilingMedallion,
+        enabled: true,
+        ...(finishResolved ? { finish: finishResolved.ref } : {}),
+      })
+      if (!parsed.success)
+        refuse('invalid_size', 'ceilingMedallion has invalid dimensions, style or placement.', {
+          field: 'ceilingMedallion',
+          issues: parsed.error.issues.map((i) => ({ path: i.path, message: i.message })),
+        })
+      medallionSpec = parsed.data
+    }
+  }
+  let frameSpec: CeilingFrameConfig | null | undefined
+  let frameNote: string | undefined
+  if (input.ceilingFrame !== undefined) {
+    if (input.ceilingFrame === null || input.ceilingFrame.enabled === false) {
+      frameSpec = null
+    } else {
+      const finishResolved =
+        input.ceilingFrame.finish !== undefined
+          ? resolveSlotFinish(input.ceilingFrame.finish, 'ceilingFrame.finish', 'ceiling', context)
+          : undefined
+      frameNote = finishResolved?.note
+      const parsed = CeilingFrameConfig.safeParse({
+        ...input.ceilingFrame,
+        enabled: true,
+        ...(finishResolved ? { finish: finishResolved.ref } : {}),
+      })
+      if (!parsed.success)
+        refuse('invalid_size', 'ceilingFrame has invalid dimensions or style.', {
+          field: 'ceilingFrame',
+          issues: parsed.error.issues.map((i) => ({ path: i.path, message: i.message })),
+        })
+      frameSpec = parsed.data
+    }
+  }
   const zones = [...new Set(input.zoneIds)].map((id) => {
     const zone = nodes[id]
     if (zone?.type !== 'zone' || zone.spaceRole !== 'room')
@@ -294,10 +376,16 @@ export const dressRoom: AgentOperation<DressRoomInput> = (nodes, input, context)
     wallFinish: undefined as string | undefined,
     ceilingFinish: undefined as string | undefined,
     ceilingHeight: undefined as number | undefined,
+    ceilingMedallion: undefined as CeilingMedallionConfig | null | undefined,
+    ceilingFrame: undefined as CeilingFrameConfig | null | undefined,
     floorFinish: undefined as string | undefined,
   }))
   let note: string | undefined =
-    wallFinishResolved?.note ?? ceilingFinishResolved?.note ?? floorFinishResolved?.note
+    wallFinishResolved?.note ??
+    ceilingFinishResolved?.note ??
+    medallionNote ??
+    frameNote ??
+    floorFinishResolved?.note
 
   const clearFullHeightWallScript = (
     wallId: string,
@@ -386,7 +474,12 @@ export const dressRoom: AgentOperation<DressRoomInput> = (nodes, input, context)
       }
     }
 
-    if (ceilingFinishResolved !== undefined || input.ceilingHeight !== undefined) {
+    if (
+      ceilingFinishResolved !== undefined ||
+      input.ceilingHeight !== undefined ||
+      medallionSpec !== undefined ||
+      frameSpec !== undefined
+    ) {
       const currentZone = scratch[plan.zone.id] as ZoneNode
       const ceiling =
         currentZone.hasCeiling === false ? undefined : findRoomCeiling(scratch, currentZone)
@@ -396,19 +489,55 @@ export const dressRoom: AgentOperation<DressRoomInput> = (nodes, input, context)
           why: `${plan.zone.name} has no ceiling node to update`,
         })
       } else {
-        const nextCeiling: CeilingNode = {
+        const owner = ceilingRegionsOwner(ceiling)
+        let nextCeiling: CeilingNode = {
           ...ceiling,
           ...(ceilingFinishResolved !== undefined
             ? { slots: { ...(ceiling.slots ?? {}), surface: ceilingFinishResolved.ref } }
             : {}),
           ...(input.ceilingHeight !== undefined ? { height: input.ceilingHeight } : {}),
         }
-        scratch[ceiling.id] = nextCeiling
-        if (ceilingFinishResolved !== undefined) plan.ceilingFinish = ceilingFinishResolved.ref
+        let nextZone = currentZone
         if (input.ceilingHeight !== undefined) {
-          scratch[plan.zone.id] = { ...currentZone, ceilingHeight: input.ceilingHeight }
+          nextZone = { ...nextZone, ceilingHeight: input.ceilingHeight }
           plan.ceilingHeight = input.ceilingHeight
         }
+        if (ceilingFinishResolved !== undefined) plan.ceilingFinish = ceilingFinishResolved.ref
+        if (medallionSpec !== undefined || frameSpec !== undefined) {
+          if (owner.kind === 'zone') {
+            const zc = { ...(nextZone.ceiling ?? {}) }
+            if (medallionSpec === null) delete zc.medallion
+            else if (medallionSpec !== undefined) zc.medallion = medallionSpec
+            if (frameSpec === null) delete zc.frame
+            else if (frameSpec !== undefined) zc.frame = frameSpec
+            const updatedZone: ZoneNode = { ...nextZone }
+            if (zc.regions?.length || zc.medallion || zc.frame) updatedZone.ceiling = zc
+            else delete updatedZone.ceiling
+            nextZone = updatedZone
+            // Clear stale ceiling-level overrides when room owns the ornaments.
+            if (medallionSpec !== undefined && nextCeiling.medallion !== undefined) {
+              const cleaned = { ...nextCeiling }
+              delete cleaned.medallion
+              nextCeiling = cleaned
+            }
+            if (frameSpec !== undefined && nextCeiling.frame !== undefined) {
+              const cleaned = { ...nextCeiling }
+              delete cleaned.frame
+              nextCeiling = cleaned
+            }
+          } else {
+            const updatedCeiling = { ...nextCeiling }
+            if (medallionSpec === null) delete updatedCeiling.medallion
+            else if (medallionSpec !== undefined) updatedCeiling.medallion = medallionSpec
+            if (frameSpec === null) delete updatedCeiling.frame
+            else if (frameSpec !== undefined) updatedCeiling.frame = frameSpec
+            nextCeiling = updatedCeiling
+          }
+          if (medallionSpec !== undefined) plan.ceilingMedallion = medallionSpec
+          if (frameSpec !== undefined) plan.ceilingFrame = frameSpec
+        }
+        scratch[ceiling.id] = nextCeiling
+        if (nextZone !== currentZone) scratch[plan.zone.id] = nextZone
       }
     }
   }
@@ -555,6 +684,8 @@ export const dressRoom: AgentOperation<DressRoomInput> = (nodes, input, context)
       ...(plan.wallFinish !== undefined ? { wallFinish: plan.wallFinish } : {}),
       ...(plan.ceilingFinish !== undefined ? { ceilingFinish: plan.ceilingFinish } : {}),
       ...(plan.ceilingHeight !== undefined ? { ceilingHeight: plan.ceilingHeight } : {}),
+      ...(plan.ceilingMedallion !== undefined ? { ceilingMedallion: plan.ceilingMedallion } : {}),
+      ...(plan.ceilingFrame !== undefined ? { ceilingFrame: plan.ceilingFrame } : {}),
       ...(plan.floorFinish !== undefined ? { floorFinish: plan.floorFinish } : {}),
       ...(plan.clearedScripts > 0 ? { clearedScripts: plan.clearedScripts } : {}),
     }

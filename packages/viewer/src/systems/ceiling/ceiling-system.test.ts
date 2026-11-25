@@ -3,7 +3,10 @@ import { type AnyNode, CEILING_DRAW_OFFSET, CeilingNode, ZoneNode } from '@pasca
 import { type BufferGeometry, type Material, Mesh, MeshBasicMaterial } from 'three'
 import {
   CEILING_CAP_MESH,
+  CEILING_FRAME_MESH,
+  CEILING_MEDALLION_MESH,
   CEILING_REGION_MESH,
+  type CeilingOrnamentMaterial,
   type CeilingRegionMaterial,
   updateCeilingGeometry,
 } from './ceiling-system'
@@ -160,4 +163,47 @@ test('the cap stands on top of the ceiling layers; the underside stays at the he
   updateCeilingGeometry(ceiling, mesh, [], { [ceiling.id]: ceiling } as Record<string, AnyNode>)
   expect(mesh.position.y).toBeCloseTo(2.4 - CEILING_DRAW_OFFSET, 9)
   expect(cap.position.y).toBeCloseTo(0.0127 + 0.1397, 9)
+})
+
+test('room ceiling medallions and frames spawn as single-material child meshes and clear cleanly', () => {
+  const { zone, ceiling, mesh, nodes } = setup({
+    medallion: {
+      enabled: true,
+      style: 'haussmann-acanthe',
+      diameter: 0.9,
+      relief: 0.045,
+      finish: 'library:preset-white',
+    },
+    frame: {
+      enabled: true,
+      style: 'haussmann-cadre',
+      inset: 0.42,
+      width: 0.085,
+      relief: 0.032,
+      notchedCorners: true,
+    },
+  })
+  const ornamentMats: (string | undefined)[] = []
+  const resolveOrnament: CeilingOrnamentMaterial = (finish) => {
+    ornamentMats.push(finish)
+    return new MeshBasicMaterial()
+  }
+  mesh.userData.ceilingOrnamentMaterial = resolveOrnament
+
+  updateCeilingGeometry(ceiling, mesh, [], nodes)
+  const medallion = mesh.children.find((c) => c.name === CEILING_MEDALLION_MESH) as Mesh | undefined
+  const frame = mesh.children.find((c) => c.name === CEILING_FRAME_MESH) as Mesh | undefined
+  expect(medallion).toBeDefined()
+  expect(frame).toBeDefined()
+  expect(medallion?.userData.__fromGeometry).toBe(true)
+  expect(frame?.userData.__fromGeometry).toBe(true)
+  expect(ornamentMats).toEqual(['library:preset-white', undefined])
+
+  // Removing them removes and disposes both child meshes cleanly.
+  updateCeilingGeometry(ceiling, mesh, [], {
+    ...nodes,
+    [zone.id]: { ...zone, ceiling: undefined },
+  })
+  expect(mesh.children.find((c) => c.name === CEILING_MEDALLION_MESH)).toBeUndefined()
+  expect(mesh.children.find((c) => c.name === CEILING_FRAME_MESH)).toBeUndefined()
 })

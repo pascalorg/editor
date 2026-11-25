@@ -1009,4 +1009,86 @@ describe('whole-room finishes, 32-room batching and replaceScripts', () => {
       clearedScripts: 2,
     })
   })
+
+  test('writes and clears native ceilingMedallion and ceilingFrame on automatic and manual ceilings', () => {
+    const autoCeiling = CeilingNode.parse({
+      ...SALON_CEILING,
+      boundary: 'auto',
+    })
+    const manualCeiling = CeilingNode.parse({
+      ...SALON_CEILING,
+      id: 'ceiling_bath',
+      zoneId: 'zone_bath',
+    })
+    const base = scene({ extra: [autoCeiling, manualCeiling] })
+
+    const schema = z.object(dressRoomTool.input)
+    expect(
+      schema.safeParse({
+        zoneIds: ['zone_salon', 'zone_bath'],
+        ceilingMedallion: { style: 'haussmann-acanthe', diameter: '90cm', relief: '45mm' },
+        ceilingFrame: { style: 'haussmann-cadre', inset: '42cm', notchedCorners: true },
+      }).success,
+    ).toBe(true)
+
+    const { nodes: dressed, result } = run(base, {
+      zoneIds: ['zone_salon', 'zone_bath'],
+      ceilingMedallion: {
+        style: 'haussmann-acanthe',
+        diameter: 0.95,
+        relief: 0.045,
+        finish: 'library:preset-white',
+      },
+      ceilingFrame: {
+        style: 'haussmann-cadre',
+        inset: 0.4,
+        width: 0.09,
+        relief: 0.032,
+        notchedCorners: true,
+      },
+    })
+    expect((dressed.zone_salon as ZoneNode).ceiling?.medallion).toMatchObject({
+      enabled: true,
+      style: 'haussmann-acanthe',
+      diameter: 0.95,
+      relief: 0.045,
+      finish: 'library:preset-white',
+    })
+    expect((dressed.zone_salon as ZoneNode).ceiling?.frame).toMatchObject({
+      enabled: true,
+      style: 'haussmann-cadre',
+      inset: 0.4,
+      notchedCorners: true,
+    })
+    expect((dressed.ceiling_bath as CeilingNode).medallion).toMatchObject({
+      style: 'haussmann-acanthe',
+      diameter: 0.95,
+    })
+    expect((dressed.ceiling_bath as CeilingNode).frame).toMatchObject({
+      style: 'haussmann-cadre',
+      inset: 0.4,
+    })
+    expect(result.rooms[0]).toMatchObject({
+      zoneId: 'zone_salon',
+      ceilingMedallion: expect.objectContaining({ style: 'haussmann-acanthe' }),
+      ceilingFrame: expect.objectContaining({ style: 'haussmann-cadre' }),
+    })
+
+    // Clearing with null / enabled: false removes ornaments cleanly without touching other fields.
+    const cleared = run(dressed, {
+      zoneIds: ['zone_salon', 'zone_bath'],
+      ceilingMedallion: null,
+      ceilingFrame: { enabled: false },
+    }).nodes
+    expect((cleared.zone_salon as ZoneNode).ceiling).toBeUndefined()
+    expect((cleared.ceiling_bath as CeilingNode).medallion).toBeUndefined()
+    expect((cleared.ceiling_bath as CeilingNode).frame).toBeUndefined()
+
+    // Invalid medallion diameter refuses atomically with invalid_size.
+    expect(
+      code(() =>
+        dressRoom(base, { zoneIds: ['zone_salon'], ceilingMedallion: { diameter: 0.05 } }, context),
+      ),
+    ).toBe('invalid_size')
+  })
 })

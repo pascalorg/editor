@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { BaseNode, nodeType, objectId } from '../base'
 import { CeilingBuildUp } from '../build-up'
 import { MaterialSchema } from '../material'
+import { CeilingFrameConfig, CeilingMedallionConfig } from './ceiling-ornament'
 import { ItemNode } from './item'
 import { SurfaceHoleMetadata } from './surface-hole-metadata'
 import { SurfacePaintRegion } from './surface-paint-region'
@@ -33,6 +34,10 @@ export const CeilingNode = BaseNode.extend({
   // Painted parts of a manual ceiling (later wins). An automatic ceiling draws
   // its room's `zone.ceiling.regions` instead: it is rebuilt from the room.
   regions: z.array(SurfacePaintRegion).optional(),
+  // Native sculpted plaster medallion (rosace) and moulded ceiling frame for a
+  // manual ceiling; automatic ceilings read `zone.ceiling.{medallion,frame}`.
+  medallion: CeilingMedallionConfig.optional(),
+  frame: CeilingFrameConfig.optional(),
   boundary: z.literal('auto').optional(),
   zoneId: z.string().optional(),
   autoFromWalls: z.boolean().default(false),

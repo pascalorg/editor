@@ -204,7 +204,9 @@ export {
 } from './lib/building-footprint'
 export {
   CEILING_SURFACE_ROLE,
+  type CeilingOrnaments,
   type CeilingSurfaceCell,
+  ceilingOrnaments,
   ceilingPaintRegions,
   ceilingRegionRole,
   ceilingRegionsOwner,

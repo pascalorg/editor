@@ -136,6 +136,14 @@ export {
   CabinetTopFinishSchema,
 } from './nodes/cabinet'
 export { CeilingNode } from './nodes/ceiling'
+export {
+  CEILING_FRAME_STYLES,
+  CEILING_MEDALLION_STYLES,
+  CeilingFrameConfig,
+  CeilingFrameStyle,
+  CeilingMedallionConfig,
+  CeilingMedallionStyle,
+} from './nodes/ceiling-ornament'
 export { CHIMNEY_DEFAULT_MATERIAL, ChimneyMaterialRole, ChimneyNode } from './nodes/chimney'
 export {
   COLUMN_PRESETS,

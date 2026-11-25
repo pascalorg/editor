@@ -5,6 +5,7 @@ import {
   CEILING_DRAW_OFFSET,
   CEILING_SLOT_DEFAULT_COLOR,
   type CeilingNode,
+  ceilingOrnaments,
   ceilingPaintRegions,
   resolveCeilingHeight,
   resolveMaterial,
@@ -14,7 +15,10 @@ import {
 } from '@pascal-app/core'
 import {
   CEILING_CAP_MESH,
+  CEILING_FRAME_MESH,
+  CEILING_MEDALLION_MESH,
   CEILING_REGION_MESH,
+  type CeilingOrnamentMaterial,
   type CeilingRegionMaterial,
   createSurfaceRoleMaterial,
   NodeRenderer,
@@ -27,10 +31,12 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef } from 'react'
 import { BackSide, FrontSide, type Mesh } from 'three/webgpu'
 import { createPlaceholderGeometry } from '../shared/placeholder-geometry'
 import {
+  CEILING_ORNAMENT_DEFAULT_COLOR,
   ceilingColorFromRef,
   getCeilingCapMaterial,
   getCeilingMaterials,
   resolveCeilingFinish,
+  resolveCeilingOrnamentFinish,
 } from './materials'
 
 function createEmptyGeometry() {
@@ -144,20 +150,54 @@ export const CeilingRenderer = ({ node }: { node: CeilingNode }) => {
     },
     [textures, sceneMaterials, shading, materials],
   )
+  // Sculpted medallions and ceiling frames have downward FrontSide normals.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: dynamic library registration changes finish resolution
+  const defaultOrnamentMaterial = useMemo(() => {
+    if (!textures) return createSurfaceRoleMaterial('ceiling', colorPreset, FrontSide, sceneTheme)
+    return (
+      resolveCeilingOrnamentFinish(node.slots?.surface, sceneMaterials, shading) ??
+      resolveCeilingOrnamentFinish(node.materialPreset, sceneMaterials, shading) ??
+      resolveCeilingOrnamentFinish(node.material, sceneMaterials, shading) ??
+      resolveCeilingOrnamentFinish(CEILING_ORNAMENT_DEFAULT_COLOR, sceneMaterials, shading)!
+    )
+  }, [
+    textures,
+    libraryMaterialsVersion,
+    colorPreset,
+    sceneTheme,
+    sceneMaterials,
+    shading,
+    node.slots?.surface,
+    node.materialPreset,
+    node.material,
+  ])
+  const ornamentMaterial = useCallback<CeilingOrnamentMaterial>(
+    (finish) => {
+      if (!textures) return defaultOrnamentMaterial
+      return (
+        resolveCeilingOrnamentFinish(finish, sceneMaterials, shading) ?? defaultOrnamentMaterial
+      )
+    },
+    [textures, sceneMaterials, shading, defaultOrnamentMaterial],
+  )
   useLayoutEffect(() => {
     const mesh = ref.current
     if (!mesh) return
     mesh.userData.ceilingRegionMaterial = regionMaterial
+    mesh.userData.ceilingOrnamentMaterial = ornamentMaterial
     let repainted = false
     for (const child of mesh.children)
       if (child.name === CEILING_REGION_MESH) {
         ;(child as Mesh).material = regionMaterial(child.userData.finish)
         repainted = true
+      } else if (child.name === CEILING_MEDALLION_MESH || child.name === CEILING_FRAME_MESH) {
+        ;(child as Mesh).material = ornamentMaterial(child.userData.ornamentFinish)
+        repainted = true
       }
     // A batched copy keeps the old material until the ceiling is rebuilt.
     if (repainted) useScene.getState().markDirty(node.id as AnyNodeId)
-  }, [node.id, regionMaterial])
-  // An automatic ceiling's regions live on its room: a repaint there rebuilds it.
+  }, [node.id, regionMaterial, ornamentMaterial])
+  // An automatic ceiling's regions and ornaments live on its room: edits there rebuild it.
   const regionsKey = useScene((s) => JSON.stringify(ceilingPaintRegions(node, s.nodes)))
   const builtRegionsKey = useRef(regionsKey)
   useEffect(() => {
@@ -165,6 +205,13 @@ export const CeilingRenderer = ({ node }: { node: CeilingNode }) => {
     builtRegionsKey.current = regionsKey
     useScene.getState().markDirty(node.id as AnyNodeId)
   }, [node.id, regionsKey])
+  const ornamentsKey = useScene((s) => JSON.stringify(ceilingOrnaments(node, s.nodes)))
+  const builtOrnamentsKey = useRef(ornamentsKey)
+  useEffect(() => {
+    if (builtOrnamentsKey.current === ornamentsKey) return
+    builtOrnamentsKey.current = ornamentsKey
+    useScene.getState().markDirty(node.id as AnyNodeId)
+  }, [node.id, ornamentsKey])
 
   return (
     <mesh
