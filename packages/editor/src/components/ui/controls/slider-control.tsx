@@ -111,6 +111,7 @@ export function SliderControl({
   const cancelRef = useRef(onCancel)
   cancelRef.current = onCancel
   const editingRef = useRef(false)
+  const inputDirtyRef = useRef(false)
   const labelRef = useRef<HTMLDivElement>(null)
   const shown = dragDisplay ?? value
   const valueRef = useRef(shown)
@@ -247,6 +248,7 @@ export function SliderControl({
     const drag = dragRef.current
     dragRef.current = null
     editingRef.current = false
+    inputDirtyRef.current = false
     if (drag) {
       if (!onCancel) onChange(drag.originValue)
       useScene.temporal.getState().resume()
@@ -282,6 +284,7 @@ export function SliderControl({
 
   const handleValueClick = useCallback(() => {
     editingRef.current = true
+    inputDirtyRef.current = false
     setIsEditing(true)
     setInputValue(formatDisplay(toDisplay(value)))
   }, [value, toDisplay, formatDisplay])
@@ -308,6 +311,12 @@ export function SliderControl({
   const submitValue = useCallback(() => {
     if (!editingRef.current) return
     editingRef.current = false
+    const dirty = inputDirtyRef.current
+    inputDirtyRef.current = false
+    if (!dirty) {
+      setIsEditing(false)
+      return
+    }
     const nextValue = parseInputValue(inputValue)
     if (nextValue === null) {
       onCancel?.()
@@ -340,6 +349,7 @@ export function SliderControl({
         cancelEdit()
       } else if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
         e.preventDefault()
+        inputDirtyRef.current = true
         const direction = e.key === 'ArrowUp' ? 1 : -1
         const adjustedStep = getAdjustedStep(step, e)
         const newV = applyDisplayDelta(value, direction * adjustedStep, adjustedStep)
@@ -408,6 +418,7 @@ export function SliderControl({
               className="w-14 bg-transparent p-0 text-right font-mono text-foreground outline-none selection:bg-primary/30"
               onBlur={submitValue}
               onChange={(e) => {
+                inputDirtyRef.current = true
                 setInputValue(e.target.value)
                 if (previewWhileTyping) {
                   const next = parseInputValue(e.target.value)
