@@ -16,7 +16,12 @@ import {
   type WallJustification,
 } from '../wall/wall-frame'
 import { MIN_WALL_HEIGHT, wallFollowsStorey } from '../wall/wall-top'
-import { getSlabElevationAtPoint, getSlabSlopePlane, hasSlabSlope } from './slab-slope'
+import {
+  getSlabElevationAtPoint,
+  getSlabMaxElevation,
+  getSlabSlopePlane,
+  hasSlabSlope,
+} from './slab-slope'
 
 export type SlabElevationClamp = {
   elevation: number
@@ -110,7 +115,7 @@ export function getSlabElevationUpperBound(
   nodes?: Readonly<Record<string, AnyNode>>,
 ): number {
   const probe =
-    Math.max(storeyHeight, ...levelSlabs.map((candidate) => candidate.elevation ?? 0.05)) + 1
+    Math.max(storeyHeight, ...levelSlabs.map((candidate) => getSlabMaxElevation(candidate))) + 1
   return clampSlabElevationForWalls(probe, slab, levelWalls, levelSlabs, storeyHeight, nodes)
     .clamped
     ? storeyHeight - MIN_WALL_HEIGHT - getSlabSlopePlane(slab).rise
