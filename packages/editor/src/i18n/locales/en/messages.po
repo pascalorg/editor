@@ -2054,6 +2054,10 @@ msgid "editor.helpers.helperManager.freeMoveSlideDoorsAndWindows"
 msgstr "Free move · slide doors and windows"
 
 #: packages/editor/src/components/ui/helpers/helper-manager.tsx
+msgid "editor.helpers.helperManager.gradeSlope"
+msgstr "Grade slope"
+
+#: packages/editor/src/components/ui/helpers/helper-manager.tsx
 msgid "editor.helpers.helperManager.holdToPickAMaterial"
 msgstr "Hold to pick a material"
 

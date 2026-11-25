@@ -1202,7 +1202,7 @@ const useEditor = create<EditorState>()(
           tool: nextTool,
           ...(endsSelection ? { room: null, hoveredRoom: null, selectedReferenceId: null } : {}),
           ...(next.mode !== 'terrain-sculpt'
-            ? { terrainSampling: false, terrainSlopePickStart: null }
+            ? { terrainSampling: false, terrainSlopePickStart: null, terrainSlopeAnchor: null }
             : {}),
           ...(phaseChanged ? { phase } : {}),
         })
@@ -1415,7 +1415,7 @@ const useEditor = create<EditorState>()(
       setTerrainSampling: (sampling) =>
         set({
           terrainSampling: sampling,
-          ...(sampling ? {} : { terrainSlopePickStart: null }),
+          terrainSlopePickStart: null,
         }),
       terrainSlope: DEFAULT_TERRAIN_SLOPE_SPEC,
       setTerrainSlope: (patch) => {

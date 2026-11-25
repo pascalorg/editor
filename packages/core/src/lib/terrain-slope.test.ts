@@ -9,6 +9,7 @@ import {
   MAX_TERRAIN_SLOPE_PITCH,
   normalizeTerrainSlopeDirection,
   resolveLotSlopePlane,
+  terrainSlopeBaseElevationForPlane,
   terrainSlopeElevationRange,
   terrainSlopeGradePercent,
 } from './terrain-slope'
@@ -147,5 +148,50 @@ describe('buildSlopedTerrainField', () => {
       baseElevation: 0,
     })
     expect(isDatumField(flatZero)).toBe(true)
+  })
+})
+
+describe('audit regression guards', () => {
+  test('terrainSlopeBaseElevationForPlane reproduces an A -> B plane over the whole lot', () => {
+    const start: [number, number, number] = [-10, -20, 1.25]
+    const end: [number, number, number] = [10, 20, 4.75]
+    const derived = deriveTerrainSlopeFromPoints(start, end)!
+    const derivedPlane = {
+      anchorX: derived.anchor[0],
+      anchorZ: derived.anchor[1],
+      anchorY: derived.anchor[2],
+      direction: derived.direction,
+      pitch: derived.pitch,
+    }
+
+    for (const anchor of ['center', 'low-edge'] as const) {
+      const baseElevation = terrainSlopeBaseElevationForPlane(LOT, derivedPlane, anchor)
+      const lotPlane = resolveLotSlopePlane(LOT, {
+        pitch: derived.pitch,
+        direction: derived.direction,
+        baseElevation,
+        anchor,
+      })
+      expect(evaluateTerrainSlopePlane(lotPlane, start[0], start[1])).toBeCloseTo(start[2], 6)
+      expect(evaluateTerrainSlopePlane(lotPlane, end[0], end[1])).toBeCloseTo(end[2], 6)
+    }
+  })
+
+  test('ignores non-finite polygon coordinates without producing NaN heights', () => {
+    const dirtyPolygon: Array<[number, number]> = [
+      [Number.NaN, 0],
+      [-10, -10],
+      [10, 10],
+      [Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY],
+    ]
+    const range = terrainSlopeElevationRange(dirtyPolygon, {
+      pitch: 10,
+      direction: 45,
+      baseElevation: 1,
+      anchor: 'low-edge',
+    })
+    expect(Number.isFinite(range.min)).toBe(true)
+    expect(Number.isFinite(range.max)).toBe(true)
+    expect(range.min).toBeCloseTo(1, 5)
   })
 })

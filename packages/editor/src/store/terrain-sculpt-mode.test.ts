@@ -250,3 +250,23 @@ describe('terrain slope editor state', () => {
     expect(useEditor.getState().terrainSlopePickStart).toBeNull()
   })
 })
+
+describe('terrain slope anchor lifecycle (audit BUG-2)', () => {
+  test('clears terrainSlopeAnchor when leaving terrain-sculpt mode and resets pickStart when re-arming sampling', () => {
+    const editor = useEditor.getState()
+    editor.setMode('terrain-sculpt')
+    editor.setActiveTerrainVerb('slope')
+    editor.setTerrainSlopeAnchor([4, -6, 2.5])
+    editor.setTerrainSlopePickStart([1, 2, 0.5])
+
+    // Arming sampling always clears any stale start point.
+    editor.setTerrainSampling(true)
+    expect(useEditor.getState().terrainSlopePickStart).toBeNull()
+
+    // Leaving terrain-sculpt clears anchor so a new project/session cannot inherit stale heights.
+    editor.setMode('select')
+    expect(useEditor.getState().terrainSlopeAnchor).toBeNull()
+    expect(useEditor.getState().terrainSampling).toBe(false)
+    expect(useEditor.getState().terrainSlopePickStart).toBeNull()
+  })
+})

@@ -5020,6 +5020,14 @@ msgstr "Déplacement libre"
 msgid "editor.helpers.helperManager.freeMoveSlideDoorsAndWindows"
 msgstr "Déplacement libre · faire glisser portes et fenêtres"
 
+# Source-Hash: b8d5470b9ce47715
+# Review: required
+# English: "Grade slope"
+#: packages/editor/src/components/ui/helpers/helper-manager.tsx
+#, fuzzy
+msgid "editor.helpers.helperManager.gradeSlope"
+msgstr "Profiler la pente"
+
 # Source-Hash: b5ad765b43e75a5c
 # Review: required
 # AI-Provider: claude-code

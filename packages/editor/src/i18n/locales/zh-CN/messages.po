@@ -5020,6 +5020,14 @@ msgstr "自由移动"
 msgid "editor.helpers.helperManager.freeMoveSlideDoorsAndWindows"
 msgstr "自由移动 · 滑动门窗"
 
+# Source-Hash: b8d5470b9ce47715
+# Review: required
+# English: "Grade slope"
+#: packages/editor/src/components/ui/helpers/helper-manager.tsx
+#, fuzzy
+msgid "editor.helpers.helperManager.gradeSlope"
+msgstr "整平坡度"
+
 # Source-Hash: b5ad765b43e75a5c
 # Review: required
 # AI-Provider: claude-code

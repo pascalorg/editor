@@ -146,7 +146,7 @@ function terrainSculptHints(
         : verb === 'flatten'
           ? 'Level ground'
           : verb === 'slope'
-            ? 'Grade slope'
+            ? /* i18n */ { id: 'editor.helpers.helperManager.gradeSlope', message: 'Grade slope' }
             : 'Smooth ground'
   return [
     { keys: ['Drag'], label: action },

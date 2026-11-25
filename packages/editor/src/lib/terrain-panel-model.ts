@@ -18,6 +18,7 @@ export function useTerrainPanelRows(): PanelRow[] {
   const setSampling = useEditor((state) => state.setTerrainSampling)
   const slope = useEditor((state) => state.terrainSlope)
   const setSlope = useEditor((state) => state.setTerrainSlope)
+  const setSlopeAnchor = useEditor((state) => state.setTerrainSlopeAnchor)
   const site = useScene((state) => {
     const root = state.rootNodeIds[0]
     const node = root ? state.nodes[root] : undefined
@@ -118,7 +119,7 @@ export function useTerrainPanelRows(): PanelRow[] {
             kind: 'stepper',
             label: 'Direction',
             max: 360,
-            min: 0,
+            min: -5,
             onChange: (direction) => setSlope({ direction }),
             step: 5,
             unit: '°',
@@ -130,7 +131,10 @@ export function useTerrainPanelRows(): PanelRow[] {
             label: 'Base height',
             max: 50,
             min: -50,
-            onChange: (baseElevation) => setSlope({ baseElevation }),
+            onChange: (baseElevation) => {
+              setSlopeAnchor(null)
+              setSlope({ baseElevation })
+            },
             step: 0.1,
             unit: 'm',
             value: slope.baseElevation,
@@ -139,7 +143,12 @@ export function useTerrainPanelRows(): PanelRow[] {
             id: 'terrain-slope-lot',
             kind: 'choice',
             label: 'Whole lot',
-            onSelect: site ? () => slopeSite(site, slope) : undefined,
+            onSelect: site
+              ? () => {
+                  setSlopeAnchor(null)
+                  slopeSite(site, slope)
+                }
+              : undefined,
             value: 'Slope',
           },
         ] satisfies PanelRow[])
@@ -148,14 +157,24 @@ export function useTerrainPanelRows(): PanelRow[] {
       id: 'terrain-level-lot',
       kind: 'choice',
       label: 'Whole lot',
-      onSelect: site ? () => flattenSite(site, flattenTarget ?? 0) : undefined,
+      onSelect: site
+        ? () => {
+            setSlopeAnchor(null)
+            flattenSite(site, flattenTarget ?? 0)
+          }
+        : undefined,
       value: 'Level',
     },
     {
       id: 'terrain-clear',
       kind: 'choice',
       label: 'Terrain',
-      onSelect: site?.terrain ? () => resetSiteTerrain(site) : undefined,
+      onSelect: site?.terrain
+        ? () => {
+            setSlopeAnchor(null)
+            resetSiteTerrain(site)
+          }
+        : undefined,
       value: site?.terrain ? 'Clear' : 'Empty',
     },
   ]

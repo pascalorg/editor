@@ -12,6 +12,7 @@ import {
   type SiteNode,
   type TerrainField,
   type TerrainStroke,
+  terrainSlopeBaseElevationForPlane,
   useLiveTerrain,
   useScene,
 } from '@pascal-app/core'
@@ -195,9 +196,22 @@ export const TerrainSculptTool: React.FC = () => {
           const derived = deriveTerrainSlopeFromPoints(start, picked)
           if (derived) {
             const editor = useEditor.getState()
+            const derivedPlane = {
+              anchorX: derived.anchor[0],
+              anchorZ: derived.anchor[1],
+              anchorY: derived.anchor[2],
+              direction: derived.direction,
+              pitch: derived.pitch,
+            }
+            const baseElevation = terrainSlopeBaseElevationForPlane(
+              target.polygon?.points ?? [],
+              derivedPlane,
+              latest.current.slope.anchor ?? 'center',
+            )
             editor.setTerrainSlope({
-              pitch: Math.round(derived.pitch * 10) / 10,
-              direction: Math.round(derived.direction),
+              pitch: derived.pitch,
+              direction: derived.direction,
+              baseElevation,
             })
             editor.setTerrainSlopeAnchor(derived.anchor)
             editor.setTerrainSampling(false)

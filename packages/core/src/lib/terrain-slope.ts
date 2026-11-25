@@ -35,6 +35,15 @@ export type TerrainSlopePlane = {
   readonly pitch: number
 }
 
+/** Precomputed linear coefficients `y = anchorY + (x - anchorX) * slopeX + (z - anchorZ) * slopeZ`. */
+export type CompiledTerrainSlopePlane = {
+  readonly anchorX: number
+  readonly anchorZ: number
+  readonly anchorY: number
+  readonly slopeX: number
+  readonly slopeZ: number
+}
+
 export type TerrainSlopePoint = readonly [x: number, z: number, y: number]
 
 export type DerivedTerrainSlope = {
@@ -79,15 +88,86 @@ export function terrainSlopeGradePercent(pitch: number): number {
   return Math.tan((clamped * Math.PI) / 180) * 100
 }
 
-/** Evaluate a planar terrain slope at world `(x, z)` in metres. */
-export function evaluateTerrainSlopePlane(plane: TerrainSlopePlane, x: number, z: number): number {
+/**
+ * Compile a `TerrainSlopePlane` into linear coefficients so inner heightfield
+ * and brush loops evaluate each sample with two multiplies instead of trig.
+ */
+export function compileTerrainSlopePlane(plane: TerrainSlopePlane): CompiledTerrainSlopePlane {
+  const anchorX = Number.isFinite(plane.anchorX) ? plane.anchorX : 0
+  const anchorZ = Number.isFinite(plane.anchorZ) ? plane.anchorZ : 0
   const anchorY = Number.isFinite(plane.anchorY) ? plane.anchorY : 0
   const pitch = clampTerrainSlopePitch(plane.pitch)
-  if (pitch === 0) return anchorY
+  if (pitch === 0) {
+    return { anchorX, anchorZ, anchorY, slopeX: 0, slopeZ: 0 }
+  }
   const { dx, dz } = terrainSlopeDirectionVector(plane.direction)
   const tanPitch = Math.tan((pitch * Math.PI) / 180)
-  const projection = (x - plane.anchorX) * dx + (z - plane.anchorZ) * dz
-  return anchorY + projection * tanPitch
+  return {
+    anchorX,
+    anchorZ,
+    anchorY,
+    slopeX: dx * tanPitch,
+    slopeZ: dz * tanPitch,
+  }
+}
+
+/** Evaluate a compiled planar terrain slope at world `(x, z)` in metres. */
+export function evaluateCompiledTerrainSlopePlane(
+  compiled: CompiledTerrainSlopePlane,
+  x: number,
+  z: number,
+): number {
+  return (
+    compiled.anchorY +
+    (x - compiled.anchorX) * compiled.slopeX +
+    (z - compiled.anchorZ) * compiled.slopeZ
+  )
+}
+
+/** Evaluate a planar terrain slope at world `(x, z)` in metres. */
+export function evaluateTerrainSlopePlane(plane: TerrainSlopePlane, x: number, z: number): number {
+  return evaluateCompiledTerrainSlopePlane(compileTerrainSlopePlane(plane), x, z)
+}
+
+function resolveLotAnchorXZ(
+  polygon: ReadonlyArray<readonly [number, number]>,
+  direction: number,
+  anchor: TerrainSlopeAnchor,
+): { anchorX: number; anchorZ: number } {
+  if (anchor === 'low-edge') {
+    const { dx, dz } = terrainSlopeDirectionVector(direction)
+    let minProj = Number.POSITIVE_INFINITY
+    for (const [x, z] of polygon) {
+      if (!(Number.isFinite(x) && Number.isFinite(z))) continue
+      const proj = x * dx + z * dz
+      if (proj < minProj) minProj = proj
+    }
+    if (!Number.isFinite(minProj)) return { anchorX: 0, anchorZ: 0 }
+    return { anchorX: minProj * dx, anchorZ: minProj * dz }
+  }
+
+  let minX = Number.POSITIVE_INFINITY
+  let maxX = Number.NEGATIVE_INFINITY
+  let minZ = Number.POSITIVE_INFINITY
+  let maxZ = Number.NEGATIVE_INFINITY
+  for (const [x, z] of polygon) {
+    if (!(Number.isFinite(x) && Number.isFinite(z))) continue
+    if (x < minX) minX = x
+    if (x > maxX) maxX = x
+    if (z < minZ) minZ = z
+    if (z > maxZ) maxZ = z
+  }
+  if (
+    !(
+      Number.isFinite(minX) &&
+      Number.isFinite(maxX) &&
+      Number.isFinite(minZ) &&
+      Number.isFinite(maxZ)
+    )
+  ) {
+    return { anchorX: 0, anchorZ: 0 }
+  }
+  return { anchorX: (minX + maxX) / 2, anchorZ: (minZ + maxZ) / 2 }
 }
 
 /**
@@ -107,44 +187,21 @@ export function resolveLotSlopePlane(
   const direction = normalizeTerrainSlopeDirection(spec.direction)
   const baseElevation = Number.isFinite(spec.baseElevation) ? spec.baseElevation : 0
   const anchor = spec.anchor ?? 'center'
+  const { anchorX, anchorZ } = resolveLotAnchorXZ(polygon, direction, anchor)
+  return { anchorX, anchorZ, anchorY: baseElevation, direction, pitch }
+}
 
-  if (polygon.length === 0) {
-    return { anchorX: 0, anchorZ: 0, anchorY: baseElevation, direction, pitch }
-  }
-
-  if (anchor === 'low-edge') {
-    const { dx, dz } = terrainSlopeDirectionVector(direction)
-    let minProj = Number.POSITIVE_INFINITY
-    for (const [x, z] of polygon) {
-      const proj = x * dx + z * dz
-      if (proj < minProj) minProj = proj
-    }
-    return {
-      anchorX: minProj * dx,
-      anchorZ: minProj * dz,
-      anchorY: baseElevation,
-      direction,
-      pitch,
-    }
-  }
-
-  let minX = Number.POSITIVE_INFINITY
-  let maxX = Number.NEGATIVE_INFINITY
-  let minZ = Number.POSITIVE_INFINITY
-  let maxZ = Number.NEGATIVE_INFINITY
-  for (const [x, z] of polygon) {
-    if (x < minX) minX = x
-    if (x > maxX) maxX = x
-    if (z < minZ) minZ = z
-    if (z > maxZ) maxZ = z
-  }
-  return {
-    anchorX: (minX + maxX) / 2,
-    anchorZ: (minZ + maxZ) / 2,
-    anchorY: baseElevation,
-    direction,
-    pitch,
-  }
+/**
+ * Compute the `baseElevation` at the lot's chosen anchor (`center` or `low-edge`)
+ * that makes `resolveLotSlopePlane` reproduce `plane` across the whole lot.
+ */
+export function terrainSlopeBaseElevationForPlane(
+  polygon: ReadonlyArray<readonly [number, number]>,
+  plane: TerrainSlopePlane,
+  anchor: TerrainSlopeAnchor = 'center',
+): number {
+  const { anchorX, anchorZ } = resolveLotAnchorXZ(polygon, plane.direction, anchor)
+  return evaluateTerrainSlopePlane(plane, anchorX, anchorZ)
 }
 
 /** Min/max elevation, total rise, and grade % across `polygon` for `spec`. */
@@ -153,17 +210,19 @@ export function terrainSlopeElevationRange(
   spec: TerrainSlopeSpec,
 ): { min: number; max: number; rise: number; gradePercent: number } {
   const plane = resolveLotSlopePlane(polygon, spec)
+  const compiled = compileTerrainSlopePlane(plane)
   const gradePercent = terrainSlopeGradePercent(plane.pitch)
-  if (polygon.length === 0) {
-    return { min: plane.anchorY, max: plane.anchorY, rise: 0, gradePercent }
-  }
 
   let min = Number.POSITIVE_INFINITY
   let max = Number.NEGATIVE_INFINITY
   for (const [x, z] of polygon) {
-    const y = evaluateTerrainSlopePlane(plane, x, z)
+    if (!(Number.isFinite(x) && Number.isFinite(z))) continue
+    const y = evaluateCompiledTerrainSlopePlane(compiled, x, z)
     if (y < min) min = y
     if (y > max) max = y
+  }
+  if (!(Number.isFinite(min) && Number.isFinite(max))) {
+    return { min: compiled.anchorY, max: compiled.anchorY, rise: 0, gradePercent }
   }
   return { min, max, rise: Math.max(0, max - min), gradePercent }
 }
@@ -237,15 +296,16 @@ export function buildSlopedTerrainField(
   polygon: ReadonlyArray<readonly [number, number]>,
   spec: TerrainSlopeSpec,
 ): TerrainField {
-  const plane = resolveLotSlopePlane(polygon, spec)
+  const compiled = compileTerrainSlopePlane(resolveLotSlopePlane(polygon, spec))
   const heights = new Int16Array(field.cols * field.rows)
 
   for (let row = 0; row < field.rows; row += 1) {
     const z = field.origin[1] + row * field.spacing
     const rowBase = row * field.cols
+    const zTerm = compiled.anchorY + (z - compiled.anchorZ) * compiled.slopeZ
     for (let col = 0; col < field.cols; col += 1) {
       const x = field.origin[0] + col * field.spacing
-      heights[rowBase + col] = quantize(field, evaluateTerrainSlopePlane(plane, x, z))
+      heights[rowBase + col] = quantize(field, zTerm + (x - compiled.anchorX) * compiled.slopeX)
     }
   }
 

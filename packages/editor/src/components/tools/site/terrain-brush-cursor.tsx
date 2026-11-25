@@ -1,6 +1,7 @@
 'use client'
 
 import {
+  deriveTerrainSlopeFromPoints,
   minBrushRadius,
   raycastTerrain,
   type SiteNode,
@@ -8,6 +9,7 @@ import {
   type TerrainField,
   terrainFieldOf,
   terrainSlopeDirectionVector,
+  terrainSlopeGradePercent,
   useLiveTerrain,
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
@@ -80,6 +82,7 @@ export const TerrainBrushCursor: React.FC<{
   // one channel left. Keep the mapping centralized in `lib/terrain-verb-color`.
   const verb = useEditor(selectActiveTerrainVerb)
   const sampling = useEditor((state) => state.terrainSampling)
+  const slopePitch = useEditor((state) => state.terrainSlope.pitch)
   const slopeDirection = useEditor((state) => state.terrainSlope.direction)
   const slopePickStart = useEditor((state) => state.terrainSlopePickStart)
   const color = brushRingColor(verb, sampling)
@@ -225,9 +228,9 @@ export const TerrainBrushCursor: React.FC<{
     attribute.needsUpdate = true
     line.geometry.computeBoundingSphere()
 
-    // Uphill direction arrow inside the brush ring when in slope mode (not while picking).
+    // Uphill direction arrow inside the brush ring when in slope mode with non-zero pitch.
     if (arrowLine) {
-      if (verb === 'slope' && !sampling) {
+      if (verb === 'slope' && !sampling && slopePitch > 0) {
         const { dx, dz } = terrainSlopeDirectionVector(slopeDirection)
         const perpX = -dz
         const perpZ = dx
@@ -238,26 +241,29 @@ export const TerrainBrushCursor: React.FC<{
         const tailZ = hit.z - dz * halfLen
         const tipX = hit.x + dx * halfLen
         const tipZ = hit.z + dz * halfLen
+        const tipY = surfaceHeightAt(surface, tipX, tipZ) + RING_LIFT
         const leftX = tipX - dx * headLen - perpX * headHalfWidth
         const leftZ = tipZ - dz * headLen - perpZ * headHalfWidth
         const rightX = tipX - dx * headLen + perpX * headHalfWidth
         const rightZ = tipZ - dz * headLen + perpZ * headHalfWidth
 
-        const pts: Array<[number, number]> = [
-          [tailX, tailZ],
-          [tipX, tipZ],
-          [leftX, leftZ],
-          [tipX, tipZ],
-          [rightX, rightZ],
-        ]
         const arrowAttr = arrowLine.geometry.getAttribute('position')
         const arrowArr = arrowAttr.array as Float32Array
-        for (let i = 0; i < pts.length; i++) {
-          const [px, pz] = pts[i]!
-          arrowArr[i * 3] = px
-          arrowArr[i * 3 + 1] = surfaceHeightAt(surface, px, pz) + RING_LIFT
-          arrowArr[i * 3 + 2] = pz
-        }
+        arrowArr[0] = tailX
+        arrowArr[1] = surfaceHeightAt(surface, tailX, tailZ) + RING_LIFT
+        arrowArr[2] = tailZ
+        arrowArr[3] = tipX
+        arrowArr[4] = tipY
+        arrowArr[5] = tipZ
+        arrowArr[6] = leftX
+        arrowArr[7] = surfaceHeightAt(surface, leftX, leftZ) + RING_LIFT
+        arrowArr[8] = leftZ
+        arrowArr[9] = tipX
+        arrowArr[10] = tipY
+        arrowArr[11] = tipZ
+        arrowArr[12] = rightX
+        arrowArr[13] = surfaceHeightAt(surface, rightX, rightZ) + RING_LIFT
+        arrowArr[14] = rightZ
         arrowAttr.needsUpdate = true
         arrowLine.geometry.computeBoundingSphere()
         arrowLine.visible = true
@@ -289,7 +295,13 @@ export const TerrainBrushCursor: React.FC<{
 
     const centerHeight = surfaceHeightAt(surface, hit.x, hit.z)
     center.position.set(hit.x, centerHeight + RING_LIFT, hit.z)
-    const heightLabel = `H ${formatMeasurement(centerHeight, unit, metricNotation)}`
+    let heightLabel = `H ${formatMeasurement(centerHeight, unit, metricNotation)}`
+    if (verb === 'slope' && sampling && slopePickStart) {
+      const liveDerived = deriveTerrainSlopeFromPoints(slopePickStart, [hit.x, hit.z, centerHeight])
+      if (liveDerived) {
+        heightLabel = `${heightLabel} · ${terrainSlopeGradePercent(liveDerived.pitch).toFixed(1)}%`
+      }
+    }
     if (heightRef.current) {
       heightRef.current.style.display = ''
       if (heightLabel !== lastHeightLabelRef.current) {

@@ -329,7 +329,10 @@ export function TerrainSculptPanel() {
                 })}
                 max={50}
                 min={-50}
-                onChange={(baseElevation) => setTerrainSlope({ baseElevation })}
+                onChange={(baseElevation) => {
+                  setTerrainSlopeAnchor(null)
+                  setTerrainSlope({ baseElevation })
+                }}
                 precision={2}
                 step={0.1}
                 unit="m"
@@ -356,7 +359,10 @@ export function TerrainSculptPanel() {
           </div>
 
           <SegmentedControl
-            onChange={(anchor: TerrainSlopeAnchor) => setTerrainSlope({ anchor })}
+            onChange={(anchor: TerrainSlopeAnchor) => {
+              setTerrainSlopeAnchor(null)
+              setTerrainSlope({ anchor })
+            }}
             options={[
               {
                 value: 'center',
@@ -471,7 +477,11 @@ export function TerrainSculptPanel() {
         <Button
           className="flex-1"
           disabled={!site}
-          onClick={() => site && flattenSite(site, flattenTarget ?? 0)}
+          onClick={() => {
+            if (!site) return
+            setTerrainSlopeAnchor(null)
+            flattenSite(site, flattenTarget ?? 0)
+          }}
           size="sm"
           type="button"
           variant="outline"
@@ -482,7 +492,11 @@ export function TerrainSculptPanel() {
         <Button
           className="flex-1"
           disabled={!site?.terrain}
-          onClick={() => site && resetSiteTerrain(site)}
+          onClick={() => {
+            if (!site) return
+            setTerrainSlopeAnchor(null)
+            resetSiteTerrain(site)
+          }}
           size="sm"
           type="button"
           variant="outline"

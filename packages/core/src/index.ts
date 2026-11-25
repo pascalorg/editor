@@ -896,10 +896,13 @@ export {
 export { raycastTerrain, type TerrainHit } from './lib/terrain-raycast'
 export {
   buildSlopedTerrainField,
+  type CompiledTerrainSlopePlane,
   clampTerrainSlopePitch,
+  compileTerrainSlopePlane,
   DEFAULT_TERRAIN_SLOPE_SPEC,
   type DerivedTerrainSlope,
   deriveTerrainSlopeFromPoints,
+  evaluateCompiledTerrainSlopePlane,
   evaluateTerrainSlopePlane,
   MAX_TERRAIN_SLOPE_PITCH,
   normalizeTerrainSlopeDirection,
@@ -908,6 +911,7 @@ export {
   type TerrainSlopePlane,
   type TerrainSlopePoint,
   type TerrainSlopeSpec,
+  terrainSlopeBaseElevationForPlane,
   terrainSlopeDirectionVector,
   terrainSlopeElevationRange,
   terrainSlopeGradePercent,

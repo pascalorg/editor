@@ -38,7 +38,12 @@ import {
   quantize,
   type TerrainField,
 } from './terrain-field'
-import { evaluateTerrainSlopePlane, type TerrainSlopePlane } from './terrain-slope'
+import {
+  type CompiledTerrainSlopePlane,
+  compileTerrainSlopePlane,
+  evaluateCompiledTerrainSlopePlane,
+  type TerrainSlopePlane,
+} from './terrain-slope'
 
 export type BrushShape = 'round' | 'square'
 
@@ -128,6 +133,8 @@ export type TerrainStroke = {
   readonly target: number
   /** Target inclined plane in world space. Only meaningful for `slope`. */
   readonly slope: TerrainSlopePlane | null
+  /** Precompiled linear coefficients for `slope` so per-sample evaluation avoids trig. */
+  readonly compiledSlope: CompiledTerrainSlopePlane | null
   /** Sample index → saturating coverage in 0–1. */
   readonly mask: Map<number, number>
   /** Lazily computed diffused snapshot, for `smooth`. */
@@ -152,6 +159,7 @@ export function beginStroke(options: {
     snapshot: options.field,
     target: options.target ?? 0,
     slope: options.slope ?? null,
+    compiledSlope: options.slope ? compileTerrainSlopePlane(options.slope) : null,
     mask: new Map(),
     smoothed: null,
     lastX: null,
@@ -276,10 +284,10 @@ function resolveSample(stroke: TerrainStroke, index: number, col: number, row: n
       return quantize(field, baseMetres + (goal - baseMetres) * amount)
     }
     case 'slope': {
-      if (!stroke.slope) return base
+      if (!stroke.compiledSlope) return base
       const sampleX = field.origin[0] + col * field.spacing
       const sampleZ = field.origin[1] + row * field.spacing
-      const goal = evaluateTerrainSlopePlane(stroke.slope, sampleX, sampleZ)
+      const goal = evaluateCompiledTerrainSlopePlane(stroke.compiledSlope, sampleX, sampleZ)
       return quantize(field, baseMetres + (goal - baseMetres) * amount)
     }
     default:
