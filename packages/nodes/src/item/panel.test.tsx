@@ -160,6 +160,63 @@ describe('ItemPanel editable dimensions (#1307)', () => {
     expect(useScene.temporal.getState().pastStates.length).toBe(beforePast)
   })
 
+  test('mid-drag wheel/arrow onCommit while paused does not break single-step drag undo or cancel', () => {
+    const item = makeItem()
+    selectItem(item)
+    const beforePast = useScene.temporal.getState().pastStates.length
+
+    try {
+      // Simulate pointerdown pausing temporal tracking, then mid-drag wheel/arrow onCommit.
+      useScene.temporal.getState().pause()
+      const dragCtrl = control(
+        renderPanelControls(<ItemPanel />),
+        'SliderControl',
+        'Dimensions',
+        'Width',
+      )
+      dragCtrl.onChange(1.2)
+      // Mid-drag wheel or arrow-key nudge fires onChange + onCommit while history is still paused.
+      dragCtrl.onChange(1.25)
+      dragCtrl.onCommit?.(1.25)
+      expect(useScene.temporal.getState().isTracking).toBe(false)
+      expect(useScene.temporal.getState().pastStates.length).toBe(beforePast)
+
+      // Later pointer moves stay paused and do not create intermediate undo entries.
+      dragCtrl.onChange(0.9)
+      expect(useScene.temporal.getState().pastStates.length).toBe(beforePast)
+
+      // Pointerup resumes tracking first, then commits a single undo step back to origin.
+      useScene.temporal.getState().resume()
+      dragCtrl.onCommit?.(0.9)
+      expect(liveItem(item.id).scale).toEqual([0.5, 0.5, 0.5])
+      expect(useScene.temporal.getState().pastStates.length).toBe(beforePast + 1)
+
+      useScene.temporal.getState().undo()
+      expect(liveItem(item.id).scale).toEqual([1, 1, 1])
+
+      // Mid-drag onCommit followed by cancel still restores pre-drag origin with zero undo entries.
+      const beforeCancelPast = useScene.temporal.getState().pastStates.length
+      useScene.temporal.getState().pause()
+      const cancelCtrl = control(
+        renderPanelControls(<ItemPanel />),
+        'SliderControl',
+        'Dimensions',
+        'Width',
+      )
+      cancelCtrl.onChange(1.2)
+      cancelCtrl.onChange(1.25)
+      cancelCtrl.onCommit?.(1.25)
+      expect(useScene.temporal.getState().isTracking).toBe(false)
+
+      useScene.temporal.getState().resume()
+      cancelCtrl.onCancel?.()
+      expect(liveItem(item.id).scale).toEqual([1, 1, 1])
+      expect(useScene.temporal.getState().pastStates.length).toBe(beforeCancelPast)
+    } finally {
+      useScene.temporal.getState().resume()
+    }
+  })
+
   test('renders lock toggle button with accessible attributes and omits zero axes', () => {
     const partial = makeItem({
       id: 'item_partial_dim',

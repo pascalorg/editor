@@ -113,6 +113,11 @@ export default function ItemPanel() {
 
   const handleDimensionCommit = useCallback(
     (axis: DimensionAxis, finalDimension: number) => {
+      // Only finalize a drag once SliderControl has resumed temporal tracking
+      // (on pointerup). Wheel and arrow-key nudges also fire onCommit while a
+      // label drag is still captured and history is paused; ignoring those
+      // keeps dragOriginScaleRef intact until the drag actually ends.
+      if (!useScene.temporal.getState().isTracking) return
       const origin = dragOriginScaleRef.current
       dragOriginScaleRef.current = null
       if (!origin) return
@@ -125,8 +130,10 @@ export default function ItemPanel() {
         finalDimension,
         uniformScale,
       )
-      if (!nextScale) return
-      if (nextScale[0] === origin[0] && nextScale[1] === origin[1] && nextScale[2] === origin[2]) {
+      if (
+        !nextScale ||
+        (nextScale[0] === origin[0] && nextScale[1] === origin[1] && nextScale[2] === origin[2])
+      ) {
         useScene.temporal.getState().pause()
         handleUpdate({ scale: origin })
         useScene.temporal.getState().resume()
@@ -146,9 +153,10 @@ export default function ItemPanel() {
     const origin = dragOriginScaleRef.current
     dragOriginScaleRef.current = null
     if (!origin) return
-    useScene.temporal.getState().pause()
+    const wasTracking = useScene.temporal.getState().isTracking
+    if (wasTracking) useScene.temporal.getState().pause()
     handleUpdate({ scale: origin })
-    useScene.temporal.getState().resume()
+    if (wasTracking) useScene.temporal.getState().resume()
   }, [handleUpdate])
 
   const handleClose = useCallback(() => {
