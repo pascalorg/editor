@@ -4,10 +4,12 @@ import { dressRoomTool, isAgentRefusal } from '../agent-tools'
 import {
   CabinetModuleNode,
   CabinetNode,
+  CeilingNode,
   ItemNode,
   LevelNode,
   type WallFace,
   type WallNode,
+  type ZoneNode,
 } from '../schema'
 import { twoRooms } from './__fixtures__/dressing-scenes'
 import { applySceneChanges, type DressRoomInput, dressRoom } from './index'
@@ -813,5 +815,198 @@ describe('fixture and cabinet splashback targeting', () => {
       ).toBe(expected)
       expect(nodes).toEqual(before)
     }
+  })
+})
+
+describe('whole-room finishes, 32-room batching and replaceScripts', () => {
+  const SALON_CEILING = CeilingNode.parse({
+    id: 'ceiling_salon',
+    parentId: 'level_0',
+    zoneId: 'zone_salon',
+    polygon: [
+      [0, 0],
+      [4, 0],
+      [4, 3],
+      [0, 3],
+    ],
+  })
+
+  test('supports up to 32 zoneIds in the tool schema and refuses 33', () => {
+    const schema = z.object(dressRoomTool.input)
+    const ids = (count: number) => Array.from({ length: count }, (_, i) => `zone_${i}`)
+    expect(
+      schema.safeParse({ zoneIds: ids(32), ceilingFinish: 'library:preset-white' }).success,
+    ).toBe(true)
+    expect(
+      schema.safeParse({ zoneIds: ids(33), ceilingFinish: 'library:preset-white' }).success,
+    ).toBe(false)
+    expect(schema.safeParse({ zoneIds: ids(1), ceilingHeight: '240cm' }).success).toBe(true)
+    expect(
+      code(() => dressRoom(scene(), { zoneIds: ids(33), wallFinish: '#ffffff' }, context)),
+    ).toBe('invalid_layer')
+    expect(code(() => dressRoom(scene(), { zoneIds: ['zone_salon'] }, context))).toBe(
+      'invalid_layer',
+    )
+  })
+
+  test('applies whole-room wallFinish, ceilingFinish, ceilingHeight and floorFinish while keeping existing layers', () => {
+    const initial = run(
+      scene({
+        zones: {
+          zone_salon: {
+            wallOverrides: [{ wallId: 'wall_s', face: 'a', finish: 'library:preset-cream' }],
+          },
+        },
+        extra: [SALON_CEILING],
+      }),
+      {
+        zoneIds: ['zone_salon'],
+        layers: [{ kind: 'wainscot', finish: 'library:preset-white', to: 0.9 }],
+      },
+    ).nodes
+
+    const { nodes, result } = run(initial, {
+      zoneIds: ['zone_salon'],
+      wallFinish: '#f5f0e8',
+      ceilingFinish: 'library:preset-white',
+      ceilingHeight: 2.35,
+      floorFinish: 'library:wood-finewood27',
+    })
+    const zone = nodes.zone_salon as ZoneNode
+    const ceil = nodes.ceiling_salon as CeilingNode
+    expect(zone.wallMaterial).toMatch(/^library:preset-/)
+    expect(zone.wallOverrides).toBeUndefined()
+    expect(zone.ceilingHeight).toBe(2.35)
+    expect(zone.floor?.finish).toBe('library:wood-finewood27')
+    expect(ceil.slots?.surface).toBe('library:preset-white')
+    expect(ceil.height).toBe(2.35)
+    expect(regions(nodes, 'wall_s').map(({ finish }) => finish)).toEqual(['library:preset-white'])
+    expect(result.rooms[0]).toMatchObject({
+      zoneId: 'zone_salon',
+      wallFinish: zone.wallMaterial,
+      ceilingFinish: 'library:preset-white',
+      ceilingHeight: 2.35,
+      floorFinish: 'library:wood-finewood27',
+    })
+    expect(result.note).toContain('#f5f0e8')
+  })
+
+  test('skips missing ceilings and hasFloor/hasCeiling false rooms without aborting valid siblings', () => {
+    const { nodes, result } = run(
+      scene({
+        zones: {
+          zone_salon: { hasFloor: false, hasCeiling: false },
+        },
+        extra: [
+          CeilingNode.parse({
+            ...SALON_CEILING,
+            id: 'ceiling_bath',
+            zoneId: 'zone_bath',
+          }),
+        ],
+      }),
+      {
+        zoneIds: ['zone_salon', 'zone_bath'],
+        ceilingFinish: 'library:preset-white',
+        ceilingHeight: 2.4,
+        floorFinish: 'library:wood-finewood27',
+      },
+    )
+    expect((nodes.ceiling_bath as CeilingNode).height).toBe(2.4)
+    expect((nodes.zone_bath as ZoneNode).floor?.finish).toBe('library:wood-finewood27')
+    expect((nodes.zone_salon as ZoneNode).floor?.finish).toBeUndefined()
+    expect(result.skipped).toEqual([
+      expect.objectContaining({ zoneId: 'zone_salon', why: expect.stringContaining('no floor') }),
+      expect.objectContaining({ zoneId: 'zone_salon', why: expect.stringContaining('no ceiling') }),
+    ])
+  })
+
+  test('refuses full-height wall and floor scripts by default and clears them atomically with replaceScripts', () => {
+    const base = scene({
+      raw: {
+        wall_w: {
+          finishScripts: {
+            a: { source: 'export default () => {}', inputs: 'k' },
+            b: { source: 'export default () => {}', inputs: 'kb' },
+          },
+        },
+        wall_s: {
+          finishScripts: {
+            a: { source: 'export default () => {}', inputs: 'k2', toHeight: 1.0 },
+          },
+        },
+      },
+      extra: [SALON_CEILING],
+    })
+    base.zone_salon = {
+      ...(base.zone_salon as ZoneNode),
+      floor: {
+        script: { source: 'export default () => {}', inputs: 'kf' } as never,
+      },
+    }
+    const before = structuredClone(base)
+
+    expect(
+      code(() =>
+        dressRoom(base, { zoneIds: ['zone_salon'], wallFinish: 'library:preset-white' }, context),
+      ),
+    ).toBe('script_owns_face')
+    expect(
+      code(() =>
+        dressRoom(
+          base,
+          { zoneIds: ['zone_salon'], floorFinish: 'library:wood-finewood27' },
+          context,
+        ),
+      ),
+    ).toBe('script_owns_floor')
+    expect(base).toEqual(before)
+
+    const dry = dressRoom(
+      base,
+      {
+        zoneIds: ['zone_salon'],
+        wallFinish: 'library:preset-white',
+        floorFinish: 'library:wood-finewood27',
+        layers: [{ kind: 'wainscot', finish: 'library:preset-cream', to: 0.9 }],
+        replaceScripts: true,
+        dryRun: true,
+      },
+      context,
+    )
+    expect(dry.changes?.update ?? []).toEqual([])
+    expect(dry.result).toMatchObject({ written: false })
+    expect(base).toEqual(before)
+
+    const live = dressRoom(
+      base,
+      {
+        zoneIds: ['zone_salon'],
+        wallFinish: 'library:preset-white',
+        floorFinish: 'library:wood-finewood27',
+        layers: [{ kind: 'wainscot', finish: 'library:preset-cream', to: 0.9 }],
+        replaceScripts: true,
+      },
+      context,
+    )
+    expect(live.result).toEqual({ ...dry.result, written: true })
+    const after = applySceneChanges(base, live.changes) as SceneNodes
+    expect(wall(after, 'wall_w').finishScripts).toEqual({
+      b: { source: 'export default () => {}', inputs: 'kb' },
+    })
+    // Partial wainscot-height script stays intact.
+    expect(wall(after, 'wall_s').finishScripts).toEqual({
+      a: { source: 'export default () => {}', inputs: 'k2', toHeight: 1.0 },
+    })
+    expect((after.zone_salon as ZoneNode).floor).toEqual({
+      finish: 'library:wood-finewood27',
+    })
+    expect(regions(after, 'wall_w')).toHaveLength(1)
+    expect(live.result.rooms[0]).toMatchObject({
+      zoneId: 'zone_salon',
+      wallFinish: 'library:preset-white',
+      floorFinish: 'library:wood-finewood27',
+      clearedScripts: 2,
+    })
   })
 })

@@ -58,10 +58,51 @@ export const dressRoomTool = {
   name: 'dress_room',
   title: 'Dress a room',
   description:
-    "Dress rooms with ordered wall finishes and trims; returns the planned faces, regions, trims and skipped placements. dryRun previews without writing. The room's wallMaterial stays the base finish. Trims (skirting, chairRail, crown) use set_wall_trim and stay within the room's wall stretches. A wall shares each trim's shape, and each face shares its trim finish: changing retained coverage outside the request refuses with trim_conflict, never silently changes another room. Finish layers are flat paint regions: wainscot (to 0.9 m), tiles (to 1.2 m), splashback (from 0.9 m, 0.6 m high; alongRun starts at the cabinet worktop), and accent (the room's stretch of walls named in where.walls). Each finish layer needs finish. Fixture and cabinet targets must be on the room's level; nested cabinet/module poses are composed. Partial curved finish stretches are reported as skipped; partial curved trims refuse. Each call replaces only dress:<zoneId>: regions, including earlier owned regions on former boundary walls; hand paint and other rooms remain. layers: [] removes owned regions, not trims. Eight regions per face, including retained paint. Full-height scripts own their faces. All rooms apply atomically in one undo step. Refusals include target_required, target_not_found, no_walls, not_on_room, side_unknown, curtain_wall, railing_wall, finish_required, walls_required, invalid_layer, invalid_size, region_limit, script_owns_face, trim_conflict, target_level_mismatch and target_frame_unsupported.",
+    "Dress rooms in one atomic call: set whole-room base wall, ceiling and floor finishes, drop ceiling height, lay ordered wall trims/finishes, and optionally replace existing wall or floor scripts. Up to 32 rooms per call; dryRun previews without writing. wallFinish sets the room's base wallMaterial (clearing wallOverrides; ordered layers stay on top). ceilingFinish paints the room ceiling's surface slot and ceilingHeight sets its height (and zone ceilingHeight). floorFinish sets zone.floor.finish. Passing layers replaces only dress:<zoneId>: regions (layers: [] clears owned regions; omitting layers preserves them). Trims (skirting, chairRail, crown) use set_wall_trim and stay within the room's wall stretches; changing shared trim outside the request refuses with trim_conflict. Finish layers are flat paint regions: wainscot (to 0.9 m), tiles (to 1.2 m), splashback (from 0.9 m, 0.6 m high; alongRun starts at the cabinet worktop), and accent (the room's stretch of walls named in where.walls). Full-height wall finish scripts and floor scripts own their colours and refuse with script_owns_face or script_owns_floor unless replaceScripts: true removes them atomically. Eight regions per face, including retained paint. Refusals include target_required, target_not_found, no_walls, not_on_room, side_unknown, curtain_wall, railing_wall, finish_required, walls_required, invalid_layer, invalid_size, region_limit, script_owns_face, script_owns_floor, trim_conflict, target_level_mismatch and target_frame_unsupported.",
   input: {
-    zoneIds: z.array(NodeId).min(1).max(16).describe('The rooms to dress.'),
-    layers: z.array(layer).max(8).describe("Bottom to top; [] takes the rooms' regions off."),
-    dryRun: z.boolean().optional().describe('List what each face would carry; write nothing.'),
+    zoneIds: z.array(NodeId).min(1).max(32).describe('The rooms to dress (1 to 32).'),
+    layers: z
+      .array(layer)
+      .max(8)
+      .optional()
+      .describe(
+        'Bottom to top wall trims/finishes; omit to keep existing dress:<zoneId>: regions, or [] to remove them.',
+      ),
+    wallFinish: z
+      .string()
+      .min(1)
+      .optional()
+      .describe(
+        'Whole-room base wall finish (library:, scene: ref or #rrggbb). Clears room wallOverrides; layers stay on top.',
+      ),
+    ceilingFinish: z
+      .string()
+      .min(1)
+      .optional()
+      .describe(
+        'Whole-room ceiling finish (library:, scene: ref or #rrggbb) applied to the room ceiling node surface slot.',
+      ),
+    ceilingHeight: measurement('length', 'm', {
+      description:
+        'Dropped/explicit ceiling height in metres (min 0.1 m) written to the room ceiling node and room metadata.',
+      min: 0.1,
+    }).optional(),
+    floorFinish: z
+      .string()
+      .min(1)
+      .optional()
+      .describe(
+        'Whole-room floor finish (library:, scene: ref or #rrggbb) written to zone.floor.finish.',
+      ),
+    replaceScripts: z
+      .boolean()
+      .optional()
+      .describe(
+        'When true, removes full-height wall finishScripts on dressed inward faces (and zone.floor.script when setting floorFinish) atomically instead of refusing with script_owns_face / script_owns_floor.',
+      ),
+    dryRun: z
+      .boolean()
+      .optional()
+      .describe('List what each face and surface would carry; write nothing.'),
   },
 } as const

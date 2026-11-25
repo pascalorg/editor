@@ -1,9 +1,12 @@
 import { refuse } from '../agent-tools/refusal'
 import { wallSupportForNodes } from '../lib/opening-floor-datum'
 import { wallFaceBaseOffset } from '../lib/wall-face-script'
+import type { MaterialSurface } from '../material-kinds'
+import { nearestLibraryColorRef } from '../procedural-items/library-colors'
 import { queryNodes } from '../runtime/node-queries'
 import type {
   AnyNode,
+  CeilingNode,
   WallFace,
   WallFaceRegion,
   WallNode,
@@ -14,7 +17,7 @@ import type {
 import { dressLevel, fixtureTarget, runTargets, standsAgainst } from './dress-targets'
 import { requireMaterialRef } from './material-refs'
 import { type RoomWallFace, roomBoundaryWalls, roomWallFaces } from './room-faces'
-import type { AgentOperation, SceneNodes } from './types'
+import type { AgentContext, AgentOperation, SceneNodes } from './types'
 import {
   dressRegionOwner,
   type FaceRegionPlan,
@@ -35,7 +38,16 @@ export type DressLayer = {
   profile?: WallTrimProfile
   where?: { walls?: string[]; around?: string[]; margin?: number; alongRun?: string }
 }
-export type DressRoomInput = { zoneIds: string[]; layers: DressLayer[]; dryRun?: boolean }
+export type DressRoomInput = {
+  zoneIds: string[]
+  layers?: DressLayer[]
+  wallFinish?: string
+  ceilingFinish?: string
+  ceilingHeight?: number
+  floorFinish?: string
+  replaceScripts?: boolean
+  dryRun?: boolean
+}
 export type DressedTrim = {
   height: number
   depth: number
@@ -49,10 +61,49 @@ export type DressedFace = {
   trims: Partial<Record<WallTrimKind, DressedTrim>>
   count: number
 }
-export type DressedRoom = { zoneId: string; name: string; faces: DressedFace[] }
+export type DressedRoom = {
+  zoneId: string
+  name: string
+  faces: DressedFace[]
+  wallFinish?: string
+  ceilingFinish?: string
+  ceilingHeight?: number
+  floorFinish?: string
+  clearedScripts?: number
+}
 export type DressSkipped = { zoneId: string; layer?: number; why: string }
 const isTrim = (kind: DressLayerKind): kind is WallTrimKind =>
   kind === 'skirting' || kind === 'chairRail' || kind === 'crown'
+
+function resolveSlotFinish(
+  asked: string,
+  field: string,
+  surface: MaterialSurface,
+  context: AgentContext,
+): { ref: string; note?: string } {
+  if (/^#[0-9a-f]{6}$/i.test(asked)) {
+    const match = nearestLibraryColorRef(asked)
+    if (!match) refuse('invalid_color', `${asked} is no colour: give #rrggbb.`)
+    return {
+      ref: match.ref,
+      note: `${asked}: nearest library colour ${match.name} (${match.color}), ΔE ${Math.round(match.distance)}.`,
+    }
+  }
+  return { ref: requireMaterialRef(asked, field, surface, { materials: context.materials }) }
+}
+
+function findRoomCeiling(
+  scratch: Readonly<Record<string, AnyNode>>,
+  zone: ZoneNode,
+): CeilingNode | undefined {
+  let fallback: CeilingNode | undefined
+  for (const node of Object.values(scratch)) {
+    if (node.type !== 'ceiling' || node.zoneId !== zone.id) continue
+    if (!zone.parentId || node.parentId === zone.parentId) return node
+    fallback ??= node
+  }
+  return fallback
+}
 
 function checkLayer(layer: DressLayer, index: number) {
   const label = `Layer ${index} (${layer.kind})`
@@ -189,9 +240,27 @@ function stretchesFor(
 /** One scratch plan for all rooms; only the final outcome may be applied by a host. */
 export const dressRoom: AgentOperation<DressRoomInput> = (nodes, input, context) => {
   if (!input.zoneIds?.length) refuse('target_required', 'Name the rooms (zoneIds) to dress.')
-  if (input.zoneIds.length > 16 || !Array.isArray(input.layers) || input.layers.length > 8)
-    refuse('invalid_layer', 'Dress at most 16 rooms with at most eight layers.')
-  input.layers.forEach(checkLayer)
+  if (input.zoneIds.length > 32) refuse('invalid_layer', 'Dress at most 32 rooms in one call.')
+  const hasRoomChange =
+    input.wallFinish !== undefined ||
+    input.ceilingFinish !== undefined ||
+    input.ceilingHeight !== undefined ||
+    input.floorFinish !== undefined
+  if (input.layers !== undefined) {
+    if (!Array.isArray(input.layers) || input.layers.length > 8)
+      refuse('invalid_layer', 'Dress at most eight layers in one call.')
+    input.layers.forEach(checkLayer)
+  } else if (!hasRoomChange) {
+    refuse(
+      'invalid_layer',
+      'Supply layers or at least one room finish (wallFinish, ceilingFinish, ceilingHeight, floorFinish).',
+    )
+  }
+  if (
+    input.ceilingHeight !== undefined &&
+    !(Number.isFinite(input.ceilingHeight) && input.ceilingHeight >= 0.1)
+  )
+    refuse('invalid_size', 'ceilingHeight must be at least 0.1 m.', { field: 'ceilingHeight' })
   const zones = [...new Set(input.zoneIds)].map((id) => {
     const zone = nodes[id]
     if (zone?.type !== 'zone' || zone.spaceRole !== 'room')
@@ -200,6 +269,19 @@ export const dressRoom: AgentOperation<DressRoomInput> = (nodes, input, context)
       refuse('no_walls', `Room ${zone.name} has no walls to dress.`, { target: id })
     return zone
   })
+  const wallFinishResolved =
+    input.wallFinish !== undefined
+      ? resolveSlotFinish(input.wallFinish, 'wallFinish', 'wall', context)
+      : undefined
+  const ceilingFinishResolved =
+    input.ceilingFinish !== undefined
+      ? resolveSlotFinish(input.ceilingFinish, 'ceilingFinish', 'ceiling', context)
+      : undefined
+  const floorFinishResolved =
+    input.floorFinish !== undefined
+      ? resolveSlotFinish(input.floorFinish, 'floorFinish', 'floor', context)
+      : undefined
+
   const scratch: Record<string, AnyNode> = { ...nodes }
   const skipped: DressSkipped[] = []
   const plans = zones.map((zone) => ({
@@ -208,28 +290,130 @@ export const dressRoom: AgentOperation<DressRoomInput> = (nodes, input, context)
     regions: new Map<string, FaceRegionPlan>(),
     trims: new Map<string, Set<WallTrimKind>>(),
     clearWallIds: new Set<string>(),
+    clearedScripts: 0,
+    wallFinish: undefined as string | undefined,
+    ceilingFinish: undefined as string | undefined,
+    ceilingHeight: undefined as number | undefined,
+    floorFinish: undefined as string | undefined,
   }))
-  let note: string | undefined
+  let note: string | undefined =
+    wallFinishResolved?.note ?? ceilingFinishResolved?.note ?? floorFinishResolved?.note
 
-  // Remove all requested owners before counting replacements: stale regions of a later room
-  // must not make an otherwise valid multi-room plan exceed the cap transiently.
-  const owners = zones.map((zone) => dressRegionOwner(zone.id))
-  for (const wall of queryNodes(nodes, { type: 'wall' })) {
-    if (wall.type !== 'wall') continue
-    const kept = wall.faceRegions?.filter(
-      (region) => !owners.some((owner) => region.id.startsWith(owner)),
-    )
-    if (kept && kept.length !== wall.faceRegions?.length) {
-      for (const plan of plans)
-        if (
-          wall.faceRegions?.some((region) => region.id.startsWith(dressRegionOwner(plan.zone.id)))
-        )
-          plan.clearWallIds.add(wall.id)
-      scratch[wall.id] = { ...wall, faceRegions: kept }
+  const clearFullHeightWallScript = (
+    wallId: string,
+    face: WallFace,
+    plan: (typeof plans)[number],
+  ) => {
+    const wall = scratch[wallId]
+    if (wall?.type !== 'wall') return
+    const script = wall.finishScripts?.[face]
+    if (!script || script.toHeight !== undefined) return
+    const nextScripts = { ...wall.finishScripts }
+    delete nextScripts[face]
+    const nextWall = { ...wall }
+    if (Object.keys(nextScripts).length) nextWall.finishScripts = nextScripts
+    else delete nextWall.finishScripts
+    scratch[wallId] = nextWall as WallNode
+    plan.clearedScripts += 1
+  }
+
+  // Only remove existing owned regions when `layers` was supplied; omitting `layers` preserves them.
+  if (input.layers !== undefined) {
+    // Remove all requested owners before counting replacements: stale regions of a later room
+    // must not make an otherwise valid multi-room plan exceed the cap transiently.
+    const owners = zones.map((zone) => dressRegionOwner(zone.id))
+    for (const wall of queryNodes(nodes, { type: 'wall' })) {
+      if (wall.type !== 'wall') continue
+      const kept = wall.faceRegions?.filter(
+        (region) => !owners.some((owner) => region.id.startsWith(owner)),
+      )
+      if (kept && kept.length !== wall.faceRegions?.length) {
+        for (const plan of plans)
+          if (
+            wall.faceRegions?.some((region) => region.id.startsWith(dressRegionOwner(plan.zone.id)))
+          )
+            plan.clearWallIds.add(wall.id)
+        scratch[wall.id] = { ...wall, faceRegions: kept }
+      }
     }
   }
 
-  input.layers.forEach((layer, index) => {
+  for (const plan of plans) {
+    if (wallFinishResolved !== undefined) {
+      const seenFaces = new Set<string>()
+      for (const stretch of plan.stretches) {
+        const key = `${stretch.wallId}/${stretch.face}`
+        if (seenFaces.has(key)) continue
+        seenFaces.add(key)
+        const wall = scratch[stretch.wallId]
+        if (wall?.type !== 'wall') continue
+        const script = wall.finishScripts?.[stretch.face]
+        if (script && script.toHeight === undefined) {
+          if (input.replaceScripts) clearFullHeightWallScript(stretch.wallId, stretch.face, plan)
+          else
+            refuse(
+              'script_owns_face',
+              `Side ${stretch.face.toUpperCase()} of ${wall.name?.trim() || wall.id} is built by a script, which owns its colours: remove the script or pass replaceScripts: true to finish that side.`,
+              { target: wall.id, face: stretch.face },
+            )
+        }
+      }
+      const currentZone = scratch[plan.zone.id] as ZoneNode
+      const nextZone: ZoneNode = { ...currentZone, wallMaterial: wallFinishResolved.ref }
+      delete nextZone.wallOverrides
+      scratch[plan.zone.id] = nextZone
+      plan.wallFinish = wallFinishResolved.ref
+    }
+
+    if (floorFinishResolved !== undefined) {
+      const currentZone = scratch[plan.zone.id] as ZoneNode
+      if (currentZone.hasFloor === false) {
+        skipped.push({ zoneId: plan.zone.id, why: `${plan.zone.name} has no floor to finish` })
+      } else {
+        const { script: floorScript, ...floorRest } = currentZone.floor ?? {}
+        if (floorScript && !input.replaceScripts)
+          refuse(
+            'script_owns_floor',
+            `${plan.zone.name?.trim() || plan.zone.id}'s floor is built by a script, which owns its colours: pass replaceScripts: true or remove the script to replace it.`,
+            { target: plan.zone.id },
+          )
+        if (floorScript) plan.clearedScripts += 1
+        scratch[plan.zone.id] = {
+          ...currentZone,
+          floor: { ...floorRest, finish: floorFinishResolved.ref },
+        }
+        plan.floorFinish = floorFinishResolved.ref
+      }
+    }
+
+    if (ceilingFinishResolved !== undefined || input.ceilingHeight !== undefined) {
+      const currentZone = scratch[plan.zone.id] as ZoneNode
+      const ceiling =
+        currentZone.hasCeiling === false ? undefined : findRoomCeiling(scratch, currentZone)
+      if (!ceiling) {
+        skipped.push({
+          zoneId: plan.zone.id,
+          why: `${plan.zone.name} has no ceiling node to update`,
+        })
+      } else {
+        const nextCeiling: CeilingNode = {
+          ...ceiling,
+          ...(ceilingFinishResolved !== undefined
+            ? { slots: { ...(ceiling.slots ?? {}), surface: ceilingFinishResolved.ref } }
+            : {}),
+          ...(input.ceilingHeight !== undefined ? { height: input.ceilingHeight } : {}),
+        }
+        scratch[ceiling.id] = nextCeiling
+        if (ceilingFinishResolved !== undefined) plan.ceilingFinish = ceilingFinishResolved.ref
+        if (input.ceilingHeight !== undefined) {
+          scratch[plan.zone.id] = { ...currentZone, ceilingHeight: input.ceilingHeight }
+          plan.ceilingHeight = input.ceilingHeight
+        }
+      }
+    }
+  }
+
+  input.layers?.forEach((layer, index) => {
     const placed = plans.map((plan) =>
       stretchesFor(nodes, plan.zone, plan.stretches, layer, skipped, index),
     )
@@ -310,24 +494,32 @@ export const dressRoom: AgentOperation<DressRoomInput> = (nodes, input, context)
       }
     })
   })
-  for (const plan of plans) {
-    const outcome = setWallFaceRegions(
-      scratch,
-      {
-        owner: dressRegionOwner(plan.zone.id),
-        faces: [...plan.regions.values()],
-        clearWallIds: [...plan.clearWallIds],
-      },
-      context,
-    )
-    for (const { id, data } of outcome.changes?.update ?? [])
-      scratch[id] = { ...scratch[id], ...data } as AnyNode
-    for (const skip of (outcome.result.skipped ?? []) as {
-      wallId: string
-      face: WallFace
-      why: string
-    }[])
-      skipped.push({ zoneId: plan.zone.id, why: `${skip.wallId} side ${skip.face}: ${skip.why}` })
+  if (input.layers !== undefined) {
+    for (const plan of plans) {
+      if (input.replaceScripts) {
+        for (const facePlan of plan.regions.values()) {
+          if (facePlan.regions.length > 0)
+            clearFullHeightWallScript(facePlan.wallId, facePlan.face, plan)
+        }
+      }
+      const outcome = setWallFaceRegions(
+        scratch,
+        {
+          owner: dressRegionOwner(plan.zone.id),
+          faces: [...plan.regions.values()],
+          clearWallIds: [...plan.clearWallIds],
+        },
+        context,
+      )
+      for (const { id, data } of outcome.changes?.update ?? [])
+        scratch[id] = { ...scratch[id], ...data } as AnyNode
+      for (const skip of (outcome.result.skipped ?? []) as {
+        wallId: string
+        face: WallFace
+        why: string
+      }[])
+        skipped.push({ zoneId: plan.zone.id, why: `${skip.wallId} side ${skip.face}: ${skip.why}` })
+    }
   }
   const rooms: DressedRoom[] = plans.map((plan) => {
     const faces = new Map<string, DressedFace>()
@@ -356,7 +548,16 @@ export const dressRoom: AgentOperation<DressRoomInput> = (nodes, input, context)
         count: regions.length,
       })
     }
-    return { zoneId: plan.zone.id, name: plan.zone.name, faces: [...faces.values()] }
+    return {
+      zoneId: plan.zone.id,
+      name: plan.zone.name,
+      faces: [...faces.values()],
+      ...(plan.wallFinish !== undefined ? { wallFinish: plan.wallFinish } : {}),
+      ...(plan.ceilingFinish !== undefined ? { ceilingFinish: plan.ceilingFinish } : {}),
+      ...(plan.ceilingHeight !== undefined ? { ceilingHeight: plan.ceilingHeight } : {}),
+      ...(plan.floorFinish !== undefined ? { floorFinish: plan.floorFinish } : {}),
+      ...(plan.clearedScripts > 0 ? { clearedScripts: plan.clearedScripts } : {}),
+    }
   })
   return {
     result: {
