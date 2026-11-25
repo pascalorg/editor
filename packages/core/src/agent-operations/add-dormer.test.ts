@@ -312,4 +312,30 @@ describe('selective add_dormer operation', () => {
       )
     })
   }
+
+  test('forwards flashing and default window shape, grid, arch and sill options', () => {
+    const f = fixture()
+    const outcome = run(f, {
+      segmentId: f.segment.id,
+      flashing: false,
+      windowShape: 'arch',
+      windowArchHeight: 0.22,
+      windowColumns: 2,
+      windowRows: 3,
+      windowSill: true,
+    })
+    expect(outcome.dormer.flashing).toBe(false)
+    expect(outcome.dormer.windowShape).toBe('arch')
+    expect(outcome.dormer.windowArchHeight).toBe(0.22)
+    expect(outcome.dormer.windowColumns).toBe(2)
+    expect(outcome.dormer.windowRows).toBe(3)
+    expect(outcome.dormer.windowSill).toBe(true)
+    expect(outcome.window).toMatchObject({
+      openingShape: 'arch',
+      archHeight: 0.22,
+      columnRatios: [1, 1],
+      rowRatios: [1, 1, 1],
+      sill: true,
+    })
+  })
 })

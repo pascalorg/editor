@@ -427,4 +427,162 @@ describe('strict ownership and runtime validation', () => {
       expect(z.object(addRoofElementTool.input).safeParse(value).success).toBe(false)
     })
   }
+
+  test('applies native chimney geometry, multi-flue options and presets without inline default override', () => {
+    const f = fixture()
+    const outcome = run(f.nodes, {
+      kind: 'chimney',
+      id: f.segment.id,
+      point: [1, 1],
+      width: 1.1,
+      depth: 0.75,
+      heightAboveRidge: 1.4,
+      rotation: 90,
+      bodyShape: 'square',
+      cap: true,
+      capShape: 'stepped',
+      flueCount: 3,
+      flueShape: 'square',
+      shoulderStyle: 'corbeled',
+      bandStyle: 'double',
+      cricketStyle: 'simple',
+      panelStyle: 'rectangular',
+      cornerBevel: 0.015,
+      materialPreset: 'library:flooring-rusticbrick',
+      topMaterialPreset: 'library:flooring-wallstone1',
+    })
+    const node = roofElement(outcome.node)
+    if (node.type !== 'chimney') throw new Error('Expected chimney')
+    expect(node).toMatchObject({
+      width: 1.1,
+      depth: 0.75,
+      heightAboveRidge: 1.4,
+      bodyShape: 'square',
+      cap: true,
+      capShape: 'stepped',
+      flueCount: 3,
+      flueShape: 'square',
+      shoulderStyle: 'corbeled',
+      bandStyle: 'double',
+      cricketStyle: 'simple',
+      panelStyle: 'rectangular',
+      cornerBevel: 0.015,
+      materialPreset: 'library:flooring-rusticbrick',
+      topMaterialPreset: 'library:flooring-wallstone1',
+    })
+    expect(node.rotation).toBeCloseTo(Math.PI / 2, 9)
+    expect(node.material).toBeUndefined()
+    expect(node.topMaterial).toBeUndefined()
+
+    const bodyOnly = run(f.nodes, {
+      kind: 'chimney',
+      id: f.segment.id,
+      point: [1, 1],
+      materialPreset: 'flooring-rusticbrick',
+    })
+    const bodyNode = roofElement(bodyOnly.node)
+    if (bodyNode.type !== 'chimney') throw new Error('Expected chimney')
+    expect(bodyNode.materialPreset).toBe('library:flooring-rusticbrick')
+    expect(bodyNode.material).toBeUndefined()
+    expect(bodyNode.topMaterial).toBeUndefined()
+  })
+
+  test('applies skylight type presets, explicit overrides and glazing presets', () => {
+    const f = fixture()
+    const outcome = run(f.nodes, {
+      kind: 'skylight',
+      id: f.segment.id,
+      point: [1, 1],
+      skylightType: 'lantern',
+      width: 1.8,
+      height: '200cm',
+      curb: false,
+      curbHeight: 0,
+      materialPreset: 'library:preset-nearblack',
+      glassMaterialPreset: 'library:preset-midgrey',
+    })
+    const node = roofElement(outcome.node)
+    if (node.type !== 'skylight') throw new Error('Expected skylight')
+    expect(node).toMatchObject({
+      skylightType: 'lantern',
+      lanternHeight: 0.45,
+      width: 1.8,
+      height: 2,
+      curb: false,
+      curbHeight: 0,
+      materialPreset: 'library:preset-nearblack',
+      glassMaterialPreset: 'library:preset-midgrey',
+    })
+  })
+
+  test('applies cupola and vent dimensions, yaw override and finish presets', () => {
+    const f = fixture()
+    const cupolaOutcome = run(f.nodes, {
+      kind: 'cupola',
+      id: f.segment.id,
+      point: [1, 1],
+      width: 1.2,
+      depth: 1.2,
+      height: 1.5,
+      rotation: 45,
+      materialPreset: 'library:metal-black',
+    })
+    if (cupolaOutcome.node.type !== 'cupola') throw new Error('Expected cupola')
+    expect(cupolaOutcome.node).toMatchObject({
+      width: 1.2,
+      depth: 1.2,
+      height: 1.5,
+      materialPreset: 'library:metal-black',
+    })
+    expect(cupolaOutcome.node.rotation).toBeCloseTo(Math.PI / 4, 9)
+
+    const ventOutcome = run(f.nodes, {
+      kind: 'eyebrow-vent',
+      id: f.segment.id,
+      point: [1, 1],
+      width: 0.7,
+      depth: 0.8,
+      height: 0.4,
+      materialPreset: 'library:preset-charcoal',
+    })
+    if (ventOutcome.node.type !== 'eyebrow-vent') throw new Error('Expected eyebrow-vent')
+    expect(ventOutcome.node).toMatchObject({
+      width: 0.7,
+      depth: 0.8,
+      height: 0.4,
+      materialPreset: 'library:preset-charcoal',
+    })
+  })
+
+  test('refuses unknown material presets and invalid extended options atomically', () => {
+    const f = fixture()
+    expect(
+      refusal(f.nodes, {
+        kind: 'chimney',
+        id: f.segment.id,
+        point: [1, 1],
+        materialPreset: 'library:nonexistent-material-xyz',
+      }).code,
+    ).toBe('unknown_material')
+    expect(
+      refusal(f.nodes, {
+        kind: 'skylight',
+        id: f.segment.id,
+        point: [1, 1],
+        glassMaterialPreset: 'library:nonexistent-glass-xyz',
+      }).code,
+    ).toBe('unknown_material')
+    for (const bad of [
+      { width: 0 },
+      { depth: -0.5 },
+      { heightAboveRidge: 0 },
+      { cornerBevel: -0.1 },
+      { flueCount: 5 },
+      { skylightType: 'arched' },
+    ]) {
+      const value = { ...input(f.segment.id), ...bad }
+      expect(refusal(f.nodes, value).code).toBe('roof_element_options_invalid')
+      expect(z.object(addRoofElementTool.input).safeParse(value).success).toBe(false)
+    }
+  })
 })

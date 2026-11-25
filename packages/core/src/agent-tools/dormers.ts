@@ -40,6 +40,36 @@ export const addDormerTool = {
     wallHeight: length('Wall height above the native shell seat (default 0 m).', true),
     windowWidth: length('Default hosted window width (default 0.76 m).'),
     windowHeight: length('Default hosted window height (default 0.68 m).'),
+    flashing: z
+      .boolean()
+      .optional()
+      .describe('Roof-junction flashing apron; defaults to true on non-conical dormers.'),
+    windowShape: z
+      .enum(['rectangle', 'rounded', 'arch'])
+      .optional()
+      .describe('Default window opening shape (default rectangle).'),
+    windowArchHeight: length(
+      'Arch rise in metres for arched dormer windows (default 0.14 m).',
+      true,
+    ),
+    windowColumns: z
+      .number()
+      .int()
+      .min(1)
+      .max(8)
+      .optional()
+      .describe('Default window mullion columns (1 to 8, default 1).'),
+    windowRows: z
+      .number()
+      .int()
+      .min(1)
+      .max(8)
+      .optional()
+      .describe('Default window transom rows (1 to 8, default 1).'),
+    windowSill: z
+      .boolean()
+      .optional()
+      .describe('Add an exterior projecting window sill (default false).'),
     name: z.string().max(120).optional().describe('Dormer name; otherwise the next Dormer N.'),
     materialPreset: z
       .string()

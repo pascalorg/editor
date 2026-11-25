@@ -1,3 +1,4 @@
+import { z } from 'zod'
 import { refuse } from '../agent-tools/refusal'
 import { addRoofElementTool } from '../agent-tools/roof-elements'
 import { roofSegmentFrame } from '../lib/roof-frame'
@@ -7,24 +8,17 @@ import {
   type RoofSurfaceResult,
   type RoofSurfaceSeat,
 } from '../lib/roof-surface'
-import {
-  type AnyNode,
-  buildRoofElementNode,
-  type RoofElementKind,
-  type RoofNode,
-  type RoofSegmentNode,
-} from '../schema'
+import type { MaterialSurface } from '../material-kinds'
+import { type AnyNode, buildRoofElementNode, type RoofNode, type RoofSegmentNode } from '../schema'
+import { finishSurface, requireMaterialRef } from './material-refs'
 import { levelIdOf } from './scene-queries'
 import type { AgentOperation, SceneNodes } from './types'
 
-export type AddRoofElementInput = {
-  kind: RoofElementKind
-  id: string
-  point: number[]
-  rows?: number
-  columns?: number
-  name?: string
-}
+const { id: idSchema, point: pointSchema, ...optionsShape } = addRoofElementTool.input
+const inputSchema = z.object(addRoofElementTool.input)
+const optionsSchema = z.object(optionsShape)
+
+export type AddRoofElementInput = z.input<typeof inputSchema>
 type Point = [number, number]
 
 function host(nodes: SceneNodes, id: string): { roof: RoofNode; segment?: RoofSegmentNode } {
@@ -97,25 +91,32 @@ function requireSeat(
 
 const round3 = (value: number) => Math.round(value * 1000) / 1000
 
-export const addRoofElement: AgentOperation<AddRoofElementInput> = (nodes, input) => {
-  const schema = addRoofElementTool.input
-  if (!schema.id.safeParse(input.id).success)
+export const addRoofElement: AgentOperation<AddRoofElementInput> = (nodes, input, context) => {
+  if (!idSchema.safeParse(input.id).success)
     refuse('roof_target_invalid', 'A roof or roof-segment id is required.', { id: input.id })
-  const parsedPoint = schema.point.safeParse(input.point)
+  const parsedPoint = pointSchema.safeParse(input.point)
   if (!parsedPoint.success)
     refuse('roof_point_invalid', 'The roof plan point must contain two finite coordinates [x, z].')
-  if (
-    !schema.kind.safeParse(input.kind).success ||
-    !schema.name.safeParse(input.name).success ||
-    !schema.rows.safeParse(input.rows).success ||
-    !schema.columns.safeParse(input.columns).success
-  )
+  const parsedOptions = optionsSchema.safeParse(input)
+  if (!parsedOptions.success)
     refuse(
       'roof_element_options_invalid',
-      'Choose a native accessory, a nonempty name and integer solar counts from 1 to 20.',
+      'Supply valid roof accessory options, dimensions, counts and presets.',
+      {
+        issues: parsedOptions.error.issues.map((issue) => ({
+          path: issue.path,
+          message: issue.message,
+        })),
+      },
     )
+  const asked = parsedOptions.data
   const point = parsedPoint.data as Point
   const { roof, segment } = host(nodes, input.id)
+  const preset = (value: string | undefined, field: string, surface?: MaterialSurface) =>
+    value === undefined
+      ? undefined
+      : requireMaterialRef(value, field, surface, { materials: context?.materials })
+  const surface = finishSurface(asked.kind)
   const seat = requireSeat(
     segment
       ? getRoofSegmentCoveringSeat(
@@ -129,10 +130,12 @@ export const addRoofElement: AgentOperation<AddRoofElementInput> = (nodes, input
     point,
     segment?.id,
   )
-  const node = buildRoofElementNode(input.kind, seat.segment, seat.position, {
-    name: input.name,
-    rows: input.rows,
-    columns: input.columns,
+  const node = buildRoofElementNode(asked.kind, seat.segment, seat.position, {
+    ...asked,
+    rotation: asked.rotation === undefined ? undefined : (asked.rotation * Math.PI) / 180,
+    materialPreset: preset(asked.materialPreset, 'materialPreset', surface),
+    topMaterialPreset: preset(asked.topMaterialPreset, 'topMaterialPreset', surface),
+    glassMaterialPreset: preset(asked.glassMaterialPreset, 'glassMaterialPreset'),
   })
   if (!node)
     refuse('roof_no_ridge_line', 'This segment has no native ridge line for a ridge vent.', {
