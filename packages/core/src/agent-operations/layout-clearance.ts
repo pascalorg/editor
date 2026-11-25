@@ -23,6 +23,7 @@ import {
 import { type AnyNode, getScaledDimensions, type ItemNode } from '../schema'
 import { resolveCeilingHeight } from '../services/level-height'
 import { CEILING_DRAW_OFFSET } from '../services/storey'
+import { getSlabElevationAtPoint } from '../systems/slab/slab-slope'
 import {
   aabbsOverlap,
   type BlockedDoorIssue,
@@ -234,7 +235,7 @@ function itemFloorLift(node: ItemNode, nodes: Record<string, AnyNode>): number {
       }),
     { preferredSlabId: node.supportSlabId },
   )
-  return support ? support.elevation : ground()
+  return support ? getSlabElevationAtPoint(support, node.position[0], node.position[2]) : ground()
 }
 
 /**

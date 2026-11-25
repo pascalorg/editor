@@ -16,6 +16,7 @@ import {
   type WallJustification,
 } from '../wall/wall-frame'
 import { MIN_WALL_HEIGHT, wallFollowsStorey } from '../wall/wall-top'
+import { getSlabSlopePlane } from './slab-slope'
 
 export type SlabElevationClamp = {
   elevation: number
@@ -46,7 +47,8 @@ export function clampSlabElevationForWalls(
   storeyHeight: number,
   nodes?: Readonly<Record<string, AnyNode>>,
 ): SlabElevationClamp {
-  const bound = storeyHeight - MIN_WALL_HEIGHT
+  const rise = getSlabSlopePlane(slab).rise
+  const bound = storeyHeight - MIN_WALL_HEIGHT - rise
   if (proposedElevation <= bound) return { elevation: proposedElevation, clamped: false }
   if (slab.polygon.length < 3) return { elevation: proposedElevation, clamped: false }
 
@@ -106,7 +108,7 @@ export function getSlabElevationUpperBound(
     Math.max(storeyHeight, ...levelSlabs.map((candidate) => candidate.elevation ?? 0.05)) + 1
   return clampSlabElevationForWalls(probe, slab, levelWalls, levelSlabs, storeyHeight, nodes)
     .clamped
-    ? storeyHeight - MIN_WALL_HEIGHT
+    ? storeyHeight - MIN_WALL_HEIGHT - getSlabSlopePlane(slab).rise
     : Number.POSITIVE_INFINITY
 }
 

@@ -7,6 +7,7 @@ import {
   type ImportedMeshNode,
   LevelNode,
   resolveStairWinder,
+  SlabNode,
   StairNode,
   StairSegmentNode,
   type WallNode,
@@ -353,5 +354,44 @@ test('winder export carries actual walking-line going and winding classification
     expect(props.WalkingLineOffset).toBe(0.45)
     expect(props.TreadLength).toBeCloseTo(layout.going)
     expect(props.TreadLengthAtInnerSide).toBeCloseTo(layout.narrowEndGoing)
+  })
+})
+
+test('sloped slab exports inclined mesh geometry as IFCSLAB instead of flat SweptSolid', () => {
+  const level = LevelNode.parse({ height: 3 })
+  const slab = SlabNode.parse({
+    parentId: level.id,
+    name: 'Drainage Terrace',
+    polygon: [
+      [0, 0],
+      [4, 0],
+      [4, 2],
+      [0, 2],
+    ],
+    elevation: 0.1,
+    thickness: 0.15,
+    slope: { direction: 0, pitch: 2 },
+  })
+  level.children = [slab.id]
+  const rise = 4 * Math.tan((2 * Math.PI) / 180)
+  const result = buildIfcExport({
+    nodes: { [level.id]: level, [slab.id]: slab },
+    meshes: new Map([
+      [
+        slab.id,
+        [
+          {
+            positions: [0, 0.1, 0, 4, 0.1 + rise, 0, 4, 0.1 + rise, 2, 0, 0.1, 2],
+            indices: [0, 2, 1, 0, 3, 2],
+          },
+        ],
+      ],
+    ]),
+    timestamp: EPOCH,
+  })
+  withModel(result.ifc, (modelID) => {
+    const slabIds = idsOf(modelID, WebIFC.IFCSLAB)
+    expect(slabIds.length).toBe(1)
+    expect(result.ifc).toContain('IFCTRIANGULATEDFACESET')
   })
 })

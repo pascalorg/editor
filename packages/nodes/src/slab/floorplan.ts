@@ -4,6 +4,8 @@ import {
   type FloorplanPoint,
   type GeometryContext,
   getRenderableSlabPolygon,
+  getSlabSlopePlane,
+  hasSlabSlope,
   hostedCutterHoles,
   isDerivedNode,
   readFloorplanContext,
@@ -101,6 +103,43 @@ export function buildSlabFloorplan(node: SlabNode, ctx: GeometryContext): Floorp
       color: palette.selectedHatch,
       opacity: 0.7,
     })
+  }
+
+  // Uphill slope direction arrow in 2D plan view so sloped slabs read clearly
+  // as ramps or drainage falls alongside flat slabs.
+  if (hasSlabSlope(node)) {
+    const plane = getSlabSlopePlane(node)
+    if (plane.span > 0.05) {
+      let cx = 0
+      let cz = 0
+      for (const [x, z] of outer) {
+        cx += x
+        cz += z
+      }
+      cx /= outer.length
+      cz /= outer.length
+      const arrowLen = Math.min(Math.max(plane.span * 0.45, 0.25), 1.4)
+      const half = arrowLen / 2
+      const startX = cx - plane.dirX * half
+      const startZ = cz - plane.dirZ * half
+      const endX = cx + plane.dirX * half
+      const endZ = cz + plane.dirZ * half
+      const headLen = Math.min(arrowLen * 0.3, 0.22)
+      const perpX = -plane.dirZ
+      const perpZ = plane.dirX
+      const wing1X = endX - plane.dirX * headLen + perpX * (headLen * 0.6)
+      const wing1Z = endZ - plane.dirZ * headLen + perpZ * (headLen * 0.6)
+      const wing2X = endX - plane.dirX * headLen - perpX * (headLen * 0.6)
+      const wing2Z = endZ - plane.dirZ * headLen - perpZ * (headLen * 0.6)
+      children.push({
+        kind: 'path',
+        d: `M ${startX} ${startZ} L ${endX} ${endZ} M ${wing1X} ${wing1Z} L ${endX} ${endZ} L ${wing2X} ${wing2Z}`,
+        fill: 'none',
+        stroke,
+        strokeWidth: 0.025,
+        strokeOpacity: 0.85,
+      })
+    }
   }
 
   // Boundary editor — visible only when the slab is the active selection, and

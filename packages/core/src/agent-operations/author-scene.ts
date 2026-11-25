@@ -1357,6 +1357,7 @@ export function authorScene(
         polygon: s.polygon,
         elevation: s.top,
         thickness: s.thickness,
+        ...(s.slope && s.slope.pitch > 0 ? { slope: s.slope } : {}),
         ...(finish ? { slots: { surface: finish } } : {}),
       })
       place(node)

@@ -1,8 +1,9 @@
 // @ts-expect-error — bun:test is provided by the Bun runtime; viewer does not
 // depend on @types/bun so the import type is unresolved at compile time.
 import { describe, expect, test } from 'bun:test'
-import { SlabNode, type SlabPolygonContext } from '@pascal-app/core'
+import { getSlabElevationAtPoint, SlabNode, type SlabPolygonContext } from '@pascal-app/core'
 import type * as THREE from 'three'
+import { buildTerrainPerimeterFillGeometry } from '../../lib/terrain-perimeter-fill'
 import { generateSlabGeometry } from './slab-system'
 
 const EMPTY_CONTEXT: SlabPolygonContext = { walls: [], siblingSlabs: [] }
@@ -164,5 +165,69 @@ describe('generateSlabGeometry', () => {
       ],
     })
     expect((generateSlabGeometry(slab, EMPTY_CONTEXT).index?.count ?? 0) / 3).toBe(0)
+  })
+
+  test('extrudes a planar sloped solid slab with coplanar top, parallel bottom, and sloped hole walls', () => {
+    const slab = SlabNode.parse({
+      polygon: SQUARE,
+      elevation: 0.1,
+      thickness: 0.2,
+      slope: { direction: 0, pitch: 15 },
+      holes: [
+        [
+          [1, 1],
+          [3, 1],
+          [3, 2],
+          [1, 2],
+        ],
+      ],
+    })
+    const geometry = generateSlabGeometry(slab, EMPTY_CONTEXT)
+    const positions = geometry.getAttribute('position')
+    const normals = geometry.getAttribute('normal')
+    expect(positions.count).toBeGreaterThan(0)
+
+    const rise = 4 * Math.tan((15 * Math.PI) / 180)
+    const expectedNy = Math.cos((15 * Math.PI) / 180)
+    let sawTopFace = false
+    let sawHighVertex = false
+    for (let i = 0; i < positions.count; i++) {
+      const x = positions.getX(i)
+      const y = positions.getY(i)
+      const z = positions.getZ(i)
+      const top = getSlabElevationAtPoint(slab, x, z)
+      // Every vertex sits either on the sloped top or sloped bottom plane
+      const onTop = Math.abs(y - top) < 1e-5
+      const onBottom = Math.abs(y - (top - 0.2)) < 1e-5
+      expect(onTop || onBottom).toBe(true)
+      if (Math.abs(x - 4) < 1e-5 && onTop) {
+        expect(y).toBeCloseTo(0.1 + rise, 5)
+        sawHighVertex = true
+      }
+      if (normals.getY(i) > 0.5) {
+        expect(normals.getY(i)).toBeCloseTo(expectedNy, 5)
+        sawTopFace = true
+      }
+    }
+    expect(sawTopFace).toBe(true)
+    expect(sawHighVertex).toBe(true)
+    expect(hasVertexAt(geometry, 1, 1)).toBe(true)
+    expect(hasVertexAt(geometry, 3, 2)).toBe(true)
+  })
+
+  test('buildTerrainPerimeterFillGeometry accepts per-vertex sloped top elevations', () => {
+    const points = [
+      { x: 0, z: 0 },
+      { x: 4, z: 0 },
+      { x: 4, z: 2 },
+      { x: 0, z: 2 },
+    ]
+    const topY = [0.0, 0.8, 0.8, 0.0]
+    const bottomY = [-0.2, -0.2, -0.2, -0.2]
+    const geo = buildTerrainPerimeterFillGeometry(points, bottomY, topY, 1e-4)
+    expect(geo).not.toBeNull()
+    const ys = uniqueSortedYs(geo!)
+    expect(ys[0]).toBeCloseTo(-0.2, 4)
+    expect(ys[ys.length - 1]).toBeCloseTo(0.8, 4)
   })
 })

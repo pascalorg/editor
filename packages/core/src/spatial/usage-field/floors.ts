@@ -1,5 +1,6 @@
 import { floorsOf } from '../../agent-operations/circulation-spaces'
 import { difference } from '../../lib/polygon-boolean'
+import { hasSlabSlope } from '../../systems/slab/slab-slope'
 import type { FloorRegion, Skipped } from './types'
 import type { Nodes } from './walls'
 
@@ -33,7 +34,7 @@ export function levelFloors(nodes: Nodes): {
           holes: piece.holes,
           y: slab.elevation,
           outdoor: slab.outdoor,
-          shape: 'exact',
+          shape: source?.type === 'slab' && hasSlabSlope(source) ? 'approx' : 'exact',
         })
     }
     floors.set(floor.id, regions)

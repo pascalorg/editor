@@ -106,7 +106,7 @@ export function applySlabTopChange(slab: SlabNode, newTop: number): Partial<Slab
   }
 
   const grounded = Math.abs(slab.elevation - slab.thickness) < GROUNDED_SLAB_EPSILON
-  if (grounded && newTop <= 0) return { elevation: newTop, recessed: true }
+  if (grounded && newTop <= 0) return { elevation: newTop, recessed: true, slope: undefined }
 
   return { elevation: newTop, recessed: false }
 }
@@ -123,6 +123,7 @@ export function applySlabElevationPreset(slab: SlabNode, signedDepth: number): P
       recessed: true,
       recessedRimElevation: anchor,
       fillToTerrain: undefined,
+      slope: undefined,
     }
   }
   const thickness = Math.max(MIN_SLAB_THICKNESS, signedDepth)

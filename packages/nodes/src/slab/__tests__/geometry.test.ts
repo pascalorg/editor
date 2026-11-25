@@ -15,6 +15,7 @@ import {
   ZoneNode,
 } from '@pascal-app/core'
 import { type Group, Mesh, type MeshStandardMaterial } from 'three'
+import { buildSlabFloorplan } from '../floorplan'
 import { buildSlabGeometry } from '../geometry'
 
 function meshesOf(group: Group): Mesh[] {
@@ -429,4 +430,41 @@ test('side paint overrides migrated edge, riser and underside refs', () => {
   const group = buildSlabGeometry(slab, ctx, 'rendered', true)
   const sides = group.children.find((child) => child.userData.slotId === 'side') as Mesh
   expect((sides.material as MeshStandardMaterial).color.getHexString()).toBe('ff0000')
+})
+
+test('45-degree sloped slab splits surface vs side slots cleanly, drops sloped terrain fill, and draws 2D slope arrow', () => {
+  const slab = SlabNode.parse({
+    polygon: [
+      [0, 0],
+      [4, 0],
+      [4, 2],
+      [0, 2],
+    ],
+    elevation: 0.1,
+    thickness: 0.1,
+    fillToTerrain: true,
+    slope: { direction: 0, pitch: 45 },
+  })
+  const ctx = geometryContext(SiteNode.parse({ id: 'site_sloped' }))
+  const group = buildSlabGeometry(slab, ctx, 'rendered', true)
+  const topMesh = group.children.find((child) => child.userData.slotId === 'surface') as Mesh
+  const sideMeshes = group.children.filter((child) => child.userData.slotId === 'side') as Mesh[]
+  expect(topMesh).toBeDefined()
+  expect(topMesh.geometry.getAttribute('position').count).toBeGreaterThan(0)
+  // Expect both the slab side mesh and the sloped fillToTerrain skirt mesh
+  expect(sideMeshes.length).toBeGreaterThanOrEqual(2)
+  const fillSkirt = sideMeshes[sideMeshes.length - 1]!
+  const skirtPos = fillSkirt.geometry.getAttribute('position')
+  let maxSkirtY = Number.NEGATIVE_INFINITY
+  for (let i = 0; i < skirtPos.count; i++) {
+    maxSkirtY = Math.max(maxSkirtY, skirtPos.getY(i))
+  }
+  // At x = 4 with 45° pitch and thickness 0.1, underside is 0.1 + 4 - 0.1 = 4.0
+  expect(maxSkirtY).toBeCloseTo(4.0, 4)
+
+  const plan = buildSlabFloorplan(slab, ctx)
+  expect(plan?.kind).toBe('group')
+  const paths = plan?.kind === 'group' ? plan.children.filter((child) => child.kind === 'path') : []
+  // Body path + uphill direction arrow path
+  expect(paths.length).toBe(2)
 })

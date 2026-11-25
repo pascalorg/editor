@@ -159,4 +159,16 @@ describe('anchor-relative slab presets', () => {
     expect(moved.elevation).toBeCloseTo(0.65)
     expect(applySlabRecessDepthChange(recessed, 0.25)).toEqual({ elevation: 0.35 })
   })
+
+  test('clears slope when a sloped solid slab switches to recessed', () => {
+    const sloped = slab({
+      elevation: 0.05,
+      thickness: 0.05,
+      slope: { direction: 0, pitch: 8 },
+    })
+    expect(applySlabElevationPreset(sloped, -0.15).slope).toBeUndefined()
+    expect(applySlabElevationPreset(sloped, -0.15).recessed).toBe(true)
+    expect(applySlabTopChange(sloped, -0.1).slope).toBeUndefined()
+    expect(applySlabTopChange(sloped, -0.1).recessed).toBe(true)
+  })
 })

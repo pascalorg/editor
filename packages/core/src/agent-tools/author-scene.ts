@@ -282,6 +282,23 @@ export const authorSceneSlab = z.object({
       default: 0,
     },
   ),
+  slope: z
+    .object({
+      direction: measurement('angle', 'deg', {
+        default: 0,
+        description:
+          'Uphill azimuth in degrees in the XZ plane (0 = +X, 90 = +Z, 180 = -X, 270 = -Z).',
+      }),
+      pitch: measurement('angle', 'deg', {
+        min: 0,
+        max: 45,
+        description: 'Slope angle in degrees (0 = flat, max 45).',
+      }),
+    })
+    .optional()
+    .describe(
+      'Optional planar slope; top stays the low-edge walking surface and floor-placed items lift to the sloped surface.',
+    ),
   finish: z.string().optional().describe('library:<id> or #rrggbb (an exact colour).'),
   surfaceCode: z
     .string()

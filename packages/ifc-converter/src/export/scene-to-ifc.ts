@@ -20,6 +20,7 @@ import {
   getWallFaceOffsets,
   getWallPlanFootprint,
   getWallTop,
+  hasSlabSlope,
   hidesDescendants,
   type ImportedMeshNode,
   intersection,
@@ -1208,6 +1209,7 @@ export function buildIfcExport(input: IfcExportInput): IfcExportResult {
     // the [top − thickness, top] band: all keep their rendered shape.
     if (
       slab.recessed ||
+      hasSlabSlope(body) ||
       thickness <= 1e-4 ||
       regions.length === 0 ||
       !withinBand(rendered, top - thickness, top)

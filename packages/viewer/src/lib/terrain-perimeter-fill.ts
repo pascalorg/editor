@@ -6,11 +6,13 @@ export type TerrainPerimeterPoint = { x: number; z: number }
 export function buildTerrainPerimeterFillGeometry(
   points: readonly TerrainPerimeterPoint[],
   bottomY: readonly number[],
-  topY: number,
+  topY: number | readonly number[],
   epsilon = 1e-6,
 ): BufferGeometry | null {
   if (points.length < 3 || bottomY.length !== points.length) return null
-  if (bottomY.every((y) => y >= topY - epsilon)) return null
+  if (typeof topY !== 'number' && topY.length !== points.length) return null
+  const topAt = (index: number) => (typeof topY === 'number' ? topY : topY[index]!)
+  if (bottomY.every((y, index) => y >= topAt(index) - epsilon)) return null
 
   let signedArea = 0
   for (let index = 0; index < points.length; index += 1) {
@@ -33,25 +35,27 @@ export function buildTerrainPerimeterFillGeometry(
     const b = points[next]!
     const ay = bottomY[index]!
     const by = bottomY[next]!
+    const aTop = topAt(index)
+    const bTop = topAt(next)
     const length = Math.hypot(b.x - a.x, b.z - a.z)
     const ua = perimeter
     perimeter += length
     const ub = perimeter
-    if (length < epsilon || (ay >= topY - epsilon && by >= topY - epsilon)) continue
+    if (length < epsilon || (ay >= aTop - epsilon && by >= bTop - epsilon)) continue
     if (counterClockwise) {
-      push(a, topY, ua, topY)
+      push(a, aTop, ua, aTop)
       push(b, by, ub, by)
       push(a, ay, ua, ay)
-      push(a, topY, ua, topY)
-      push(b, topY, ub, topY)
+      push(a, aTop, ua, aTop)
+      push(b, bTop, ub, bTop)
       push(b, by, ub, by)
     } else {
-      push(a, topY, ua, topY)
+      push(a, aTop, ua, aTop)
       push(a, ay, ua, ay)
       push(b, by, ub, by)
-      push(a, topY, ua, topY)
+      push(a, aTop, ua, aTop)
       push(b, by, ub, by)
-      push(b, topY, ub, topY)
+      push(b, bTop, ub, bTop)
     }
   }
 
@@ -63,9 +67,9 @@ export function buildTerrainPerimeterFillGeometry(
     const [ia, ib, ic] = face
     if (ia == null || ib == null || ic == null) continue
     if (
-      bottomY[ia]! >= topY - epsilon &&
-      bottomY[ib]! >= topY - epsilon &&
-      bottomY[ic]! >= topY - epsilon
+      bottomY[ia]! >= topAt(ia) - epsilon &&
+      bottomY[ib]! >= topAt(ib) - epsilon &&
+      bottomY[ic]! >= topAt(ic) - epsilon
     ) {
       continue
     }

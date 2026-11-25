@@ -1,6 +1,12 @@
 'use client'
 
-import { resolveLevelId, type SlabNode, useLiveNodeOverrides, useScene } from '@pascal-app/core'
+import {
+  getSlabMaxElevation,
+  resolveLevelId,
+  type SlabNode,
+  useLiveNodeOverrides,
+  useScene,
+} from '@pascal-app/core'
 import { PolygonEditor } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { useCallback, useEffect } from 'react'
@@ -73,7 +79,7 @@ export const SlabHoleEditor: React.FC<{ slabId: SlabNode['id']; holeIndex: numbe
       onPolygonChange={handlePolygonChange}
       onPolygonPreview={handlePolygonPreview}
       polygon={hole}
-      surfaceHeight={slab.elevation ?? 0.05}
+      surfaceHeight={getSlabMaxElevation(slab)}
     />
   )
 }

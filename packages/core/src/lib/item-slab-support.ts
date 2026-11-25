@@ -1,4 +1,5 @@
 import type { SlabNode } from '../schema'
+import { getSlabElevationAtPoint } from '../systems/slab/slab-slope'
 import { pointInPolygon, SUPPORT_ELEVATION_EPSILON } from '../systems/slab/slab-support'
 import { itemOverlapsPolygon } from './item-polygon-overlap'
 
@@ -32,19 +33,27 @@ export function selectSlabSupportForItem(
 ): SlabNode | undefined {
   const { maxElevation, preferredSlabId } = options
   if (maxElevation == null && preferredSlabId === 'ground') return
+  const [px, , pz] = footprint.position
   let highest: SlabNode | undefined
+  let highestElevation = Number.NEGATIVE_INFINITY
   let preferred: SlabNode | undefined
   let covering: SlabNode | undefined
+  let coveringElevation = Number.NEGATIVE_INFINITY
   let prefersBase = false
   for (const slab of slabs) {
     if (slab.id === preferredSlabId && slab.plateRole === 'base') prefersBase = true
-    const elevation = slab.elevation ?? 0.05
+    const elevation = getSlabElevationAtPoint(slab, px, pz)
     if (maxElevation != null && elevation > maxElevation + SUPPORT_ELEVATION_EPSILON) continue
     if (!slabSupportsItemFootprint(slab, footprint, renderedPolygon(slab))) continue
-    if (!highest || elevation > (highest.elevation ?? 0.05)) highest = slab
+    if (!highest || elevation > highestElevation) {
+      highest = slab
+      highestElevation = elevation
+    }
     if (slab.id === preferredSlabId) preferred = slab
-    if (slab.plateRole === 'platform' && (!covering || elevation > (covering.elevation ?? 0.05)))
+    if (slab.plateRole === 'platform' && (!covering || elevation > coveringElevation)) {
       covering = slab
+      coveringElevation = elevation
+    }
   }
   if (maxElevation == null) {
     if (prefersBase && covering) return covering

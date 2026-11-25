@@ -13656,6 +13656,10 @@ msgid "node.slab.panel.depth"
 msgstr "Depth"
 
 #: packages/nodes/src/slab/panel.tsx
+msgid "node.slab.panel.direction"
+msgstr "Direction"
+
+#: packages/nodes/src/slab/panel.tsx
 msgid "node.slab.panel.done"
 msgstr "Done"
 
@@ -13672,6 +13676,10 @@ msgid "node.slab.panel.fixed"
 msgstr "Fixed"
 
 #: packages/nodes/src/slab/panel.tsx
+msgid "node.slab.panel.flipSlope"
+msgstr "Flip 180°"
+
+#: packages/nodes/src/slab/panel.tsx
 msgid "node.slab.panel.floor"
 msgstr "Floor"
 
@@ -13682,6 +13690,10 @@ msgstr "Follows terrain"
 #: packages/nodes/src/slab/panel.tsx
 msgid "node.slab.panel.foundation"
 msgstr "Foundation"
+
+#: packages/nodes/src/slab/panel.tsx
+msgid "node.slab.panel.grade"
+msgstr "Grade"
 
 #: packages/nodes/src/slab/panel.tsx
 msgid "node.slab.panel.holes"
@@ -13700,12 +13712,40 @@ msgid "node.slab.panel.noHoles"
 msgstr "No holes"
 
 #: packages/nodes/src/slab/panel.tsx
+msgid "node.slab.panel.pitch"
+msgstr "Pitch"
+
+#: packages/nodes/src/slab/panel.tsx
 msgid "node.slab.panel.rim"
 msgstr "Rim"
 
 #: packages/nodes/src/slab/panel.tsx
+msgid "node.slab.panel.rotate90"
+msgstr "Rotate 90°"
+
+#: packages/nodes/src/slab/panel.tsx
 msgid "node.slab.panel.slab"
 msgstr "Slab"
+
+#: packages/nodes/src/slab/panel.tsx
+msgid "node.slab.panel.slope"
+msgstr "Slope"
+
+#: packages/nodes/src/slab/panel.tsx
+msgid "node.slab.panel.slopeAdaRamp"
+msgstr "Ramp 1:12"
+
+#: packages/nodes/src/slab/panel.tsx
+msgid "node.slab.panel.slopeDrainage"
+msgstr "Drainage (2%)"
+
+#: packages/nodes/src/slab/panel.tsx
+msgid "node.slab.panel.slopeDriveway"
+msgstr "Driveway (12%)"
+
+#: packages/nodes/src/slab/panel.tsx
+msgid "node.slab.panel.slopeFlat"
+msgstr "Flat (0°)"
 
 #: packages/nodes/src/slab/panel.tsx
 msgid "node.slab.panel.standard2"
