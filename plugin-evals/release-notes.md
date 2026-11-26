@@ -1,8 +1,14 @@
 # OpenAI submission release notes
 
-Draft release notes for a future Pascal agent skills 0.1.11 **With MCP** submission.
+Draft release notes for a future Pascal agent skills 0.1.12 **With MCP** submission.
 
-This release adds the `architect` router skill, which routes agents to Pascal's AI building designer via `ask_architect`, `get_architect_turn`, and `cancel_architect_turn` on the `pascal-hosted` server. It also adds the `architect:run` OAuth scope to the Cursor managed browser sign-in. Architect uses Pascal credits and hosted AI processing; higher effort is available to Pascal Pro/Max subscribers. The skill covers upgrade and top-up error handling and boundaries against fetching remote instructions or running arbitrary code.
+First directory submission of Pascal for ChatGPT and Codex. Pascal models buildings as editable 3D scenes through its hosted MCP server at `https://editor.pascal.app/api/mcp`: build rooms and houses from a description or a dimensioned floor plan, try a renovation change, validate and save the result, and return a link that opens it in Pascal's 3D editor. People sign in with their Pascal account through OAuth and approve the workspace the plugin can use.
+
+This version declares that hosted server, with OAuth and CIMD client registration, as the package's only MCP server, adds the support URL, and rewrites the listing around these capabilities. Every tool carries a title and explicit `readOnlyHint`, `destructiveHint`, and `openWorldHint` values. Models are design aids, not measured surveys, engineering drawings, or permit documents.
+
+The hosted server is declared only in this ChatGPT package. Codex installs from the Git marketplace keep the local `pascal mcp connect` server, because Pascal's hosted OAuth sign-in does not accept the Codex client; Codex users register the hosted endpoint with an API key.
+
+The package also bundles the `architect` router skill, which routes agents to Pascal's AI building designer through `ask_architect`, `get_architect_turn`, and `cancel_architect_turn`. Those tools work only on a host that has been granted Architect access (the `architect:run` scope, which Cursor's managed browser sign-in requests). ChatGPT's connection is not granted that access, so Architect is not available in ChatGPT. Where it is available, Architect uses Pascal credits and hosted AI processing; higher effort is available to Pascal Pro/Max subscribers. The skill covers upgrade and top-up error handling and boundaries against fetching remote instructions or running arbitrary code.
 
 Draft release notes for the previous Pascal agent skills 0.1.10 **With MCP** submission.
 

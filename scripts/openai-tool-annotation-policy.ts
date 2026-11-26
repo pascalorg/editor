@@ -110,6 +110,17 @@ export const EXPECTED_OPENAI_TOOL_ANNOTATIONS = {
   verify_scene: policy(true, false, false),
   view_assets: policy(true, false, false),
   view_scene: policy(true, false, false),
+  // Registered only when the host supplies hosted service and project file executors.
+  list_pascal_services: policy(true, false, false),
+  pull_site_data: policy(false, true, true),
+  get_site_pull: policy(false, false, true),
+  generate_studio_media: policy(false, true, true),
+  get_studio_generation: policy(false, false, true),
+  get_project_assets: policy(true, false, false),
+  get_project_file: policy(true, false, false),
+  upload_project_file: policy(false, false, false),
+  rename_project_file: policy(false, true, false),
+  delete_project_file: policy(false, true, false),
 } as const satisfies Record<string, ToolAnnotations>
 
 const exactKeys = (value: Record<string, unknown>, expected: readonly string[]): boolean => {

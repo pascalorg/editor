@@ -50,13 +50,13 @@ codex mcp add pascal \
 
 Codex stores the environment-variable name, not its value. Set `PASCAL_API_KEY` again in each new terminal before starting Codex, or supply it through the user's existing shell or secret-manager configuration.
 
-Run this command even when the Codex plugin is installed. The plugin's portable `mcp.json` follows Agent Plugins 1.0.0, which forbids credentials and placeholder expansion in `headers` and reserves `Authorization` for the client, so a plugin cannot carry a hosted key. The plugin therefore supplies only the local `pascal` server, and `codex mcp add` owns the hosted connection.
+Run this command even when the Codex plugin is installed. The plugin supplies only the local `pascal` server, because Pascal's hosted OAuth sign-in does not accept the Codex client, so `codex mcp add` with an API key owns the hosted connection.
 
 Claude Code:
 
-Plugin users set the key once in the configuration prompt shown when `pascal-agent-skills@pascal` is enabled. To add or change it later, reinstall with `claude plugin install pascal-agent-skills@pascal --config pascal_api_key=<key>`, or open `/plugin` in a session and use its configure flow; there is no `claude plugin config` command. The hosted tools then load under the plugin's `pascal-hosted` server beside the local `pascal` server, and Claude Code keeps the key in the OS keychain, falling back to `~/.claude/.credentials.json`, rather than writing it into `settings.json` or any project file.
+Plugin users need no API key. The plugin's `pascal-hosted` server is the plain hosted URL and signs in through Pascal's browser OAuth flow: run `/mcp`, select `pascal-hosted`, and choose to authenticate. Pascal opens in the browser; sign in, choose the intended workspace, and review access. The hosted tools then load under `pascal-hosted` beside the local `pascal` server. In Claude and Claude Desktop, connect the same server from the plugin's **Connectors** tab.
 
-Without the plugin, register the hosted endpoint manually:
+Without the plugin, or to use an API key instead of browser sign-in, register the hosted endpoint manually:
 
 ```bash
 : "${PASCAL_API_KEY:?Set PASCAL_API_KEY to the apiKey returned by Pascal}" && \
@@ -81,7 +81,7 @@ The current OpenClaw static-header path stores the expanded key in its private M
 
 Cursor:
 
-The Cursor marketplace installs this repository's `skills/` directory. Its `.cursor-plugin/plugin.json` explicitly selects the Cursor MCP configuration, so the Claude-only `${user_config.pascal_api_key}` header is never used by Cursor. The local server runs `npx --yes --package=@pascal-app/cli@1.1.6 pascal mcp connect`; Node.js 22.23.4+ on 22.x, 24.22.1+ on 24.x, or 26.12.1+ and npm must be available to Cursor. No global `pascal` installation or web-editor runtime is required. The first connection downloads the pinned CLI from npm, and later connections reuse npm's cache. This starts only the local MCP service and keeps existing local project storage. If Cursor reports `spawn npx ENOENT`, install Node.js/npm and fully restart Cursor so it picks up the executable path. For an older installed bundle that still runs `pascal`, update the plugin; `npm install --global @pascal-app/cli@1.1.6` followed by **Customize → MCPs → pascal → Reload** repairs that legacy local command.
+The Cursor marketplace installs this repository's `skills/` directory. Its `.cursor-plugin/plugin.json` explicitly selects the Cursor MCP configuration, so Cursor never falls back to the Claude configuration, whose local server needs a global `pascal` executable. The local server runs `npx --yes --package=@pascal-app/cli@1.1.6 pascal mcp connect`; Node.js 22.23.4+ on 22.x, 24.22.1+ on 24.x, or 26.12.1+ and npm must be available to Cursor. No global `pascal` installation or web-editor runtime is required. The first connection downloads the pinned CLI from npm, and later connections reuse npm's cache. This starts only the local MCP service and keeps existing local project storage. If Cursor reports `spawn npx ENOENT`, install Node.js/npm and fully restart Cursor so it picks up the executable path. For an older installed bundle that still runs `pascal`, update the plugin; `npm install --global @pascal-app/cli@1.1.6` followed by **Customize → MCPs → pascal → Reload** repairs that legacy local command.
 
 The hosted `pascal-hosted` server uses browser sign-in. In **Customize → MCPs**, choose **Authenticate** (or **Connect**) beside `pascal-hosted`. Pascal opens in your browser: sign in or create an account with Google or email, choose the intended workspace, review access, then return to Cursor. No API key or plugin variable is required. Let the user approve the account and workspace shown in consent. Ordinary access covers reading and editing projects; it does not authorize publishing, credit spending, external AI processing, community posting, or account management. Disconnect at `https://editor.pascal.app/settings/connected-apps`.
 

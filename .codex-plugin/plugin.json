@@ -1,7 +1,7 @@
 {
   "name": "pascal-agent-skills",
-  "version": "0.1.11",
-  "description": "Create, inspect, validate, and assess furniture layouts with bounded next actions in Pascal through MCP.",
+  "version": "0.1.12",
+  "description": "Model buildings in 3D with Pascal through MCP: turn a floor plan into an editable model, explore a renovation change, validate and save it, and share a 3D editor link.",
   "author": {
     "name": "Pascal",
     "email": "support@pascal.app",
@@ -10,25 +10,29 @@
   "homepage": "https://editor.pascal.app/docs/developers/mcp",
   "repository": "https://github.com/pascalorg/editor",
   "license": "MIT",
-  "keywords": ["pascal", "3d", "architecture", "mcp", "furniture", "spatial"],
+  "keywords": ["pascal", "3d", "architecture", "floor-plan", "renovation", "mcp"],
   "skills": "./skills/",
   "interface": {
     "displayName": "Pascal",
-    "shortDescription": "Build 3D scenes and check fit",
-    "longDescription": "Use Pascal's MCP tools to work with editable building scenes, validate and save results, and produce bounded furniture footprint reports with explicit evidence, limitations, and blocker-aware next actions.",
+    "shortDescription": "Model and share 3D buildings",
+    "longDescription": "Pascal models buildings as editable 3D scenes through Pascal's hosted MCP server. Describe a room or a house, or share a floor plan with its dimensions, and the assistant builds the walls, rooms, doors, windows, stairs and roofs, validates the result, saves it to your Pascal project, and returns a link that opens the model in Pascal's 3D editor for you to view and share. You can also try a renovation change, such as removing a wall or adding a room, check it, and undo it if you prefer the original.\n\nPascal is for people planning a home, a renovation or a small building project. Models follow the dimensions you provide and approximate what a plan shows; they are design aids, not measured surveys, engineering drawings or permit documents. When you sign in with your Pascal account, you approve the workspace the assistant can read and edit.",
     "developerName": "Pascal",
-    "category": "Developer Tools",
+    "category": "Productivity",
     "capabilities": [
-      "Build and edit 3D scenes",
-      "Validate spatial layouts",
-      "Assess furniture footprints"
+      "Model buildings in 3D",
+      "Turn floor plans into 3D models",
+      "Explore renovation changes",
+      "Validate and save designs",
+      "Share 3D editor links"
     ],
     "websiteURL": "https://editor.pascal.app/docs/developers/mcp",
+    "supportURL": "https://editor.pascal.app/contact",
     "privacyPolicyURL": "https://editor.pascal.app/privacy",
     "termsOfServiceURL": "https://editor.pascal.app/terms",
     "defaultPrompt": [
-      "Use Pascal to inspect this building project, make the requested bounded edit, validate it, save it, and return the editor URL.",
-      "Check whether this furniture footprint fits in a measured Pascal room, including rotations, collisions, and door access."
+      "Model a 4 by 3.5 meter bedroom with a door and a window in Pascal, then give me the 3D link.",
+      "Turn this floor plan into an editable Pascal 3D model using the dimensions shown, then share the link.",
+      "In my Pascal project, try removing the wall between the kitchen and living room and show me the result."
     ],
     "brandColor": "#171717",
     "composerIcon": "./assets/pascal-mark.svg",

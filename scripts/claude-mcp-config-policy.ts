@@ -12,8 +12,6 @@ function hasExactKeys(value: Record<string, unknown>, expected: readonly string[
 }
 
 export const hostedMcpUrl = 'https://editor.pascal.app/api/mcp'
-export const hostedApiKeyOption = 'pascal_api_key'
-export const hostedAuthorizationHeader = `Bearer \${user_config.${hostedApiKeyOption}}`
 
 function validateLocalServer(server: unknown, failures: string[]): void {
   if (!isRecord(server) || !hasExactKeys(server, ['type', 'command', 'args'])) {
@@ -36,9 +34,13 @@ function validateLocalServer(server: unknown, failures: string[]): void {
   }
 }
 
+// Claude, Claude Desktop, Cowork and Claude Code connect a plain URL through the server's OAuth
+// (CIMD); a header or ${user_config.*} reference would ship a credential path the web apps ignore.
 function validateHostedServer(server: unknown, failures: string[]): void {
-  if (!isRecord(server) || !hasExactKeys(server, ['type', 'url', 'headers'])) {
-    failures.push('skills/.mcp.json pascal-hosted server must contain only type, url, and headers')
+  if (!isRecord(server) || !hasExactKeys(server, ['type', 'url'])) {
+    failures.push(
+      'skills/.mcp.json pascal-hosted server must contain only type and url; it signs in with OAuth, not headers',
+    )
     return
   }
 
@@ -46,51 +48,6 @@ function validateHostedServer(server: unknown, failures: string[]): void {
     failures.push('skills/.mcp.json pascal-hosted server type must be http')
   if (server.url !== hostedMcpUrl)
     failures.push(`skills/.mcp.json pascal-hosted server url must be ${hostedMcpUrl}`)
-
-  const headers = server.headers
-  if (!isRecord(headers) || !hasExactKeys(headers, ['Authorization'])) {
-    failures.push('skills/.mcp.json pascal-hosted server must send only an Authorization header')
-    return
-  }
-  // The header must stay a ${user_config.*} reference. A literal token here would publish a
-  // credential in the installed plugin source instead of resolving it from the host's secret store.
-  if (headers.Authorization !== hostedAuthorizationHeader) {
-    failures.push(
-      `skills/.mcp.json pascal-hosted Authorization header must be exactly "${hostedAuthorizationHeader}"`,
-    )
-  }
-}
-
-function validateUserConfig(userConfig: unknown, failures: string[]): void {
-  if (!isRecord(userConfig) || !hasExactKeys(userConfig, [hostedApiKeyOption])) {
-    failures.push(
-      `Claude plugin manifest must declare exactly one user configuration option named ${hostedApiKeyOption}`,
-    )
-    return
-  }
-
-  const option = userConfig[hostedApiKeyOption]
-  if (!isRecord(option)) {
-    failures.push(`Claude plugin manifest ${hostedApiKeyOption} option must be an object`)
-    return
-  }
-
-  if (option.type !== 'string') {
-    failures.push(`Claude plugin manifest ${hostedApiKeyOption} type must be string`)
-  }
-  if (option.sensitive !== true) {
-    failures.push(
-      `Claude plugin manifest ${hostedApiKeyOption} must be sensitive so the key is stored outside settings.json`,
-    )
-  }
-  if (option.required !== false) {
-    failures.push(
-      `Claude plugin manifest ${hostedApiKeyOption} must set required to false so the local connector works without a key`,
-    )
-  }
-  if ('default' in option) {
-    failures.push(`Claude plugin manifest ${hostedApiKeyOption} must not ship a default credential`)
-  }
 }
 
 export function validateClaudeMcpPolicy(
@@ -117,7 +74,11 @@ export function validateClaudeMcpPolicy(
     if ('mcpServers' in pluginManifest) {
       failures.push('Claude plugin manifest must not define inline MCP servers')
     }
-    validateUserConfig(pluginManifest.userConfig, failures)
+    if ('userConfig' in pluginManifest) {
+      failures.push(
+        'Claude plugin manifest must not ask for configuration; the hosted server signs in with OAuth',
+      )
+    }
   }
 
   if (!isRecord(marketplaceEntry)) {
