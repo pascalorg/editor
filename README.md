@@ -122,14 +122,16 @@ Register the local server (this runs `codex mcp add pascal -- pascal mcp connect
 pascal mcp setup codex
 ```
 
-Or install the plugin, which adds the skills and the same local server:
+Or install the plugin, which adds the skills and the hosted server at
+`https://editor.pascal.app/api/mcp`, signed in through Pascal's browser OAuth flow. It does not add
+the local server; run `pascal mcp setup codex` for local work:
 
 ```bash
 codex plugin marketplace add pascalorg/editor
 codex plugin add pascal-agent-skills@pascal
 ```
 
-For a hosted workspace, register the endpoint with an API key held in an environment variable
+Without the plugin, register the hosted endpoint with an API key held in an environment variable
 (Codex stores the variable name, not the key):
 
 ```bash

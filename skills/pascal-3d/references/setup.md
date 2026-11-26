@@ -76,7 +76,7 @@ codex mcp add pascal \
 
 Codex stores the environment-variable name, not its value. Set `PASCAL_API_KEY` again in each new terminal before starting Codex, or supply it through the user's existing shell or secret-manager configuration.
 
-Run this command even when the Codex plugin is installed. The plugin's portable `mcp.json` follows Agent Plugins 1.0.0, which forbids credentials and placeholder expansion in `headers` and reserves `Authorization` for the client, so a plugin cannot carry a hosted key. The plugin therefore supplies only the local `pascal` server, and `codex mcp add` owns the hosted connection.
+Skip this command when the Codex plugin is installed: the plugin's portable `mcp.json` already declares the hosted endpoint, which signs in through Pascal's browser OAuth flow instead of an API key, and a second registration would give Codex two hosted connections. The plugin does not supply the local server; for local work, run `pascal mcp setup codex`.
 
 Claude Code:
 

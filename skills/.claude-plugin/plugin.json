@@ -2,8 +2,8 @@
   "$schema": "https://json.schemastore.org/claude-code-plugin-manifest.json",
   "name": "pascal-agent-skills",
   "displayName": "Pascal",
-  "version": "0.1.11",
-  "description": "Create, inspect, validate, and assess furniture layouts with bounded next actions in Pascal through MCP.",
+  "version": "0.1.12",
+  "description": "Model buildings in 3D with Pascal through MCP: turn a floor plan into an editable model, explore a renovation change, validate and save it, and share a 3D editor link.",
   "author": {
     "name": "Pascal",
     "email": "support@pascal.app",
@@ -12,7 +12,12 @@
   "homepage": "https://editor.pascal.app/docs/developers/mcp",
   "repository": "https://github.com/pascalorg/editor",
   "license": "MIT",
-  "keywords": ["pascal", "3d", "architecture", "mcp", "furniture", "spatial"],
+  "keywords": ["pascal", "3d", "architecture", "floor-plan", "renovation", "mcp"],
+  "icon": "./.claude-plugin/icon.png",
+  "documentationUrl": "https://editor.pascal.app/docs/developers/mcp",
+  "supportUrl": "https://editor.pascal.app/contact",
+  "privacyPolicyUrl": "https://editor.pascal.app/privacy",
+  "termsOfServiceUrl": "https://editor.pascal.app/terms",
   "userConfig": {
     "pascal_api_key": {
       "type": "string",
