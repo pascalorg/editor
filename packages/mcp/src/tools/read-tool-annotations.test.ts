@@ -155,6 +155,51 @@ const TOOL_POLICIES = [
     },
     tools: ['photo_to_scene'],
   },
+  {
+    annotations: {
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
+    tools: ['list_pascal_services', 'get_project_assets', 'get_project_file'],
+  },
+  {
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: true,
+      idempotentHint: true,
+      openWorldHint: true,
+    },
+    tools: ['pull_site_data', 'generate_studio_media'],
+  },
+  {
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: true,
+    },
+    tools: ['get_site_pull', 'get_studio_generation'],
+  },
+  {
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: false,
+    },
+    tools: ['upload_project_file'],
+  },
+  {
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: true,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
+    tools: ['rename_project_file', 'delete_project_file'],
+  },
 ] as const
 
 const EXPECTED_TOOL_NAMES = TOOL_POLICIES.flatMap(({ tools }) => tools).toSorted()
@@ -179,7 +224,11 @@ describe('MCP tool annotations', () => {
     bridge.loadDefault()
     const directory = mkdtempSync(join(tmpdir(), 'pascal-mcp-annotations-'))
     const store = new SqliteSceneStore({ databasePath: join(directory, 'pascal.db') })
-    const server = createPascalMcpServer({ bridge, store })
+    // The hosted server supplies these executors, so its scan sees their tools too.
+    const unused = async () => {
+      throw new Error('not used while listing tools')
+    }
+    const server = createPascalMcpServer({ bridge, store, services: unused, files: unused })
     const [serverTransport, clientTransport] = InMemoryTransport.createLinkedPair()
     const client = new Client({ name: 'annotation-test-client', version: '0.0.0' })
     await Promise.all([server.connect(serverTransport), client.connect(clientTransport)])
@@ -188,6 +237,7 @@ describe('MCP tool annotations', () => {
       const listed = await client.listTools()
       const byName = new Map(listed.tools.map((tool) => [tool.name, tool]))
       expect([...byName.keys()].toSorted()).toEqual(EXPECTED_TOOL_NAMES)
+      expect(listed.tools.filter((tool) => !tool.title?.trim()).map(({ name }) => name)).toEqual([])
 
       for (const policy of TOOL_POLICIES) {
         for (const name of policy.tools) {
