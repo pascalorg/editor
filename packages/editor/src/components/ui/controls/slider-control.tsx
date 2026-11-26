@@ -10,6 +10,7 @@ interface SliderControlProps {
   label: React.ReactNode
   value: number
   onChange: (value: number) => void
+  onDragStart?: () => void
   onCommit?: (value: number) => void
   onCancel?: () => void
   previewWhileTyping?: boolean
@@ -59,6 +60,7 @@ export function SliderControl({
   label,
   value,
   onChange,
+  onDragStart,
   onCommit,
   onCancel,
   previewWhileTyping = false,
@@ -109,6 +111,7 @@ export function SliderControl({
   const cancelRef = useRef(onCancel)
   cancelRef.current = onCancel
   const editingRef = useRef(false)
+  const inputDirtyRef = useRef(false)
   const labelRef = useRef<HTMLDivElement>(null)
   const shown = dragDisplay ?? value
   const valueRef = useRef(shown)
@@ -140,7 +143,7 @@ export function SliderControl({
     const el = labelRef.current
     if (!el) return
     const handleWheel = (e: WheelEvent) => {
-      if (isEditing) return
+      if (isEditing || dragRef.current || !useScene.temporal.getState().isTracking) return
       e.preventDefault()
       const direction = e.deltaY < 0 ? 1 : -1
       const s = getAdjustedStep(step, e)
@@ -154,8 +157,9 @@ export function SliderControl({
 
   // Arrow key support while hovered
   useEffect(() => {
-    if (!isHovered || isEditing) return
+    if (!isHovered || isEditing || isDragging) return
     const handleKeyDown = (e: KeyboardEvent) => {
+      if (dragRef.current || !useScene.temporal.getState().isTracking) return
       let direction = 0
       if (e.key === 'ArrowUp' || e.key === 'ArrowRight') direction = 1
       else if (e.key === 'ArrowDown' || e.key === 'ArrowLeft') direction = -1
@@ -169,11 +173,11 @@ export function SliderControl({
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [isHovered, isEditing, step, applyDisplayDelta, onChange, onCommit])
+  }, [isHovered, isEditing, isDragging, step, applyDisplayDelta, onChange, onCommit])
 
   const handleLabelPointerDown = useCallback(
     (e: React.PointerEvent<HTMLDivElement>) => {
-      if (isEditing) return
+      if (isEditing || dragRef.current || !useScene.temporal.getState().isTracking) return
       e.preventDefault()
       e.currentTarget.setPointerCapture(e.pointerId)
       dragRef.current = {
@@ -184,8 +188,9 @@ export function SliderControl({
       }
       setIsDragging(true)
       useScene.temporal.getState().pause()
+      onDragStart?.()
     },
-    [isEditing],
+    [isEditing, onDragStart],
   )
 
   const handleLabelPointerMove = useCallback(
@@ -243,6 +248,7 @@ export function SliderControl({
     const drag = dragRef.current
     dragRef.current = null
     editingRef.current = false
+    inputDirtyRef.current = false
     if (drag) {
       if (!onCancel) onChange(drag.originValue)
       useScene.temporal.getState().resume()
@@ -278,6 +284,7 @@ export function SliderControl({
 
   const handleValueClick = useCallback(() => {
     editingRef.current = true
+    inputDirtyRef.current = false
     setIsEditing(true)
     setInputValue(formatDisplay(toDisplay(value)))
   }, [value, toDisplay, formatDisplay])
@@ -304,6 +311,12 @@ export function SliderControl({
   const submitValue = useCallback(() => {
     if (!editingRef.current) return
     editingRef.current = false
+    const dirty = inputDirtyRef.current
+    inputDirtyRef.current = false
+    if (!dirty) {
+      setIsEditing(false)
+      return
+    }
     const nextValue = parseInputValue(inputValue)
     if (nextValue === null) {
       onCancel?.()
@@ -336,6 +349,7 @@ export function SliderControl({
         cancelEdit()
       } else if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
         e.preventDefault()
+        inputDirtyRef.current = true
         const direction = e.key === 'ArrowUp' ? 1 : -1
         const adjustedStep = getAdjustedStep(step, e)
         const newV = applyDisplayDelta(value, direction * adjustedStep, adjustedStep)
@@ -404,6 +418,7 @@ export function SliderControl({
               className="w-14 bg-transparent p-0 text-right font-mono text-foreground outline-none selection:bg-primary/30"
               onBlur={submitValue}
               onChange={(e) => {
+                inputDirtyRef.current = true
                 setInputValue(e.target.value)
                 if (previewWhileTyping) {
                   const next = parseInputValue(e.target.value)
