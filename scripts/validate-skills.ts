@@ -2,6 +2,7 @@ import { existsSync, lstatSync, readdirSync, readFileSync, statSync } from 'node
 import { dirname, extname, join, relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { XMLParser, XMLValidator } from 'fast-xml-parser'
+import { chatGptPackageEntries, chatGptSkillNames } from './chatgpt-plugin-package'
 import { validateClaudeMcpPolicy } from './claude-mcp-config-policy'
 import { validateClawHubIgnorePolicy } from './clawhub-ignore-policy'
 import { validateCursorPluginPackage } from './cursor-plugin-policy'
@@ -1166,6 +1167,47 @@ if (
   !lstatSync(claudeIconPath).isFile()
 ) {
   fail('Claude plugin icon must be a PNG inside the skills/ plugin root')
+}
+
+// The ChatGPT ZIP carries what OpenAI reads (plugin.json, mcp.json, skills, the listing icons) and
+// LICENSE, and leaves out the Claude, Cursor and ClawHub files and skills ChatGPT cannot use.
+const chatGptEntries = chatGptPackageEntries(root)
+const chatGptPaths = new Set(chatGptEntries.map(({ path }) => path))
+for (const { path, source } of chatGptEntries) {
+  if (!existsSync(source)) fail(`ChatGPT package entry ${path} has no source file`)
+}
+if (
+  chatGptEntries.find(({ path }) => path === 'mcp.json')?.source !==
+  join(root, 'packaging', 'chatgpt', 'mcp.json')
+) {
+  fail('ChatGPT package mcp.json must come from packaging/chatgpt/mcp.json')
+}
+const chatGptRequiredPaths = [
+  'plugin.json',
+  'mcp.json',
+  'LICENSE',
+  ...['composerIcon', 'logo'].map((field) =>
+    String(portableInterface?.[field]).replace(/^\.\//u, ''),
+  ),
+  ...chatGptSkillNames.map((name) => `skills/${name}/SKILL.md`),
+]
+for (const path of chatGptRequiredPaths) {
+  if (!chatGptPaths.has(path)) fail(`ChatGPT package must include ${path}`)
+}
+if ((chatGptSkillNames as readonly string[]).includes('architect')) {
+  fail(
+    'ChatGPT package must leave out the architect skill, which needs a scope ChatGPT is not granted',
+  )
+}
+for (const path of chatGptPaths) {
+  const skill = path.startsWith('skills/') ? path.split('/')[1] : undefined
+  if (
+    path.split('/').some((part) => part.startsWith('.')) ||
+    (skill !== undefined && !(chatGptSkillNames as readonly string[]).includes(skill)) ||
+    (path.startsWith('skills/') && path.split('/').length < 3)
+  ) {
+    fail(`ChatGPT package must not include ${path}`)
+  }
 }
 
 if (codexPlugin.skills !== './skills/') fail('Codex plugin must point to canonical ./skills/')
