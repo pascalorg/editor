@@ -8,6 +8,7 @@ import type {
   FloorPlacedFootprintsResolver,
 } from '../../registry/types'
 import type { AnyNode, AnyNodeId, SlabNode } from '../../schema'
+import { getSlabElevationAtPoint } from '../../systems/slab/slab-slope'
 import { getFloorPlacedFootprints } from './floor-placed-footprints'
 
 export { getFloorPlacedFootprints } from './floor-placed-footprints'
@@ -124,10 +125,11 @@ export function getFloorPlacedElevation({
     const host = nodes[supportSlabId]
     for (const footprint of footprints) {
       if (host?.type === 'slab' && host.plateRole === 'base') {
+        const sampleAt = footprint.position ?? position
         const coverings = activeSpatialGrid()
           .getSupportCandidatesForFootprint(
             resolvedLevelId,
-            footprint.position ?? position,
+            sampleAt,
             footprint.dimensions,
             footprint.rotation,
           )
@@ -136,10 +138,18 @@ export function getFloorPlacedElevation({
             (candidate): candidate is SlabNode =>
               candidate?.type === 'slab' && candidate.plateRole === 'platform',
           )
-          .sort((a, b) => b.elevation - a.elevation)
+          .sort(
+            (a, b) =>
+              getSlabElevationAtPoint(b, sampleAt[0], sampleAt[2]) -
+              getSlabElevationAtPoint(a, sampleAt[0], sampleAt[2]),
+          )
         const covering = coverings[0]
         if (covering)
-          return onFloor(covering.id, covering.elevation, footprint.position ?? position)
+          return onFloor(
+            covering.id,
+            getSlabElevationAtPoint(covering, sampleAt[0], sampleAt[2]),
+            sampleAt,
+          )
       }
       const hosted = activeSpatialGrid().getHostSlabElevationForFootprint(
         resolvedLevelId,

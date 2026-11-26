@@ -13,6 +13,9 @@ import {
   getLevelElevations,
   getMaterialPresetByRef,
   getRenderableSlabPolygon,
+  getSlabBottomElevationAtPoint,
+  getSlabElevationAtPoint,
+  hasSlabSlope,
   intersection,
   isDeckSlab,
   isFloorPlate,
@@ -263,15 +266,18 @@ function buildSlabTerrainFillGeometry(
     }
   }
 
-  const top = node.elevation - node.thickness
+  const topY = hasSlabSlope(node)
+    ? points.map(([x, z]) => getSlabBottomElevationAtPoint(node, x, z))
+    : node.elevation - node.thickness
   const localPoints = points.map(([x, z]) => ({ x, z }))
-  const bottomY = points.map(([x, z]) => {
+  const bottomY = points.map(([x, z], index) => {
     const [siteX, siteZ] = toSite(x, z)
     // Down to the ground as the site draws it: a flat site's fill lies a hand under the datum.
     const ground = terrain.field ? surfaceHeightAt(terrain.field, siteX, siteZ) : FLAT_GROUND_Y
-    return Math.min(top, ground - terrain.baseWorldY)
+    const vertexTop = typeof topY === 'number' ? topY : topY[index]!
+    return Math.min(vertexTop, ground - terrain.baseWorldY)
   })
-  const geometry = buildTerrainPerimeterFillGeometry(localPoints, bottomY, top, 1e-4)
+  const geometry = buildTerrainPerimeterFillGeometry(localPoints, bottomY, topY, 1e-4)
   if (!geometry || !partition?.sides.some((side) => side.dropTo !== undefined)) return geometry
   const clipped = clipPlateTerrainFill(geometry, partition)
   geometry.dispose()
@@ -581,6 +587,9 @@ export function buildSlabGeometry(
       )
     }
   }
+  const railingGroundAt = hasSlabSlope(node)
+    ? (x: number, z: number) => getSlabElevationAtPoint(node, x, z) - elevation
+    : undefined
   for (const [index, segment] of (node.railing ?? []).entries()) {
     const geometries = generateFenceSlotGeometries(
       FenceNode.parse({
@@ -592,6 +601,7 @@ export function buildSlabGeometry(
         baseHeight: 0,
         postCap: 'none',
       }),
+      railingGroundAt,
     )
     for (const geometry of Object.values(geometries)) {
       if (!geometry.getAttribute('position')) {

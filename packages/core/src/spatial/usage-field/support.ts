@@ -4,6 +4,7 @@ import { selectSlabSupportForItem } from '../../lib/item-slab-support'
 import { getRenderableSlabPolygon } from '../../lib/slab-polygon'
 import { levelBaseElevationAt } from '../../lib/terrain-support-query'
 import type { AnyNode, SlabNode, WallNode } from '../../schema'
+import { getSlabElevationAtPoint } from '../../systems/slab/slab-slope'
 import type { Nodes } from './walls'
 
 type Footprint = {
@@ -57,7 +58,7 @@ export function floorUnder(
   const winner = selectSlabSupportForItem(slabs, footprint, (slab) => polygons.get(slab.id)!, {
     preferredSlabId: node.supportSlabId,
   })
-  return winner ? winner.elevation : ground()
+  return winner ? getSlabElevationAtPoint(winner, x, z) : ground()
 }
 
 /** Whether a node, or anything it hangs from, is hidden. */

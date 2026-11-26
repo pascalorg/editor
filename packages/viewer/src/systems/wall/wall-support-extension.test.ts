@@ -178,4 +178,24 @@ describe('wall support extension', () => {
     expect(lowSpanMinY).toBeCloseTo(-0.55)
     geometry.dispose()
   })
+
+  test('trims a wall base along a sloped slab segment (endElevation)', () => {
+    const wall = WallNode.parse({ start: [0, 0], end: [4, 0], height: 2.5, thickness: 0.1 })
+    const geometry = generateExtrudedWall(wall, [], calculateLevelMiters([wall]), 1.1, 0.1, [
+      { start: 0, end: 1, elevation: 0.1, endElevation: 1.1 },
+    ])
+    const position = geometry.getAttribute('position')
+    let lowEndMinY = Number.POSITIVE_INFINITY
+    let highEndMinY = Number.POSITIVE_INFINITY
+    for (let index = 0; index < position.count; index++) {
+      const x = position.getX(index)
+      const y = position.getY(index)
+      if (x < 0.05) lowEndMinY = Math.min(lowEndMinY, y)
+      if (x > 3.95) highEndMinY = Math.min(highEndMinY, y)
+    }
+    // Mesh sits at slabElevation = 1.1: low end reaches 0.1 - 1.1 = -1.0, high end trims up to 0.0.
+    expect(lowEndMinY).toBeCloseTo(-1.0, 2)
+    expect(highEndMinY).toBeCloseTo(0.0, 2)
+    geometry.dispose()
+  })
 })

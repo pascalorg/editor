@@ -1,5 +1,6 @@
 import {
   getRenderableSlabPolygon,
+  getSlabElevationAtPoint,
   type PolygonPoint2D,
   pointInPolygon2D,
   polygonsIntersect,
@@ -118,8 +119,12 @@ function generateSolidSlabGeometry(
   const elevation = slabNode.elevation ?? 0.05
   const thickness = slabNode.thickness ?? 0.05
   const bottom = elevation - thickness
-  const bottomAt = (x: number, z: number) =>
-    platformBaseAt ? Math.min(bottom, platformBaseAt(x, z)) : bottom
+  const topAt = (x: number, z: number) => getSlabElevationAtPoint(slabNode, x, z)
+  const slabBottomAt = (x: number, z: number) => topAt(x, z) - thickness
+  const bottomAt = (x: number, z: number) => {
+    const slabBottom = slabBottomAt(x, z)
+    return platformBaseAt ? Math.min(slabBottom, platformBaseAt(x, z)) : slabBottom
+  }
   const sampleRing = (ring: PolygonPoint2D[]) =>
     !platformBaseAt
       ? ring
@@ -149,14 +154,18 @@ function generateSolidSlabGeometry(
   const addWall = (a: THREE.Vector2, b: THREE.Vector2, flipped: boolean) => {
     const base = positions.length / 3
     const len = Math.max(Math.hypot(b.x - a.x, b.y - a.y), 0.001)
-    positions.push(a.x, bottomAt(a.x, a.y), a.y)
-    uvs.push(0, bottomAt(a.x, a.y) - bottom)
-    positions.push(b.x, bottomAt(b.x, b.y), b.y)
-    uvs.push(len, bottomAt(b.x, b.y) - bottom)
-    positions.push(b.x, elevation, b.y)
-    uvs.push(len, thickness)
-    positions.push(a.x, elevation, a.y)
-    uvs.push(0, thickness)
+    const aBot = bottomAt(a.x, a.y)
+    const bBot = bottomAt(b.x, b.y)
+    const aTop = topAt(a.x, a.y)
+    const bTop = topAt(b.x, b.y)
+    positions.push(a.x, aBot, a.y)
+    uvs.push(0, aBot - bottom)
+    positions.push(b.x, bBot, b.y)
+    uvs.push(len, bBot - bottom)
+    positions.push(b.x, bTop, b.y)
+    uvs.push(len, bTop - bottom)
+    positions.push(a.x, aTop, a.y)
+    uvs.push(0, aTop - bottom)
     // Standard winding on a CCW polygon gives inward-facing normals (see pool
     // path), so the unflipped quad faces outward; flipped is its back face.
     if (!flipped) {
@@ -182,12 +191,12 @@ function generateSolidSlabGeometry(
     const capPoints = [...contour2d, ...holes2d.flat()]
     const topBase = positions.length / 3
     for (const p of capPoints) {
-      positions.push(p.x, elevation, p.y)
+      positions.push(p.x, topAt(p.x, p.y), p.y)
       uvs.push(p.x, -p.y)
     }
     const bottomBase = positions.length / 3
     for (const p of capPoints) {
-      positions.push(p.x, bottom, p.y)
+      positions.push(p.x, slabBottomAt(p.x, p.y), p.y)
       uvs.push(p.x, -p.y)
     }
 

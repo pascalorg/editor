@@ -1210,6 +1210,20 @@ export {
 } from './systems/roof/roof-footprint'
 export { resolveSlabPlacementElevation } from './systems/slab/slab-placement'
 export {
+  getSlabBottomElevationAtPoint,
+  getSlabElevationAtPoint,
+  getSlabMaxElevation,
+  getSlabSlopePlane,
+  getSlabSurfaceNormal,
+  hasSlabSlope,
+  intersectRayWithSlabPlane,
+  normalizeSlabSlopeDirection,
+  type SlabPlaneRayHit,
+  type SlabSlopeInput,
+  type SlabSlopePlane,
+  slabSlopeEqual,
+} from './systems/slab/slab-slope'
+export {
   clampSlabElevationForWalls,
   computeWallSlabSupport,
   getSlabElevationUpperBound,

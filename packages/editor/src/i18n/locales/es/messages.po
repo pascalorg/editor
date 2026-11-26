@@ -34061,6 +34061,14 @@ msgstr "Abrir hueco"
 msgid "node.slab.panel.depth"
 msgstr "Profundidad"
 
+# Source-Hash: 76cd03300faa9b2b
+# Review: required
+# English: "Direction"
+#: packages/nodes/src/slab/panel.tsx
+#, fuzzy
+msgid "node.slab.panel.direction"
+msgstr "Dirección"
+
 # Source-Hash: 16552c2580bbe8b8
 # Review: required
 # AI-Provider: claude-code
@@ -34101,6 +34109,14 @@ msgstr "Extiende el perímetro hasta el terreno. La superficie plana, la base y 
 msgid "node.slab.panel.fixed"
 msgstr "Fijo"
 
+# Source-Hash: 3b9832a6f9ba9968
+# Review: required
+# English: "Flip 180°"
+#: packages/nodes/src/slab/panel.tsx
+#, fuzzy
+msgid "node.slab.panel.flipSlope"
+msgstr "Invertir 180°"
+
 # Source-Hash: d7148fa065bc709b
 # Review: required
 # AI-Provider: claude-code
@@ -34130,6 +34146,14 @@ msgstr "Sigue el terreno"
 #, fuzzy
 msgid "node.slab.panel.foundation"
 msgstr "Cimentación"
+
+# Source-Hash: 6412dea95597a3d4
+# Review: required
+# English: "Grade"
+#: packages/nodes/src/slab/panel.tsx
+#, fuzzy
+msgid "node.slab.panel.grade"
+msgstr "Pendiente (%)"
 
 # Source-Hash: 34504c6ca6445e76
 # Review: required
@@ -34171,6 +34195,14 @@ msgstr "Mover"
 msgid "node.slab.panel.noHoles"
 msgstr "Sin huecos"
 
+# Source-Hash: 75e3449fc1776d09
+# Review: required
+# English: "Pitch"
+#: packages/nodes/src/slab/panel.tsx
+#, fuzzy
+msgid "node.slab.panel.pitch"
+msgstr "Inclinación"
+
 # Source-Hash: c6a29e75bf215488
 # Review: required
 # AI-Provider: claude-code
@@ -34181,6 +34213,14 @@ msgstr "Sin huecos"
 msgid "node.slab.panel.rim"
 msgstr "Borde"
 
+# Source-Hash: 6bd6f5ee572899d9
+# Review: required
+# English: "Rotate 90°"
+#: packages/nodes/src/slab/panel.tsx
+#, fuzzy
+msgid "node.slab.panel.rotate90"
+msgstr "Girar 90°"
+
 # Source-Hash: 8775bc8dc9593964
 # Review: required
 # AI-Provider: claude-code
@@ -34190,6 +34230,46 @@ msgstr "Borde"
 #, fuzzy
 msgid "node.slab.panel.slab"
 msgstr "Forjado"
+
+# Source-Hash: e6d82e606b8c9301
+# Review: required
+# English: "Slope"
+#: packages/nodes/src/slab/panel.tsx
+#, fuzzy
+msgid "node.slab.panel.slope"
+msgstr "Pendiente"
+
+# Source-Hash: 7b465193955207a7
+# Review: required
+# English: "Ramp 1:12"
+#: packages/nodes/src/slab/panel.tsx
+#, fuzzy
+msgid "node.slab.panel.slopeAdaRamp"
+msgstr "Rampa 1:12"
+
+# Source-Hash: 603d99ba3d998535
+# Review: required
+# English: "Drainage (2%)"
+#: packages/nodes/src/slab/panel.tsx
+#, fuzzy
+msgid "node.slab.panel.slopeDrainage"
+msgstr "Drenaje (2%)"
+
+# Source-Hash: 3128bd470eeb24b4
+# Review: required
+# English: "Driveway (12%)"
+#: packages/nodes/src/slab/panel.tsx
+#, fuzzy
+msgid "node.slab.panel.slopeDriveway"
+msgstr "Acceso (12%)"
+
+# Source-Hash: 14cfbd4f2f4cc918
+# Review: required
+# English: "Flat (0°)"
+#: packages/nodes/src/slab/panel.tsx
+#, fuzzy
+msgid "node.slab.panel.slopeFlat"
+msgstr "Plano (0°)"
 
 # Source-Hash: fb23c960abf5de23
 # Review: required

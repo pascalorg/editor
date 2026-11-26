@@ -7,8 +7,11 @@ import {
   floorConstructionLift,
   type GeometryContext,
   getMaterialPresetByRef,
+  getSlabElevationAtPoint,
+  hasSlabSlope,
   liftedManualSlab,
   plateLevelContext,
+  type SlabNode,
 } from '@pascal-app/core'
 import {
   applyMaterialPresetToMaterials,
@@ -160,8 +163,18 @@ export function buildFenceGeometry(
     node.surfaceMode === 'selected'
       ? (node.supportSurfaceNodeId as AnyNodeId | undefined)
       : undefined
-  const sampledSupport =
-    followsTerrain && !node.supportSlabId && ctx?.supportHeightAt
+  const rawHostSlab =
+    node.supportSlabId && ctx ? ctx.resolve(node.supportSlabId as AnyNodeId) : undefined
+  const slopedHostSlab =
+    rawHostSlab?.type === 'slab' &&
+    (rawHostSlab.parentId ?? null) === (node.parentId ?? null) &&
+    hasSlabSlope(rawHostSlab as SlabNode)
+      ? liftedManualSlab(nodes, rawHostSlab as SlabNode)
+      : null
+
+  const sampledSupport = slopedHostSlab
+    ? (x: number, z: number) => getSlabElevationAtPoint(slopedHostSlab, x, z)
+    : followsTerrain && !node.supportSlabId && ctx?.supportHeightAt
       ? (x: number, z: number) =>
           Math.max(
             ctx.supportHeightAt!(x, z, chosenHost),

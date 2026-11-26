@@ -18,6 +18,7 @@ import type { AnyNode } from '../schema/types'
 import { resolveCeilingHeight } from '../services/level-height'
 import { getStoredLevelHeight } from '../services/storey'
 import { surfaceRegionContainsPoint } from '../services/surface-region'
+import { getSlabElevationAtPoint } from '../systems/slab/slab-slope'
 import { computeWallSlabSupport } from '../systems/slab/slab-support'
 import { getWallLocalFaceZ } from '../systems/wall/wall-frame'
 import type { ProceduralItemNode } from './node'
@@ -124,18 +125,24 @@ function floorLift(node: AnyNode | ProceduralItemNode, nodes: QueryNodes): numbe
     const footprints = capability
       ? getFloorPlacedFootprints(capability, node, { nodes: nodes as Record<string, AnyNode> })
       : []
-    const supports = footprints.map((footprint) =>
-      supportFor({ ...footprint, position: footprint.position ?? position }),
-    )
+    const supports = footprints.map((footprint) => {
+      const sampleAt = footprint.position ?? position
+      return { slab: supportFor({ ...footprint, position: sampleAt }), sampleAt }
+    })
     const preferred = supportSlabId ? nodes[supportSlabId] : undefined
     const prefersBase = preferred?.type === 'slab' && preferred.plateRole === 'base'
     const pinned = supports.find(
-      (slab) =>
+      ({ slab }) =>
         slab && (slab.id === supportSlabId || (prefersBase && slab.plateRole === 'platform')),
     )
-    if (pinned) return pinned.elevation ?? 0.05
+    if (pinned?.slab)
+      return getSlabElevationAtPoint(pinned.slab, pinned.sampleAt[0], pinned.sampleAt[2])
     return supports.length
-      ? Math.max(...supports.map((slab) => (slab ? (slab.elevation ?? 0.05) : ground)))
+      ? Math.max(
+          ...supports.map(({ slab, sampleAt }) =>
+            slab ? getSlabElevationAtPoint(slab, sampleAt[0], sampleAt[2]) : ground,
+          ),
+        )
       : ground
   }
   if (!(isProceduralItem(node) || node.type === 'item' || node.type === 'shelf')) return 0
@@ -150,7 +157,9 @@ function floorLift(node: AnyNode | ProceduralItemNode, nodes: QueryNodes): numbe
         rotation: node.rotation,
       }
   const support = supportFor(footprint)
-  return support ? (support.elevation ?? 0.05) : ground
+  return support
+    ? getSlabElevationAtPoint(support, footprint.position[0], footprint.position[2])
+    : ground
 }
 function nodeParentFrame(
   node: AnyNode | ProceduralItemNode,

@@ -4,8 +4,11 @@ import {
   type FloorplanPoint,
   type GeometryContext,
   getRenderableSlabPolygon,
+  getSlabSlopePlane,
+  hasSlabSlope,
   hostedCutterHoles,
   isDerivedNode,
+  pointInPolygon,
   readFloorplanContext,
   type SlabNode,
   slabPolygonContextFromGeometry,
@@ -103,6 +106,40 @@ export function buildSlabFloorplan(node: SlabNode, ctx: GeometryContext): Floorp
     })
   }
 
+  // Uphill slope direction arrow in 2D plan view so sloped slabs read clearly
+  // as ramps or drainage falls alongside flat slabs. Placed along the widest
+  // solid interior chord so cutouts and concave L/U footprints stay clean.
+  if (hasSlabSlope(node)) {
+    const plane = getSlabSlopePlane(node)
+    if (plane.span > 0.05) {
+      const desiredLen = Math.min(Math.max(plane.span * 0.45, 0.25), 1.4)
+      const anchor = findSlopeArrowAnchor(outer, holes, plane.dirX, plane.dirZ, desiredLen)
+      if (anchor) {
+        const arrowLen = Math.min(desiredLen, anchor.chordLen * 0.72)
+        const half = arrowLen / 2
+        const startX = anchor.x - plane.dirX * half
+        const startZ = anchor.z - plane.dirZ * half
+        const endX = anchor.x + plane.dirX * half
+        const endZ = anchor.z + plane.dirZ * half
+        const headLen = Math.min(arrowLen * 0.3, 0.22)
+        const perpX = -plane.dirZ
+        const perpZ = plane.dirX
+        const wing1X = endX - plane.dirX * headLen + perpX * (headLen * 0.6)
+        const wing1Z = endZ - plane.dirZ * headLen + perpZ * (headLen * 0.6)
+        const wing2X = endX - plane.dirX * headLen - perpX * (headLen * 0.6)
+        const wing2Z = endZ - plane.dirZ * headLen - perpZ * (headLen * 0.6)
+        children.push({
+          kind: 'path',
+          d: `M ${startX} ${startZ} L ${endX} ${endZ} M ${wing1X} ${wing1Z} L ${endX} ${endZ} L ${wing2X} ${wing2Z}`,
+          fill: 'none',
+          stroke,
+          strokeWidth: 0.025,
+          strokeOpacity: 0.85,
+        })
+      }
+    }
+  }
+
   // Boundary editor — visible only when the slab is the active selection, and
   // only on a slab the user drew.
   if (isSelected && slabOutlineEditable(node)) {
@@ -181,4 +218,125 @@ function appendRingEditor(
       payload: { holeIndex, vertexIndex: i },
     })
   }
+}
+
+function rayRingHitOffsets(
+  ox: number,
+  oz: number,
+  dx: number,
+  dz: number,
+  ringPts: readonly FloorplanPoint[],
+): number[] {
+  const hits: number[] = []
+  for (let i = 0; i < ringPts.length; i++) {
+    const [ax, az] = ringPts[i]!
+    const [bx, bz] = ringPts[(i + 1) % ringPts.length]!
+    const ex = bx - ax
+    const ez = bz - az
+    const denom = dx * ez - dz * ex
+    if (Math.abs(denom) < 1e-12) continue
+    const s = ((ax - ox) * ez - (az - oz) * ex) / denom
+    const u = ((ax - ox) * dz - (az - oz) * dx) / denom
+    if (u >= -1e-9 && u <= 1 + 1e-9) hits.push(s)
+  }
+  return hits
+}
+
+function solidChordSpan(
+  px: number,
+  pz: number,
+  dx: number,
+  dz: number,
+  outer: readonly FloorplanPoint[],
+  holes: readonly (readonly FloorplanPoint[])[],
+): { sNeg: number; sPos: number; len: number } | null {
+  let sNeg = Number.NEGATIVE_INFINITY
+  let sPos = Number.POSITIVE_INFINITY
+  const rings: Array<readonly FloorplanPoint[]> = [outer, ...holes.filter((h) => h.length >= 3)]
+  for (const r of rings) {
+    for (const s of rayRingHitOffsets(px, pz, dx, dz, r)) {
+      if (s <= 1e-9 && s > sNeg) sNeg = s
+      if (s >= -1e-9 && s < sPos) sPos = s
+    }
+  }
+  if (!Number.isFinite(sNeg) || !Number.isFinite(sPos)) return null
+  const len = sPos - sNeg
+  return len > 1e-4 ? { sNeg, sPos, len } : null
+}
+
+function findSlopeArrowAnchor(
+  outer: readonly FloorplanPoint[],
+  holes: readonly (readonly FloorplanPoint[])[],
+  dirX: number,
+  dirZ: number,
+  desiredLen: number,
+): { x: number; z: number; chordLen: number } | null {
+  const outerPoly = outer as Array<[number, number]>
+  const holePolys = holes.filter((h) => h.length >= 3) as Array<Array<[number, number]>>
+  const isInsideSolid = (x: number, z: number) =>
+    pointInPolygon(x, z, outerPoly) && !holePolys.some((hole) => pointInPolygon(x, z, hole))
+
+  let cx = 0
+  let cz = 0
+  let minX = Number.POSITIVE_INFINITY
+  let maxX = Number.NEGATIVE_INFINITY
+  let minZ = Number.POSITIVE_INFINITY
+  let maxZ = Number.NEGATIVE_INFINITY
+  for (const [x, z] of outer) {
+    cx += x
+    cz += z
+    if (x < minX) minX = x
+    if (x > maxX) maxX = x
+    if (z < minZ) minZ = z
+    if (z > maxZ) maxZ = z
+  }
+  cx /= outer.length
+  cz /= outer.length
+
+  const perpX = -dirZ
+  const perpZ = dirX
+  const evaluate = (px: number, pz: number) => {
+    if (!isInsideSolid(px, pz)) return null
+    const along = solidChordSpan(px, pz, dirX, dirZ, outer, holes)
+    if (!along || along.len < 0.15) return null
+    const midS = (along.sNeg + along.sPos) / 2
+    const mx = px + dirX * midS
+    const mz = pz + dirZ * midS
+    if (!isInsideSolid(mx, mz)) return null
+    const across = solidChordSpan(mx, mz, perpX, perpZ, outer, holes)
+    const perpClearance = across ? Math.min(-across.sNeg, across.sPos) : 0
+    return { x: mx, z: mz, chordLen: along.len, perpClearance }
+  }
+
+  // Keep convex hole-free polygons dead-center just like before.
+  const centerCandidate = evaluate(cx, cz)
+  if (
+    centerCandidate &&
+    centerCandidate.chordLen >= desiredLen * 1.25 &&
+    centerCandidate.perpClearance >= 0.15
+  ) {
+    return { x: cx, z: cz, chordLen: centerCandidate.chordLen }
+  }
+
+  let best = centerCandidate
+  const steps = 9
+  for (let ix = 0; ix < steps; ix++) {
+    const px = minX + ((ix + 0.5) / steps) * (maxX - minX)
+    for (let iz = 0; iz < steps; iz++) {
+      const pz = minZ + ((iz + 0.5) / steps) * (maxZ - minZ)
+      const cand = evaluate(px, pz)
+      if (!cand) continue
+      const candEff = Math.min(cand.chordLen, desiredLen / 0.72)
+      const bestEff = best ? Math.min(best.chordLen, desiredLen / 0.72) : -1
+      if (
+        !best ||
+        candEff > bestEff + 0.05 ||
+        (Math.abs(candEff - bestEff) <= 0.05 && cand.perpClearance > best.perpClearance + 0.02)
+      ) {
+        best = cand
+      }
+    }
+  }
+
+  return best ? { x: best.x, z: best.z, chordLen: best.chordLen } : null
 }

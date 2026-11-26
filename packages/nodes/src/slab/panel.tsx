@@ -4,9 +4,14 @@ import {
   type AnyNode,
   formatAreaLabel,
   formatFixed,
+  formatLength,
   getAreaUnitLabel,
+  getSlabSlopePlane,
+  hasSlabSlope,
   isDerivedNode,
+  MAX_SLAB_SLOPE_DEGREES,
   MIN_SLAB_THICKNESS,
+  normalizeSlabSlopeDirection,
   type SlabNode,
   squareMetersToAreaUnit,
   usePascalI18n,
@@ -40,6 +45,7 @@ import {
   applySlabThicknessChange,
   applySlabTopChange,
   clampSlabElevation,
+  clampSlabSlope,
   getSlabAnchorElevation,
   getSlabBaseElevation,
   getSlabRecessDepth,
@@ -167,6 +173,46 @@ export function SlabPanel() {
     [handleUpdate],
   )
 
+  const handleSlopePitchChange = useCallback(
+    (proposed: number) => {
+      const current = nodeRef.current
+      if (!current || current.recessed) return
+      const direction = normalizeSlabSlopeDirection(current.slope?.direction ?? 0)
+      const clamped = clampSlabSlope(useScene.getState().nodes, current, {
+        direction,
+        pitch: proposed,
+      })
+      handleUpdate({ slope: clamped })
+    },
+    [handleUpdate],
+  )
+
+  const handleSlopeDirectionChange = useCallback(
+    (proposed: number) => {
+      const current = nodeRef.current
+      if (!current || current.recessed || !hasSlabSlope(current)) return
+      const clamped = clampSlabSlope(useScene.getState().nodes, current, {
+        direction: proposed,
+        pitch: current.slope!.pitch,
+      })
+      handleUpdate({ slope: clamped })
+    },
+    [handleUpdate],
+  )
+
+  const handleRotateSlopeDirection = useCallback(
+    (deltaDegrees: number) => {
+      const current = nodeRef.current
+      if (!current || current.recessed || !hasSlabSlope(current)) return
+      const clamped = clampSlabSlope(useScene.getState().nodes, current, {
+        direction: (current.slope?.direction ?? 0) + deltaDegrees,
+        pitch: current.slope!.pitch,
+      })
+      handleUpdate({ slope: clamped })
+    },
+    [handleUpdate],
+  )
+
   const handleClose = useCallback(() => {
     setSelection({ selectedIds: [] })
     useInteractionScope
@@ -282,6 +328,28 @@ export function SlabPanel() {
   }
 
   const area = calculateArea(node.polygon)
+  const canSlope = !node.plateRole && !node.recessed && !derived
+  const slopePlane = getSlabSlopePlane(node)
+  const slopePitch = slopePlane.sloped ? (node.slope?.pitch ?? 0) : 0
+  const slopeDirection = normalizeSlabSlopeDirection(node.slope?.direction ?? 0)
+  const slopePresets = [
+    {
+      label: i18n._({ id: 'node.slab.panel.slopeFlat', message: 'Flat (0°)' }),
+      pitch: 0,
+    },
+    {
+      label: i18n._({ id: 'node.slab.panel.slopeDrainage', message: 'Drainage (2%)' }),
+      pitch: 1.1,
+    },
+    {
+      label: i18n._({ id: 'node.slab.panel.slopeAdaRamp', message: 'Ramp 1:12' }),
+      pitch: 4.8,
+    },
+    {
+      label: i18n._({ id: 'node.slab.panel.slopeDriveway', message: 'Driveway (12%)' }),
+      pitch: 6.8,
+    },
+  ]
 
   // Clean preset values per display system; imperial stores exact meters
   // for whole-inch offsets.
@@ -432,6 +500,63 @@ export function SlabPanel() {
           ))}
         </div>
       </PanelSection>
+
+      {canSlope && (
+        <PanelSection title={i18n._({ id: 'node.slab.panel.slope', message: 'Slope' })}>
+          <SliderControl
+            label={i18n._({ id: 'node.slab.panel.pitch', message: 'Pitch' })}
+            max={MAX_SLAB_SLOPE_DEGREES}
+            min={0}
+            onChange={handleSlopePitchChange}
+            precision={1}
+            step={0.5}
+            unit="°"
+            value={slopePitch}
+          />
+
+          {slopePitch > 0 && (
+            <>
+              <SliderControl
+                label={i18n._({ id: 'node.slab.panel.direction', message: 'Direction' })}
+                onChange={handleSlopeDirectionChange}
+                precision={0}
+                step={1}
+                unit="°"
+                value={slopeDirection}
+              />
+
+              <div className="mt-1 grid grid-cols-2 gap-1.5 px-1">
+                <ActionButton
+                  label={i18n._({ id: 'node.slab.panel.rotate90', message: 'Rotate 90°' })}
+                  onClick={() => handleRotateSlopeDirection(90)}
+                />
+                <ActionButton
+                  label={i18n._({ id: 'node.slab.panel.flipSlope', message: 'Flip 180°' })}
+                  onClick={() => handleRotateSlopeDirection(180)}
+                />
+              </div>
+
+              <div className="mt-1.5 flex items-center justify-between px-2 py-0.5 text-muted-foreground text-xs">
+                <span>{i18n._({ id: 'node.slab.panel.grade', message: 'Grade' })}</span>
+                <span className="font-mono text-foreground dark:text-white">
+                  {formatFixed(slopePlane.grade * 100, 1)}% · +
+                  {formatLength(slopePlane.rise, unit === 'imperial' ? 'ft' : 'm', { max: 2 })}
+                </span>
+              </div>
+            </>
+          )}
+
+          <div className="mt-2 grid grid-cols-2 gap-1.5 px-1 pb-1">
+            {slopePresets.map((preset) => (
+              <ActionButton
+                key={preset.label}
+                label={preset.label}
+                onClick={() => handleSlopePitchChange(preset.pitch)}
+              />
+            ))}
+          </div>
+        </PanelSection>
+      )}
 
       <PanelSection title={i18n._({ id: 'node.slab.panel.info', message: 'Info' })}>
         <div className="flex items-center justify-between px-2 py-1 text-muted-foreground text-sm">

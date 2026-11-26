@@ -13,6 +13,7 @@ import type { AnyNode, AnyNodeId, LevelNode, SiteNode, SlabNode, WallNode } from
 import { getLevelBelow } from '../../services/storey'
 import useLiveTerrain from '../../store/use-live-terrain'
 import useScene from '../../store/use-scene'
+import { slabSlopeEqual } from '../../systems/slab/slab-slope'
 import { getFloorPlacedFootprints } from './floor-placed-elevation'
 import {
   itemOverlapsPolygon,
@@ -74,7 +75,8 @@ export function initSpatialGridSync(): () => void {
           next?.type !== 'slab' ||
           previous.parentId !== next.parentId ||
           previous.polygon !== next.polygon ||
-          previous.elevation !== next.elevation)
+          previous.elevation !== next.elevation ||
+          !slabSlopeEqual(previous.slope, next.slope))
       const roomChanged =
         (previous?.type === 'zone' || next?.type === 'zone') &&
         (previous?.type !== 'zone' ||
@@ -189,6 +191,7 @@ export function initSpatialGridSync(): () => void {
         const supportChanged =
           node.polygon !== prev.polygon ||
           node.elevation !== prev.elevation ||
+          !slabSlopeEqual(node.slope, prev.slope) ||
           node.holes !== prev.holes
         if (supportChanged) {
           const levelId = resolveLevelId(node, state.nodes)
@@ -261,6 +264,7 @@ export function initSpatialGridSync(): () => void {
           slab.parentId !== previous.parentId ||
           slab.polygon !== previous.polygon ||
           slab.elevation !== previous.elevation ||
+          !slabSlopeEqual(slab.slope, previous.slope) ||
           slab.holes !== previous.holes
         )
           continue
@@ -331,6 +335,7 @@ export function countBulkSlabChanges(
       prev?.type !== 'slab' ||
       (prev as SlabNode).polygon !== (node as SlabNode).polygon ||
       (prev as SlabNode).elevation !== (node as SlabNode).elevation ||
+      !slabSlopeEqual((prev as SlabNode).slope, (node as SlabNode).slope) ||
       (prev as SlabNode).holes !== (node as SlabNode).holes
     ) {
       count++
@@ -430,6 +435,7 @@ export function markSlabChangeDependents(
     next.parentId !== previous.parentId ||
     next.polygon !== previous.polygon ||
     next.elevation !== previous.elevation ||
+    !slabSlopeEqual(next.slope, previous.slope) ||
     next.holes !== previous.holes
 
   // A slab's surface script is the surface what stands on the slab rests on.
@@ -437,7 +443,7 @@ export function markSlabChangeDependents(
     markNodesOverlappingSlab(previous, nodes, markDirty, previousNodes)
     markNodesOverlappingSlab(next, nodes, markDirty)
   }
-  if (next.elevation !== previous.elevation) {
+  if (next.elevation !== previous.elevation || !slabSlopeEqual(next.slope, previous.slope)) {
     markDeckAttachedStairs(next.id, nodes, markDirty)
   }
   if (

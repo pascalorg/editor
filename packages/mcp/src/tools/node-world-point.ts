@@ -3,6 +3,7 @@ import {
   type GeometryContext,
   getFenceCenterlineFrameAt,
   getLevelElevations,
+  getSlabElevationAtPoint,
   getWallCurveFrameAt,
   type MeasurementFeature,
   measurementCentroid,
@@ -200,7 +201,11 @@ function ownGeometryCentre(node: AnyNode, nodes: Nodes): Vec3 | null {
     }
     return boundsCentre(points)
   }
-  if (node.type === 'slab') return polygonCentre(node.polygon, node.elevation ?? 0)
+  if (node.type === 'slab') {
+    const centre = polygonCentre(node.polygon, node.elevation ?? 0)
+    if (!centre) return null
+    return [centre[0], getSlabElevationAtPoint(node, centre[0], centre[2]), centre[2]]
+  }
   if (node.type === 'site') return polygonCentre(node.polygon?.points, 0)
   if (Array.isArray(n.polygon)) return polygonCentre(n.polygon, 0)
   if (Array.isArray(n.start) && Array.isArray(n.end)) {

@@ -1,6 +1,7 @@
 import type { GeometryContext } from '../registry/types'
 import type { AnyNode, AnyNodeId, SlabNode, WallNode } from '../schema'
 import { DEFAULT_SLAB_ELEVATION } from '../schema/nodes/slab'
+import { hasSlabSlope } from '../systems/slab/slab-slope'
 import { getWallCurveFrameAt, isCurvedWall, sampleWallCenterline } from '../systems/wall/wall-curve'
 import {
   getWallBodyCenterOffset,
@@ -102,6 +103,7 @@ const MAX_CORNER_MITER_RATIO = 10
  */
 function isFloatingSlab(slab: SlabNode): boolean {
   if (slab.recessed) return false
+  if (hasSlabSlope(slab)) return true
   const elevation = slab.elevation ?? DEFAULT_SLAB_ELEVATION
   const thickness = slab.thickness ?? DEFAULT_SLAB_THICKNESS
   return elevation - thickness > GROUNDED_SLAB_UNDERSIDE_EPSILON

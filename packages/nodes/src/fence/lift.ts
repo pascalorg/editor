@@ -3,6 +3,7 @@ import {
   type AnyNodeId,
   findLevelAncestorId,
   floorConstructionLift,
+  getSlabElevationAtPoint,
   levelBaseElevationAt,
   liftedManualSlab,
   nodeRegistry,
@@ -32,10 +33,12 @@ import type { FenceNode } from './schema'
  * instead of following the hillside around it.
  */
 export function resolveFenceLiftElevation(
-  node: Pick<FenceNode, 'supportSlabId' | 'supportSurfaceNodeId' | 'supportOffset' | 'parentId'>,
+  node: Pick<FenceNode, 'supportSlabId' | 'supportSurfaceNodeId' | 'supportOffset' | 'parentId'> &
+    Partial<Pick<FenceNode, 'start'>>,
   resolve: (id: string) => AnyNode | undefined,
   levelBase = 0,
   nodes: Record<string, AnyNode> = {},
+  point?: readonly [number, number],
 ): number {
   const offset = node.supportOffset ?? 0
   if (node.supportSurfaceNodeId) {
@@ -51,7 +54,10 @@ export function resolveFenceLiftElevation(
   const host = resolve(node.supportSlabId)
   if (host?.type !== 'slab') return levelBase + offset
   if ((host.parentId ?? null) !== (node.parentId ?? null)) return levelBase + offset
-  const elevation = (host as SlabNode).elevation
+  const samplePoint = point ?? node.start
+  const elevation = samplePoint
+    ? getSlabElevationAtPoint(host as SlabNode, samplePoint[0], samplePoint[1])
+    : (host as SlabNode).elevation
   return (Number.isFinite(elevation) ? elevation : 0) + offset
 }
 
@@ -73,9 +79,10 @@ export function resolveFenceLiftElevationForNodes(
     'id' | 'start' | 'supportSlabId' | 'supportSurfaceNodeId' | 'supportOffset' | 'parentId'
   >,
   nodes: Record<string, AnyNode>,
+  point: readonly [number, number] = node.start,
 ): number {
   const levelId = findLevelAncestorId(node.id as AnyNodeId, nodes)
-  const levelBase = levelId ? levelBaseElevationAt(nodes, levelId, node.start[0], node.start[1]) : 0
+  const levelBase = levelId ? levelBaseElevationAt(nodes, levelId, point[0], point[1]) : 0
   return resolveFenceLiftElevation(
     node,
     (id) => {
@@ -84,5 +91,6 @@ export function resolveFenceLiftElevationForNodes(
     },
     levelBase + (nodes[node.id] ? floorConstructionLift(nodes, nodes[node.id]!) : 0),
     nodes,
+    point,
   )
 }

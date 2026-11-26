@@ -8,6 +8,7 @@ import {
   getLevelElevations,
   getLevelFloorToFloorHeight,
 } from '../../services/storey'
+import { getSlabElevationAtPoint } from '../slab/slab-slope'
 import { stairBaseElevation } from './stair-base-elevation'
 import { stairArrivalOpening } from './stair-footprint'
 
@@ -42,10 +43,19 @@ export function resolveStairTotalRise(
   const baseElevation = baseElevationFor(stair, nodes, level?.id ?? null)
 
   if (stair.deckSlabId) {
-    // The deck's `elevation` IS its walking surface (level-local). A stale
-    // reference (deck gone) falls through to the level-derived rise.
+    // The deck's walking surface (level-local) may be sloped, so sample it at
+    // the stair's arrival landing centroid (falling back to the stair position).
     const deck = nodes[stair.deckSlabId]
-    if (deck?.type === 'slab') return (deck.elevation ?? 0.05) - baseElevation
+    if (deck?.type === 'slab') {
+      const arrival = stairArrivalOpening(stair, nodes)
+      const [ax, az] = arrival.length
+        ? [
+            arrival.reduce((sum, vertex) => sum + vertex[0], 0) / arrival.length,
+            arrival.reduce((sum, vertex) => sum + vertex[1], 0) / arrival.length,
+          ]
+        : [stair.position[0], stair.position[2]]
+      return getSlabElevationAtPoint(deck, ax, az) - baseElevation
+    }
   }
 
   if (!level) return DEFAULT_LEVEL_HEIGHT

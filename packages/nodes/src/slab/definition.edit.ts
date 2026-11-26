@@ -1,6 +1,8 @@
 import {
   type AnyNode,
   type AnyNodeId,
+  getSlabBottomElevationAtPoint,
+  getSlabElevationAtPoint,
   type HandleDescriptor,
   MIN_SLAB_THICKNESS,
   markSlabChangeDependents,
@@ -207,7 +209,7 @@ function slabThicknessHandle(): HandleDescriptor<SlabNodeType> {
     placement: {
       position: (n) => {
         const [cx, cz] = slabHandleAnchor(n)
-        return [cx, (n.elevation ?? 0.05) + HEIGHT_HANDLE_OFFSET, cz]
+        return [cx, getSlabElevationAtPoint(n, cx, cz) + HEIGHT_HANDLE_OFFSET, cz]
       },
     },
   }
@@ -238,7 +240,7 @@ function slabBaseElevationHandle(): HandleDescriptor<SlabNodeType> {
     placement: {
       position: (n) => {
         const [cx, cz] = slabHandleAnchor(n)
-        return [cx, getSlabBaseElevation(n), cz]
+        return [cx, getSlabBottomElevationAtPoint(n, cx, cz), cz]
       },
     },
   }

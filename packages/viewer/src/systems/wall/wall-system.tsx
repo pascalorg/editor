@@ -1771,12 +1771,13 @@ export function generateExtrudedWall(
         ]
       : baseSegments.map((segment) => ({ segment, face: undefined }))
   for (const { segment, face } of profiles) {
-    const segmentElevation = face
-      ? Math.min(
-          Math.max(segment.elevation, segment.endElevation ?? segment.elevation),
-          topElevation,
-        )
-      : Math.min(segment.elevation, slabElevation)
+    const segmentElevation =
+      face || segment.endElevation !== undefined
+        ? Math.min(
+            Math.max(segment.elevation, segment.endElevation ?? segment.elevation),
+            topElevation,
+          )
+        : Math.min(segment.elevation, slabElevation)
     const cutHeight = segmentElevation - effectiveBaseElevation
     if (cutHeight <= 1e-6 || segment.end - segment.start <= 1e-7) continue
 

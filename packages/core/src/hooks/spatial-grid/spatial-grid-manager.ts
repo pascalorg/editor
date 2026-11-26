@@ -11,6 +11,7 @@ import useLiveNodeOverrides, { getEffectiveNode } from '../../store/use-live-nod
 import useLiveTerrain from '../../store/use-live-terrain'
 import useLiveTransforms, { type LiveTransform } from '../../store/use-live-transforms'
 import useScene from '../../store/use-scene'
+import { getSlabElevationAtPoint, intersectRayWithSlabPlane } from '../../systems/slab/slab-slope'
 import {
   computeWallSlabSupport,
   pointInPolygon,
@@ -854,7 +855,7 @@ export class SpatialGridManager {
         }
 
         if (!inHole) {
-          const elevation = slab.elevation ?? 0.05
+          const elevation = getSlabElevationAtPoint(slab, x, z)
           if (elevation > maxElevation) {
             maxElevation = elevation
           }
@@ -908,7 +909,7 @@ export class SpatialGridManager {
       { maxElevation },
     )
     return winner
-      ? { elevation: winner.elevation ?? 0.05, slabId: winner.id }
+      ? { elevation: getSlabElevationAtPoint(winner, position[0], position[2]), slabId: winner.id }
       : { elevation: 0, slabId: null }
   }
 
@@ -931,30 +932,26 @@ export class SpatialGridManager {
     const slabMap = this.slabsByLevel.get(levelId)
     const [ox, oy, oz] = rayOrigin
     const [dx, dy, dz] = rayDirection
-    if (Math.abs(dy) < 1e-9) return { elevation: 0, slabId: null, point: null }
 
     let best: { t: number; elevation: number; slabId: string } | null = null
     if (slabMap) {
       for (const stored of slabMap.values()) {
         const slab = this.effectiveSlabRecord(stored)
         if (slab.polygon.length < 3) continue
-        const elevation = slab.elevation ?? 0.05
-        const t = (elevation - oy) / dy
-        if (t <= 0) continue
-        if (best && t >= best.t) continue
-        const x = ox + dx * t
-        const z = oz + dz * t
+        const hit = intersectRayWithSlabPlane(slab, rayOrigin, rayDirection)
+        if (!hit) continue
+        if (best && hit.t >= best.t) continue
         const rendered = this.getRenderedSlabPolygon(levelId, slab)
-        if (rendered.length < 3 || !pointInPolygon(x, z, rendered)) continue
+        if (rendered.length < 3 || !pointInPolygon(hit.x, hit.z, rendered)) continue
         let inHole = false
         for (const hole of slab.holes || []) {
-          if (hole.length >= 3 && pointInPolygon(x, z, hole)) {
+          if (hole.length >= 3 && pointInPolygon(hit.x, hit.z, hole)) {
             inHole = true
             break
           }
         }
         if (inHole) continue
-        best = { t, elevation, slabId: slab.id }
+        best = { t: hit.t, elevation: hit.y, slabId: slab.id }
       }
     }
     if (best) {
@@ -964,6 +961,7 @@ export class SpatialGridManager {
         point: [ox + dx * best.t, oz + dz * best.t],
       }
     }
+    if (Math.abs(dy) < 1e-9) return { elevation: 0, slabId: null, point: null }
     const tBase = -oy / dy
     return {
       elevation: 0,
@@ -991,7 +989,10 @@ export class SpatialGridManager {
     for (const stored of slabMap.values()) {
       const slab = this.effectiveSlabRecord(stored)
       if (!this.slabSupportsFootprint(levelId, slab, position, dimensions, rotation)) continue
-      candidates.push({ slabId: slab.id, elevation: slab.elevation ?? 0.05 })
+      candidates.push({
+        slabId: slab.id,
+        elevation: getSlabElevationAtPoint(slab, position[0], position[2]),
+      })
     }
     candidates.sort(
       (a, b) =>
@@ -1019,7 +1020,7 @@ export class SpatialGridManager {
     if (!stored) return null
     const slab = this.effectiveSlabRecord(stored)
     if (!this.slabSupportsFootprint(levelId, slab, position, dimensions, rotation)) return null
-    return slab.elevation ?? 0.05
+    return getSlabElevationAtPoint(slab, position[0], position[2])
   }
 
   /**

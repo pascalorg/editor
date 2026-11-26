@@ -13,6 +13,16 @@ export const MIN_SLAB_THICKNESS = 0.02
 // it is never zero (a zero-thickness plate renders as a hole).
 export const MIN_GROUND_FLOOR_THICKNESS = 0.01
 export const DEFAULT_SLAB_ELEVATION = 0.05
+export const MAX_SLAB_SLOPE_DEGREES = 45
+
+export const SlabSlopeSchema = z.object({
+  /** Uphill direction in degrees in the XZ plane: 0 = +X, 90 = +Z, 180 = -X, 270 = -Z. */
+  direction: z.number().finite(),
+  /** Slope angle in degrees (0 = flat, max 45°). */
+  pitch: z.number().finite().min(0).max(MAX_SLAB_SLOPE_DEGREES),
+})
+
+export type SlabSlope = z.infer<typeof SlabSlopeSchema>
 
 export const SlabNode = BaseNode.extend({
   id: objectId('slab'),
@@ -48,6 +58,7 @@ export const SlabNode = BaseNode.extend({
     })
     .optional(),
   thickness: z.number().default(0.05), // Grows downward from the surface
+  slope: SlabSlopeSchema.optional(),
   recessed: z.boolean().default(false),
   recessedRimElevation: z.number().finite().optional(),
   fillToTerrain: z.boolean().optional(),
@@ -78,6 +89,7 @@ export const SlabNode = BaseNode.extend({
   - associatedZoneIds: rooms whose authored construction overlaps this manual slab, resolved once during legacy migration.
   - foundation: base plate exterior support to terrain; solid or none, with its own material (default concrete).
   - thickness: grows downward from the surface; the solid occupies [elevation - thickness, elevation]
+  - slope: optional planar tilt ({ direction: uphill azimuth degrees in XZ where 0=+X and 90=+Z, pitch: slope angle in degrees 0..45 }); elevation stays the low-edge walking surface
   - recessed: open recess (pool) whose floor sits at elevation
   - recessedRimElevation: optional rim anchor for a raised/lowered recess; absent means the level plane
   - fillToTerrain: manual slabs only; extends a solid slab's perimeter downward to terrain without changing its flat top or authored thickness

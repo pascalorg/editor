@@ -4,6 +4,7 @@ import { resolveLevelId } from '../../lib/node-ancestry'
 import { getRenderableSlabPolygon } from '../../lib/slab-polygon'
 import { levelBaseElevationAt } from '../../lib/terrain-support-query'
 import type { AnyNode, SlabNode, StairNode, WallNode } from '../../schema'
+import { getSlabElevationAtPoint } from '../slab/slab-slope'
 import { pointInPolygon } from '../slab/slab-support'
 import { getStairFloorPlacedFootprints } from './stair-floor-footprints'
 
@@ -48,14 +49,24 @@ export function stairBaseElevation(
       ) && !(slab.holes ?? []).some((hole) => pointInPolygon(position[0], position[2], hole))
     )
   }
-  const elevation = (slab: SlabNode) =>
-    Number.isFinite(slab.elevation ?? 0.05) ? (slab.elevation ?? 0.05) : 0
+  const elevationAt = (slab: SlabNode, position: readonly [number, number, number]) => {
+    const sampled = getSlabElevationAtPoint(slab, position[0], position[2])
+    return Number.isFinite(sampled) ? sampled : 0
+  }
   const host = slabs.find((slab) => slab.id === stair.supportSlabId)
-  if (host && footprints.some((footprint) => supports(host, footprint)))
-    return stair.position[1] + elevation(host)
+  if (host) {
+    const hostFootprints = footprints.filter((footprint) => supports(host, footprint))
+    if (hostFootprints.length > 0) {
+      return (
+        stair.position[1] +
+        Math.max(...hostFootprints.map((fp) => elevationAt(host, fp.position ?? stair.position)))
+      )
+    }
+  }
   const lifts = footprints.map((footprint) => {
+    const pos = footprint.position ?? stair.position
     const supported = slabs.filter((slab) => supports(slab, footprint))
-    return supported.length ? Math.max(...supported.map(elevation)) : ground
+    return supported.length ? Math.max(...supported.map((slab) => elevationAt(slab, pos))) : ground
   })
   return stair.position[1] + (lifts.length ? Math.max(...lifts) : ground)
 }

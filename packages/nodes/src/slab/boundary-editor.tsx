@@ -1,6 +1,12 @@
 'use client'
 
-import { resolveLevelId, type SlabNode, useLiveNodeOverrides, useScene } from '@pascal-app/core'
+import {
+  getSlabMaxElevation,
+  resolveLevelId,
+  type SlabNode,
+  useLiveNodeOverrides,
+  useScene,
+} from '@pascal-app/core'
 import {
   boundaryReshapeScope,
   clearSlabSnapFeedback,
@@ -166,7 +172,7 @@ export const SlabBoundaryEditor: React.FC<{ slabId: SlabNode['id'] }> = ({ slabI
       onPolygonPreview={handlePolygonPreview}
       polygon={slab.polygon}
       resolvePlanPoint={resolvePolygonEditorPlanPoint}
-      surfaceHeight={slab.elevation ?? 0.05}
+      surfaceHeight={getSlabMaxElevation(slab)}
     />
   )
 }

@@ -3,11 +3,15 @@ import {
   type AnyNodeId,
   clampSlabElevationForWalls,
   getSlabElevationUpperBound,
+  getSlabSlopePlane,
   getStoredLevelHeight,
   type LevelNode,
+  MAX_SLAB_SLOPE_DEGREES,
   MIN_SLAB_THICKNESS,
+  normalizeSlabSlopeDirection,
   type SlabElevationClamp,
   type SlabNode,
+  type SlabSlope,
   type WallNode,
 } from '@pascal-app/core'
 
@@ -106,7 +110,7 @@ export function applySlabTopChange(slab: SlabNode, newTop: number): Partial<Slab
   }
 
   const grounded = Math.abs(slab.elevation - slab.thickness) < GROUNDED_SLAB_EPSILON
-  if (grounded && newTop <= 0) return { elevation: newTop, recessed: true }
+  if (grounded && newTop <= 0) return { elevation: newTop, recessed: true, slope: undefined }
 
   return { elevation: newTop, recessed: false }
 }
@@ -123,6 +127,7 @@ export function applySlabElevationPreset(slab: SlabNode, signedDepth: number): P
       recessed: true,
       recessedRimElevation: anchor,
       fillToTerrain: undefined,
+      slope: undefined,
     }
   }
   const thickness = Math.max(MIN_SLAB_THICKNESS, signedDepth)
@@ -180,4 +185,44 @@ export function slabElevationUpperBound(
   const context = resolveSlabLevelContext(nodes, slab)
   if (!context) return Number.POSITIVE_INFINITY
   return getSlabElevationUpperBound(slab, context.walls, context.slabs, context.storeyHeight, nodes)
+}
+
+/**
+ * Clamp a proposed slab slope so its high edge never squeezes a plane-bound
+ * wall below MIN_WALL_HEIGHT. Unconstrained slabs pass through normalized.
+ */
+export function clampSlabSlope(
+  nodes: Readonly<Record<AnyNodeId, AnyNode>>,
+  slab: SlabNode,
+  proposedSlope: SlabSlope | undefined,
+): SlabSlope | undefined {
+  if (!proposedSlope) return undefined
+  const pitch = Math.min(Math.max(proposedSlope.pitch, 0), MAX_SLAB_SLOPE_DEGREES)
+  if (pitch <= 1e-6) return undefined
+  const direction = normalizeSlabSlopeDirection(proposedSlope.direction)
+  const flatUpper = slabElevationUpperBound(nodes, { ...slab, slope: undefined })
+  if (!Number.isFinite(flatUpper)) return { direction, pitch }
+
+  const candidate: SlabNode = { ...slab, slope: { direction, pitch } }
+  const plane = getSlabSlopePlane(candidate)
+  if (plane.span <= 1e-6) return { direction, pitch }
+
+  const slopedUpper = slabElevationUpperBound(nodes, candidate)
+  const currentElevation = slab.elevation ?? 0.05
+  if (!Number.isFinite(slopedUpper) || currentElevation <= slopedUpper + 1e-9) {
+    return { direction, pitch }
+  }
+
+  // Derive the exact span along the uphill direction to the highest overlapping
+  // plane-bound wall rather than capping against the slab's full polygon span.
+  const wallLocalRise = Math.max(0, flatUpper - slopedUpper)
+  const wallSpan = plane.grade > 1e-9 ? wallLocalRise / plane.grade : 0
+  if (wallSpan <= 1e-6) return { direction, pitch }
+
+  const maxRise = Math.max(0, flatUpper - currentElevation)
+  const maxPitch = (Math.atan(maxRise / wallSpan) * 180) / Math.PI
+  // Floor to 0.01° so rounding never overshoots flatUpper.
+  const clampedPitch = Math.floor(Math.min(pitch, maxPitch) * 100) / 100
+  if (clampedPitch <= 1e-4) return undefined
+  return { direction, pitch: clampedPitch }
 }
