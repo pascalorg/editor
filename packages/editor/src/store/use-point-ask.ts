@@ -102,6 +102,7 @@ export type PinRecord = {
   /** "Window · Kitchen, north wall": the chat chip's words. */
   label: string
   levelId: string | null
+  viewport?: PointViewport
   before?: PointCrop
   after?: PointCrop
   /** When the pin may retire (ms epoch), set once its turn ends and it is out of the person's way. */

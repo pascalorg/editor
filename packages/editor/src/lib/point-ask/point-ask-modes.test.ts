@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, spyOn, test } from 'bun:test'
 import {
   BuildingNode,
+  emitter,
   LevelNode,
   type PointAskSubmit,
   registerPointAskHandler,
@@ -13,10 +14,12 @@ import { useViewer } from '@pascal-app/viewer'
 import { cameraPoseStore } from '@pascal-app/viewer/ui'
 import { BoxGeometry, Mesh, MeshBasicMaterial, PerspectiveCamera, Raycaster } from 'three'
 import {
+  applyFloorplanCameraPose,
   type EditorFloorplanContext,
   type FloorplanHit,
   getEditorFloorplanContext,
   setEditorFloorplanContext,
+  setEditorFloorplanPoseHandler,
 } from '../../components/editor/floorplan-context-bridge'
 import {
   getEditorThreeContext,
@@ -337,6 +340,7 @@ afterEach(() => {
   unregisterHandler = () => {}
   setEditorThreeContext(initialThree)
   setEditorFloorplanContext(initialFloorplan)
+  setEditorFloorplanPoseHandler(null)
   cameraPoseStore.setState({ pose: initialPose })
   if (initialWallObject) sceneRegistry.nodes.set(wall.id, initialWallObject)
   else sceneRegistry.nodes.delete(wall.id)
@@ -506,6 +510,98 @@ describe('point-ask Split 2D+3D mode', () => {
     dispatchPointer('pointerup', canvas, 350, 300)
     expect(usePointAsk.getState().bubble?.viewport).toBe('3d')
   })
+
+  test('moving pointer from 2D pane onto empty 3D canvas clears the stale 2D hover', () => {
+    useEditor.setState({
+      viewLayouts: { ...useEditor.getState().viewLayouts, edit: sceneLayout('split') },
+    })
+    const camera = new PerspectiveCamera(60, 4 / 3, 0.1, 100)
+    camera.position.set(0, 1.5, 6)
+    camera.lookAt(0, 1.5, 0)
+    camera.updateMatrixWorld(true)
+    const canvas = makeCanvas({ left: 0, top: 0, width: 700, height: 600 })
+    setEditorThreeContext({ camera, raycaster: new Raycaster(), domElement: canvas })
+
+    const { context, svgElement } = makeFloorplanFixture({
+      left: 720,
+      top: 0,
+      width: 700,
+      height: 600,
+    })
+    setEditorFloorplanContext(context)
+
+    stopSession = startPointAskSession({ freeClick: true, enrichedRegions: false })
+    usePointAsk.setState({ active: true, latched: true })
+
+    dispatchPointer('pointermove', svgElement, 1070, 300)
+    expect(usePointAsk.getState().hover?.viewport).toBe('2d')
+    expect(usePointAsk.getState().hover?.target.id).toBe(zone.id)
+    expect(useViewer.getState().hoveredId).toBe(zone.id)
+
+    dispatchPointer('pointermove', canvas, 50, 50)
+    expect(usePointAsk.getState().hover).toBeNull()
+    expect(useViewer.getState().hoveredId).toBeNull()
+  })
+
+  test('after-image capture honors the 2D viewport of a 2D comment in Split mode', async () => {
+    useEditor.setState({
+      viewLayouts: { ...useEditor.getState().viewLayouts, edit: sceneLayout('split') },
+    })
+    const camera = new PerspectiveCamera(60, 4 / 3, 0.1, 100)
+    camera.position.set(0, 1.5, 6)
+    camera.lookAt(0, 1.5, 0)
+    camera.updateMatrixWorld(true)
+    const canvas = makeCanvas({ left: 0, top: 0, width: 700, height: 600 })
+    setEditorThreeContext({ camera, raycaster: new Raycaster(), domElement: canvas })
+
+    const { context, svgElement, captureSpy } = makeFloorplanFixture(
+      { left: 720, top: 0, width: 700, height: 600 },
+      { captureDataUrl: 'data:image/jpeg;base64,PLAN2D_AFTER' },
+    )
+    setEditorFloorplanContext(context)
+
+    stopSession = startPointAskSession({ freeClick: true, enrichedRegions: false })
+    usePointAsk.setState({ active: true, latched: true })
+
+    dispatchPointer('pointerdown', svgElement, 1070, 300)
+    dispatchPointer('pointerup', svgElement, 1070, 300)
+    expect(captureSpy).toHaveBeenCalledTimes(1)
+
+    await sendBubble('Widen the kitchen', { x: 1070, y: 300, width: 10, height: 10 })
+    const askId = received[0]?.askId
+    expect(askId).toBeDefined()
+    expect(usePointAsk.getState().pins[askId!]?.viewport).toBe('2d')
+
+    emitter.emit('point-ask:status', { askId: askId!, status: 'working' })
+    usePointAsk.getState().dispatchPin(askId!, { type: 'commit', changedNodeIds: [zone.id] })
+    emitter.emit('point-ask:status', {
+      askId: askId!,
+      status: 'ended',
+      outcome: 'completed',
+      asked: false,
+      wroteScene: true,
+    })
+
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(captureSpy).toHaveBeenCalledTimes(2)
+    expect(usePointAsk.getState().pins[askId!]?.after?.dataUrl).toBe(
+      'data:image/jpeg;base64,PLAN2D_AFTER',
+    )
+  })
+
+  test('applyFloorplanCameraPose routes through the always-mounted pose handler before the 2D SVG mounts', () => {
+    setEditorFloorplanContext(null)
+    const receivedPoses: unknown[] = []
+    setEditorFloorplanPoseHandler((pose) => receivedPoses.push(pose))
+    const pose = {
+      position: [0.05, 25, 0.05] as [number, number, number],
+      target: [2, 0, -1] as [number, number, number],
+      projection: 'orthographic' as const,
+      viewWidth: 12,
+    }
+    expect(applyFloorplanCameraPose(pose)).toBe(true)
+    expect(receivedPoses).toEqual([pose])
+  })
 })
 
 describe('point-ask Walkthrough mode', () => {
@@ -576,8 +672,13 @@ describe('point-ask Walkthrough mode', () => {
     expect(usePointAsk.getState().active).toBe(false)
   })
 
-  test('Preview-mode Walkthrough and Drone allow C commenting across levels, while non-walkthrough Preview disables it', () => {
-    const upperLevel = LevelNode.parse({ id: 'level_upper', parentId: building.id, level: 1 })
+  test('Preview-mode Walkthrough and Drone allow C commenting across levels, while non-walkthrough Preview disables it', async () => {
+    const upperLevel = LevelNode.parse({
+      id: 'level_upper',
+      name: 'Upper Floor',
+      parentId: building.id,
+      level: 1,
+    })
     const upperWall = WallNode.parse({
       id: 'wall_upper',
       parentId: upperLevel.id,
@@ -651,6 +752,11 @@ describe('point-ask Walkthrough mode', () => {
       expect(bubble).not.toBeNull()
       expect(bubble?.targets[0]?.id).toBe(upperWall.id)
       expect(bubble?.camera?.position).toEqual([0, 4.5, 5])
+
+      await sendBubble('Fix this upper-floor wall', { x: 400, y: 300, width: 10, height: 10 })
+      expect(received).toHaveLength(1)
+      expect(received[0]?.context.level).toEqual({ id: upperLevel.id, name: 'Upper Floor' })
+      expect(usePointAsk.getState().pins[received[0]!.askId]?.levelId).toBe(upperLevel.id)
     } finally {
       sceneRegistry.nodes.delete(upperWall.id)
     }

@@ -33,6 +33,7 @@ export type EditorFloorplanContext = {
 }
 
 let current: EditorFloorplanContext | null = null
+let poseHandler: ((pose: CameraPose) => void) | null = null
 
 export function setEditorFloorplanContext(ctx: EditorFloorplanContext | null) {
   current = ctx
@@ -42,10 +43,20 @@ export function getEditorFloorplanContext(): EditorFloorplanContext | null {
   return current
 }
 
+export function setEditorFloorplanPoseHandler(handler: ((pose: CameraPose) => void) | null) {
+  poseHandler = handler
+}
+
 export function applyFloorplanCameraPose(pose: CameraPose): boolean {
-  if (!current?.applyPose) return false
-  current.applyPose(pose)
-  return true
+  if (current?.applyPose) {
+    current.applyPose(pose)
+    return true
+  }
+  if (poseHandler) {
+    poseHandler(pose)
+    return true
+  }
+  return false
 }
 
 const CROP_LONG_SIDE_MIN = 512

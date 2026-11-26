@@ -3,6 +3,7 @@ import {
   type AnyNodeId,
   beginScenePreview,
   emitter,
+  findLevelAncestorId,
   hasPointAskHandler,
   type NodeEvent,
   type PointAskStatus,
@@ -1001,6 +1002,9 @@ function onPointerMove(event: PointerEvent) {
       const hover = pickAtPoint(event.clientX, event.clientY)
       point.setHover(hover)
       useViewer.getState().setHoveredId((hover?.target.id as AnyNodeId | undefined) ?? null)
+    } else if (point.hover?.viewport === '2d') {
+      point.setHover(null)
+      useViewer.getState().setHoveredId(null)
     }
   }
   if (!down) return
@@ -1374,6 +1378,14 @@ const askMarks = new Map<
   { start: HistoryMark | null; end: HistoryMark | null; undoneSteps: number; undone: boolean }
 >()
 
+function resolveLevelForIds(ids: readonly string[], nodes: Record<string, AnyNode>): string | null {
+  for (const id of ids) {
+    const resolved = findLevelAncestorId(id as AnyNodeId, nodes)
+    if (resolved) return resolved
+  }
+  return null
+}
+
 /**
  * Sends the bubble's ask: the pin plants on the frame of Enter and the bubble folds into it; the
  * handoff to the chat follows (after the crop, up to 1.5 s ordinarily or 12 s for an enriched
@@ -1406,11 +1418,14 @@ export async function sendBubble(
     const p = object.worldToLocal(new Vector3(...bubble.anchor))
     local = { nodeId: first.id, offset: [p.x, p.y, p.z] }
   }
+  const initialTargetIds = area ? area.ids : bubble.targets.map((t) => t.id)
+  const initialLevelId =
+    resolveLevelForIds(initialTargetIds, nodes) ?? useViewer.getState().selection.levelId ?? null
   // A region has no targets: what shows inside it is what the pin watches for changes.
   const model = createPin({
     askId,
     text: words,
-    targetIds: area ? area.ids : bubble.targets.map((t) => t.id),
+    targetIds: initialTargetIds,
   })
   const label = area
     ? regionLabel(area.ids.length + area.more)
@@ -1423,7 +1438,8 @@ export async function sendBubble(
     ...(bubble.footprint ? { footprint: bubble.footprint } : {}),
     local,
     label,
-    levelId: useViewer.getState().selection.levelId ?? null,
+    levelId: initialLevelId,
+    viewport: surface,
     retireAt: null,
     createdAt: Date.now(),
     ...(bubble.crop.state === 'ready' ? { before: bubble.crop } : {}),
@@ -1468,6 +1484,7 @@ export async function sendBubble(
   const enriched = (area || freeEnriched) && crop.state === 'ready' ? crop.enriched : undefined
   if (enriched) {
     const ids = visibleNodeIds(enriched)
+    const enrichedLevelId = resolveLevelForIds(ids, nodes)
     usePointAsk.setState((state) => {
       const pin = state.pins[askId]
       if (!pin) return state
@@ -1487,6 +1504,7 @@ export async function sendBubble(
           [askId]: {
             ...pin,
             model: { ...pin.model, targetIds: ids },
+            ...(enrichedLevelId ? { levelId: enrichedLevelId } : {}),
             ...(area
               ? {
                   anchor: nextAnchor,
@@ -1500,10 +1518,14 @@ export async function sendBubble(
       }
     })
   }
-  const firstNode = first ? nodes[first.id] : undefined
+  const levelSourceIds =
+    bubble.targets.length > 0
+      ? bubble.targets.map((t) => t.id)
+      : enriched
+        ? visibleNodeIds(enriched)
+        : (area?.ids ?? [])
   const levelId =
-    useViewer.getState().selection.levelId ??
-    (firstNode ? (resolveLevelId(firstNode, nodes) ?? '') : '')
+    resolveLevelForIds(levelSourceIds, nodes) ?? useViewer.getState().selection.levelId ?? ''
   const context = buildPointContext({
     askId,
     capturedAt: bubble.capturedAt,
@@ -1622,7 +1644,15 @@ export function lookAtAsk(askId: string) {
 async function captureAfter(askId: string) {
   const pin = usePointAsk.getState().pins[askId]
   if (!pin) return
-  const surface: PointViewport = viewportRect('3d') ? '3d' : viewportRect('2d') ? '2d' : '3d'
+  const pinViewport = pin.viewport ?? pin.submit?.context.viewport
+  const surface: PointViewport =
+    pinViewport && viewportRect(pinViewport)
+      ? pinViewport
+      : viewportRect('3d')
+        ? '3d'
+        : viewportRect('2d')
+          ? '2d'
+          : '3d'
   const nodes = useScene.getState().nodes as Record<string, AnyNode>
   const boxes = pin.model.targetIds.flatMap((id) => {
     const box = worldBoxOf(nodes, id)

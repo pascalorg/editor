@@ -441,7 +441,7 @@ function useFirstPersonCameraPoseRestore(
 
     const restoreFrame = requestAnimationFrame(() => {
       const currentControls = controls.current
-      if (currentControls) {
+      if (currentControls && !planOwnsNavigation()) {
         restoreCameraPose(currentControls, pose)
       }
       isRestoring.current = false

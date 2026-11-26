@@ -291,7 +291,11 @@ import {
 } from '../tools/wall/wall-drafting'
 import { formatWallDraftHeading, resolveTypedWallEnd } from '../tools/wall/wall-typed-entry'
 import { resolveFloorplanBackgroundSelection } from './floorplan-background-selection'
-import { captureFloorplanSvgCrop, setEditorFloorplanContext } from './floorplan-context-bridge'
+import {
+  captureFloorplanSvgCrop,
+  setEditorFloorplanContext,
+  setEditorFloorplanPoseHandler,
+} from './floorplan-context-bridge'
 import {
   canApplyFloorplanNavigationSync,
   canZoomFloorplanDuringNavigation,
@@ -7433,6 +7437,7 @@ export function FloorplanPanel({
 
   const [pendingApplyPose, setPendingApplyPose] = useState<CameraPose | null>(null)
   useEffect(() => {
+    setEditorFloorplanPoseHandler((pose) => setPendingApplyPose(pose))
     const applyPose = (pose: CameraPose) => {
       if (suppressSelfApplyPoseRef.current) return
       const editor = useEditor.getState()
@@ -7445,7 +7450,10 @@ export function FloorplanPanel({
       }
     }
     emitter.on('camera-controls:apply-pose', applyPose)
-    return () => emitter.off('camera-controls:apply-pose', applyPose)
+    return () => {
+      setEditorFloorplanPoseHandler(null)
+      emitter.off('camera-controls:apply-pose', applyPose)
+    }
   }, [])
 
   useEffect(() => {
