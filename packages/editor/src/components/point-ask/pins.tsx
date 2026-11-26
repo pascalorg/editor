@@ -449,7 +449,12 @@ function PinView({
           s.pins[askId] &&
           s.pins[askId].behavior !== 'persistent'
         ) {
-          s.openCard(askId)
+          const sourceViewport =
+            s.pins[askId].viewport ?? s.pins[askId].submit?.context.viewport ?? null
+          s.openCard(
+            askId,
+            sourceViewport && viewportRect(sourceViewport) ? sourceViewport : viewport,
+          )
           setTimeout(() => {
             if (
               usePointAsk.getState().cardFor === askId &&
@@ -461,7 +466,7 @@ function PinView({
         }
       }, 900)
     }
-  }, [model?.state, askId, model?.targetIds, persistent])
+  }, [model?.state, askId, model?.targetIds, persistent, viewport])
 
   const hovering = useRef(false)
 
@@ -592,7 +597,7 @@ function PinView({
           if (persistent) return
           pinHover.askId = askId
           emitter.emit('point-ask:pin', { askId, action: 'hover' })
-          usePointAsk.getState().openCard(askId)
+          usePointAsk.getState().openCard(askId, viewport)
         }}
         onPointerLeave={() => {
           hovering.current = false
@@ -688,7 +693,12 @@ function PinCard() {
       const node = wrap.current
       const cardEl = card.current
       if (!(record && node && cardEl)) return
-      const vp = usePointAsk.getState().cardViewport ?? preferredPointViewport() ?? '3d'
+      const sourceVp = record.viewport ?? record.submit?.context.viewport
+      const vp =
+        usePointAsk.getState().cardViewport ??
+        (sourceVp && viewportRect(sourceVp) ? sourceVp : null) ??
+        preferredPointViewport() ??
+        '3d'
       const at = projectWorldIn(pinWorld(record), vp)
       const placed =
         record.behavior === 'persistent' ? persistentMarkerPositions(now, vp).get(askId) : null

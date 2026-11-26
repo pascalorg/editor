@@ -35,7 +35,7 @@ import {
   stageRect,
   viewportRect,
 } from './projector'
-import { canPoint, closeBubble, sendBubble, startPointAskSession } from './session'
+import { canPoint, changeMore, closeBubble, sendBubble, startPointAskSession } from './session'
 
 const building = BuildingNode.parse({ id: 'building_modes' })
 const level = LevelNode.parse({ id: 'level_modes', parentId: building.id })
@@ -587,6 +587,18 @@ describe('point-ask Split 2D+3D mode', () => {
     expect(usePointAsk.getState().pins[askId!]?.after?.dataUrl).toBe(
       'data:image/jpeg;base64,PLAN2D_AFTER',
     )
+
+    // changeMore also honors the pin's source 2D viewport even if cardViewport was not set and 3D is focused.
+    useEditor.setState({
+      viewLayouts: {
+        ...useEditor.getState().viewLayouts,
+        edit: { ...sceneLayout('split'), focus: 1 },
+      },
+    })
+    usePointAsk.getState().openCard(askId!, null)
+    expect(changeMore(askId!)).toBe(true)
+    expect(usePointAsk.getState().bubble?.viewport).toBe('2d')
+    expect(captureSpy).toHaveBeenCalledTimes(3)
   })
 
   test('applyFloorplanCameraPose routes through the always-mounted pose handler before the 2D SVG mounts', () => {

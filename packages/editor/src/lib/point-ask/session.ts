@@ -1746,7 +1746,12 @@ export function changeMore(askId: string): boolean {
   if (!state.active && !enterPointMode(true)) return false
   endCompare()
   if (usePointAsk.getState().bubble) closeBubble('dismiss')
-  const surface = usePointAsk.getState().cardViewport ?? preferredPointViewport() ?? '3d'
+  const pinViewport = pin.viewport ?? pin.submit?.context.viewport
+  const surface =
+    usePointAsk.getState().cardViewport ??
+    (pinViewport && viewportRect(pinViewport) ? pinViewport : null) ??
+    preferredPointViewport() ??
+    '3d'
   state.openCard(null)
   const boxes = targets.flatMap((target) => {
     const projected = target.box ? projectBoxIn(target.box, surface) : null
