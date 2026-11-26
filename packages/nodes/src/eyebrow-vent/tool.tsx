@@ -11,10 +11,14 @@ import {
 } from '@pascal-app/core'
 import { triggerSFX } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import * as THREE from 'three'
 import { RoofAttachmentFallbackPreview } from '../shared/roof-attachment-fallback-preview'
-import { resolveRoofSegmentHit } from '../shared/roof-segment-hit'
+import {
+  resolveRoofSegmentHit,
+  roofElementAtClick,
+  roofEventWitness,
+} from '../shared/roof-segment-hit'
 import { getAnalyticalNormal, getDownSlopeYaw, surfaceQuatFromNormal } from '../shared/roof-surface'
 import {
   clearRoofSurfacePlacementGuides,
@@ -53,6 +57,12 @@ const EyebrowVentTool = () => {
     [previewRotation],
   )
 
+  const clearPreview = useCallback(() => {
+    setPreviewPos(null)
+    setPreviewSurfaceQuat(null)
+    clearRoofSurfacePlacementGuides()
+  }, [])
+
   useEffect(() => {
     if (!activeBuildingId) return
 
@@ -77,8 +87,11 @@ const EyebrowVentTool = () => {
         lastSnapRef.current = [sx, sz]
       }
 
-      const hit = resolveRoofSegmentHit(event.node as RoofNode, wx, wy, wz)
-      if (!hit) return
+      const hit = resolveRoofSegmentHit(event.node as RoofNode, wx, wy, wz, roofEventWitness(event))
+      if (!hit) {
+        clearPreview()
+        return
+      }
 
       const normal = getAnalyticalNormal(hit.localX, hit.localZ, hit.segment)
       setPreviewSurfaceQuat(surfaceQuatFromNormal(normal, new THREE.Quaternion()))
@@ -98,24 +111,22 @@ const EyebrowVentTool = () => {
     }
 
     const onClick = (event: RoofEvent) => {
-      const hit = resolveRoofSegmentHit(
+      const placed = roofElementAtClick(
+        'eyebrow-vent',
         event.node as RoofNode,
-        event.position[0],
-        event.position[1],
-        event.position[2],
+        event.position,
+        undefined,
+        roofEventWitness(event),
       )
-      if (!hit) return
+      if (!placed) {
+        clearPreview()
+        return
+      }
+      const { node: vent, segmentId } = placed
       const state = useScene.getState()
 
-      const vent = EyebrowVentNode.parse({
-        ...eyebrowVentDefinition.defaults(),
-        name: 'Eyebrow Vent',
-        roofSegmentId: hit.segment.id,
-        position: [hit.localX, hit.localY, hit.localZ],
-        rotation: getDownSlopeYaw(hit.localX, hit.localZ, hit.segment),
-      })
-      state.createNode(vent, hit.segment.id as AnyNodeId)
-      state.dirtyNodes.add(hit.segment.id as AnyNodeId)
+      state.createNode(vent, segmentId)
+      state.dirtyNodes.add(segmentId)
       setSelection({ selectedIds: [vent.id] })
       triggerSFX('sfx:item-place')
       clearRoofSurfacePlacementGuides()
@@ -132,18 +143,14 @@ const EyebrowVentTool = () => {
       emitter.off('roof:click', onClick)
       clearRoofSurfacePlacementGuides()
     }
-  }, [activeBuildingId, setSelection, previewNode])
+  }, [activeBuildingId, setSelection, previewNode, clearPreview])
 
   return (
     <>
       <RoofAttachmentFallbackPreview
         activeBuildingId={activeBuildingId}
         ghost={<EyebrowVentPreview node={previewNode} invalid />}
-        onInvalidTarget={() => {
-          setPreviewPos(null)
-          setPreviewSurfaceQuat(null)
-          clearRoofSurfacePlacementGuides()
-        }}
+        onInvalidTarget={clearPreview}
       />
       {activeBuildingId && previewPos && previewSurfaceQuat && (
         <group position={previewPos}>

@@ -1,5 +1,6 @@
 import {
   type AnyNodeId,
+  createSceneApi,
   getEffectiveNode,
   getRoofGlazing,
   type RoofGlazing,
@@ -7,6 +8,7 @@ import {
   useLiveNodeOverrides,
   useScene,
 } from '@pascal-app/core'
+import { prepareSeatedRoofEdit } from './roof-level-target'
 
 /** A roof panel edits several segments as one gesture without writing the scene per tick. */
 export function createRoofGlazingPreview(ids: readonly AnyNodeId[]) {
@@ -24,8 +26,16 @@ export function createRoofGlazingPreview(ids: readonly AnyNodeId[]) {
       const data = { ...pending.get(id), ...patch }
       return Object.keys(data).length ? [{ id, data }] : []
     })
-    if (updates.length) useScene.getState().updateNodes(updates)
+    if (updates.length) {
+      const prepared = prepareSeatedRoofEdit(createSceneApi(useScene), { update: updates })
+      if (typeof prepared !== 'function') {
+        clear()
+        return prepared
+      }
+      prepared()
+    }
     clear()
+    return null
   }
   return {
     previewFields(data: Partial<RoofSegmentNode>) {

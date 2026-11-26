@@ -44,11 +44,27 @@ import {
 } from './roof-level'
 import {
   isRoofOnStoreyWalls,
-  planRoofsOffStorey,
+  planRoofsOffStorey as planRoofMigration,
   roofsKeptOverStorey,
-  seatRoofs,
+  seatRoofs as seatRoofProposal,
 } from './roof-move'
 import { getLevelElevations } from './storey'
+
+// Positive controls must fail loudly on refusal, not silently skip their assertions.
+function planRoofsOffStorey(...args: Parameters<typeof planRoofMigration>) {
+  const result = planRoofMigration(...args)
+  if (result && 'kind' in result) throw new Error('Unexpected migration refusal')
+  return result
+}
+
+function seatRoofs<C extends Parameters<typeof seatRoofProposal>[1]>(
+  nodes: Parameters<typeof seatRoofProposal>[0],
+  changes: C,
+) {
+  const result = seatRoofProposal(nodes, changes)
+  if ('kind' in result) throw new Error('Unexpected seating refusal')
+  return result
+}
 
 // One rule for every roof writer (a roof made on the ground floor's level blocks the exploded
 // view): a roof lives on the level directly above the storey whose walls carry it, and over the top

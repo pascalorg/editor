@@ -7,6 +7,7 @@ import {
 import { getLevelDisplayName } from '../lib/level-name'
 import type { AnyNode, AnyNodeId, LevelNode } from '../schema'
 import { requireLevel } from './level-target'
+import { refuseRoofHost } from './roof-writes'
 import { levelsOf } from './scene-queries'
 import type { AgentOperation } from './types'
 
@@ -36,16 +37,17 @@ export const duplicateLevel: AgentOperation<DuplicateLevelInput> = (nodes, input
       levelId,
     })
 
-  const { createOps, newLevelId, shiftedLevels, updateOps, skippedNodes, notes } =
-    buildLevelDuplicateCreateOps({
-      nodes: all,
-      level,
-      levels: levelsOf(nodes).filter(
-        (entry) => entry.parentId === building.id || building.children.includes(entry.id),
-      ),
-      preset: input.preset ?? 'everything',
-      position: input.position ?? 'above',
-    })
+  const duplicate = buildLevelDuplicateCreateOps({
+    nodes: all,
+    level,
+    levels: levelsOf(nodes).filter(
+      (entry) => entry.parentId === building.id || building.children.includes(entry.id),
+    ),
+    preset: input.preset ?? 'everything',
+    position: input.position ?? 'above',
+  })
+  if ('kind' in duplicate) refuseRoofHost(duplicate)
+  const { createOps, newLevelId, shiftedLevels, updateOps, skippedNodes, notes } = duplicate
   const create = createOps.map(({ node, parentId }) => ({
     node: node.id === newLevelId && input.name ? ({ ...node, name: input.name } as AnyNode) : node,
     parentId,

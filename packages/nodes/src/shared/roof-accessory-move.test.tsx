@@ -11,12 +11,35 @@ import {
   useScene,
 } from '@pascal-app/core'
 import { getActiveSnapContext, useEditor } from '@pascal-app/editor'
-import { useViewer } from '@pascal-app/viewer'
+import { generateRoofSegmentGeometry, useViewer } from '@pascal-app/viewer'
 import { act } from '@react-three/test-renderer'
 import type { ComponentType } from 'react'
-import { Group } from 'three'
+import { DoubleSide, Group, Mesh, MeshBasicMaterial, Raycaster, Vector3 } from 'three'
 import { installMountedScene, mount } from '../__tests__/harness'
 import { builtinPlugin } from '../index'
+
+function coveringPoint(segment: RoofSegmentNode, x: number): [number, number, number] {
+  // Pointer events hit the finished native covering, not the bare structural
+  // datum. Moving accessories are transient, so their cutters are not rendered.
+  const geometry = generateRoofSegmentGeometry(segment)
+  const material = new MeshBasicMaterial({ side: DoubleSide })
+  const mesh = new Mesh(
+    geometry,
+    Array.from({ length: 8 }, () => material),
+  )
+  mesh.updateMatrixWorld(true)
+  try {
+    const hit = new Raycaster(new Vector3(x, 100, 1), new Vector3(0, -1, 0))
+      .intersectObject(mesh)
+      .find((entry) => entry.face?.materialIndex === 3 && entry.face.normal.y > 0)
+    if (!hit) throw new Error('Expected a native gable covering at the drag cursor')
+    expect(hit.point.y).toBeGreaterThan(getRoofSegmentSurfaceY(segment, x, 1))
+    return hit.point.toArray()
+  } finally {
+    geometry.dispose()
+    material.dispose()
+  }
+}
 
 installMountedScene()
 for (const kind of [
@@ -72,7 +95,7 @@ for (const kind of [
       expect(getActiveSnapContext()).toBe('item')
       const roofEvent = (x: number) => ({
         node: useScene.getState().nodes[roof.id],
-        position: [x, getRoofSegmentSurfaceY(segment, x, 1), 1],
+        position: coveringPoint(segment, x),
         nativeEvent: { timeStamp: x, shiftKey: true, altKey: mode === 'force' },
         stopPropagation() {},
       })

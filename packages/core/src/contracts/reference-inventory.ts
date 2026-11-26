@@ -1037,6 +1037,7 @@ export const METADATA_NON_REFERENCES: readonly { path: string; reason: string }[
   ...described('Flag, enum, number or tag; names nothing.', [
     'annotationObstacle',
     'annotationRole',
+    'attic',
     'autoGutter',
     'autoGutterSide',
     'autoRidgeVent',

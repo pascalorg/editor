@@ -46,6 +46,19 @@
       }
     },
     {
+      "name": "add_dormer",
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "openWorldHint": false
+      },
+      "justifications": {
+        "readOnlyHint": "Creates one native dormer and its hosted window in the connected Pascal scene.",
+        "destructiveHint": "Adds the complete subtree without replacing or deleting existing authored scene nodes.",
+        "openWorldHint": "Uses only the connected scene and its configured material library without accessing the public internet."
+      }
+    },
+    {
       "name": "add_fence",
       "annotations": {
         "readOnlyHint": false,
@@ -121,6 +134,19 @@
         "readOnlyHint": "Adds a rock to a Site, or changes the fields given of an existing one, in the connected Pascal scene.",
         "destructiveHint": "Changing a rock replaces its outline, height, seed or looks; undo restores them. Floors it passes through derive their holes and are not edited.",
         "openWorldHint": "It operates on the connected Pascal scene and its persisted terrain without accessing the public internet."
+      }
+    },
+    {
+      "name": "add_roof_element",
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "openWorldHint": false
+      },
+      "justifications": {
+        "readOnlyHint": "Creates one native roof accessory in the connected Pascal scene.",
+        "destructiveHint": "Adds one accessory without replacing or deleting existing scene nodes.",
+        "openWorldHint": "Uses only the connected scene without network access."
       }
     },
     {

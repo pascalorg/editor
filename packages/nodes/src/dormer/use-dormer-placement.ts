@@ -8,10 +8,10 @@ import {
 } from '@pascal-app/core'
 import { consumePlacementDragRelease, triggerSFX } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import * as THREE from 'three'
 import { createRelativeRoofDrag } from '../shared/relative-roof-drag'
-import { resolveRoofSegmentHit } from '../shared/roof-segment-hit'
+import { resolveRoofSegmentHit, roofEventWitness } from '../shared/roof-segment-hit'
 import { DORMER_PLACEMENT_ROTATION_STEP, DORMER_PLACEMENT_SNAP_M } from './geometry'
 
 const tmpMatrix = new THREE.Matrix4()
@@ -43,8 +43,8 @@ export type DormerPlacementHit = {
  *
  * Does NOT own:
  *   - the ghost mesh (caller renders `<DormerPreview>`)
- *   - any node-lifecycle state (caller passes an `onCommit` that
- *     decides between createNode / updateNode / etc.)
+ *   - admission or node lifecycle (the caller resolves a prospective
+ *     hit, then reports whether its committing write succeeded)
  *
  * Returns the segment transform + cursor hit so the caller can mount
  * the ghost, plus the live ghost rotation (driven by R / Shift+R).
@@ -55,7 +55,8 @@ export function useDormerPlacement(opts: {
     position: [number, number, number]
     roofSegmentId?: string
   }
-  onCommit: (hit: DormerPlacementHit, rotation: number) => void
+  resolveProposal?: (hit: DormerPlacementHit, rotation: number) => DormerPlacementHit | null
+  onCommit: (hit: DormerPlacementHit, rotation: number) => boolean
 }): {
   activeBuildingId: string | undefined
   clearPreview: () => void
@@ -75,19 +76,27 @@ export function useDormerPlacement(opts: {
   // inside useEffect) can read the latest value at commit time.
   const ghostRotationRef = useRef(opts.initialRotation ?? 0)
   const relativeStartRef = useRef(opts.relativeStart)
+  const rawHitRef = useRef<DormerPlacementHit | null>(null)
+  const acceptedHitRef = useRef<DormerPlacementHit | null>(null)
+  const resolveProposalRef = useRef(opts.resolveProposal)
+  resolveProposalRef.current = opts.resolveProposal
   // Latest commit callback, captured via ref so the useEffect doesn't
   // need it in its dep list (we don't want to re-register listeners
   // every time the parent rerenders).
   const onCommitRef = useRef(opts.onCommit)
   onCommitRef.current = opts.onCommit
 
-  const clearPreview = () => {
+  const clearPreview = useCallback(() => {
+    acceptedHitRef.current = null
+    rawHitRef.current = null
+    lastSnapRef.current = null
     setSegmentXform(null)
     setHitSegment(null)
     setHitLocal(null)
-  }
+  }, [])
 
   useEffect(() => {
+    clearPreview()
     if (!activeBuildingId) return
 
     const computeSegmentXform = (segmentId: string): DormerSegmentTransform | null => {
@@ -109,7 +118,27 @@ export function useDormerPlacement(opts: {
       ? createRelativeRoofDrag(relativeStartRef.current)
       : null
     let committed = false
-    let lastRelativeHit: DormerPlacementHit | null = null
+
+    const publishHit = (rawHit: DormerPlacementHit | null) => {
+      const hit = rawHit
+        ? resolveProposalRef.current
+          ? resolveProposalRef.current(rawHit, ghostRotationRef.current)
+          : rawHit
+        : null
+      const xform = hit ? computeSegmentXform(hit.segment.id) : null
+      if (!(hit && xform)) {
+        clearPreview()
+        // Retain the raw pose so a subsequent R can recover from a refused rotation.
+        rawHitRef.current = rawHit
+        return null
+      }
+      rawHitRef.current = rawHit
+      acceptedHitRef.current = hit
+      setSegmentXform(xform)
+      setHitSegment(hit.segment)
+      setHitLocal([hit.localX, hit.localY, hit.localZ])
+      return hit
+    }
 
     const resolvePlacementHit = (event: RoofEvent): DormerPlacementHit | null => {
       if (roofDrag) return roofDrag.resolve(event)
@@ -118,10 +147,15 @@ export function useDormerPlacement(opts: {
         event.position[0],
         event.position[1],
         event.position[2],
+        roofEventWitness(event),
       )
     }
 
     const updatePreview = (event: RoofEvent) => {
+      if (committed) return
+      const hit = publishHit(resolvePlacementHit(event))
+      event.stopPropagation()
+      if (!hit) return
       const wx = event.position[0]
       const wz = event.position[2]
 
@@ -132,42 +166,33 @@ export function useDormerPlacement(opts: {
         triggerSFX('sfx:grid-snap')
         lastSnapRef.current = [sx, sz]
       }
-
-      const hit = resolvePlacementHit(event)
-      if (!hit) return
-      if (roofDrag) lastRelativeHit = hit
-      const xform = computeSegmentXform(hit.segment.id)
-      if (!xform) return
-      setSegmentXform(xform)
-      setHitSegment(hit.segment)
-      // Lift the ghost to the actual roof-surface Y at the cursor so
-      // it tracks the mouse along the slope. The CSG inside
-      // `generateDormerGeometry` carves the dormer against the host
-      // roof regardless of `position[1]` — anchoring at the cursor
-      // height is purely a visual alignment.
-      setHitLocal([hit.localX, hit.localY, hit.localZ])
-      event.stopPropagation()
     }
 
     const onClick = (event: RoofEvent) => {
       if (committed) return
-      const hit = roofDrag
-        ? (lastRelativeHit ?? resolvePlacementHit(event))
-        : resolvePlacementHit(event)
-      if (!hit) return
-      committed = true
-      onCommitRef.current(hit, ghostRotationRef.current)
-      triggerSFX('sfx:item-place')
+      const hit = publishHit(resolvePlacementHit(event))
       event.stopPropagation()
+      if (!hit) return
+      if (!onCommitRef.current(hit, ghostRotationRef.current)) {
+        clearPreview()
+        return
+      }
+      committed = true
+      clearPreview()
+      triggerSFX('sfx:item-place')
     }
 
     const onPlacementDragPointerUp = (event: PointerEvent) => {
       if (committed) return
       if (!consumePlacementDragRelease(event)) return
-      const hit = roofDrag ? lastRelativeHit : null
+      const hit = roofDrag ? acceptedHitRef.current : null
       if (!hit) return
+      if (!onCommitRef.current(hit, ghostRotationRef.current)) {
+        clearPreview()
+        return
+      }
       committed = true
-      onCommitRef.current(hit, ghostRotationRef.current)
+      clearPreview()
       triggerSFX('sfx:item-place')
     }
 
@@ -182,6 +207,7 @@ export function useDormerPlacement(opts: {
       const dir = e.shiftKey ? -1 : 1
       ghostRotationRef.current += dir * DORMER_PLACEMENT_ROTATION_STEP
       setGhostRotation(ghostRotationRef.current)
+      publishHit(rawHitRef.current)
       e.preventDefault()
     }
 
@@ -198,7 +224,7 @@ export function useDormerPlacement(opts: {
       window.removeEventListener('keydown', onKeyDown)
       window.removeEventListener('pointerup', onPlacementDragPointerUp)
     }
-  }, [activeBuildingId])
+  }, [activeBuildingId, clearPreview])
 
   return {
     activeBuildingId: activeBuildingId ?? undefined,

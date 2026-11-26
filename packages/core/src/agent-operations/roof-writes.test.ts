@@ -434,8 +434,9 @@ describe('every roof writer', () => {
       test('paste, room placement and a generated build (seatRoofs on their changes)', () => {
         const nodes = house()
         const create = roofNodes().map((node) => ({ node, parentId: node.parentId ?? undefined }))
-        const { changes } = seatRoofs(nodes, { create })
-        expectPlaced(applySceneChanges(nodes, changes), roofId, 'level_g', seated)
+        const result = seatRoofs(nodes, { create })
+        if ('kind' in result) throw new Error('Unexpected seating refusal')
+        expectPlaced(applySceneChanges(nodes, result.changes), roofId, 'level_g', seated)
       })
 
       test('apply_patch, update_node and a saved graph (seatWrittenRoofs on their ops)', () => {
@@ -461,6 +462,7 @@ describe('every roof writer', () => {
           create: roofNodes().map((node) => ({ node })),
         })
         const move = planRoofsOffStorey(nodes, 'level_g')
+        if (move && 'kind' in move) throw new Error('Unexpected migration refusal')
         expectPlaced(
           move ? applySceneChanges(nodes, move.changes) : nodes,
           roofId,

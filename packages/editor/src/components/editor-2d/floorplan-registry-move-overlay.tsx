@@ -329,7 +329,7 @@ export function FloorplanRegistryMoveOverlay() {
           (ownsSubtree ||
             ('children' in movingNode && movingNode.children.length > 0) ||
             surfaceAttachmentId(useScene.getState().nodes[movingNode.id] ?? movingNode) !== null)
-        if (atomicPreview && !commitValid) {
+        if (freshPlacement && !commitValid) {
           showRejection()
           return false
         }

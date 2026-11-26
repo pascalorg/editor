@@ -791,6 +791,8 @@ function migrateNodes(nodes: Record<string, any>): {
         const window = createDormerDefaultWindow(
           dormer,
           windowId,
+          // A stored legacy dormer keeps main's nominal face choice: a scene-context read is
+          // unmeasured where the host has no resolvable roof, and would then default to front.
           getDormerDefaultWindowFace(dormer, hostSegment),
         )
         patchedNodes[windowId] = window

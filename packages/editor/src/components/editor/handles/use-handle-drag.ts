@@ -68,6 +68,7 @@ export type HandleDragMoveContext = {
 type HandleDragSession = {
   move: (context: HandleDragMoveContext) => Partial<AnyNode> | null
   commit?: (patch: Partial<AnyNode>) => void
+  prepareCommit?: (patch: Partial<AnyNode>) => (() => void) | null
   markDirty?: boolean
   onBegin?: () => void
   onCancel?: () => void
@@ -342,7 +343,21 @@ export function startHandleDrag(
     if (moveFrame !== 0) window.cancelAnimationFrame?.(moveFrame)
     flushMove()
     swallowNextClick()
-    sfxEmitter.emit('sfx:item-place')
+    let commit = session.commit ?? ((patch: Partial<AnyNode>) => sceneApi.update(overrideId, patch))
+    if (lastPatch && session.prepareCommit) {
+      try {
+        const prepared = session.prepareCommit(lastPatch)
+        if (!prepared) {
+          gesture.cancel('cancel')
+          return
+        }
+        commit = () => prepared()
+      } catch (error) {
+        gesture.cancel('cancel')
+        throw error
+      }
+    }
+    if (!session.prepareCommit) sfxEmitter.emit('sfx:item-place')
     gesture.finish(() => {
       try {
         if (lastPatch) {
@@ -350,8 +365,9 @@ export function startHandleDrag(
             patch: lastPatch,
             resumeHistory,
             runAsSingleHistoryStep: (run) => runAsSingleSceneHistoryStep(useScene, run),
-            commit: session.commit ?? ((patch) => sceneApi.update(overrideId, patch)),
+            commit,
           })
+          if (session.prepareCommit) sfxEmitter.emit('sfx:item-place')
         }
       } finally {
         try {

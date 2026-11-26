@@ -69,8 +69,10 @@ const TOOL_POLICIES = [
     tools: [
       'add_corner_window',
       'add_door',
+      'add_dormer',
       'add_fence',
       'add_level',
+      'add_roof_element',
       'add_site_surface',
       'add_steps',
       'add_tree',

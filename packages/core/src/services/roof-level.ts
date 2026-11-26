@@ -115,24 +115,26 @@ function stackOf(nodes: Nodes, levelId: string, side: 'below' | 'above'): LevelN
     .filter((node): node is LevelNode => node?.type === 'level')
 }
 
+/** Proposed roof regions in the covered storey's plan, in metres. */
+export type RoofHostFootprint = readonly (readonly (readonly [number, number])[])[]
+
+export type RoofHostRefusal =
+  | { kind: 'refuse'; code: 'storey_above'; storeyAboveId: string; nodeId?: string | null }
+  | { kind: 'refuse'; code: 'storey_without_building' }
+
+/** The building's roof level, created first when absent, updated when undeclared. */
+export type RoofLevelPlacement = {
+  kind: 'roof'
+  levelId: string
+  create: LevelNode | null
+  update: { id: string; data: Partial<LevelNode> }[]
+  /** The covered storey's floor from the target level's floor (m, negative). */
+  storeyOffset: number
+}
+
 export type RoofLevelPlan =
   /** A storey stands above: it takes a roof over part of the storey below. */
-  (
-    | { kind: 'storey'; levelId: string }
-    /** The building's roof level, `create`d first when it has none, `update`d when undeclared. */
-    | {
-        kind: 'roof'
-        levelId: string
-        create: LevelNode | null
-        update: { id: string; data: Partial<LevelNode> }[]
-      }
-  ) & {
-    /**
-     * The storey's floor from the target level's, once the plan is written (m, negative): a roof
-     * measured from the storey's floor sits its container this high on the target level.
-     */
-    storeyOffset: number
-  }
+  { kind: 'storey'; levelId: string; storeyOffset: number } | RoofLevelPlacement | RoofHostRefusal
 
 /** How far `storeyId`'s floor sits from `levelId`'s (m): negative, the storey being below. */
 function storeyOffsetTo(nodes: Nodes, storeyId: string, levelId: string): number {
@@ -141,7 +143,7 @@ function storeyOffsetTo(nodes: Nodes, storeyId: string, levelId: string): number
 }
 
 /** A level reused as the roof level, declared when it was not. */
-function roofLevelPlan(nodes: Nodes, storeyId: string, level: LevelNode): RoofLevelPlan {
+function roofLevelPlan(nodes: Nodes, storeyId: string, level: LevelNode): RoofLevelPlacement {
   return {
     kind: 'roof',
     levelId: level.id,
@@ -175,7 +177,11 @@ function roofLevelPlan(nodes: Nodes, storeyId: string, level: LevelNode): RoofLe
 export function roofLevelAbove(
   nodes: Nodes,
   storeyId: string,
-): { kind: 'storey'; level: LevelNode } | { kind: 'roof'; level: LevelNode | null } {
+  _footprint?: RoofHostFootprint,
+):
+  | { kind: 'storey'; level: LevelNode }
+  | { kind: 'roof'; level: LevelNode | null }
+  | RoofHostRefusal {
   const above = stackOf(nodes, storeyId, 'above')
   const isPlain = (level: LevelNode) => !servesAsRoofLevel(nodes, level) && !isSupportLevel(level)
   // The roof stands on the storey directly above, an empty one still to be built included.
@@ -196,10 +202,16 @@ export function roofLevelAbove(
  * (the roof's rise over its eaves) on top. Pure: the caller writes the plan in the same step as the
  * roof.
  */
-export function planRoofLevel(nodes: Nodes, storeyId: string, roofHeight: number): RoofLevelPlan {
+export function planRoofLevel(
+  nodes: Nodes,
+  storeyId: string,
+  roofHeight: number,
+  footprint?: RoofHostFootprint,
+): RoofLevelPlan {
   const storey = nodes[storeyId]
   if (storey?.type !== 'level') throw Error(`${storeyId} is not a level`)
-  const target = roofLevelAbove(nodes, storeyId)
+  const target = roofLevelAbove(nodes, storeyId, footprint)
+  if (target.kind === 'refuse') return target
   if (target.kind === 'storey')
     return {
       kind: 'storey',

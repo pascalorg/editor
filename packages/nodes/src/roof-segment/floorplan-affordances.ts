@@ -1,5 +1,6 @@
 import {
   type AnyNodeId,
+  createSceneApi,
   type FloorplanAffordance,
   type FloorplanMoveTarget,
   getRoofSegmentResizePatch,
@@ -16,7 +17,7 @@ import {
   isGridSnapActive,
   isMagneticSnapActive,
 } from '@pascal-app/editor'
-import { commitSeatedRoofEdit } from '../roof/roof-level-target'
+import { prepareSeatedRoofEdit } from '../roof/roof-level-target'
 import {
   bearingWallThickness,
   catchRoofOnWalls,
@@ -31,6 +32,31 @@ import { rotateAffordanceDelta } from '../shared/rotate-affordance'
 const MIN_ROOF_DIM = MIN_ROOF_SEGMENT_DIMENSION
 
 type RoofSegmentResizePayload = { mode: 'radial' } | { axis: 'x' | 'z'; side: 1 | -1 }
+
+/** Admit this segment's complete edit before the 2D dispatcher resumes history. */
+function roofSegmentCommit(id: AnyNodeId, patch: () => Partial<RoofSegmentNode>) {
+  let prepared: (() => void) | null = null
+  const canCommit = () => {
+    const result = prepareSeatedRoofEdit(
+      createSceneApi(useScene),
+      { update: [{ id, data: patch() }] },
+      id,
+    )
+    prepared = typeof result === 'function' ? result : null
+    return prepared !== null
+  }
+  return {
+    canCommit,
+    commit() {
+      // Direct callers may commit without the dispatcher; they still plan before writing.
+      if (!prepared && !canCommit()) return
+      const write = prepared
+      prepared = null
+      useLiveNodeOverrides.getState().clear(id)
+      write?.()
+    },
+  }
+}
 
 // Resolve world-space center + effective rotation of a roof segment by
 // composing the parent roof's position + rotation with the segment's
@@ -87,6 +113,10 @@ export const roofSegmentResizeAffordance: FloorplanAffordance<RoofSegmentNode> =
 
       return {
         affectedIds: [segmentId],
+        ...roofSegmentCommit(segmentId, () => ({
+          width: lastRadius * 2,
+          depth: lastRadius * 2,
+        })),
         apply({ planPoint }) {
           const pointerRadius = Math.hypot(planPoint[0] - cx, planPoint[1] - cz)
           lastRadius = Math.max(
@@ -96,18 +126,6 @@ export const roofSegmentResizeAffordance: FloorplanAffordance<RoofSegmentNode> =
           const diameter = lastRadius * 2
           useLiveNodeOverrides.getState().set(segmentId, { width: diameter, depth: diameter })
           useScene.getState().markDirty(segmentId)
-        },
-        canCommit() {
-          return true
-        },
-        commit() {
-          useLiveNodeOverrides.getState().clear(segmentId)
-          const diameter = lastRadius * 2
-          // Grown onto the walls that carry it, its roof goes to the level above them.
-          commitSeatedRoofEdit(
-            [{ id: segmentId, data: { width: diameter, depth: diameter } }],
-            segmentId,
-          )
         },
       }
     }
@@ -150,6 +168,7 @@ export const roofSegmentResizeAffordance: FloorplanAffordance<RoofSegmentNode> =
 
     return {
       affectedIds: [segmentId],
+      ...roofSegmentCommit(segmentId, () => resized(lastValue)),
       apply({ planPoint, modifiers }) {
         const currentLocal = projectLocalAxis(planPoint[0], planPoint[1])
         const delta = (currentLocal - initialLocal) * side
@@ -170,13 +189,6 @@ export const roofSegmentResizeAffordance: FloorplanAffordance<RoofSegmentNode> =
         lastValue = newValue
         useLiveNodeOverrides.getState().set(segmentId, resized(newValue))
         useScene.getState().markDirty(segmentId)
-      },
-      canCommit() {
-        return true
-      },
-      commit() {
-        useLiveNodeOverrides.getState().clear(segmentId)
-        commitSeatedRoofEdit([{ id: segmentId, data: resized(lastValue) }], segmentId)
       },
     }
   },
@@ -200,6 +212,7 @@ export const roofSegmentRotateAffordance: FloorplanAffordance<RoofSegmentNode> =
 
     return {
       affectedIds: [segmentId],
+      ...roofSegmentCommit(segmentId, () => ({ rotation: lastRotation })),
       apply({ planPoint }) {
         const delta = rotateAffordanceDelta({
           center: [cx, cz],
@@ -210,13 +223,6 @@ export const roofSegmentRotateAffordance: FloorplanAffordance<RoofSegmentNode> =
         lastRotation = initialRotation - delta
         useLiveNodeOverrides.getState().set(segmentId, { rotation: lastRotation })
         useScene.getState().markDirty(segmentId)
-      },
-      canCommit() {
-        return true
-      },
-      commit() {
-        useLiveNodeOverrides.getState().clear(segmentId)
-        commitSeatedRoofEdit([{ id: segmentId, data: { rotation: lastRotation } }], segmentId)
       },
     }
   },
@@ -254,6 +260,7 @@ export const roofSegmentMoveTarget: FloorplanMoveTarget<RoofSegmentNode> = ({ no
 
   return {
     affectedIds: [segmentId],
+    ...roofSegmentCommit(segmentId, moved),
     apply({ planPoint, modifiers }) {
       // Mode-aware: `getSegmentGridStep()` is 0 outside grid mode (so `lines` /
       // `off` move freely), and the `moving` scope resolves the `polygon` set
@@ -294,14 +301,6 @@ export const roofSegmentMoveTarget: FloorplanMoveTarget<RoofSegmentNode> = ({ no
         ) ?? node.wallThickness
       useLiveNodeOverrides.getState().set(segmentId, moved())
       useScene.getState().markDirty(segmentId)
-    },
-    canCommit() {
-      return true
-    },
-    commit() {
-      useLiveNodeOverrides.getState().clear(segmentId)
-      // Dragged onto the walls that carry it, its roof goes to the level above them.
-      commitSeatedRoofEdit([{ id: segmentId, data: moved() }], segmentId)
     },
   }
 }
