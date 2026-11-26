@@ -7,6 +7,9 @@ export const chatGptSkillNames = ['pascal-3d', 'furniture-fit'] as const
 
 export type PackageEntry = { path: string; source: string }
 
+// ZIP entry names always use `/`, whatever the platform's path separator.
+const zipPath = (from: string, to: string) => relative(from, to).replaceAll('\\', '/')
+
 function skillFiles(root: string, name: string): PackageEntry[] {
   const directory = join(root, 'skills', name)
   return readdirSync(directory, { recursive: true, withFileTypes: true })
@@ -14,11 +17,11 @@ function skillFiles(root: string, name: string): PackageEntry[] {
     .map((entry) => join(entry.parentPath, entry.name))
     .filter(
       (source) =>
-        !relative(directory, source)
+        !zipPath(directory, source)
           .split('/')
           .some((part) => part.startsWith('.')),
     )
-    .map((source) => ({ path: relative(root, source), source }))
+    .map((source) => ({ path: zipPath(root, source), source }))
 }
 
 /**
