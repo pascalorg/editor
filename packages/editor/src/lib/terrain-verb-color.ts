@@ -35,6 +35,7 @@ export const TERRAIN_VERB_COLOR: Record<TerrainVerb, string> = {
   lower: '#ef4444',
   flatten: '#3b82f6',
   smooth: '#a855f7',
+  slope: '#14b8a6',
 }
 
 /**

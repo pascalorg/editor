@@ -3865,6 +3865,190 @@ msgstr "编辑{label}"
 msgid "editor.controls.sliderControl.mixed"
 msgstr "混合"
 
+# Source-Hash: 0649bd94e026be6e
+# Review: required
+# English: "Anchor: Center"
+#: packages/editor/src/components/ui/controls/terrain-sculpt-panel.tsx
+#, fuzzy
+msgid "editor.controls.terrainSculptPanel.anchorCenter"
+msgstr "基准：中心"
+
+# Source-Hash: cb7e57c94164cc98
+# Review: required
+# English: "Anchored at {elevation}"
+#: packages/editor/src/components/ui/controls/terrain-sculpt-panel.tsx
+#, fuzzy
+msgid "editor.controls.terrainSculptPanel.anchoredAt"
+msgstr "锚定于 {elevation}"
+
+# Source-Hash: 97a469eea5be88b7
+# Review: required
+# English: "Brush strokes grade onto the picked A → B plane. Clear anchor to grade from click height."
+#: packages/editor/src/components/ui/controls/terrain-sculpt-panel.tsx
+#, fuzzy
+msgid "editor.controls.terrainSculptPanel.anchoredBrushHint"
+msgstr "笔刷将按拾取的 A → B 平面整平。清除锚点可从点击高度开始整平。"
+
+# Source-Hash: 9b6a17a595aba42c
+# Review: required
+# English: "Low edge"
+#: packages/editor/src/components/ui/controls/terrain-sculpt-panel.tsx
+#, fuzzy
+msgid "editor.controls.terrainSculptPanel.anchorLowEdge"
+msgstr "低边"
+
+# Source-Hash: d0f86d2093269896
+# Review: required
+# English: "Clear"
+#: packages/editor/src/components/ui/controls/terrain-sculpt-panel.tsx
+#, fuzzy
+msgid "editor.controls.terrainSculptPanel.clearAnchor"
+msgstr "清除"
+
+# Source-Hash: 1aeed95f4f4a25d9
+# Review: required
+# English: "Clear picked slope anchor"
+#: packages/editor/src/components/ui/controls/terrain-sculpt-panel.tsx
+#, fuzzy
+msgid "editor.controls.terrainSculptPanel.clearSlopeAnchorAria"
+msgstr "清除已拾取的坡度锚点"
+
+# Source-Hash: 76cd03300faa9b2b
+# Review: required
+# English: "Direction"
+#: packages/editor/src/components/ui/controls/terrain-sculpt-panel.tsx
+#, fuzzy
+msgid "editor.controls.terrainSculptPanel.direction"
+msgstr "方向"
+
+# Source-Hash: 8a3bc5111b9e97f4
+# Review: required
+# English: "Elevation"
+#: packages/editor/src/components/ui/controls/terrain-sculpt-panel.tsx
+#, fuzzy
+msgid "editor.controls.terrainSculptPanel.elevation"
+msgstr "标高"
+
+# Source-Hash: 3b9832a6f9ba9968
+# Review: required
+# English: "Flip 180°"
+#: packages/editor/src/components/ui/controls/terrain-sculpt-panel.tsx
+#, fuzzy
+msgid "editor.controls.terrainSculptPanel.flip180"
+msgstr "翻转 180°"
+
+# Source-Hash: c86013f873a5cf54
+# Review: required
+# English: "Flip slope direction 180 degrees"
+#: packages/editor/src/components/ui/controls/terrain-sculpt-panel.tsx
+#, fuzzy
+msgid "editor.controls.terrainSculptPanel.flipSlope180Aria"
+msgstr "将坡度方向翻转 180 度"
+
+# Source-Hash: dfc8dd7b821e0027
+# Review: required
+# English: "Brush strokes start from the height where you click, or apply this grade across the whole lot."
+#: packages/editor/src/components/ui/controls/terrain-sculpt-panel.tsx
+#, fuzzy
+msgid "editor.controls.terrainSculptPanel.freeBrushHint"
+msgstr "笔刷从点击处的高度开始整平，或将该坡度应用到整个地块。"
+
+# Source-Hash: c21f80df7e8f26bb
+# Review: required
+# English: "Grade {percent}%"
+#: packages/editor/src/components/ui/controls/terrain-sculpt-panel.tsx
+#, fuzzy
+msgid "editor.controls.terrainSculptPanel.gradeReadout"
+msgstr "坡度 {percent}%"
+
+# Source-Hash: ffb9dd742ce285d5
+# Review: required
+# English: "Click a second point on the ground to match its slope and direction."
+#: packages/editor/src/components/ui/controls/terrain-sculpt-panel.tsx
+#, fuzzy
+msgid "editor.controls.terrainSculptPanel.pickEndHint"
+msgstr "点击地面上的第二个点以匹配其坡度和方向。"
+
+# Source-Hash: 39032dcfac98ce16
+# Review: required
+# English: "Pick two points on the ground to match slope"
+#: packages/editor/src/components/ui/controls/terrain-sculpt-panel.tsx
+#, fuzzy
+msgid "editor.controls.terrainSculptPanel.pickSlopePointsAria"
+msgstr "在地面拾取两点以匹配坡度"
+
+# Source-Hash: 3eb8aa36ee14d71e
+# Review: required
+# English: "Pick A → B slope"
+#: packages/editor/src/components/ui/controls/terrain-sculpt-panel.tsx
+#, fuzzy
+msgid "editor.controls.terrainSculptPanel.pickSlopeTitle"
+msgstr "拾取 A → B 坡度"
+
+# Source-Hash: 0234a08c7f69eb6e
+# Review: required
+# English: "Click a start point on the ground for the slope."
+#: packages/editor/src/components/ui/controls/terrain-sculpt-panel.tsx
+#, fuzzy
+msgid "editor.controls.terrainSculptPanel.pickStartHint"
+msgstr "点击地面上的起点以确定坡度。"
+
+# Source-Hash: 75e3449fc1776d09
+# Review: required
+# English: "Pitch"
+#: packages/editor/src/components/ui/controls/terrain-sculpt-panel.tsx
+#, fuzzy
+msgid "editor.controls.terrainSculptPanel.pitch"
+msgstr "倾角"
+
+# Source-Hash: 9cab4d4c95f63cdd
+# Review: required
+# English: "Flat"
+#: packages/editor/src/components/ui/controls/terrain-sculpt-panel.tsx
+#, fuzzy
+msgid "editor.controls.terrainSculptPanel.presetFlat"
+msgstr "平坦"
+
+# Source-Hash: 6bd6f5ee572899d9
+# Review: required
+# English: "Rotate 90°"
+#: packages/editor/src/components/ui/controls/terrain-sculpt-panel.tsx
+#, fuzzy
+msgid "editor.controls.terrainSculptPanel.rotate90"
+msgstr "旋转 90°"
+
+# Source-Hash: 99178c8101a2c6c8
+# Review: required
+# English: "Rotate slope direction 90 degrees"
+#: packages/editor/src/components/ui/controls/terrain-sculpt-panel.tsx
+#, fuzzy
+msgid "editor.controls.terrainSculptPanel.rotateSlope90Aria"
+msgstr "将坡度方向旋转 90 度"
+
+# Source-Hash: e6d82e606b8c9301
+# Review: required
+# English: "Slope"
+#: packages/editor/src/components/ui/controls/terrain-sculpt-panel.tsx
+#, fuzzy
+msgid "editor.controls.terrainSculptPanel.slope"
+msgstr "坡度"
+
+# Source-Hash: 8da50c5d2ebdae8d
+# Review: required
+# English: "Drag to grade the ground along an inclined plane, pick A → B to match two points, or apply the slope to the whole lot."
+#: packages/editor/src/components/ui/controls/terrain-sculpt-panel.tsx
+#, fuzzy
+msgid "editor.controls.terrainSculptPanel.slopeHint"
+msgstr "拖动按倾斜平面整平地形、拾取 A → B 两点匹配坡度，或将坡度应用到整个地块。"
+
+# Source-Hash: 0d99cfc72de66487
+# Review: required
+# English: "Slope lot"
+#: packages/editor/src/components/ui/controls/terrain-sculpt-panel.tsx
+#, fuzzy
+msgid "editor.controls.terrainSculptPanel.slopeLot"
+msgstr "倾斜整个地块"
+
 # Source-Hash: a2bd204e93e90598
 # Review: required
 # AI-Provider: claude-code
@@ -4836,6 +5020,14 @@ msgstr "自由移动"
 msgid "editor.helpers.helperManager.freeMoveSlideDoorsAndWindows"
 msgstr "自由移动 · 滑动门窗"
 
+# Source-Hash: b8d5470b9ce47715
+# Review: required
+# English: "Grade slope"
+#: packages/editor/src/components/ui/helpers/helper-manager.tsx
+#, fuzzy
+msgid "editor.helpers.helperManager.gradeSlope"
+msgstr "整平坡度"
+
 # Source-Hash: b5ad765b43e75a5c
 # Review: required
 # AI-Provider: claude-code
@@ -4875,6 +5067,22 @@ msgstr "对象、墙体或房间"
 #, fuzzy
 msgid "editor.helpers.helperManager.paintWithThisMaterial"
 msgstr "使用此材质涂装"
+
+# Source-Hash: 14f87dcf447adf8e
+# Review: required
+# English: "Pick end point to match slope"
+#: packages/editor/src/components/ui/helpers/helper-manager.tsx
+#, fuzzy
+msgid "editor.helpers.helperManager.pickSlopeEndPoint"
+msgstr "选择终点以匹配坡度"
+
+# Source-Hash: 98d35989e0b9f45c
+# Review: required
+# English: "Pick start point"
+#: packages/editor/src/components/ui/helpers/helper-manager.tsx
+#, fuzzy
+msgid "editor.helpers.helperManager.pickSlopeStartPoint"
+msgstr "选择起点"
 
 # Source-Hash: 188f55cc5afbe34f
 # Review: required
@@ -11170,6 +11378,14 @@ msgstr "旋转"
 #, fuzzy
 msgid "editor.lib.hudTitle.select"
 msgstr "选择"
+
+# Source-Hash: b3bdf03121550c31
+# Review: required
+# English: "Slope terrain"
+#: packages/editor/src/lib/hud-title.ts
+#, fuzzy
+msgid "editor.lib.hudTitle.slopeTerrain"
+msgstr "倾斜地形"
 
 # Source-Hash: ec1f1d68af469867
 # Review: required

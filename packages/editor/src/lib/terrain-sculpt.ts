@@ -8,12 +8,15 @@
 
 import {
   type BrushSettings,
+  buildSlopedTerrainField,
+  clampTerrainSlopePitch,
   commitTerrainField,
   createTerrainField,
   DEFAULT_TERRAIN_SPACING,
   type HeightPatch,
   isDatumField,
   minBrushRadius,
+  normalizeTerrainSlopeDirection,
   persistedTerrainFieldOf,
   pointInPolygon2D,
   quantize,
@@ -21,6 +24,8 @@ import {
   type SiteNode,
   sampleTarget,
   type TerrainField,
+  type TerrainSlopePlane,
+  type TerrainSlopeSpec,
   type TerrainVerb,
   useLiveTerrain,
   useScene,
@@ -215,6 +220,40 @@ export function resolveFlattenTarget(
   return explicitTarget ?? sampleTarget(field, x, z)
 }
 
+/**
+ * Resolve the inclined target plane for a `slope` brush stroke.
+ *
+ * When the user picked two ground points (`A -> B`), `lockedAnchor` keeps the
+ * plane pinned to point A so multiple strokes along the ramp stay flush on both
+ * ends. Otherwise the plane anchors seamlessly at the clicked ground point.
+ */
+export function resolveSlopeStrokePlane(
+  field: TerrainField,
+  spec: Pick<TerrainSlopeSpec, 'direction' | 'pitch'>,
+  x: number,
+  z: number,
+  lockedAnchor?: readonly [number, number, number] | null,
+): TerrainSlopePlane {
+  const pitch = clampTerrainSlopePitch(spec.pitch)
+  const direction = normalizeTerrainSlopeDirection(spec.direction)
+  if (lockedAnchor) {
+    return {
+      anchorX: lockedAnchor[0],
+      anchorZ: lockedAnchor[1],
+      anchorY: lockedAnchor[2],
+      direction,
+      pitch,
+    }
+  }
+  return {
+    anchorX: x,
+    anchorZ: z,
+    anchorY: sampleTarget(field, x, z),
+    direction,
+    pitch,
+  }
+}
+
 export type SculptCommit = {
   verb: TerrainVerb
   settings: BrushSettings
@@ -259,6 +298,19 @@ export function flattenSite(site: SiteNode, metres: number): void {
   const heights = new Int16Array(field.heights.length)
   heights.fill(value)
   commitStroke(site.id, { ...field, heights })
+}
+
+/**
+ * Grade the whole site to a single planar slope in one undoable step.
+ *
+ * Evaluates across the full padded field extent (matching `flattenSite`) so the
+ * property boundary sits on continuous sloped ground without an edge cliff.
+ */
+export function slopeSite(site: SiteNode, spec: TerrainSlopeSpec): void {
+  abandonLiveStroke(site)
+  const field = sculptFieldForSite(site)
+  const sloped = buildSlopedTerrainField(field, site.polygon?.points ?? [], spec)
+  commitStroke(site.id, sloped)
 }
 
 /**

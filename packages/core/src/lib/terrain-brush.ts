@@ -38,6 +38,12 @@ import {
   quantize,
   type TerrainField,
 } from './terrain-field'
+import {
+  type CompiledTerrainSlopePlane,
+  compileTerrainSlopePlane,
+  evaluateCompiledTerrainSlopePlane,
+  type TerrainSlopePlane,
+} from './terrain-slope'
 
 export type BrushShape = 'round' | 'square'
 
@@ -47,7 +53,8 @@ export type BrushShape = 'round' | 'square'
  * it converges on a target height, which is the operation that makes two
  * disjoint building pads provably equal — the thing freehand push/pull cannot do.
  */
-export type TerrainVerb = 'raise' | 'lower' | 'flatten' | 'smooth'
+export type BaseTerrainVerb = 'raise' | 'lower' | 'flatten' | 'smooth'
+export type TerrainVerb = BaseTerrainVerb | 'slope'
 
 export type BrushSettings = {
   /** Brush radius in metres. */
@@ -124,6 +131,10 @@ export type TerrainStroke = {
   readonly snapshot: TerrainField
   /** Absolute target height in metres. Only meaningful for `flatten`. */
   readonly target: number
+  /** Target inclined plane in world space. Only meaningful for `slope`. */
+  readonly slope: TerrainSlopePlane | null
+  /** Precompiled linear coefficients for `slope` so per-sample evaluation avoids trig. */
+  readonly compiledSlope: CompiledTerrainSlopePlane | null
   /** Sample index → saturating coverage in 0–1. */
   readonly mask: Map<number, number>
   /** Lazily computed diffused snapshot, for `smooth`. */
@@ -139,12 +150,16 @@ export function beginStroke(options: {
   settings?: Partial<BrushSettings>
   /** Absolute height for `flatten`, in metres. Ignored by the other verbs. */
   target?: number
+  /** Target inclined plane for `slope`. Ignored by the other verbs. */
+  slope?: TerrainSlopePlane
 }): TerrainStroke {
   return {
     verb: options.verb,
     settings: { ...DEFAULT_BRUSH_SETTINGS, ...options.settings },
     snapshot: options.field,
     target: options.target ?? 0,
+    slope: options.slope ?? null,
+    compiledSlope: options.slope ? compileTerrainSlopePlane(options.slope) : null,
     mask: new Map(),
     smoothed: null,
     lastX: null,
@@ -268,10 +283,14 @@ function resolveSample(stroke: TerrainStroke, index: number, col: number, row: n
       const goal = (smoothed[index] ?? base) * field.step
       return quantize(field, baseMetres + (goal - baseMetres) * amount)
     }
+    case 'slope': {
+      if (!stroke.compiledSlope) return base
+      const sampleX = field.origin[0] + col * field.spacing
+      const sampleZ = field.origin[1] + row * field.spacing
+      const goal = evaluateCompiledTerrainSlopePlane(stroke.compiledSlope, sampleX, sampleZ)
+      return quantize(field, baseMetres + (goal - baseMetres) * amount)
+    }
     default:
-      // `col`/`row` are carried for future verbs that need position (terrace).
-      void col
-      void row
       return base
   }
 }

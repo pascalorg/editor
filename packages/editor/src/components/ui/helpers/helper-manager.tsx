@@ -70,7 +70,7 @@ import {
 } from '../../../lib/paint-region-mode'
 import { snapContextOf } from '../../../lib/snapping-mode'
 import { cornerHintRows, useCornerSnapHint } from '../../../store/use-corner-snap-hint'
-import useEditor, { getActiveContinuationContext } from '../../../store/use-editor'
+import useEditor, { getActiveContinuationContext, selectActiveTerrainVerb } from '../../../store/use-editor'
 import useInteractionScope, {
   useActiveHandleDrag,
   useMovingNode,
@@ -107,8 +107,32 @@ function reshapingHints(reshape: ReshapeKind): ContextualShortcutHint[] {
 // brush ring now carries the verb in colour (`brushRingColor`): the ring says
 // *which* verb only to someone who already knows the mapping, and the HUD is what
 // teaches it.
-function terrainSculptHints(verb: TerrainVerb, sampling: boolean): ContextualShortcutHint[] {
+function terrainSculptHints(
+  verb: TerrainVerb,
+  sampling: boolean,
+  hasSlopePickStart: boolean,
+): ContextualShortcutHint[] {
   if (sampling) {
+    if (verb === 'slope') {
+      return [
+        {
+          keys: ['Click'],
+          label: hasSlopePickStart
+            ? /* i18n */ {
+                id: 'editor.helpers.helperManager.pickSlopeEndPoint',
+                message: 'Pick end point to match slope',
+              }
+            : /* i18n */ {
+                id: 'editor.helpers.helperManager.pickSlopeStartPoint',
+                message: 'Pick start point',
+              },
+        },
+        {
+          keys: ['Esc'],
+          label: /* i18n */ { id: 'editor.helpers.helperManager.cancelPicking', message: 'Cancel picking' },
+        },
+      ]
+    }
     return [
       { keys: ['Click'], label: /* i18n */ { id: 'editor.helpers.helperManager.pickTargetHeight', message: 'Pick target height' } },
       { keys: ['Esc'], label: /* i18n */ { id: 'editor.helpers.helperManager.cancelPicking', message: 'Cancel picking' } },
@@ -121,7 +145,9 @@ function terrainSculptHints(verb: TerrainVerb, sampling: boolean): ContextualSho
         ? 'Lower ground'
         : verb === 'flatten'
           ? 'Level ground'
-          : 'Smooth ground'
+          : verb === 'slope'
+            ? /* i18n */ { id: 'editor.helpers.helperManager.gradeSlope', message: 'Grade slope' }
+            : 'Smooth ground'
   return [
     { keys: ['Drag'], label: action },
     // Nested, so the two render as alternatives ("[ / ]") rather than a chord —
@@ -492,8 +518,9 @@ export function HelperManager({
   })
   const mode = useEditor((s) => s.mode)
   const tool = useEditor((s) => s.tool)
-  const terrainVerb = useEditor((s) => s.terrainVerb)
+  const terrainVerb = useEditor(selectActiveTerrainVerb)
   const terrainSampling = useEditor((s) => s.terrainSampling)
+  const terrainSlopePickStart = useEditor((s) => s.terrainSlopePickStart)
   const isFirstPersonMode = useEditor((s) => s.isFirstPersonMode)
   const measurementToolKind = useEditor((s) => s.toolDefaults.measurement?.kind)
   const wallMode = useEditor((s) => s.continuationByContext.wall)
@@ -835,7 +862,7 @@ export function HelperManager({
   if (mode === 'terrain-sculpt') {
     return (
       <ContextualHelperPanel
-        hints={terrainSculptHints(terrainVerb, terrainSampling)}
+        hints={terrainSculptHints(terrainVerb, terrainSampling, terrainSlopePickStart !== null)}
         title={terrainHudTitle(terrainVerb)}
       />
     )

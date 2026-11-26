@@ -4,6 +4,7 @@ import {
   advanceStroke,
   applyHeightPatch,
   beginStroke,
+  deriveTerrainSlopeFromPoints,
   detachStrokeAnchor,
   emitter,
   minBrushRadius,
@@ -11,6 +12,7 @@ import {
   type SiteNode,
   type TerrainField,
   type TerrainStroke,
+  terrainSlopeBaseElevationForPlane,
   useLiveTerrain,
   useScene,
 } from '@pascal-app/core'
@@ -24,10 +26,11 @@ import {
   clipTerrainPatchToSite,
   commitStroke,
   resolveFlattenTarget,
+  resolveSlopeStrokePlane,
   sculptFieldForSite,
   terrainPointInsideSite,
 } from '../../../lib/terrain-sculpt'
-import useEditor from '../../../store/use-editor'
+import useEditor, { selectActiveTerrainVerb } from '../../../store/use-editor'
 import { isBoxSelectPointerSuppressed } from '../select/box-select-state'
 import { strokePointerAction } from './stroke-pointer-ownership'
 import { TerrainBrushCursor, type TerrainBrushFocus } from './terrain-brush-cursor'
@@ -61,10 +64,13 @@ export const TerrainSculptTool: React.FC = () => {
   const brushFocusRef = useRef<TerrainBrushFocus | null>(null)
   const nodes = useScene((state) => state.nodes)
   const rootNodeIds = useScene((state) => state.rootNodeIds)
-  const verb = useEditor((state) => state.terrainVerb)
+  const verb = useEditor(selectActiveTerrainVerb)
   const brush = useEditor((state) => state.terrainBrush)
   const flattenTarget = useEditor((state) => state.terrainFlattenTarget)
   const sampling = useEditor((state) => state.terrainSampling)
+  const slope = useEditor((state) => state.terrainSlope)
+  const slopeAnchor = useEditor((state) => state.terrainSlopeAnchor)
+  const slopePickStart = useEditor((state) => state.terrainSlopePickStart)
 
   const siteNode = rootNodeIds[0] ? nodes[rootNodeIds[0]] : null
   const site = siteNode?.type === 'site' ? (siteNode as SiteNode) : null
@@ -72,8 +78,26 @@ export const TerrainSculptTool: React.FC = () => {
   // Everything the pointer handlers need, mirrored into refs so the listener
   // effect depends only on the canvas and camera. Re-attaching listeners because
   // the brush radius changed would drop an in-flight stroke.
-  const latest = useRef({ site, verb, brush, flattenTarget, sampling })
-  latest.current = { site, verb, brush, flattenTarget, sampling }
+  const latest = useRef({
+    site,
+    verb,
+    brush,
+    flattenTarget,
+    sampling,
+    slope,
+    slopeAnchor,
+    slopePickStart,
+  })
+  latest.current = {
+    site,
+    verb,
+    brush,
+    flattenTarget,
+    sampling,
+    slope,
+    slopeAnchor,
+    slopePickStart,
+  }
 
   const strokeRef = useRef<{
     stroke: TerrainStroke
@@ -161,7 +185,40 @@ export const TerrainSculptTool: React.FC = () => {
       // Eyedropper: sample and consume the click. Sampling *is* the gesture, so
       // it must not also deposit a dab.
       if (latest.current.sampling) {
-        useEditor.getState().setTerrainFlattenTarget(resolveFlattenTarget(field, null, ...point))
+        const sampledHeight = resolveFlattenTarget(field, null, ...point)
+        if (activeVerb === 'slope') {
+          const picked: [number, number, number] = [point[0], point[1], sampledHeight]
+          const start = latest.current.slopePickStart
+          if (!start) {
+            useEditor.getState().setTerrainSlopePickStart(picked)
+            return
+          }
+          const derived = deriveTerrainSlopeFromPoints(start, picked)
+          if (derived) {
+            const editor = useEditor.getState()
+            const derivedPlane = {
+              anchorX: derived.anchor[0],
+              anchorZ: derived.anchor[1],
+              anchorY: derived.anchor[2],
+              direction: derived.direction,
+              pitch: derived.pitch,
+            }
+            const baseElevation = terrainSlopeBaseElevationForPlane(
+              target.polygon?.points ?? [],
+              derivedPlane,
+              latest.current.slope.anchor ?? 'center',
+            )
+            editor.setTerrainSlope({
+              pitch: derived.pitch,
+              direction: derived.direction,
+              baseElevation,
+            })
+            editor.setTerrainSlopeAnchor(derived.anchor)
+            editor.setTerrainSampling(false)
+          }
+          return
+        }
+        useEditor.getState().setTerrainFlattenTarget(sampledHeight)
         return
       }
 
@@ -178,6 +235,16 @@ export const TerrainSculptTool: React.FC = () => {
         settings: { ...settings, radius: Math.max(settings.radius, minBrushRadius(field)) },
         target:
           activeVerb === 'flatten' ? resolveFlattenTarget(field, explicit, ...point) : undefined,
+        slope:
+          activeVerb === 'slope'
+            ? resolveSlopeStrokePlane(
+                field,
+                latest.current.slope,
+                point[0],
+                point[1],
+                latest.current.slopeAnchor,
+              )
+            : undefined,
       })
       strokeRef.current = {
         stroke,
@@ -306,7 +373,14 @@ export const TerrainSculptTool: React.FC = () => {
     const onCancel = () => {
       // Only claim the key when there was something to abandon, or Escape with no
       // stroke live would be swallowed and never exit the mode.
-      if (abandonStroke()) markToolCancelConsumed()
+      if (abandonStroke()) {
+        markToolCancelConsumed()
+        return
+      }
+      if (useEditor.getState().terrainSampling) {
+        useEditor.getState().setTerrainSampling(false)
+        markToolCancelConsumed()
+      }
     }
 
     // `pointercancel` abandons rather than commits, unlike `pointerup`: the

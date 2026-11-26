@@ -96,6 +96,12 @@ export function paintRegionHudTitle(mode: keyof typeof PAINT_REGION_LABELS): Hud
 }
 
 export function terrainHudTitle(verb: TerrainVerb): HudTitle {
+  if (verb === 'slope') {
+    return {
+      label: /* i18n */ { id: 'editor.lib.hudTitle.slopeTerrain', message: 'Slope terrain' },
+      icon: { kind: 'iconify', name: 'lucide:trending-up' },
+    }
+  }
   const label =
     verb === 'raise'
       ? /* i18n */ { id: 'editor.lib.hudTitle.raiseTerrain', message: 'Raise terrain' }

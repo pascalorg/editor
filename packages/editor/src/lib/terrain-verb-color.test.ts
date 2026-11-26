@@ -13,7 +13,7 @@ import { brushRingColor } from './terrain-verb-color'
  * when a fifth verb is added (terrace is planned).
  */
 
-const VERBS: TerrainVerb[] = ['raise', 'lower', 'flatten', 'smooth']
+const VERBS: TerrainVerb[] = ['raise', 'lower', 'flatten', 'smooth', 'slope']
 
 describe('brushRingColor', () => {
   test('no two verbs share a colour', () => {

@@ -3865,6 +3865,190 @@ msgstr "{label}を編集"
 msgid "editor.controls.sliderControl.mixed"
 msgstr "混在"
 
+# Source-Hash: 0649bd94e026be6e
+# Review: required
+# English: "Anchor: Center"
+#: packages/editor/src/components/ui/controls/terrain-sculpt-panel.tsx
+#, fuzzy
+msgid "editor.controls.terrainSculptPanel.anchorCenter"
+msgstr "基準：中央"
+
+# Source-Hash: cb7e57c94164cc98
+# Review: required
+# English: "Anchored at {elevation}"
+#: packages/editor/src/components/ui/controls/terrain-sculpt-panel.tsx
+#, fuzzy
+msgid "editor.controls.terrainSculptPanel.anchoredAt"
+msgstr "{elevation} に固定"
+
+# Source-Hash: 97a469eea5be88b7
+# Review: required
+# English: "Brush strokes grade onto the picked A → B plane. Clear anchor to grade from click height."
+#: packages/editor/src/components/ui/controls/terrain-sculpt-panel.tsx
+#, fuzzy
+msgid "editor.controls.terrainSculptPanel.anchoredBrushHint"
+msgstr "ブラシで取得した A → B 平面に整地します。クリック位置の高さから始めるには解除してください。"
+
+# Source-Hash: 9b6a17a595aba42c
+# Review: required
+# English: "Low edge"
+#: packages/editor/src/components/ui/controls/terrain-sculpt-panel.tsx
+#, fuzzy
+msgid "editor.controls.terrainSculptPanel.anchorLowEdge"
+msgstr "低い端"
+
+# Source-Hash: d0f86d2093269896
+# Review: required
+# English: "Clear"
+#: packages/editor/src/components/ui/controls/terrain-sculpt-panel.tsx
+#, fuzzy
+msgid "editor.controls.terrainSculptPanel.clearAnchor"
+msgstr "解除"
+
+# Source-Hash: 1aeed95f4f4a25d9
+# Review: required
+# English: "Clear picked slope anchor"
+#: packages/editor/src/components/ui/controls/terrain-sculpt-panel.tsx
+#, fuzzy
+msgid "editor.controls.terrainSculptPanel.clearSlopeAnchorAria"
+msgstr "選択した傾斜アンカーを解除"
+
+# Source-Hash: 76cd03300faa9b2b
+# Review: required
+# English: "Direction"
+#: packages/editor/src/components/ui/controls/terrain-sculpt-panel.tsx
+#, fuzzy
+msgid "editor.controls.terrainSculptPanel.direction"
+msgstr "方向"
+
+# Source-Hash: 8a3bc5111b9e97f4
+# Review: required
+# English: "Elevation"
+#: packages/editor/src/components/ui/controls/terrain-sculpt-panel.tsx
+#, fuzzy
+msgid "editor.controls.terrainSculptPanel.elevation"
+msgstr "基準高さ"
+
+# Source-Hash: 3b9832a6f9ba9968
+# Review: required
+# English: "Flip 180°"
+#: packages/editor/src/components/ui/controls/terrain-sculpt-panel.tsx
+#, fuzzy
+msgid "editor.controls.terrainSculptPanel.flip180"
+msgstr "180°反転"
+
+# Source-Hash: c86013f873a5cf54
+# Review: required
+# English: "Flip slope direction 180 degrees"
+#: packages/editor/src/components/ui/controls/terrain-sculpt-panel.tsx
+#, fuzzy
+msgid "editor.controls.terrainSculptPanel.flipSlope180Aria"
+msgstr "傾斜方向を180度反転"
+
+# Source-Hash: dfc8dd7b821e0027
+# Review: required
+# English: "Brush strokes start from the height where you click, or apply this grade across the whole lot."
+#: packages/editor/src/components/ui/controls/terrain-sculpt-panel.tsx
+#, fuzzy
+msgid "editor.controls.terrainSculptPanel.freeBrushHint"
+msgstr "クリックした高さからブラシで整地するか、この傾斜を敷地全体に適用できます。"
+
+# Source-Hash: c21f80df7e8f26bb
+# Review: required
+# English: "Grade {percent}%"
+#: packages/editor/src/components/ui/controls/terrain-sculpt-panel.tsx
+#, fuzzy
+msgid "editor.controls.terrainSculptPanel.gradeReadout"
+msgstr "勾配 {percent}%"
+
+# Source-Hash: ffb9dd742ce285d5
+# Review: required
+# English: "Click a second point on the ground to match its slope and direction."
+#: packages/editor/src/components/ui/controls/terrain-sculpt-panel.tsx
+#, fuzzy
+msgid "editor.controls.terrainSculptPanel.pickEndHint"
+msgstr "地面の2点目をクリックして傾斜と方向を合わせます。"
+
+# Source-Hash: 39032dcfac98ce16
+# Review: required
+# English: "Pick two points on the ground to match slope"
+#: packages/editor/src/components/ui/controls/terrain-sculpt-panel.tsx
+#, fuzzy
+msgid "editor.controls.terrainSculptPanel.pickSlopePointsAria"
+msgstr "地面の2点を選択して傾斜を合わせる"
+
+# Source-Hash: 3eb8aa36ee14d71e
+# Review: required
+# English: "Pick A → B slope"
+#: packages/editor/src/components/ui/controls/terrain-sculpt-panel.tsx
+#, fuzzy
+msgid "editor.controls.terrainSculptPanel.pickSlopeTitle"
+msgstr "A → B 傾斜を取得"
+
+# Source-Hash: 0234a08c7f69eb6e
+# Review: required
+# English: "Click a start point on the ground for the slope."
+#: packages/editor/src/components/ui/controls/terrain-sculpt-panel.tsx
+#, fuzzy
+msgid "editor.controls.terrainSculptPanel.pickStartHint"
+msgstr "地面の傾斜の始点をクリックしてください。"
+
+# Source-Hash: 75e3449fc1776d09
+# Review: required
+# English: "Pitch"
+#: packages/editor/src/components/ui/controls/terrain-sculpt-panel.tsx
+#, fuzzy
+msgid "editor.controls.terrainSculptPanel.pitch"
+msgstr "勾配角"
+
+# Source-Hash: 9cab4d4c95f63cdd
+# Review: required
+# English: "Flat"
+#: packages/editor/src/components/ui/controls/terrain-sculpt-panel.tsx
+#, fuzzy
+msgid "editor.controls.terrainSculptPanel.presetFlat"
+msgstr "平坦"
+
+# Source-Hash: 6bd6f5ee572899d9
+# Review: required
+# English: "Rotate 90°"
+#: packages/editor/src/components/ui/controls/terrain-sculpt-panel.tsx
+#, fuzzy
+msgid "editor.controls.terrainSculptPanel.rotate90"
+msgstr "90°回転"
+
+# Source-Hash: 99178c8101a2c6c8
+# Review: required
+# English: "Rotate slope direction 90 degrees"
+#: packages/editor/src/components/ui/controls/terrain-sculpt-panel.tsx
+#, fuzzy
+msgid "editor.controls.terrainSculptPanel.rotateSlope90Aria"
+msgstr "傾斜方向を90度回転"
+
+# Source-Hash: e6d82e606b8c9301
+# Review: required
+# English: "Slope"
+#: packages/editor/src/components/ui/controls/terrain-sculpt-panel.tsx
+#, fuzzy
+msgid "editor.controls.terrainSculptPanel.slope"
+msgstr "傾斜"
+
+# Source-Hash: 8da50c5d2ebdae8d
+# Review: required
+# English: "Drag to grade the ground along an inclined plane, pick A → B to match two points, or apply the slope to the whole lot."
+#: packages/editor/src/components/ui/controls/terrain-sculpt-panel.tsx
+#, fuzzy
+msgid "editor.controls.terrainSculptPanel.slopeHint"
+msgstr "ドラッグで傾斜面に整地するか、A → B の2点から勾配を取得、または敷地全体に傾斜を適用します。"
+
+# Source-Hash: 0d99cfc72de66487
+# Review: required
+# English: "Slope lot"
+#: packages/editor/src/components/ui/controls/terrain-sculpt-panel.tsx
+#, fuzzy
+msgid "editor.controls.terrainSculptPanel.slopeLot"
+msgstr "敷地全体を傾斜"
+
 # Source-Hash: a2bd204e93e90598
 # Review: required
 # AI-Provider: claude-code
@@ -4836,6 +5020,14 @@ msgstr "自由移動"
 msgid "editor.helpers.helperManager.freeMoveSlideDoorsAndWindows"
 msgstr "自由移動 · ドアと窓をスライド"
 
+# Source-Hash: b8d5470b9ce47715
+# Review: required
+# English: "Grade slope"
+#: packages/editor/src/components/ui/helpers/helper-manager.tsx
+#, fuzzy
+msgid "editor.helpers.helperManager.gradeSlope"
+msgstr "傾斜を整地"
+
 # Source-Hash: b5ad765b43e75a5c
 # Review: required
 # AI-Provider: claude-code
@@ -4875,6 +5067,22 @@ msgstr "オブジェクト、壁、または部屋"
 #, fuzzy
 msgid "editor.helpers.helperManager.paintWithThisMaterial"
 msgstr "この素材で塗る"
+
+# Source-Hash: 14f87dcf447adf8e
+# Review: required
+# English: "Pick end point to match slope"
+#: packages/editor/src/components/ui/helpers/helper-manager.tsx
+#, fuzzy
+msgid "editor.helpers.helperManager.pickSlopeEndPoint"
+msgstr "傾斜を合わせる終点を選択"
+
+# Source-Hash: 98d35989e0b9f45c
+# Review: required
+# English: "Pick start point"
+#: packages/editor/src/components/ui/helpers/helper-manager.tsx
+#, fuzzy
+msgid "editor.helpers.helperManager.pickSlopeStartPoint"
+msgstr "始点を選択"
 
 # Source-Hash: 188f55cc5afbe34f
 # Review: required
@@ -11170,6 +11378,14 @@ msgstr "回転"
 #, fuzzy
 msgid "editor.lib.hudTitle.select"
 msgstr "選択"
+
+# Source-Hash: b3bdf03121550c31
+# Review: required
+# English: "Slope terrain"
+#: packages/editor/src/lib/hud-title.ts
+#, fuzzy
+msgid "editor.lib.hudTitle.slopeTerrain"
+msgstr "地形を傾斜"
 
 # Source-Hash: ec1f1d68af469867
 # Review: required
