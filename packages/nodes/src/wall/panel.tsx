@@ -78,6 +78,7 @@ import {
 import { createWallPropertyPreview } from './property-preview'
 import { RailingWallPanel } from './railing-wall-panel'
 import { railingWallTypePatch } from './railing-wall-panel-model'
+import { WallTrimBounds } from './trim-bounds'
 
 /**
  * Base half of the plane-bound repair: a stamped draft offset goes, and a
@@ -782,6 +783,12 @@ function WallTrimSection({
             onChange={(next) => updateTrim({ profile: next })}
             options={profileOptions.map((option) => ({ ...option, label: i18n._(option.label) }))}
             value={selectedProfile}
+          />
+          <WallTrimBounds
+            trim={trimValue}
+            length={Math.hypot(node.end[0] - node.start[0], node.end[1] - node.start[1])}
+            unit={unit}
+            onChange={updateTrim}
           />
           <SliderControl
             label={i18n._({ id: 'node.wall.panel.height', message: 'Height' })}

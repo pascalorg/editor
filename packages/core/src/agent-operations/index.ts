@@ -1,9 +1,11 @@
 import { AGENT_TOOL_CONTRACTS, BATCHABLE_TOOLS } from '../agent-tools'
 import { inOneGo } from '../lib/steps'
 import { addColumn } from './add-column'
+import { addDormer } from './add-dormer'
 import { addFence } from './add-fence'
 import { addLevel } from './add-level'
 import { addObjectInBatch } from './add-object'
+import { addRoofElement } from './add-roof-element'
 import { addWall } from './add-wall'
 import { viewAssets } from './asset-views'
 import { createBatchSteps } from './batch'
@@ -14,6 +16,7 @@ import { createStair } from './create-stair'
 import { deleteNode } from './delete-node'
 import { designBrief, gatedByBrief } from './design-brief'
 import { placeDesign, validateDesignOperation } from './designs'
+import { dressRoom } from './dress-room'
 import { duplicateLevel } from './duplicate-level'
 import { duplicateNode } from './duplicate-node'
 import { findByType } from './find-by-type'
@@ -42,6 +45,7 @@ import { addTree } from './tree'
 import type { AgentOperation, AgentOperationSteps, AgentOperations } from './types'
 import { createUnit, listUnits, setUnitMembers } from './units'
 import { verifyScene, verifySceneSteps } from './verify-scene'
+import { setWallTrim } from './wall-skirting'
 import { setWallType } from './wall-type'
 import './rock-checks'
 import './room-checks'
@@ -51,9 +55,11 @@ import './usage-checks'
 export { inOneGo, type Steps } from '../lib/steps'
 export * from './achieved'
 export * from './add-column'
+export * from './add-dormer'
 export * from './add-fence'
 export * from './add-level'
 export * from './add-object'
+export * from './add-roof-element'
 export * from './add-wall'
 export * from './apply-changes'
 export * from './apply-outcome'
@@ -71,6 +77,7 @@ export * from './delete-node'
 export * from './design-brief'
 export * from './designs'
 export * from './door-clearance'
+export * from './dress-room'
 export * from './duplicate-level'
 export * from './duplicate-node'
 export * from './find-by-type'
@@ -119,6 +126,7 @@ export * from './tree'
 export * from './types'
 export * from './units'
 export * from './verify-scene'
+export * from './wall-face-regions'
 export * from './wall-face-script'
 export * from './wall-object-observations'
 export * from './wall-opening'
@@ -126,6 +134,8 @@ export * from './wall-skirting'
 export * from './wall-type'
 
 const SINGLE_OPERATIONS = {
+  add_dormer: addDormer,
+  add_roof_element: addRoofElement,
   measure_stair: measureStairOperation,
   fit_stair: fitStair,
   list_levels: listLevels,
@@ -142,6 +152,8 @@ const SINGLE_OPERATIONS = {
   design_brief: designBrief,
   add_wall: addWall,
   set_wall_type: setWallType,
+  set_wall_trim: setWallTrim,
+  dress_room: dressRoom,
   add_fence: addFence,
   add_hedge: addHedge,
   add_planting: addPlanting,

@@ -174,6 +174,13 @@ export type LinearResizeHandle<N> = {
    * the handle UI generic.
    */
   commit?: (node: N, patch: Partial<N>, sceneApi: SceneApi, modifiers?: HandleDragModifiers) => void
+  /** Prepare without writing, before history resumes; null rejects, a closure commits the plan. */
+  prepareCommit?: (
+    node: N,
+    patch: Partial<N>,
+    sceneApi: SceneApi,
+    modifiers?: HandleDragModifiers,
+  ) => (() => void) | null
   /**
    * Optional per-tick hook fired while this handle is being dragged, with the
    * live (in-progress, override-merged) node. A pure side-channel for transient
@@ -294,6 +301,12 @@ export type RadialResizeHandle<N> = {
   axis: HandleAxis
   currentValue: (node: N) => number
   apply: (node: N, newValue: number, sceneApi: SceneApi) => Partial<N>
+  prepareCommit?: (
+    node: N,
+    patch: Partial<N>,
+    sceneApi: SceneApi,
+    modifiers?: HandleDragModifiers,
+  ) => (() => void) | null
   min?: number | ((node: N, sceneApi: SceneApi) => number)
   max?: number | ((node: N, sceneApi: SceneApi) => number)
   placement: HandlePlacement<N>
@@ -351,6 +364,12 @@ export type ArcResizeHandle<N = any> = {
   /** Optional metadata for descriptors that bundle two handles per kind. */
   end?: 'start' | 'end'
   apply: (initialNode: N, delta: number, sceneApi: SceneApi) => Partial<N>
+  prepareCommit?: (
+    node: N,
+    patch: Partial<N>,
+    sceneApi: SceneApi,
+    modifiers?: HandleDragModifiers,
+  ) => (() => void) | null
   visible?: (node: N, sceneApi: SceneApi) => boolean
   placement: HandlePlacement<N>
   portal?: HandlePortal

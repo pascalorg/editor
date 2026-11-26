@@ -1,5 +1,6 @@
 import {
   type AnyNodeId,
+  createSceneApi,
   isGlazedRoofSegment,
   ROOF_BUILD_UP_PRESETS,
   type RoofBuildUp,
@@ -9,6 +10,7 @@ import {
   useScene,
 } from '@pascal-app/core'
 import type { NodePanelModel } from '@pascal-app/editor'
+import { prepareSeatedRoofEdit } from '../roof/roof-level-target'
 
 const NONE = 'none'
 const CUSTOM = 'custom'
@@ -71,11 +73,11 @@ export const roofSegmentPanelModel: NodePanelModel<RoofSegmentNode> = {
         onChange: (id) => {
           const patch = roofBuildUpPresetPatch(id)
           if (!patch) return
-          runAsSingleSceneHistoryStep(useScene, () =>
-            useScene
-              .getState()
-              .updateNodes(planes.map((plane) => ({ id: plane.id as AnyNodeId, data: patch }))),
-          )
+          const prepared = prepareSeatedRoofEdit(createSceneApi(useScene), {
+            update: planes.map((plane) => ({ id: plane.id as AnyNodeId, data: patch })),
+          })
+          if (typeof prepared !== 'function') return
+          runAsSingleSceneHistoryStep(useScene, prepared)
         },
       },
     ]

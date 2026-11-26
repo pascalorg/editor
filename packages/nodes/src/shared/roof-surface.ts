@@ -4,6 +4,8 @@ import {
   getGlazedRoofFaces,
   getRoofModuleFaces,
   getRoofSegmentDeckReach,
+  getRoofSegmentDownSlopeYaw,
+  getRoofSegmentSurfaceNormal,
   getRoofSegmentSurfaceY,
   getRoofShapeInsets,
   getRoofShapeRatios,
@@ -76,7 +78,6 @@ const SHINGLE_SURFACE_EPSILON = 0.02
 const FACE_TOLERANCE = 1e-6
 const ROOF_SURFACE_FACE_CACHE_MAX = 128
 const roofSurfaceFaceCache = new Map<string, RoofSurfaceFace[]>()
-const _downSlopeYawNormal = new THREE.Vector3()
 const _surfaceQuatRight = new THREE.Vector3()
 const _surfaceQuatForward = new THREE.Vector3()
 const _surfaceQuatMatrix = new THREE.Matrix4()
@@ -417,144 +418,13 @@ function lineInterval(
   return [Math.min(...unique), Math.max(...unique)]
 }
 
-// Outward normal for a roof surface tilting at angle θ in the horizontal
-// direction (dx, dz). Derivation: the surface tangent vectors are the
-// ridge axis (perpendicular to the fall line, horizontal) and the
-// down-slope direction (cos θ horizontal + −sin θ vertical). Crossing
-// them gives the outward normal ∝ (sin θ · dx, cos θ, sin θ · dz),
-// equivalently (dx · tan θ, 1, dz · tan θ) un-normalised.
-function buildSlopeNormal(dx: number, dz: number, tan: number, out: THREE.Vector3): THREE.Vector3 {
-  return out.set(dx * tan, 1, dz * tan).normalize()
-}
-
 export function getAnalyticalNormal(
   lx: number,
   lz: number,
   seg: RoofSegmentNode,
   out = new THREE.Vector3(),
 ): THREE.Vector3 {
-  const { roofType, depth, width } = seg
-  const slope = getSegmentSlopeFrame(seg)
-  if (slope.activeRh === 0 || slope.tanTheta === 0) {
-    return out.set(0, 1, 0)
-  }
-  if (roofType === 'barrel') {
-    const face = getBarrelRoofFaces(seg).find(
-      (face) =>
-        face.normal[1] > 0 &&
-        (lz - face.origin[2]) / face.v[2] >= -1e-6 &&
-        (lz - face.origin[2]) / face.v[2] <= face.length + 1e-6,
-    )
-    return face ? out.set(...face.normal) : out.set(0, 1, 0)
-  }
-  const primaryTan = slope.tanTheta
-  const halfW = width / 2
-  const halfD = depth / 2
-
-  // Ridge runs along X — slope falls in ±Z. Gambrel shares the gable
-  // dispatch (its kink-to-eave/lower tier is the primary slope frame).
-  if (roofType === 'gable' || roofType === 'gambrel') {
-    if (roofType === 'gambrel') {
-      // Tier-aware: the upper (shallower) face spans |z| < mz; the
-      // lower (steep) face spans mz < |z| ≤ halfD. Using primaryTan on
-      // the upper tier would tilt the ghost too steeply near the ridge.
-      const lowerWidthRatio =
-        seg.gambrelLowerWidthRatio ?? ROOF_SHAPE_DEFAULTS.gambrelLowerWidthRatio
-      const lowerHeightRatio =
-        seg.gambrelLowerHeightRatio ?? ROOF_SHAPE_DEFAULTS.gambrelLowerHeightRatio
-      const mz = halfD * lowerWidthRatio
-      if (Math.abs(lz) <= mz) {
-        const upperRise = slope.activeRh * (1 - lowerHeightRatio)
-        const upperRun = mz
-        const upperTan = upperRun > 0 ? upperRise / upperRun : 0
-        return buildSlopeNormal(0, lz >= 0 ? 1 : -1, upperTan, out)
-      }
-    }
-    return buildSlopeNormal(0, lz >= 0 ? 1 : -1, primaryTan, out)
-  }
-
-  // Single slope falling toward +Z (ridge at -Z, eave at +Z).
-  if (roofType === 'shed') {
-    return buildSlopeNormal(0, 1, primaryTan, out)
-  }
-
-  if (roofType === 'conical') {
-    const radius = Math.hypot(lx, lz)
-    if (radius <= 1e-6) return out.set(0, 1, 0)
-    return buildSlopeNormal(lx / radius, lz / radius, primaryTan, out)
-  }
-
-  // 4-sided slopes: the dominant axis chooses which face the point sits
-  // on. Hip is uniform across all four faces. Mansard has a steep outer
-  // band (primaryTan) and a shallow top inside the waist. Dutch has hip
-  // ends and gable sides — both share the same primaryTan from the
-  // slope frame, so directional dispatch is enough.
-  if (roofType === 'hip') {
-    const onZ = (halfD > 0 ? Math.abs(lz) / halfD : 0) >= (halfW > 0 ? Math.abs(lx) / halfW : 0)
-    if (onZ) return buildSlopeNormal(0, lz >= 0 ? 1 : -1, primaryTan, out)
-    return buildSlopeNormal(lx >= 0 ? 1 : -1, 0, primaryTan, out)
-  }
-
-  if (roofType === 'mansard') {
-    const widthRatio = seg.mansardSteepWidthRatio ?? ROOF_SHAPE_DEFAULTS.mansardSteepWidthRatio
-    const heightRatio = seg.mansardSteepHeightRatio ?? ROOF_SHAPE_DEFAULTS.mansardSteepHeightRatio
-    const inset = Math.min(width, depth) * widthRatio
-    const fx = halfW > 0 ? Math.abs(lx) / halfW : 0
-    const fz = halfD > 0 ? Math.abs(lz) / halfD : 0
-    const onZ = fz >= fx
-    const inSteepBand = onZ ? Math.abs(lz) > halfD - inset : Math.abs(lx) > halfW - inset
-
-    let tan = primaryTan
-    if (!inSteepBand) {
-      // Top hip (shallow) above the waist — rises from the waist
-      // rectangle at fraction `heightRatio` of activeRh up to the peak.
-      const topRise = slope.activeRh * (1 - heightRatio)
-      const topRun = Math.max(0, Math.min(halfW, halfD) - inset)
-      tan = topRun > 0 ? topRise / topRun : 0
-    }
-    if (onZ) return buildSlopeNormal(0, lz >= 0 ? 1 : -1, tan, out)
-    return buildSlopeNormal(lx >= 0 ? 1 : -1, 0, tan, out)
-  }
-
-  if (roofType === 'dutch') {
-    const inset =
-      Math.min(width, depth) * (seg.dutchHipWidthRatio ?? ROOF_SHAPE_DEFAULTS.dutchHipWidthRatio)
-    const heightRatio = seg.dutchHipHeightRatio ?? ROOF_SHAPE_DEFAULTS.dutchHipHeightRatio
-    const lengthRatio = seg.dutchWaistLengthRatio ?? ROOF_SHAPE_DEFAULTS.dutchWaistLengthRatio
-    const lowerRise = slope.activeRh * heightRatio
-
-    if (width >= depth) {
-      const waistHalfX = Math.max(0, (halfW - inset) * lengthRatio)
-      const waistHalfZ = Math.max(0, halfD - inset)
-      if (Math.abs(lx) <= waistHalfX && Math.abs(lz) <= waistHalfZ) {
-        const topRise = slope.activeRh * (1 - heightRatio)
-        const topTan = waistHalfZ > 0 ? topRise / waistHalfZ : 0
-        return buildSlopeNormal(0, lz >= 0 ? 1 : -1, topTan, out)
-      }
-
-      const xRun = Math.max(0.0001, halfW - waistHalfX)
-      const zRun = Math.max(0.0001, halfD - waistHalfZ)
-      const xTan = Math.abs(lx) > waistHalfX ? lowerRise / xRun : 0
-      const zTan = Math.abs(lz) > waistHalfZ ? lowerRise / zRun : 0
-      return out.set((lx >= 0 ? 1 : -1) * xTan, 1, (lz >= 0 ? 1 : -1) * zTan).normalize()
-    }
-
-    const waistHalfX = Math.max(0, halfW - inset)
-    const waistHalfZ = Math.max(0, (halfD - inset) * lengthRatio)
-    if (Math.abs(lx) <= waistHalfX && Math.abs(lz) <= waistHalfZ) {
-      const topRise = slope.activeRh * (1 - heightRatio)
-      const topTan = waistHalfX > 0 ? topRise / waistHalfX : 0
-      return buildSlopeNormal(lx >= 0 ? 1 : -1, 0, topTan, out)
-    }
-
-    const xRun = Math.max(0.0001, halfW - waistHalfX)
-    const zRun = Math.max(0.0001, halfD - waistHalfZ)
-    const xTan = Math.abs(lx) > waistHalfX ? lowerRise / xRun : 0
-    const zTan = Math.abs(lz) > waistHalfZ ? lowerRise / zRun : 0
-    return out.set((lx >= 0 ? 1 : -1) * xTan, 1, (lz >= 0 ? 1 : -1) * zTan).normalize()
-  }
-
-  return out.set(0, 1, 0)
+  return out.set(...getRoofSegmentSurfaceNormal(seg, lx, lz))
 }
 
 // ─── Quaternion helper ───────────────────────────────────────────────
@@ -592,7 +462,5 @@ export function surfaceQuatFromNormal(normal: THREE.Vector3, out: THREE.Quaterni
 // → 0, −Z → π, +X → +π/2, −X → −π/2. Kept next to `surfaceQuatFromNormal`
 // so the two stay in lockstep — the formula is only valid for its basis.
 export function getDownSlopeYaw(lx: number, lz: number, seg: RoofSegmentNode): number {
-  const n = getAnalyticalNormal(lx, lz, seg, _downSlopeYawNormal)
-  if (n.x === 0 && n.z === 0) return 0
-  return Math.atan2(n.x * n.y, n.z)
+  return getRoofSegmentDownSlopeYaw(seg, lx, lz)
 }

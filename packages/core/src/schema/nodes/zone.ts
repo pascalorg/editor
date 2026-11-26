@@ -2,6 +2,7 @@ import dedent from 'dedent'
 import { z } from 'zod'
 import { BaseNode, nodeType, objectId } from '../base'
 import { GeometryScriptSource } from '../geometry-source'
+import { CeilingFrameConfig, CeilingMedallionConfig } from './ceiling-ornament'
 import { SurfacePaintRegion } from './surface-paint-region'
 
 /**
@@ -67,11 +68,14 @@ export const ZoneNode = BaseNode.extend({
       direction: z.enum(['parallel', 'diagonal', 'perpendicular']).optional(),
     })
     .optional(),
-  // Painted parts of the room's ceiling. The automatic ceilings are rebuilt
-  // from the room, so what the user painted on them lives here.
+  // Painted parts and architectural ornaments of the room's ceiling. Automatic
+  // ceilings are rebuilt from the room, so room-level ceiling regions, medallions
+  // and moulded ceiling frames live here.
   ceiling: z
     .object({
       regions: z.array(SurfacePaintRegion).optional(),
+      medallion: CeilingMedallionConfig.optional(),
+      frame: CeilingFrameConfig.optional(),
     })
     .optional(),
   floorStepFinish: z.string().optional(),

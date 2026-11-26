@@ -387,6 +387,7 @@ export function buildLevelDuplicateCreateOps({
     })),
     update: updateOps,
   })
+  if ('kind' in seated) return seated
   return {
     createOps: seated.changes.create,
     newLevelId,

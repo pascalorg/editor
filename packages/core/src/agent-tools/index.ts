@@ -11,6 +11,8 @@ import { addCornerWindowTool } from './corner-window'
 import { createRoomTool } from './create-room'
 import { designBriefTool } from './design-brief'
 import { placeDesignTool, validateDesignTool } from './designs'
+import { addDormerTool } from './dormers'
+import { dressRoomTool } from './dress-room'
 import { addFenceTool } from './fences'
 import { findByTypeTool } from './find-by-type'
 import { setFinishScriptTool } from './finish-script'
@@ -33,6 +35,7 @@ import { placeInRoomTool } from './place-in-room'
 import { placeItemsTool } from './place-items'
 import { addPlantingTool } from './planting'
 import { addRockTool } from './rock'
+import { addRoofElementTool } from './roof-elements'
 import { createRoofTool, moveRoofsToRoofLevelTool } from './roofs'
 import { ROOM_TOOL_CONTRACTS } from './room-structure'
 import { searchMaterialsTool } from './search-materials'
@@ -44,6 +47,7 @@ import { UNIT_TOOL_CONTRACTS } from './units'
 import { verifySceneTool } from './verify-scene'
 import { viewSceneTool } from './view-scene'
 import { addDoorTool, addWindowTool } from './wall-openings'
+import { setWallTrimTool } from './wall-trim'
 import { addWallTool, setWallTypeTool } from './walls'
 
 export * from './achieved'
@@ -56,6 +60,8 @@ export * from './columns'
 export * from './contract'
 export * from './corner-window'
 export * from './create-room'
+export * from './dormers'
+export * from './dress-room'
 export * from './fences'
 export * from './find-by-type'
 export * from './finish-script'
@@ -76,6 +82,7 @@ export * from './project-files'
 export * from './refusal'
 export * from './retired'
 export * from './rock'
+export * from './roof-elements'
 export * from './roofs'
 export * from './room-structure'
 export * from './search-materials'
@@ -88,6 +95,7 @@ export * from './units'
 export * from './verify-scene'
 export * from './view-scene'
 export * from './wall-openings'
+export * from './wall-trim'
 export * from './walls'
 export * from './write-target'
 
@@ -97,6 +105,8 @@ export * from './write-target'
  * surface drifts. See wiki/architecture/agent-surfaces.md.
  */
 export const AGENT_TOOL_CONTRACTS = [
+  addDormerTool,
+  addRoofElementTool,
   addColumnTool,
   measureStairTool,
   fitStairTool,
@@ -116,6 +126,8 @@ export const AGENT_TOOL_CONTRACTS = [
   validateDesignTool,
   addWallTool,
   setWallTypeTool,
+  setWallTrimTool,
+  dressRoomTool,
   addFenceTool,
   addHedgeTool,
   addPlantingTool,

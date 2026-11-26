@@ -19,6 +19,7 @@ import { applySceneChanges } from './apply-changes'
 import { requireLevel } from './level-target'
 import { finishSurface, requireMaterialRef } from './material-refs'
 import { buildingFrame, type RoofRectangle, roofRectangles } from './roof-footprint'
+import { refuseRoofHost } from './roof-writes'
 import { levelRole, levelsOf, queryNodes } from './scene-queries'
 import type { AgentContext, AgentOperation, SceneChanges, SceneNodes } from './types'
 
@@ -335,6 +336,7 @@ export const createRoof: AgentOperation<CreateRoofInput> = (nodes, input, contex
       roofType,
       wallHeight,
       position: [(r.minX + r.maxX) / 2 - centerX, 0, (r.minZ + r.maxZ) / 2 - centerZ],
+      ...(r.trim && roofType !== 'conical' ? { trim: r.trim } : {}),
       ...(input.pitch !== undefined && { pitch: input.pitch }),
       ...(input.overhang !== undefined && { overhang: input.overhang }),
       ...fasciaFields({ ...input, fasciaMaterialPreset }),
@@ -348,6 +350,7 @@ export const createRoof: AgentOperation<CreateRoofInput> = (nodes, input, contex
 
   const peak = Math.max(...segments.map((segment) => getActiveRoofHeight(segment)))
   const plan = planRoofLevel(nodes, storey.id, wallHeight + peak)
+  if (plan.kind === 'refuse') refuseRoofHost(plan)
   if (plan.kind === 'storey') {
     const above = nodes[plan.levelId] as Level
     refuse(

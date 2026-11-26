@@ -1,4 +1,5 @@
 import type { AnyNode, CeilingNode } from '../schema'
+import type { CeilingFrameConfig, CeilingMedallionConfig } from '../schema/nodes/ceiling-ornament'
 import type { SurfacePaintRegion } from '../schema/nodes/surface-paint-region'
 import {
   area,
@@ -49,6 +50,31 @@ export function ceilingPaintRegions(
   if (owner.kind === 'ceiling') return ceiling.regions ?? []
   const zone = nodes[owner.id]
   return zone?.type === 'zone' ? (zone.ceiling?.regions ?? []) : []
+}
+
+export type CeilingOrnaments = {
+  medallion?: CeilingMedallionConfig
+  frame?: CeilingFrameConfig
+}
+
+/**
+ * The sculpted ceiling medallion and moulded frame a ceiling draws: its room's
+ * for an automatic ceiling (`zone.ceiling`), falling back to its own fields on
+ * manual ceilings. Disabled ornaments (`enabled === false`) resolve to absent.
+ */
+export function ceilingOrnaments(
+  ceiling: Pick<CeilingNode, 'id' | 'boundary' | 'zoneId' | 'medallion' | 'frame'>,
+  nodes: Readonly<Record<string, AnyNode | undefined>>,
+): CeilingOrnaments {
+  const owner = ceilingRegionsOwner(ceiling)
+  const zone = owner.kind === 'zone' ? nodes[owner.id] : undefined
+  const zoneCeiling = zone?.type === 'zone' ? zone.ceiling : undefined
+  const rawMedallion = zoneCeiling?.medallion ?? ceiling.medallion
+  const rawFrame = zoneCeiling?.frame ?? ceiling.frame
+  return {
+    ...(rawMedallion && rawMedallion.enabled !== false ? { medallion: rawMedallion } : {}),
+    ...(rawFrame && rawFrame.enabled !== false ? { frame: rawFrame } : {}),
+  }
 }
 
 export type CeilingSurfaceCell = {

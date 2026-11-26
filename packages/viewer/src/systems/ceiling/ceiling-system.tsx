@@ -5,6 +5,7 @@ import {
   type CeilingNode,
   type CeilingSurfaceCell,
   ceilingCapLift,
+  ceilingOrnaments,
   ceilingPaintRegions,
   computeCeilingSurfaceCells,
   getEffectiveCutterNode,
@@ -22,9 +23,20 @@ import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import { mergeSurfaceHolePolygons } from '../surface-hole-geometry'
+import {
+  buildCeilingFrameGeometry,
+  buildCeilingMedallionGeometry,
+  resolveMedallionCenter,
+} from './ceiling-ornament-geometry'
 
 /** Name of the meshes a ceiling draws its paint regions with, one per region. */
 export const CEILING_REGION_MESH = 'ceiling-region'
+
+/** Name of the sculpted plaster medallion (rosace) child mesh on a ceiling. */
+export const CEILING_MEDALLION_MESH = 'ceiling-medallion'
+
+/** Name of the swept moulded ceiling frame (cadre / caissons) child mesh on a ceiling. */
+export const CEILING_FRAME_MESH = 'ceiling-frame'
 
 /**
  * Name of the mesh that draws a ceiling's upper face while `showCeilingTops` is on. It shares the
@@ -38,6 +50,9 @@ export const CEILING_CAP_MESH = 'ceiling-cap'
  * registered mesh; the system builds geometry and asks it.
  */
 export type CeilingRegionMaterial = (finish: CeilingSurfaceCell['finish']) => THREE.Material
+
+/** The FrontSide plaster/finish material resolver for sculpted ceiling medallions and frames. */
+export type CeilingOrnamentMaterial = (finish: string | undefined) => THREE.Material
 
 type SceneNodes = ReturnType<typeof useScene.getState>['nodes']
 
@@ -131,14 +146,9 @@ export function updateCeilingGeometry(
   // Painted regions partition the underside: the ceiling's own mesh keeps what
   // no region covers, and each region draws as its own single-material mesh,
   // so batching buckets them by material like any other surface.
+  const allHoles = [...mergeSurfaceHolePolygons(node.holes || []), ...extraHoles]
   const regions = node.polygon.length >= 3 ? ceilingPaintRegions(node, nodes) : []
-  const cells = regions.length
-    ? computeCeilingSurfaceCells(
-        node.polygon,
-        [...mergeSurfaceHolePolygons(node.holes || []), ...extraHoles],
-        regions,
-      )
-    : null
+  const cells = regions.length ? computeCeilingSurfaceCells(node.polygon, allHoles, regions) : null
   const surface = cells?.find((cell) => cell.role === CEILING_SURFACE_ROLE)
 
   mesh.geometry.dispose()
@@ -148,6 +158,7 @@ export function updateCeilingGeometry(
     mesh,
     (cells ?? []).filter((cell) => cell.role !== CEILING_SURFACE_ROLE),
   )
+  syncCeilingOrnamentMeshes(node, mesh, allHoles, nodes)
 
   const gridMesh = mesh.getObjectByName('ceiling-grid') as THREE.Mesh
   if (gridMesh) {
@@ -207,6 +218,61 @@ function syncCeilingRegionMeshes(mesh: THREE.Mesh, cells: readonly CeilingSurfac
     surplus.geometry.dispose()
     surplus.removeFromParent()
   }
+}
+
+function syncSingleOrnamentMesh(
+  parent: THREE.Mesh,
+  name: string,
+  geometry: THREE.BufferGeometry | null,
+  finish: string | undefined,
+) {
+  const existing = parent.children.find(
+    (child): child is THREE.Mesh => (child as THREE.Mesh).isMesh && child.name === name,
+  )
+  if (!geometry) {
+    if (existing) {
+      existing.geometry.dispose()
+      existing.removeFromParent()
+    }
+    return
+  }
+  const resolve = parent.userData.ceilingOrnamentMaterial as CeilingOrnamentMaterial | undefined
+  let child = existing
+  if (!child) {
+    child = new THREE.Mesh()
+    child.name = name
+    child.castShadow = true
+    child.receiveShadow = true
+    parent.add(child)
+  } else {
+    child.geometry.dispose()
+  }
+  child.geometry = geometry
+  child.userData.ornamentFinish = finish
+  child.userData.__fromGeometry = true
+  child.material = resolve?.(finish) ?? (parent.material as THREE.Material)
+}
+
+function syncCeilingOrnamentMeshes(
+  node: CeilingNode,
+  mesh: THREE.Mesh,
+  holes: readonly (readonly [number, number][])[],
+  nodes: SceneNodes,
+) {
+  const ornaments = node.polygon.length >= 3 ? ceilingOrnaments(node, nodes) : {}
+  const medallionCenter = ornaments.medallion
+    ? resolveMedallionCenter(node.polygon, holes, ornaments.medallion)
+    : null
+  const medallionGeom =
+    ornaments.medallion && medallionCenter
+      ? buildCeilingMedallionGeometry(ornaments.medallion, medallionCenter)
+      : null
+  syncSingleOrnamentMesh(mesh, CEILING_MEDALLION_MESH, medallionGeom, ornaments.medallion?.finish)
+
+  const frameGeom = ornaments.frame
+    ? buildCeilingFrameGeometry(node.polygon, holes, ornaments.frame)
+    : null
+  syncSingleOrnamentMesh(mesh, CEILING_FRAME_MESH, frameGeom, ornaments.frame?.finish)
 }
 
 /** Flat geometry for level-XZ pieces, laid out the way `generateCeilingGeometry` lays a ceiling. */

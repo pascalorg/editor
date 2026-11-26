@@ -42,6 +42,7 @@ import {
   getWallEndpointAtPoint,
   mergedWallTop,
   mergeWallFaceRegions,
+  mergeWallTrims,
   planMergedZoneReferences,
   resolveMergedWallEndpoints,
   type WallAttachmentUpdate,
@@ -101,6 +102,7 @@ type WallMergePlan = {
   mergedChildren: WallNode['children']
   mergedTop: Pick<WallNode, 'height' | 'endHeightOffset'>
   mergedFaceRegions: WallNode['faceRegions']
+  mergedTrims: ReturnType<typeof mergeWallTrims>
   attachmentUpdates: WallAttachmentUpdate[]
   zoneUpdates: Array<{ id: AnyNodeId; data: Partial<AnyNode> }>
 }
@@ -1184,6 +1186,7 @@ function buildWallMergePlans(
         mergedChildren,
         mergedTop,
         mergedFaceRegions: mergedFaceRegions.length > 0 ? mergedFaceRegions : undefined,
+        mergedTrims: mergeWallTrims([primary, secondary], start, end),
         attachmentUpdates,
         zoneUpdates,
       })
@@ -1862,6 +1865,7 @@ export function planNodeDeletion(
     nextNodes[plan.primaryWallId] = {
       ...keptWall,
       ...plan.mergedTop,
+      ...plan.mergedTrims,
       ...(plan.mergedFaceRegions ? { faceRegions: plan.mergedFaceRegions } : {}),
       start: plan.mergedStart,
       end: plan.mergedEnd,

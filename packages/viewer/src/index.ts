@@ -421,7 +421,10 @@ export {
 } from './store/use-viewer'
 export {
   CEILING_CAP_MESH,
+  CEILING_FRAME_MESH,
+  CEILING_MEDALLION_MESH,
   CEILING_REGION_MESH,
+  type CeilingOrnamentMaterial,
   type CeilingRegionMaterial,
   CeilingSystem,
 } from './systems/ceiling/ceiling-system'
@@ -527,6 +530,7 @@ export {
   getPendingRoofMergeCount,
   getRoofOuterSurfaceFrameAtPoint,
   getRoofSegmentBrushes,
+  getRoofSegmentHostSolid,
   mapRoofGroupMaterialIndex,
   ROOF_MATERIAL_SLOT_COUNT,
   type RoofGeometryAdapter,

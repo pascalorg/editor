@@ -63,6 +63,7 @@ import { localizedLevelName } from '@pascal-app/viewer/ui'
 import { messageWithSlot } from '../../../i18n/message-slot'
 import { displayRoomName } from '@pascal-app/viewer/ui'
 import { localizedRoomNameSections } from '../../../lib/room-name-messages'
+import { RoomDressing } from './room-dressing'
 
 /** "Room · Ground floor", "Mezzanine · in Kitchen", "Room · not enclosed". */
 export function roomKicker(
@@ -146,6 +147,7 @@ export function RoomPanel({
           <RoomConstructionRows key={room.zoneId} room={room} />
         )}
         <RoomFloorScriptRow key={`floor-script-${room.zoneId}`} zoneId={room.zoneId} />
+        {!mezzanine && <RoomDressing key={`dressing-${room.zoneId}`} zoneId={room.zoneId} />}
       </div>
     </PanelWrapper>
   )

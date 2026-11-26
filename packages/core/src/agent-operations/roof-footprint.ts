@@ -5,8 +5,16 @@
 // slices the footprint into hundreds of slivers, so the footprint is snapped first, balcony-thin
 // strips join their larger neighbour, and a pathological footprint falls back to its bounding box.
 
+import { type RoofRectangleTrim, roofRectangleOutline } from '../lib/roof-rectangle-outline'
+
 type Pt = [number, number]
-export type RoofRectangle = { minX: number; maxX: number; minZ: number; maxZ: number }
+export type RoofRectangle = {
+  minX: number
+  maxX: number
+  minZ: number
+  maxZ: number
+  trim?: RoofRectangleTrim
+}
 export type RoofFootprint = { rectangles: RoofRectangle[]; roofType: 'gable' | 'hip' | 'flat' }
 
 /** Coordinates snap to 10 cm. */
@@ -75,7 +83,131 @@ function dropThinStrips(cells: boolean[][], xs: number[], zs: number[]) {
   )
 }
 
+const snapMm = (value: number) => Math.round(value * 1000) / 1000
+const ON_BOX = 0.002
+
+function distanceToSegment(point: Pt, a: Pt, b: Pt): number {
+  const dx = b[0] - a[0]
+  const dz = b[1] - a[1]
+  const length = dx * dx + dz * dz
+  const t =
+    length === 0
+      ? 0
+      : Math.min(1, Math.max(0, ((point[0] - a[0]) * dx + (point[1] - a[1]) * dz) / length))
+  return Math.hypot(point[0] - (a[0] + t * dx), point[1] - (a[1] + t * dz))
+}
+
+const onBoundary = (point: Pt, polygon: readonly Pt[]) =>
+  polygon.some(
+    (_, i) => distanceToSegment(point, polygon[i]!, polygon[(i + 1) % polygon.length]!) <= 0.005,
+  )
+
+type CornerName = 'backLeft' | 'backRight' | 'frontRight' | 'frontLeft'
+
+/** Recognize only a rectangle whose diagonal sides cut its corners; all other shapes use the sweep. */
+function cornerCutRectangle(polygon: readonly Pt[]): RoofRectangle | null {
+  const points = polygon
+    .map(([x, z]): Pt => [snapMm(x), snapMm(z)])
+    .filter((point, i, all) => {
+      const next = all[(i + 1) % all.length]!
+      return point[0] !== next[0] || point[1] !== next[1]
+    })
+  if (points.length < 3) return null
+  const minX = Math.min(...points.map((point) => point[0]))
+  const maxX = Math.max(...points.map((point) => point[0]))
+  const minZ = Math.min(...points.map((point) => point[1]))
+  const maxZ = Math.max(...points.map((point) => point[1]))
+  if (maxX - minX < MIN_PART || maxZ - minZ < MIN_PART) return null
+  const onBox = ([x, z]: Pt) =>
+    Math.abs(x - minX) <= ON_BOX ||
+    Math.abs(x - maxX) <= ON_BOX ||
+    Math.abs(z - minZ) <= ON_BOX ||
+    Math.abs(z - maxZ) <= ON_BOX
+  if (!points.every(onBox)) return null
+
+  let twiceArea = 0
+  points.forEach((point, i) => {
+    const next = points[(i + 1) % points.length]!
+    twiceArea += point[0] * next[1] - next[0] * point[1]
+  })
+  if (twiceArea === 0) return null
+
+  const corners: { name: CornerName; point: Pt }[] = [
+    { name: 'backLeft', point: [minX, minZ] },
+    { name: 'backRight', point: [maxX, minZ] },
+    { name: 'frontRight', point: [maxX, maxZ] },
+    { name: 'frontLeft', point: [minX, maxZ] },
+  ]
+  const trim: RoofRectangleTrim = {}
+  const cut = new Set<CornerName>()
+  for (let i = 0; i < points.length; i++) {
+    const a = points[i]!
+    const b = points[(i + 1) % points.length]!
+    const alongX = Math.abs(b[1] - a[1]) <= ON_BOX
+    const alongZ = Math.abs(b[0] - a[0]) <= ON_BOX
+    if (alongX || alongZ) {
+      const onSide = alongX
+        ? Math.abs(a[1] - minZ) <= ON_BOX || Math.abs(a[1] - maxZ) <= ON_BOX
+        : Math.abs(a[0] - minX) <= ON_BOX || Math.abs(a[0] - maxX) <= ON_BOX
+      if (!onSide) return null
+      continue
+    }
+    const found = corners.find(({ point: corner }) => {
+      const cross = (b[0] - a[0]) * (corner[1] - a[1]) - (b[1] - a[1]) * (corner[0] - a[0])
+      if (Math.sign(cross) === Math.sign(twiceArea) || cross === 0) return false
+      const onHorizontal = (point: Pt) => Math.abs(point[1] - corner[1]) <= ON_BOX
+      const onVertical = (point: Pt) => Math.abs(point[0] - corner[0]) <= ON_BOX
+      return (onHorizontal(a) && onVertical(b)) || (onVertical(a) && onHorizontal(b))
+    })
+    if (!found || cut.has(found.name)) return null
+    const { name, point: corner } = found
+    const [horizontal, vertical] = Math.abs(a[1] - corner[1]) <= ON_BOX ? [a, b] : [b, a]
+    const legX = Math.abs(horizontal[0] - corner[0])
+    const legZ = Math.abs(vertical[1] - corner[1])
+    if (legX <= ON_BOX || legZ <= ON_BOX) return null
+    trim[`${name}X`] = snapMm(legX)
+    trim[`${name}Z`] = snapMm(legZ)
+    cut.add(name)
+  }
+  const rectangle: RoofRectangle = {
+    minX,
+    maxX,
+    minZ,
+    maxZ,
+    ...(cut.size ? { trim } : {}),
+  }
+  const outline = roofRectangleOutline(rectangle)
+  return outline.length >= 3 &&
+    points.every((point) => onBoundary(point, outline)) &&
+    outline.every((point) => onBoundary(point, points))
+    ? rectangle
+    : null
+}
+
 export function roofRectangles(polygons: readonly (readonly Pt[])[]): RoofFootprint {
+  // Read recognized diagonal cuts to the millimetre, before the orthogonal fit's 10 cm grid.
+  const hasDiagonalSide = polygons.some((polygon) =>
+    polygon.some((point, i) => {
+      const next = polygon[(i + 1) % polygon.length]!
+      return Math.abs(next[0] - point[0]) > ON_BOX && Math.abs(next[1] - point[1]) > ON_BOX
+    }),
+  )
+  if (hasDiagonalSide && polygons.length > 0 && polygons.length <= MAX_SEGMENTS) {
+    const fitted = polygons.map(cornerCutRectangle)
+    if (fitted.every((rectangle) => rectangle !== null)) {
+      const long = Math.max(
+        Math.max(...fitted.map((r) => r.maxX)) - Math.min(...fitted.map((r) => r.minX)),
+        Math.max(...fitted.map((r) => r.maxZ)) - Math.min(...fitted.map((r) => r.minZ)),
+      )
+      const roofType =
+        long > BLOCK_LENGTH || fitted.length > MAX_HIP_WINGS
+          ? 'flat'
+          : fitted.length === 1
+            ? 'gable'
+            : 'hip'
+      return { rectangles: fitted, roofType }
+    }
+  }
   const snapped = polygons.map((polygon) => polygon.map(([x, z]): Pt => [snap(x), snap(z)]))
   const all = snapped.flat()
   const bounds: RoofRectangle = {

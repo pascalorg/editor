@@ -6,6 +6,7 @@ import {
   isRoofLevel,
   isStoreyContent,
   liftRoofLevels,
+  type RoofHostRefusal,
   roofLevelOrderBreach,
   servesAsRoofLevel,
   storeyOf,
@@ -58,6 +59,18 @@ export function roofLevelRefusal(
 export function refuseRoofLevel(nodes: SceneNodes, levelId: string, what: string) {
   const refusal = roofLevelRefusal(nodes, levelId, what)
   if (refusal) throw refusal
+}
+
+/** Translate the planner's unchanged refusal through the existing agent transport. */
+export function refuseRoofHost(refusal: RoofHostRefusal): never {
+  const { kind: _kind, code, ...details } = refusal
+  refuse(
+    code,
+    code === 'storey_above'
+      ? 'The proposed roof overlaps a built storey above it.'
+      : 'The roof needs a storey in a building.',
+    details,
+  )
 }
 
 const roleOf = (write: NodeWrite) =>
@@ -189,6 +202,7 @@ export function seatWrittenRoofs(ops: NodeWrite[], scene: SceneNodes): string[] 
   }
 
   const seat = planRoofSeats(scene, applySceneWrites(after, appended))
+  if (seat && 'kind' in seat) refuseRoofHost(seat)
   if (seat) {
     const moved = new Map(seat.changes.update.map(({ id, data }) => [id, data.parentId]))
     // A parent the write creates listing a roof the seat moves would list it twice.

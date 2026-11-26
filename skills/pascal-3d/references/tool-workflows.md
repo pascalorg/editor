@@ -140,6 +140,95 @@ Do not mutate just to make a report unless the user authorizes a temporary or sa
 
 When a requested deliverable is unsupported, return `partial` or `failed` with the tool status and the next supported action. Do not substitute an invented file, URL, or capability.
 
+## Native wall trim
+
+`set_wall_trim({ kind, wallIds?, zoneIds?, roomId?, height?, depth?, offsetY?, profile?, faces?, finish?, enabled? })` edits native skirting, crown or chairRail. Wall and room targets form a union; an explicit wall covers its selected faces whole, while a room covers only its inward stretches of shared walls. `faces` filters a room's inward faces, never selects its outside. `offsetY: 0` is valid; `finish` uses `paint` semantics on only the targeted trim slots. Hiding preserves settings. Another retained stretch's shared dimensions or same-face finish cannot silently change (`trim_conflict`); target all affected rooms together or keep their settings. Curtain and railing walls refuse; bounded room trims on curves refuse. Select a wall's trim panel to edit the same settings and Start/End bounds manually.
+
+## Room dressing
+
+`dress_room({ zoneIds, layers, dryRun? })` dresses inward room stretches in one
+atomic operation. Build the complete ordered stack: skirting, chairRail, crown,
+wainscot (default to 0.9 m), tiles (to 1.2 m), splashback (from 0.9 m, rising
+0.6 m), and accent (name `where.walls`). Finish layers need `finish`; `to: "full"`
+reaches the ceiling. `where.around` names fixtures, with optional `margin`
+(default 0.1 m); `where.alongRun` follows a base cabinet's footprint and worktop,
+including nested rotated runs. Targets must share the room's level.
+Each call replaces only its rooms' `dress:<zoneId>:` regions, even on former
+boundary walls; hand paint, other owners and the base finish remain.
+`layers: []` removes those regions, not trims. Preview with `dryRun: true`.
+Trims use `set_wall_trim`'s bounded coverage and atomic `trim_conflict` refusal;
+include all affected rooms when changing shared settings. Eight regions per
+face includes retained paint; a full-height finish script owns its face.
+Partial curved finish stretches are skipped and reported, never expanded.
+The selected-room panel's **Dress room** controls provide the same layer
+options, preview/refusals and one-undo apply.
+
+## Native roof accessories
+
+`add_roof_element({ kind, id, point, rows?, columns?, name? })` adds one
+chimney, skylight, solar-panel, cupola, box-vent, ridge-vent, turbine-vent or
+eyebrow-vent with native defaults and orientation. `point` is a finite numeric
+`[x, z]` in metres in the roof level's building-local plan axes, not world or
+segment-local coordinates. A roof id chooses the highest physical covering;
+a roof-segment id queries only that segment without bypassing cuts or higher
+covering. Missing covering refuses `roof_point_outside_segment`; unresolved
+accessory/plugin cuts or roof intersections refuse `roof_surface_unmeasured`
+with `reason` and `nodeIds`. Do not replace an unresolved seat with a guess.
+
+Solar `rows` and `columns` are independently optional integers from 1 to 20,
+defaulting to 2 and 3. Ridge vents snap to a native ridge/break line (a shed's
+high eave), refuse `roof_no_ridge_line` where absent, and validate the achieved
+point again. Their stored Y is zero; the renderer derives the seat.
+The result names the roof and supplying segment and reports segment-local
+`localPosition`, `rotation` in radians and achieved level-plan `planPoint`,
+rounded for readback; stored coordinates retain full precision.
+
+By hand, choose the matching roof-accessory tool and click the roof. Manual
+events with a genuine registered native mesh-triangle witness can preserve
+exceptional vertical/surviving CSG hits that a strict plan query cannot measure.
+Bare XYZ and accessory-child hits cannot authorize that fallback.
+For ridge vents, covering evidence applies only at an unchanged achieved point;
+moved snaps require strict support, and vertical witnesses do not certify it.
+
+## Dormers
+
+`add_dormer` creates a native dormer and its hosted window together. Supply
+`segmentId`, or `roofId` and `at: [x, z]` in metres in the roof level's
+building-local plan axes. With only a segment, the centre defaults to
+segment-local `[0, segment.depth / 4]`; a roof selects the highest physical
+covering under `at`. Naming both ids requires reciprocal ownership.
+
+Optional `width`, `depth`, `windowWidth` and `windowHeight` are positive
+lengths; `wallHeight` and `roofHeight` are nonnegative. Defaults match the
+native editor: 1.21 × 1.55 m body, 0 m wall height, 0.49 m own roof height
+and a 0.76 × 0.68 m window. `shedHighSide` is `back` (default) or `front`.
+`name` and overall/top/side/wall `materialPreset` refs are optional; finishes
+use the same `library:` and `scene:` material references as other tools.
+
+The shared planner seats on the bare structural shell, faces downhill and
+requires whole-footprint support on one architectural slope, no dormer
+overlap and a fitting default window whose actual centre clears finished
+covering by more than 0.01 m. Native curved tessellation is not by itself a
+ridge or profile break. Unresolved geometry refuses
+`dormer_geometry_unmeasured` with `reason` and relevant `nodeIds`; other
+refusals include `not_on_slope`, `too_wide`, `overlaps_dormer`,
+`window_too_wide` and `window_not_exposed`. A refused call creates neither
+part. The additive operation is available in `run_batch`.
+
+Own `roofType` supports hip, gable, shed, gambrel, dutch, mansard, flat and
+conical. Conical preserves the existing circular, depth-driven native body,
+rectangular window frames and legacy host cutter: do not promise independent
+conical axes or redesigned curved-wall windows.
+
+The result names both created nodes and their roof/segment, with the
+footprint in level-plan coordinates. On a level marked as an attic,
+`atticRoomId` and `windowSillAboveAtticFloorM` are independent nullable facts
+at the actual child position. A floor fact uses a real covering slab's top,
+respecting holes; missing floor is unknown, not an assumed zero datum.
+This tool does not create an attic or require another roof-sampling tool.
+By hand, choose Dormer, click the roof and use its existing inspector; the
+manual workflow uses the same placement admission.
+
 ## Greenhouse and barrel roofs
 
 Use `create_roof` with `roofSystem: "glazed"` for a gable, straight shed or barrel greenhouse roof. For a barrel roof, `depth` is the span and `barrelRise` is the arch rise, no more than half the span. `barrelSegments` controls faceting. `glazing` sets frame dimensions, glass appearance, grid layouts, glazed ends and individual glass, solid or empty panels. Standard barrel construction uses a solid covering.

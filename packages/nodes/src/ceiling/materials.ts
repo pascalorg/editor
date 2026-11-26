@@ -134,6 +134,66 @@ export function resolveCeilingFinish(
     : null
 }
 
+export const CEILING_ORNAMENT_DEFAULT_COLOR = '#f5f2eb'
+
+/**
+ * Resolve a FrontSide plaster/finish material for sculpted 3D ceiling medallions
+ * and moulded frames (their vertex normals point downward into the room, unlike
+ * the BackSide flat ceiling plane).
+ */
+export function resolveCeilingOrnamentFinish(
+  finish: MaterialSchema | string | undefined,
+  sceneMaterials: Record<SceneMaterialId, SceneMaterial> | undefined,
+  shading: RenderShading,
+): Material | null {
+  if (!finish) return null
+  if (typeof finish !== 'string') {
+    const resolved = resolveMaterial(finish)
+    return createMaterial(
+      {
+        ...finish,
+        properties: {
+          ...resolved,
+          roughness: resolved.roughness ?? 0.78,
+          side: 'front',
+        },
+      },
+      shading,
+    )
+  }
+  const color = parseMaterialColor(finish)
+  if (color) {
+    return createMaterial(
+      {
+        preset: 'custom',
+        properties: {
+          color,
+          roughness: 0.78,
+          metalness: 0,
+          opacity: 1,
+          transparent: false,
+          side: 'front',
+        },
+      },
+      shading,
+    )
+  }
+  const parsed = parseMaterialRef(finish)
+  if (parsed?.kind === 'scene')
+    return resolveCeilingOrnamentFinish(
+      sceneMaterials?.[parsed.id as SceneMaterialId]?.material,
+      sceneMaterials,
+      shading,
+    )
+  const preset = getMaterialPresetByRef(finish)
+  return preset
+    ? createMaterialFromPreset(
+        { ...preset, mapProperties: { ...preset.mapProperties, side: FrontSide } },
+        shading,
+      )
+    : null
+}
+
 /**
  * Resolve a slot `MaterialRef` to a flat colour for the ceiling surface.
  * `library:` refs use the catalog preset's base colour; `scene:` refs use the

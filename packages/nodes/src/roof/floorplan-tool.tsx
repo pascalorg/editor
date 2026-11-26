@@ -154,11 +154,12 @@ export default function RoofFloorplanTool({
         useRoofRidgeMode.getState().mode,
         useRoofPlacementMode.getState().mode,
       )
+      if (!roofId) return
       corner1 = null
       clearDraft()
       alignmentCandidates = collectRoofAlignmentAnchors(sceneApi.nodes(), levelId, roofType)
       clearSurfacePlanSnapFeedback()
-      if (roofId) selectNode(roofId as AnyNodeId)
+      selectNode(roofId as AnyNodeId)
     }
 
     const onCancel = () => {
