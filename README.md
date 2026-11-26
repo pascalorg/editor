@@ -63,8 +63,8 @@ pascal mcp setup claude
 ```
 
 Or install the plugin, which bundles the skills, the local `pascal` server, and a hosted
-`pascal-hosted` server that prompts for an optional Pascal API key and stores it in the OS
-keychain (leave it empty to stay local-only):
+`pascal-hosted` server that signs in through Pascal's browser OAuth flow from `/mcp`, with no
+API key (leave it unauthenticated to stay local-only):
 
 ```text
 /plugin marketplace add pascalorg/editor

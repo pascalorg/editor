@@ -7,10 +7,7 @@
     },
     "pascal-hosted": {
       "type": "http",
-      "url": "https://editor.pascal.app/api/mcp",
-      "headers": {
-        "Authorization": "Bearer ${user_config.pascal_api_key}"
-      }
+      "url": "https://editor.pascal.app/api/mcp"
     }
   }
 }

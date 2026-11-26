@@ -18,14 +18,5 @@
   "supportUrl": "https://editor.pascal.app/contact",
   "privacyPolicyUrl": "https://editor.pascal.app/privacy",
   "termsOfServiceUrl": "https://editor.pascal.app/terms",
-  "userConfig": {
-    "pascal_api_key": {
-      "type": "string",
-      "title": "Pascal API key (hosted)",
-      "description": "Paste a key from editor.pascal.app Settings to work on your hosted projects and Capture scans; leave empty to use only the local Pascal CLI.",
-      "sensitive": true,
-      "required": false
-    }
-  },
   "skills": ["./pascal-3d", "./furniture-fit", "./architect"]
 }

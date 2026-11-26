@@ -958,8 +958,6 @@ if (canonicalJson(portableMcpServers.pascal) !== canonicalJson(expectedPortableS
     `Portable mcp.json pascal server must be the server.json streamable-http remote with OpenAI OAuth (CIMD) and no headers: ${canonicalJson(expectedPortableServer)}`,
   )
 }
-// The hosted server reads its key through ${user_config.*}, which only Claude Code substitutes, so
-// it stays in the Claude plugin root instead of the portable Agent Plugins manifest.
 if (Object.keys(claudeMcpServers).sort().join(',') !== 'pascal,pascal-hosted') {
   fail('skills/.mcp.json must add only the Claude-specific pascal-hosted server')
 }
@@ -976,14 +974,6 @@ if (Object.keys(cursorMcpServers).sort().join(',') !== 'pascal,pascal-hosted') {
   fail('Cursor mcp.json must declare exactly the pascal and pascal-hosted servers')
 }
 for (const failure of validateCursorPluginPackage(root)) fail(failure)
-const claudeUserConfig = (claudePlugin.userConfig ?? {}) as Record<string, unknown>
-const claudeHostedKeyOption = claudeUserConfig.pascal_api_key as Record<string, unknown> | undefined
-if (claudeHostedKeyOption?.sensitive !== true) {
-  fail('Claude plugin userConfig.pascal_api_key must set sensitive so the key never reaches a file')
-}
-if (claudeHostedKeyOption?.required !== false) {
-  fail('Claude plugin userConfig.pascal_api_key must set required to false for local-only installs')
-}
 
 const localPascalServer = claudeMcpServers.pascal as Record<string, unknown> | undefined
 if (geminiExtension.name !== 'pascal') fail('Gemini CLI extension name must be pascal')
