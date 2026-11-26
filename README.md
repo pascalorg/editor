@@ -123,8 +123,9 @@ pascal mcp setup codex
 ```
 
 Or install the plugin, which adds the skills and the hosted server at
-`https://editor.pascal.app/api/mcp`, signed in through Pascal's browser OAuth flow. It does not add
-the local server; run `pascal mcp setup codex` for local work:
+`https://editor.pascal.app/api/mcp`, signed in through Pascal's browser OAuth flow. Since plugin
+0.1.12, Codex installs from the Git marketplace use this hosted OAuth server instead of the local
+server; run `pascal mcp setup codex` for local work:
 
 ```bash
 codex plugin marketplace add pascalorg/editor

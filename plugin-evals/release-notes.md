@@ -6,7 +6,7 @@ First directory submission of Pascal for ChatGPT and Codex. Pascal models buildi
 
 This version declares that hosted server, with OAuth and CIMD client registration, as the package's only MCP server, adds the support URL, and rewrites the listing around these capabilities. Every tool carries a title and explicit `readOnlyHint`, `destructiveHint`, and `openWorldHint` values. Models are design aids, not measured surveys, engineering drawings, or permit documents.
 
-Draft release notes for the unsubmitted Pascal agent skills 0.1.11 **With MCP** candidate.
+Codex installs from the Git marketplace now use the hosted OAuth server instead of the local `pascal mcp connect` server; for local use, run `pascal mcp setup codex`.
 
 This release adds the `architect` router skill, which routes agents to Pascal's AI building designer via `ask_architect`, `get_architect_turn`, and `cancel_architect_turn` on the `pascal-hosted` server. It also adds the `architect:run` OAuth scope to the Cursor managed browser sign-in. Architect uses Pascal credits and hosted AI processing; higher effort is available to Pascal Pro/Max subscribers. The skill covers upgrade and top-up error handling and boundaries against fetching remote instructions or running arbitrary code.
 
