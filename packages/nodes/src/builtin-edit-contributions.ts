@@ -25,9 +25,11 @@ import {
 import { floorOpeningEditContribution } from './floor-opening/definition.edit'
 import { guideEditContribution } from './guide/definition.edit'
 import { gutterEditContribution } from './gutter/definition.edit'
+import { hedgeEditContribution } from './hedge/definition.edit'
 import { hvacEquipmentEditContribution } from './hvac-equipment/definition.edit'
 import { importedMeshEditContribution } from './imported-mesh/definition.edit'
 import { itemEditContribution } from './item/definition.edit'
+import { lawnEditContribution } from './lawn/definition.edit'
 import { leanToExtensionEditContribution } from './lean-to-extension/definition.edit'
 import { levelEditContribution } from './level/definition.edit'
 import { linesetEditContribution } from './lineset/definition.edit'
@@ -36,8 +38,10 @@ import { measurementEditContribution } from './measurement/definition.edit'
 import { pipeFittingEditContribution } from './pipe-fitting/definition.edit'
 import { pipeSegmentEditContribution } from './pipe-segment/definition.edit'
 import { pipeTrapEditContribution } from './pipe-trap/definition.edit'
+import { plantingEditContribution } from './planting/definition.edit'
 import { proceduralItemEditContribution } from './procedural-item/definition.edit'
 import { ridgeVentEditContribution } from './ridge-vent/definition.edit'
+import { rockEditContribution } from './rock/definition.edit'
 import { roofEditContribution } from './roof/definition.edit'
 import { roofSegmentEditContribution } from './roof-segment/definition.edit'
 import { scanEditContribution } from './scan/definition.edit'
@@ -51,6 +55,7 @@ import { spawnEditContribution } from './spawn/definition.edit'
 import { stairEditContribution } from './stair/definition.edit'
 import { stairSegmentEditContribution } from './stair-segment/definition.edit'
 import { structuralGridEditContribution } from './structural-grid/definition.edit'
+import { treeEditContribution } from './tree/definition.edit'
 import { turbineVentEditContribution } from './turbine-vent/definition.edit'
 import { unitEditContribution } from './unit/definition.edit'
 import { wallEditContribution } from './wall/definition.edit'
@@ -87,6 +92,11 @@ export const builtinEditContributions = {
   'stair-segment': stairSegmentEditContribution,
   zone: zoneEditContribution,
   site: siteEditContribution,
+  rock: rockEditContribution,
+  hedge: hedgeEditContribution,
+  planting: plantingEditContribution,
+  tree: treeEditContribution,
+  lawn: lawnEditContribution,
   building: buildingEditContribution,
   level: levelEditContribution,
   guide: guideEditContribution,

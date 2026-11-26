@@ -102,6 +102,8 @@ export function honestNodePatch(
           field: required,
         },
       )
+    if (current.type === 'lawn')
+      refuse('invalid_input', `Invalid lawn edit: ${parsed.error.message}`)
     // Any other schema failure is the caller's own refusal.
     return sent
   }

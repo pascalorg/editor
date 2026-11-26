@@ -1,0 +1,1 @@
+export { rockDefinition } from './definition'

@@ -115,6 +115,7 @@ import { roomKeyForZone } from '../../lib/room-zone-routing'
 import {
   emitCanvasNodeSelection,
   enterBuildingFromCanvas,
+  isSelectableSiteNode,
   resolveCanvasBuildingId,
   resolveCanvasSelectionNode,
   resolveSelectedIdsForNodeClick,
@@ -147,8 +148,8 @@ const isNodeInCurrentLevel = (node: AnyNode): boolean => {
   if (node.type === 'elevator') return true
   const currentLevelId = useViewer.getState().selection.levelId
   if (!currentLevelId) return true // No level selected, allow all
-  const nodeLevelId = resolveLevelId(node, useScene.getState().nodes)
-  return nodeLevelId === currentLevelId
+  const nodes = useScene.getState().nodes
+  return isSelectableSiteNode(node, nodes) || resolveLevelId(node, nodes) === currentLevelId
 }
 
 type PaintInteraction = {
@@ -605,7 +606,7 @@ const SELECTION_STRATEGIES: Record<Phase, SelectionStrategy> = {
       useViewer.getState().setSelection({ buildingId: (node as BuildingNode).id })
     },
     handleDeselect: () => {
-      useViewer.getState().setSelection({ buildingId: null })
+      useViewer.getState().setSelection({ buildingId: null, selectedIds: [] })
     },
     isValid: (node) => node.type === 'building',
   },
@@ -1607,13 +1608,15 @@ export const SelectionManager = () => {
       // From site the house is one thing: a hit anywhere on it picks its
       // building and goes inside, where the next click picks a room or element.
       if (useEditor.getState().phase === 'site') {
-        if (!enterBuildingFromCanvas(node)) return
-        event.stopPropagation()
-        clickHandledRef.current = true
-        setTimeout(() => {
-          clickHandledRef.current = false
-        }, 50)
-        return
+        if (enterBuildingFromCanvas(node)) {
+          event.stopPropagation()
+          clickHandledRef.current = true
+          setTimeout(() => {
+            clickHandledRef.current = false
+          }, 50)
+          return
+        }
+        if (!isSelectableSiteNode(node, useScene.getState().nodes)) return
       }
 
       if (isNodeInCurrentLevel(node) && roomPickingEnabled()) {
@@ -1879,11 +1882,14 @@ export const SelectionManager = () => {
       })
       // From site the click picks the whole building, so the hover shows it.
       if (useEditor.getState().phase === 'site') {
-        const buildingId = resolveCanvasBuildingId(node, useScene.getState().nodes)
-        if (!buildingId) return
-        event.stopPropagation()
-        useViewer.getState().setHoveredId(buildingId as AnyNodeId)
-        return
+        const nodes = useScene.getState().nodes
+        const buildingId = resolveCanvasBuildingId(node, nodes)
+        if (buildingId) {
+          event.stopPropagation()
+          useViewer.getState().setHoveredId(buildingId as AnyNodeId)
+          return
+        }
+        if (!isSelectableSiteNode(node, nodes)) return
       }
 
       if (node.type === 'building' || node.type === 'site') return
@@ -1914,7 +1920,10 @@ export const SelectionManager = () => {
         selectedIds: useViewer.getState().selection.selectedIds,
       })
       const nodeId =
-        useEditor.getState().phase === 'site' ? resolveCanvasBuildingId(node, nodes) : node.id
+        useEditor.getState().phase === 'site'
+          ? (resolveCanvasBuildingId(node, nodes) ??
+            (isSelectableSiteNode(node, nodes) ? node.id : null))
+          : node.id
       if (nodeId && useViewer.getState().hoveredId === nodeId) {
         useViewer.setState({ hoveredId: null })
       }
@@ -2354,9 +2363,17 @@ const EditorOutlinerSync = () => {
     void registryVersion
     let idsToHighlight: string[] = []
 
-    // 1. Site outlines the building; inside it, the selection.
+    // Site elements take precedence over the building context's outline.
     if (phase === 'site') {
-      if (selection.buildingId) idsToHighlight = [selection.buildingId]
+      idsToHighlight = Array.from(
+        new Set([...selection.selectedIds, ...previewSelectedIds]),
+      ).filter((id) => {
+        const node = nodes[id as AnyNodeId]
+        return node && isSelectableSiteNode(node, nodes)
+      })
+      if (idsToHighlight.length === 0 && selection.buildingId) {
+        idsToHighlight = [selection.buildingId]
+      }
     } else {
       idsToHighlight = Array.from(new Set([...selection.selectedIds, ...previewSelectedIds]))
     }

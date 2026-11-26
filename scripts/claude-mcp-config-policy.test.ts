@@ -1,11 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
-import {
-  hostedAuthorizationHeader,
-  hostedMcpUrl,
-  validateClaudeMcpPolicy,
-} from './claude-mcp-config-policy'
+import { hostedMcpUrl, validateClaudeMcpPolicy } from './claude-mcp-config-policy'
 
 const repositoryRoot = resolve(import.meta.dir, '..')
 const canonicalConfig = JSON.parse(
@@ -31,25 +27,16 @@ const hostedGuidancePaths = [
 ] as const
 
 const localServer = { type: 'stdio', command: 'pascal', args: ['mcp', 'connect'] }
-const hostedServer = {
-  type: 'http',
-  url: hostedMcpUrl,
-  headers: { Authorization: hostedAuthorizationHeader },
-}
+const hostedServer = { type: 'http', url: hostedMcpUrl }
 
 function withServers(servers: Record<string, unknown>): Record<string, unknown> {
   return { mcpServers: servers }
 }
 
-const canonicalKeyOption = (canonicalPlugin.userConfig as Record<string, unknown>)
-  .pascal_api_key as Record<string, unknown>
-
-function pluginWithUserConfig(userConfig: unknown): Record<string, unknown> {
-  return { ...canonicalPlugin, userConfig }
-}
+const keyOption = { type: 'string', sensitive: true, required: false }
 
 describe('Claude plugin MCP configuration', () => {
-  test('accepts the local connector beside the hosted endpoint', () => {
+  test('accepts the local connector beside the hosted OAuth endpoint', () => {
     expect(
       validateClaudeMcpPolicy(canonicalConfig, canonicalPlugin, canonicalMarketplaceEntry),
     ).toEqual([])
@@ -88,12 +75,12 @@ describe('Claude plugin MCP configuration', () => {
 
   test.each([
     [
-      'a literal hosted credential',
-      { ...hostedServer, headers: { Authorization: 'Bearer pascal_live_placeholder' } },
+      'a hosted Authorization header',
+      { ...hostedServer, headers: { Authorization: `Bearer \${user_config.pascal_api_key}` } },
     ],
     [
-      'an unexpected hosted header',
-      { ...hostedServer, headers: { ...hostedServer.headers, 'X-Pascal-Org': 'acme' } },
+      'a literal hosted credential',
+      { ...hostedServer, headers: { Authorization: 'Bearer pascal_live_placeholder' } },
     ],
     ['a redirected hosted URL', { ...hostedServer, url: 'https://mcp.example.com/api/mcp' }],
     ['a non-HTTP hosted transport', { ...hostedServer, type: 'sse' }],
@@ -126,26 +113,7 @@ describe('Claude plugin MCP configuration', () => {
 
   test.each([
     ['inline MCP servers', { ...canonicalPlugin, mcpServers: { remote: {} } }],
-    ['a missing hosted key option', pluginWithUserConfig(undefined)],
-    [
-      'an extra user configuration option',
-      pluginWithUserConfig({
-        pascal_api_key: canonicalKeyOption,
-        pascal_password: { type: 'string', sensitive: true, required: false },
-      }),
-    ],
-    [
-      'a plaintext hosted key option',
-      pluginWithUserConfig({ pascal_api_key: { ...canonicalKeyOption, sensitive: false } }),
-    ],
-    [
-      'a required hosted key option',
-      pluginWithUserConfig({ pascal_api_key: { ...canonicalKeyOption, required: true } }),
-    ],
-    [
-      'a default hosted credential',
-      pluginWithUserConfig({ pascal_api_key: { ...canonicalKeyOption, default: 'placeholder' } }),
-    ],
+    ['a hosted API key option', { ...canonicalPlugin, userConfig: { pascal_api_key: keyOption } }],
   ])('rejects plugin-manifest %s', (_label, pluginManifest) => {
     expect(
       validateClaudeMcpPolicy(canonicalConfig, pluginManifest, canonicalMarketplaceEntry).length,
@@ -177,12 +145,10 @@ describe('Claude plugin MCP upgrade guidance', () => {
     expect(content).toContain('one-active-agent-client-per-local-service requirement')
   })
 
-  test.each(hostedGuidancePaths)('%s documents the plugin hosted key path', (path) => {
+  test.each(hostedGuidancePaths)('%s documents the plugin hosted OAuth sign-in', (path) => {
     const content = readFileSync(join(repositoryRoot, path), 'utf8')
     expect(content).toContain('pascal-hosted')
-    expect(content).toContain(
-      'claude plugin install pascal-agent-skills@pascal --config pascal_api_key=',
-    )
-    expect(content).toContain('keychain')
+    expect(content).toContain('/mcp')
+    expect(content).not.toContain('--config pascal_api_key=')
   })
 })

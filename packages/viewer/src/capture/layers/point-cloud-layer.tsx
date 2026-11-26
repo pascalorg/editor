@@ -3,17 +3,13 @@
 import type { CaptureStreamPacket } from '@pascal-app/core/capture'
 import { useLoader } from '@react-three/fiber'
 import { useMemo } from 'react'
-import type { BufferGeometry } from 'three'
-import { PLYLoader } from 'three/addons/loaders/PLYLoader.js'
 import { OVERLAY_LAYER } from '../../lib/layers'
 import { SCAN_POINT_CLOUD_NAME } from '../../lib/scan-points'
 import { rewriteLoopbackAssetUrl } from '../asset-url'
+import { firstPoints, type PointCloudData, PointCloudPlyLoader } from './point-cloud-ply'
 import { POINT_DISC_SIZE, PointDiscCloud } from './point-disc-cloud'
 
-export type PointCloudData = {
-  colors: Float32Array | null
-  positions: Float32Array
-}
+export type { PointCloudData }
 
 export function CapturePointCloudLayer({
   artifactUrl,
@@ -54,8 +50,8 @@ function PlyPointCloud({
   pointSize: number
   url: string
 }) {
-  const source = useLoader(PLYLoader, rewriteLoopbackAssetUrl(url))
-  const data = useMemo(() => buildGeometryPointCloudData(source, maxPoints), [maxPoints, source])
+  const source = useLoader(PointCloudPlyLoader, rewriteLoopbackAssetUrl(url))
+  const data = useMemo(() => firstPoints(source, maxPoints), [maxPoints, source])
   return <PointCloudDataLayer data={data} pointSize={pointSize} />
 }
 
@@ -72,33 +68,6 @@ function PointCloudDataLayer({ data, pointSize }: { data: PointCloudData; pointS
       size={pointSize}
     />
   )
-}
-
-/** A loaded cloud's points and colours, thinned evenly across the file to at most `maxPoints`. */
-export function buildGeometryPointCloudData(
-  geometry: BufferGeometry,
-  maxPoints: number,
-): PointCloudData {
-  const position = geometry.getAttribute('position')
-  if (!position) return { colors: null, positions: new Float32Array() }
-  const color = geometry.getAttribute('color')
-  const available = position.count
-  const keep = Math.max(0, Math.min(available, Math.floor(maxPoints)))
-  const positions = new Float32Array(keep * 3)
-  const colors = color ? new Float32Array(keep * 3) : null
-  for (let index = 0; index < keep; index += 1) {
-    const from = keep === available ? index : Math.floor((index * available) / keep)
-    const to = index * 3
-    positions[to] = position.getX(from)
-    positions[to + 1] = position.getY(from)
-    positions[to + 2] = position.getZ(from)
-    if (colors && color) {
-      colors[to] = color.getX(from)
-      colors[to + 1] = color.getY(from)
-      colors[to + 2] = color.getZ(from)
-    }
-  }
-  return { colors, positions }
 }
 
 export function buildPointCloudData(

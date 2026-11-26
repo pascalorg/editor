@@ -63,8 +63,8 @@ pascal mcp setup claude
 ```
 
 Or install the plugin, which bundles the skills, the local `pascal` server, and a hosted
-`pascal-hosted` server that prompts for an optional Pascal API key and stores it in the OS
-keychain (leave it empty to stay local-only):
+`pascal-hosted` server that signs in through Pascal's browser OAuth flow from `/mcp`, with no
+API key (leave it unauthenticated to stay local-only):
 
 ```text
 /plugin marketplace add pascalorg/editor
@@ -122,7 +122,8 @@ Register the local server (this runs `codex mcp add pascal -- pascal mcp connect
 pascal mcp setup codex
 ```
 
-Or install the plugin, which adds the skills and the same local server:
+Or install the plugin, which adds the skills and the same local server. Pascal's hosted OAuth
+sign-in does not accept the Codex client, so the plugin does not add the hosted server:
 
 ```bash
 codex plugin marketplace add pascalorg/editor

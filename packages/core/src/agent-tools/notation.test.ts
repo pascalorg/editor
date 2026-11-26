@@ -1,6 +1,10 @@
 import { describe, expect, test } from 'bun:test'
 import { z } from 'zod'
-import { NOT_LENGTHS, NOTATION_CASES } from '../agent-operations/__fixtures__/notation-cases'
+import {
+  NOT_LENGTHS,
+  NOTATION_CASES,
+  TREE_POINT_NOTATION_CASES,
+} from '../agent-operations/__fixtures__/notation-cases'
 import { HOSTED_SERVICE_TOOL_CONTRACTS } from './hosted-services'
 import {
   AGENT_TOOL_CONTRACTS,
@@ -31,6 +35,16 @@ describe('one notation (N1): each length, angle and pitch reads in its own unit 
           9,
         )
       })
+})
+
+describe('add_tree plan coordinates use the shared length notation on both axes', () => {
+  for (const { sent, received } of TREE_POINT_NOTATION_CASES)
+    test(JSON.stringify(sent), () => {
+      const point = fieldSchema(contract('add_tree'), 'trees[].at').parse(sent) as number[]
+      expect(point).toHaveLength(2)
+      expect(point[0]).toBeCloseTo(received[0], 9)
+      expect(point[1]).toBeCloseTo(received[1], 9)
+    })
 })
 
 test('every other number a shared tool takes by name is a coordinate, a fraction or a ratio', () => {

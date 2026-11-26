@@ -16,7 +16,13 @@ const policy = (
 export const EXPECTED_OPENAI_TOOL_ANNOTATIONS = {
   add_door: policy(false, false, false),
   add_fence: policy(false, false, false),
+  add_hedge: policy(false, true, false),
   add_level: policy(false, false, false),
+  add_planting: policy(false, true, false),
+  add_rock: policy(false, true, false),
+  add_site_surface: policy(false, false, false),
+  add_steps: policy(false, false, false),
+  add_tree: policy(false, false, false),
   add_wall: policy(false, false, false),
   set_wall_type: policy(false, true, false),
   add_corner_window: policy(false, false, false),
@@ -104,6 +110,17 @@ export const EXPECTED_OPENAI_TOOL_ANNOTATIONS = {
   verify_scene: policy(true, false, false),
   view_assets: policy(true, false, false),
   view_scene: policy(true, false, false),
+  // Registered only when the host supplies hosted service and project file executors.
+  list_pascal_services: policy(true, false, false),
+  pull_site_data: policy(false, true, true),
+  get_site_pull: policy(false, false, true),
+  generate_studio_media: policy(false, true, true),
+  get_studio_generation: policy(false, false, true),
+  get_project_assets: policy(true, false, false),
+  get_project_file: policy(true, false, false),
+  upload_project_file: policy(false, false, false),
+  rename_project_file: policy(false, true, false),
+  delete_project_file: policy(false, true, false),
 } as const satisfies Record<string, ToolAnnotations>
 
 const exactKeys = (value: Record<string, unknown>, expected: readonly string[]): boolean => {

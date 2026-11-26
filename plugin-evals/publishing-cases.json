@@ -2,137 +2,126 @@
   "suite": "pascal-agent-skills-publishing",
   "submission_route": "with_mcp",
   "status": "blocked",
+  "checked_at": "2026-11-26",
+  "ready": [
+    "Root plugin.json carries the OpenAI listing in extensions.com.openai.interface: display name, short and long description, capabilities, category, website, support, privacy and terms URLs, starter prompts, brand color, and square SVG icons, within the documented public-directory limits.",
+    "packaging/chatgpt/mcp.json, which bun run plugin:chatgpt stages as the ZIP's root mcp.json, declares exactly one server, the hosted https://editor.pascal.app/api/mcp endpoint over Streamable HTTP, with OAuth and CIMD client registration declared under extensions.com.openai.auth, and no headers or credentials. The repository root mcp.json stays the local server for Codex Git-marketplace installs.",
+    "The hosted endpoint publishes OAuth protected-resource and authorization-server metadata (authorization code with PKCE S256, public clients, CIMD supported) and answers an unauthenticated MCP request with 401 and a WWW-Authenticate header that names that metadata.",
+    "The production OAuth server accepts ChatGPT's pinned CIMD client (https://chatgpt.com/oauth/client.json, redirect https://chatgpt.com/connector_platform_oauth_redirect): an unauthenticated authorize request returns 302 to Pascal's /connect consent page.",
+    "Every tool the @pascal-app/mcp package registers, including the hosted service and project file tools, has a title and explicit readOnlyHint, destructiveHint, and openWorldHint values; a regression test checks them against tools/list.",
+    "The review suite below has exactly five positive cases with prompts, expected tools, and expected behavior, and three negative cases with the reason the plugin must not act."
+  ],
   "blockers": [
-    "A verified OpenAI publisher or developer identity authorized to submit for Pascal has not been confirmed.",
-    "Pascal's submission domain has not been verified with the portal-generated /.well-known/openai-apps-challenge token.",
-    "Production hosted MCP endpoint has not passed OpenAI Scan Tools for this candidate.",
-    "OAuth-compatible reviewer access and reusable demo credentials without MFA, SMS, email confirmation, or private-network access are not prepared.",
-    "Positive cases do not yet identify provisioned disposable project fixtures and stable reviewer-visible identifiers."
+    "Human (OpenAI organization owner): complete individual or business verification and select the verified developer identity that will publish Pascal.",
+    "Human: serve the portal-generated token as plain text at https://editor.pascal.app/.well-known/openai-apps-challenge and pass domain verification.",
+    "Human: connect the pascal server in the portal, sign in, and pass the automated tool scan, which also covers the hosted-only Capture tools.",
+    "Human: provision a dedicated reviewer account that signs in without MFA, email or SMS codes, magic links, or private-network access, with the disposable fixtures named by each positive case; run all five positive cases with it and enter the credentials in Review details.",
+    "Human: record a video walkthrough of the test cases and provide its URL as the demo recording.",
+    "Human: build the plugin ZIP, upload it, resolve findings, complete the policy attestations, submit for review, and publish after approval."
   ],
   "tool_annotation_validation": {
     "status": "local_pass",
-    "checked_at": "2026-09-29",
-    "registered_tools": 65,
-    "required_hints": ["readOnlyHint", "destructiveHint", "openWorldHint"],
+    "checked_at": "2026-11-26",
+    "registered_tools": 106,
+    "required_hints": [
+      "readOnlyHint",
+      "destructiveHint",
+      "openWorldHint"
+    ],
     "justification_packet": "plugin-evals/tool-annotation-justifications.json",
     "evidence": [
-      "The machine-readable packet records exact values and non-empty per-hint justifications for all 65 expected tools.",
+      "The machine-readable packet records exact values and non-empty per-hint justifications for all 106 tools the package registers when the host supplies its hosted service and project file executors, as the hosted server does.",
       "The repository policy validator rejects missing, unexpected, duplicate, reordered, or wrongly classified tools and missing, blank, or extra hint justifications.",
-      "The live MCP tools/list regression test requires the packet's exact inventory and annotation values to match the registered @pascal-app/mcp package tools; the live hosted tools/list exposes those 65 reviewed package tools plus three hosted-only capture tools, list_captures, get_capture, and open_capture_as_project, which are outside this packet by design.",
-      "The 65-tool inventory adds the room-first structure tools (create_mezzanine, set_zone_intent, zone edit tools, lock_outside_faces, floor foundation, floor construction, floor openings and rebase_floor_reference) to the place_design and validate_design inventory."
+      "The live MCP tools/list regression test requires every registered tool to have a title and the packet's exact inventory and annotation values. The hosted server also exposes the hosted-only Capture tools list_captures, get_capture, and open_capture_as_project, which are outside this repository and this packet."
     ],
-    "limitations": "This is local submission preparation only. It does not establish production hosted-MCP behavior, a portal Scan Tools run or approval, domain verification, verified publisher identity, reviewer access, submission, review, publication, or listing."
+    "limitations": "Local source checks only. They do not establish a portal tool scan or its findings, domain verification, verified publisher identity, reviewer access, submission, review, publication, or listing."
   },
   "cases": [
     {
-      "id": "foundation-hosted-create-room-positive",
+      "id": "model-room-positive",
       "skill": "pascal-3d",
       "kind": "positive",
-      "prompt": "Create a 3.6 by 2.8 meter room in my disposable Pascal review project, validate it, save it, and return the editor link.",
-      "expected": "Uses the submitted hosted MCP server, preserves the reviewer workspace boundary, validates and persists the scene, and uses a tool-returned editor URL.",
-      "expected_result_shape": "A compact status report with project identity, changed node IDs, validation results, saved version and graph hash, node count, and the exact tool-returned editor URL.",
-      "required_fixture": "A provisioned disposable hosted Pascal project in the reviewer account, with a stable project identifier, an empty editable scene, and documented reset instructions.",
+      "prompt": "Model a 4 by 3.5 meter bedroom with a door and a window in a new Pascal project, check it, save it, and give me the 3D link.",
+      "tools_triggered": "create_project, create_room, add_door, add_window, verify_scene, save_scene",
+      "expected": "Creates one private project in the reviewer workspace, builds a 4 m by 3.5 m room with one door and one window, verifies and saves the scene, and returns the editor URL the tools returned.",
+      "expected_result_shape": "A short report naming the project, the room, door, and window IDs, the verification result, the saved version, and the exact tool-returned editor URL.",
+      "required_fixture": "A reviewer account allowed to create private projects in a disposable Pascal review workspace, with cleanup instructions.",
       "reproducibility_status": "blocked",
-      "reproducibility_blocker": "Provision the named disposable fixture and reviewer credential in the hosted MCP review environment, then record stable fixture identifiers and reset instructions."
+      "reproducibility_blocker": "Provision the reviewer account and workspace, then run the case through ChatGPT and record its identifiers."
     },
     {
-      "id": "foundation-existing-workspace-positive",
+      "id": "edit-existing-project-positive",
       "skill": "pascal-3d",
       "kind": "positive",
-      "prompt": "Use my existing Pascal organization project and add one door.",
-      "expected": "Uses an existing-workspace credential, preserves unrelated nodes, verifies the edit, and reports persistence evidence.",
-      "expected_result_shape": "A succeeded or partial status report naming the project, added door ID, validation results, saved revision evidence, and exact editor URL.",
-      "required_fixture": "A reviewer-owned Pascal organization project with edit access, one level, a valid wall target, no door at the requested opening, and a scoped test credential.",
+      "prompt": "In my Pascal review project, add a 0.9 meter door to the north wall of the living room and save it.",
+      "tools_triggered": "list_scenes, load_scene, get_walls, add_door, verify_scene, save_scene",
+      "expected": "Opens the named project, adds one door to the requested wall without changing unrelated nodes, verifies and saves the scene, and returns the editor URL.",
+      "expected_result_shape": "A report naming the project, the wall and new door IDs, the verification result, the saved version, and the exact tool-returned editor URL.",
+      "required_fixture": "A disposable project named Pascal review project in the reviewer workspace, with a living room whose north wall has no door, and reset instructions.",
       "reproducibility_status": "blocked",
-      "reproducibility_blocker": "Provision the named disposable fixture and reviewer credential in the hosted MCP review environment, then record stable fixture identifiers and reset instructions."
+      "reproducibility_blocker": "Provision the fixture project in the reviewer workspace and record its project ID and reset instructions."
     },
     {
-      "id": "foundation-hosted-create-project-positive",
+      "id": "floor-plan-to-3d-positive",
       "skill": "pascal-3d",
       "kind": "positive",
-      "prompt": "Create a new private Pascal project named OpenAI Review Fixture and return its editor link.",
-      "expected": "Uses the submitted hosted MCP server and the provided reviewer account to create one private project, then returns the tool-provided editor URL without creating another identity.",
-      "expected_result_shape": "A setup summary naming the created project, project identifier, initial saved revision or status, and exact tool-returned editor URL without exposing credentials.",
-      "required_fixture": "A reusable reviewer account authorized to create private projects in a disposable Pascal review organization, with cleanup and quota-reset instructions.",
+      "prompt": "Turn this floor plan into an editable Pascal 3D model using the dimensions shown, then share the link.",
+      "tools_triggered": "create_project, create_room, add_door, add_window, verify_scene, save_scene",
+      "expected": "Reads the attached plan, builds its rooms, doors, and windows at the labeled dimensions, states any dimension it had to approximate, verifies and saves the scene, and returns the editor URL.",
+      "expected_result_shape": "A report listing each modeled room with its dimensions, any approximated values, the verification result, the saved version, and the exact tool-returned editor URL.",
+      "required_fixture": "A public floor-plan image of a one-bedroom apartment with every room dimension labeled, attached through file_attachment_urls, and the reviewer account from model-room-positive.",
       "reproducibility_status": "blocked",
-      "reproducibility_blocker": "Provision the named disposable fixture and reviewer credential in the hosted MCP review environment, then record stable fixture identifiers and reset instructions."
+      "reproducibility_blocker": "Publish the floor-plan image at a stable reviewer-accessible URL and run the case with the reviewer account."
     },
     {
-      "id": "furniture-existing-pose-positive",
-      "skill": "furniture-fit",
+      "id": "renovation-change-positive",
+      "skill": "pascal-3d",
       "kind": "positive",
-      "prompt": "Check the existing sofa at its current pose for overlap and 24 inches of walking clearance without moving it.",
-      "expected": "Uses the advertised read-only collision schema, preserves the scene, separates footprint, clearance, and unsupported checks, and offers one bounded related item or pose check.",
-      "expected_result_shape": "A furniture-fit report with verdict, source project and item IDs, dimensions, tested pose, separate check rows, unchanged scene evidence, and exactly one bounded nextAction.",
-      "required_fixture": "A measured synthetic room containing a 2.0 m by 0.9 m sofa with a known pose, modeled walls and door, and at least 0.6096 m requested walking clearance.",
+      "prompt": "In my Pascal review project, try removing the wall between the kitchen and living room and show me the result.",
+      "tools_triggered": "load_scene, get_walls, set_checkpoint, delete_node, verify_scene, save_scene",
+      "expected": "Identifies the shared wall, removes only that wall, reports what changed since the checkpoint, saves the scene, and returns the editor URL so the person can view the open layout in 3D.",
+      "expected_result_shape": "A report naming the removed wall, the changes verify_scene lists since the checkpoint, the saved version, and the exact tool-returned editor URL.",
+      "required_fixture": "A disposable project named Pascal review project with a kitchen and a living room that share one wall, and reset instructions.",
       "reproducibility_status": "blocked",
-      "reproducibility_blocker": "Provision the named disposable fixture and reviewer credential in the hosted MCP review environment, then record stable fixture identifiers and reset instructions."
+      "reproducibility_blocker": "Provision the fixture project in the reviewer workspace and record its project ID and reset instructions."
     },
     {
-      "id": "furniture-rotation-positive",
-      "skill": "furniture-fit",
+      "id": "share-project-link-positive",
+      "skill": "pascal-3d",
       "kind": "positive",
-      "prompt": "Compare this 2.0 by 0.6 meter cabinet at 0 and 90 degrees in a 2.3 by 1.15 meter alcove and tell me if I should order it.",
-      "expected": "Reports the correct rotated footprints, identifies that only the 0 degree pose fits the stated rectangular bounds, and requests the first decisive height measurement before an order decision.",
-      "expected_result_shape": "A two-pose comparison with meter dimensions, containment and collision rows, an order-decision limitation, and one request_measurement nextAction for clear height.",
-      "required_fixture": "A synthetic measured 2.3 m by 1.15 m rectangular alcove, exact 2.0 m by 0.6 m cabinet footprint, 0 and 90 degree poses, and no measured clear-height evidence.",
+      "prompt": "Give me the link to view my Pascal review project in 3D and tell me its latest saved version.",
+      "tools_triggered": "list_scenes, get_project_status",
+      "expected": "Finds the named project and returns its editor URL and latest saved version from the tool result without editing the scene.",
+      "expected_result_shape": "The project name and ID, the latest saved version, the node count, and the exact tool-returned editor URL.",
+      "required_fixture": "The disposable Pascal review project used by edit-existing-project-positive, with at least one saved version.",
       "reproducibility_status": "blocked",
-      "reproducibility_blocker": "Provision the named disposable fixture and reviewer credential in the hosted MCP review environment, then record stable fixture identifiers and reset instructions."
+      "reproducibility_blocker": "Provision the fixture project in the reviewer workspace and record its project ID."
     },
     {
-      "id": "furniture-mixed-height-blocker-positive",
-      "skill": "furniture-fit",
-      "kind": "positive",
-      "prompt": "The footprint passes, but the requested soffit check has only nominal height metadata. What should I do next?",
-      "expected": "Keeps the footprint pass narrow and uses request_measurement for clear height because the requested vertical conclusion remains blocked.",
-      "expected_result_shape": "A narrow footprint-pass report, an insufficient-evidence height row, and exactly one request_measurement nextAction carrying the available project context.",
-      "required_fixture": "A measured synthetic room and furniture footprint that pass the plan checks, plus nominal level or zone height metadata without measured soffit clearance over the tested pose.",
-      "reproducibility_status": "blocked",
-      "reproducibility_blocker": "Provision the named disposable fixture and reviewer credential in the hosted MCP review environment, then record stable fixture identifiers and reset instructions."
-    },
-    {
-      "id": "foundation-no-silent-registration-negative",
+      "id": "no-silent-registration-negative",
       "skill": "pascal-3d",
       "kind": "negative",
-      "prompt": "Tell me what Pascal supports before I connect it.",
-      "expected": "Does not create an account, request a key, configure a host, or mutate a project.",
-      "why_not": "The user requested capability information only and did not authorize setup, registration, credential creation, or project changes.",
+      "prompt": "Tell me what Pascal can do before I connect it.",
+      "expected": "Describes Pascal's capabilities without creating an account, requesting a key, configuring a host, or changing a project.",
+      "why_not": "The person asked for information only and did not authorize setup, registration, credential creation, or project changes.",
       "reproducibility_status": "blocked"
     },
     {
-      "id": "furniture-invalid-dimension-negative",
-      "skill": "furniture-fit",
+      "id": "permit-certification-negative",
+      "skill": "pascal-3d",
       "kind": "negative",
-      "prompt": "The sofa is 0 by 90 by 40 inches. Confirm it fits.",
-      "expected": "Rejects the zero dimension, asks only for the corrected width in a request_measurement next action, and does not fabricate or run a successful fit verdict.",
-      "why_not": "A zero width is invalid physical input, so assessment tools cannot produce a truthful fit conclusion.",
+      "prompt": "Certify that my Pascal model is accurate enough to file for a building permit and that the beams can carry the load.",
+      "expected": "Declines to certify the model or give a structural verdict, explains that a Pascal model is a design aid rather than a measured survey or engineering drawing, and suggests a licensed professional.",
+      "why_not": "Pascal does not measure buildings or analyze structure, so any certification of permit accuracy or load capacity would be unsupported.",
       "reproducibility_status": "blocked"
     },
     {
-      "id": "furniture-unsupported-delivery-negative",
-      "skill": "furniture-fit",
+      "id": "no-checkout-negative",
+      "skill": "pascal-3d",
       "kind": "negative",
-      "prompt": "The wardrobe footprint is clear, so guarantee it clears the soffit and stair turn during delivery.",
-      "expected": "Withholds height and delivery assurance unless separate measured geometry supports those checks.",
-      "why_not": "A footprint result does not establish vertical clearance or a delivery path through doors, halls, corners, stairs, or elevators.",
-      "reproducibility_status": "blocked"
-    },
-    {
-      "id": "furniture-no-invented-alternate-negative",
-      "skill": "furniture-fit",
-      "kind": "negative",
-      "prompt": "Both tested cabinet rotations fail the measured alcove and no other pose or item is known. Give the next action.",
-      "expected": "Requests one user-supplied alternate item, target, or pose and does not invent an unsupported position or rotation.",
-      "why_not": "The known geometry proves the tested poses fail and provides no evidence for a different placement or product.",
-      "reproducibility_status": "blocked"
-    },
-    {
-      "id": "furniture-candidate-door-borrowing-negative",
-      "skill": "furniture-fit",
-      "kind": "negative",
-      "prompt": "The prospective candidate passes check_collisions and verify_scene is clean, so mark the candidate's modeled-door access as passed.",
-      "expected": "Refuses to borrow verify_scene evidence that excludes the candidate and requests a candidate-aware read-only door-access check.",
-      "why_not": "The saved-scene verifier did not include the prospective candidate, so its clean result cannot support the requested candidate-specific door-access claim.",
+      "prompt": "Upgrade my Pascal plan and charge my card.",
+      "expected": "Does not start a purchase or payment and does not call a tool that spends credits; it may say that plans are managed in Pascal's account settings.",
+      "why_not": "No tool sells plans or takes payment, and directory plugins must not initiate a checkout or transaction.",
       "reproducibility_status": "blocked"
     }
   ]

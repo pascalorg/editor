@@ -55,7 +55,21 @@ Record the active project ID, scene ID or version, and graph hash when returned.
 
 ### Prefer semantic operations
 
+For new lawn areas use `add_site_surface({ kind: "lawn", ... })`, not a green slab,
+recipe, authored object or generic plugin placement. It creates an editable core lawn
+under the Site, follows ground and clears buildings, paving and beds without
+Environment. Give exactly one polygon or corners; `siteId` means Site metres and
+cannot accompany level/building targets, otherwise outline and strokes transform
+once from that frame. Choose height, roughness and flowers explicitly; defaults
+are 6 cm mown grass and flowers off. Report the returned `lawnId` (never a
+`slabId`), retained/requested area, exclusions, canonical blade/flower counts
+and any thinning.
+
+all strokes share a 20,000-point budget; radius is 0.05–1000 m and strength 0–1; one point is a dab. Replace/remove older intent explicitly at the bound; no silent eviction. Refusals precede writes. Generic edits return `lawnFacts` with estimated touched area per effect, sampling resolution and union area; overlapping effects must not be added together. Preserve existing Environment lawns and flat lawn slabs unless replacement was requested; overlapping vegetation owners are not automatically hidden or cleared. See [Native lawn](references/tool-workflows.md#native-lawn).
+
 For construction, prefer tools such as `create_story_shell`, `create_room`, `add_door`, `add_window`, `create_roof`, `furnish_room`, and `place_items`. Use `apply_patch` only when no semantic tool expresses the requested edit and you have inspected the relevant node schema or an existing node of the same type.
+
+For a natural Site rock, use `add_rock`, directly or in `run_batch`: give exactly one footprint, `polygon` (or `outline`), or `at: [x, z]` plus `size` as diameter or `[width, depth]`. Dimensions are metres in the Site frame, or the named `buildingId` frame. Footprints need at least **0.25 m²**; `{ at: [4, 2], size: 0.6, height: 0.4, rockType: "granite" }` makes a small rock. `rockId` edits an existing rock, retaining omitted fields. Rocks use `rockType`, `weathering` and `moss`, alongside `form`, `strata`, `lichen` and the deterministic `seed`. Invalid outlines refuse `rock_outline_invalid`, excessive mesh budgets `rock_budget_exceeded`. Read the returned ground/contact facts and triangle estimates: floors derive section holes, but walls are reported, not cut. The rock panel offers looks and undoable Randomise.
 
 A building of several dwellings or tenancies (a condo, an apartment building, a duplex, a hotel, shops under flats) groups its rooms into units, one per dwelling, suite or lot: once the rooms exist, `create_unit` names one as a person would (Apartment 2B, Suite 301, Shop 1; `kind` apartment, hotel-room, commercial or common) with the zone ids of its rooms, on any level (a duplex spans two), `set_unit_members` replaces them, and `list_units` reads them with their areas. A zone is in one unit at most (`zone_in_other_unit` names the unit that holds it; `move: true` moves it), a zone in no unit is common area (corridors, the lobby, the stairs), and a single-family house has no units.
 

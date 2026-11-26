@@ -186,6 +186,7 @@ export class MergedOutlineNode extends TempNode {
   private readonly _cutoutMasksB = new Map<any, NodeMaterial>()
   private readonly _usedCutoutMasksA = new Set<any>()
   private readonly _usedCutoutMasksB = new Set<any>()
+  private readonly _depthSprites = new WeakMap<object, SpriteNodeMaterial>()
   private readonly _maskSceneA = new Scene()
   private readonly _maskSceneB = new Scene()
 
@@ -407,7 +408,7 @@ export class MergedOutlineNode extends TempNode {
         (obj: any, sc: any, cam: any, geo: any, _mat: any, grp: any, lights: any, clip: any) => {
           if (!hasDrawableGeometry(geo)) return
           if (!(this._cacheA.has(obj) || this._cacheB.has(obj))) {
-            const m = obj.isSprite ? this._depthSpriteMaterial : this._depthMaterial
+            const m = obj.isSprite ? this._depthSpriteFor(_mat) : this._depthMaterial
             renderer.renderObject(obj, sc, cam, geo, m, grp, lights, clip)
           }
         },
@@ -460,6 +461,21 @@ export class MergedOutlineNode extends TempNode {
         if (!hasDrawableGeometry(geo)) return
         if (useProxies || cache.has(obj)) {
           let maskMaterial = obj.isSprite ? spriteMaterial : material
+          if (obj.isSprite && hasPlacedSprites(sourceMaterial)) {
+            // An instanced sprite (a scan's point cloud) places and sizes each of its sprites in
+            // its own nodes: the plain sprite mask drew every one as a 1 m quad at the origin,
+            // tens of thousands deep, whenever the scan was hovered or selected.
+            let spriteMask = cutoutMasks.get(sourceMaterial)
+            if (!spriteMask) {
+              spriteMask = spriteMaterial.clone()
+              cutoutMasks.set(sourceMaterial, spriteMask)
+            }
+            if (copySpritePlacement(sourceMaterial, spriteMask, spriteMaterial.colorNode)) {
+              spriteMask.needsUpdate = true
+            }
+            maskMaterial = spriteMask
+            usedCutoutMasks.add(sourceMaterial)
+          }
           if (!obj.isSprite && sourceMaterial?.alphaTest > 0) {
             let cutoutMask = cutoutMasks.get(sourceMaterial)
             const opacityNode =
@@ -501,12 +517,16 @@ export class MergedOutlineNode extends TempNode {
               ownedMaterial.colorNode !== maskMaterial.colorNode ||
               ownedMaterial.opacityNode !== maskMaterial.opacityNode ||
               ownedMaterial.positionNode !== maskMaterial.positionNode ||
+              (ownedMaterial as any).scaleNode !== (maskMaterial as any).scaleNode ||
+              (ownedMaterial as any).rotationNode !== (maskMaterial as any).rotationNode ||
               ownedMaterial.alphaTest !== maskMaterial.alphaTest ||
               ownedMaterial.side !== maskMaterial.side
             ) {
               ownedMaterial.colorNode = maskMaterial.colorNode
               ownedMaterial.opacityNode = maskMaterial.opacityNode
               ownedMaterial.positionNode = maskMaterial.positionNode
+              ;(ownedMaterial as any).scaleNode = (maskMaterial as any).scaleNode
+              ;(ownedMaterial as any).rotationNode = (maskMaterial as any).rotationNode
               ownedMaterial.alphaTest = maskMaterial.alphaTest
               ownedMaterial.side = maskMaterial.side
               ownedMaterial.needsUpdate = true
@@ -591,6 +611,20 @@ export class MergedOutlineNode extends TempNode {
       }
     }
     return true
+  }
+
+  /** The depth sprite, placed as `source` places its sprites when it does (see `_renderMask`). */
+  private _depthSpriteFor(source: any): SpriteNodeMaterial {
+    if (!hasPlacedSprites(source)) return this._depthSpriteMaterial
+    let depth = this._depthSprites.get(source)
+    if (!depth) {
+      depth = this._depthSpriteMaterial.clone()
+      this._depthSprites.set(source, depth)
+    }
+    if (copySpritePlacement(source, depth, this._depthSpriteMaterial.colorNode)) {
+      depth.needsUpdate = true
+    }
+    return depth
   }
 
   private _disposeProxyMaterial(proxy: Mesh | Sprite) {
@@ -878,6 +912,34 @@ export class MergedOutlineNode extends TempNode {
       })
     }
   }
+}
+
+/** A sprite material that places, sizes or cuts its sprites in nodes (an instanced cloud). */
+function hasPlacedSprites(material: any): boolean {
+  return Boolean(material?.isSpriteNodeMaterial && (material.positionNode || material.scaleNode))
+}
+
+/**
+ * Gives `mask` the placement, size, rotation and cut-out of `source`'s sprites, coloured
+ * `colorNode`. True when anything changed and the mask needs a rebuild.
+ */
+function copySpritePlacement(source: any, mask: any, colorNode: any): boolean {
+  const next = {
+    alphaTest: source.alphaTest,
+    colorNode,
+    opacityNode: source.opacityNode ?? null,
+    positionNode: source.positionNode ?? null,
+    rotationNode: source.rotationNode ?? null,
+    scaleNode: source.scaleNode ?? null,
+    sizeAttenuation: source.sizeAttenuation,
+  }
+  let changed = false
+  for (const [key, value] of Object.entries(next)) {
+    if (mask[key] === value) continue
+    mask[key] = value
+    changed = true
+  }
+  return changed
 }
 
 export const mergedOutline = (

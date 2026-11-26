@@ -283,6 +283,12 @@ export { WallMoveSideHandles } from './components/editor/wall-move-side-handles'
 export { WallPushArrow } from './components/editor/wall-push-arrow'
 export { useWallsBelowSetting } from './components/editor-2d/floorplan-adjacent-walls-layer'
 export { useFloorplanRender } from './components/editor-2d/floorplan-render-context'
+// The plan's own draft drawing (area fill, outline, closing side, vertex markers), so a
+// kind-owned plan tool draws its draft exactly as the slab and zone drafts are drawn.
+export {
+  FLOORPLAN_DRAFT_OUTLINE_WIDTH,
+  FloorplanDraftLayer,
+} from './components/editor-2d/renderers/floorplan-draft-layer'
 export {
   type DraftMeasurement,
   FloorplanDraftMeasurement,
@@ -972,6 +978,14 @@ export {
   sculptFieldForSite,
   terrainPointInsideSite,
 } from './lib/terrain-sculpt'
+export {
+  BOUNDARY_OUTLINE_COLOR,
+  type PlanDraftColors,
+  planDraftColors,
+  TOOL_DRAFT_FILL_OPACITY,
+  TOOL_INVALID_COLOR,
+  TOOL_PREVIEW_COLOR,
+} from './lib/tool-preview-colors'
 export { withToolShortcut } from './lib/tool-shortcuts'
 export { enterUnitFocus } from './lib/units'
 export { exportSceneToUsdz, type UsdzExportOptions } from './lib/usdz-export'

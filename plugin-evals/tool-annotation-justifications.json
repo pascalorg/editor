@@ -59,6 +59,19 @@
       }
     },
     {
+      "name": "add_hedge",
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": true,
+        "openWorldHint": false
+      },
+      "justifications": {
+        "readOnlyHint": "It is not read-only because it adds a hedge to a Site, or changes the fields given of an existing one, in the connected Pascal scene.",
+        "destructiveHint": "Changing a hedge replaces its line, height, width, openings, seed or looks; undo restores them. Nothing else in the scene is edited.",
+        "openWorldHint": "It operates on the connected Pascal scene without accessing the public internet."
+      }
+    },
+    {
       "name": "add_level",
       "annotations": {
         "readOnlyHint": false,
@@ -82,6 +95,71 @@
         "readOnlyHint": "It is not read-only because it creates an object from a three.js module in the connected Pascal scene, or rebuilds an existing one.",
         "destructiveHint": "Given an existing object's nodeId it replaces that object's geometry and script, so earlier authored state is overwritten (undo restores it).",
         "openWorldHint": "It runs the supplied module in the Pascal server's script host and stores the result with the scene, without accessing the public internet."
+      }
+    },
+    {
+      "name": "add_planting",
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": true,
+        "openWorldHint": false
+      },
+      "justifications": {
+        "readOnlyHint": "Adds one planting bed to the Site or changes an existing bed in the connected scene.",
+        "destructiveHint": "Changing a bed replaces its supplied outline, species, layout or appearance fields; undo restores the prior state.",
+        "openWorldHint": "It operates on the connected Pascal scene without accessing the public internet."
+      }
+    },
+    {
+      "name": "add_rock",
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": true,
+        "openWorldHint": false
+      },
+      "justifications": {
+        "readOnlyHint": "Adds a rock to a Site, or changes the fields given of an existing one, in the connected Pascal scene.",
+        "destructiveHint": "Changing a rock replaces its outline, height, seed or looks; undo restores them. Floors it passes through derive their holes and are not edited.",
+        "openWorldHint": "It operates on the connected Pascal scene and its persisted terrain without accessing the public internet."
+      }
+    },
+    {
+      "name": "add_site_surface",
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "openWorldHint": false
+      },
+      "justifications": {
+        "readOnlyHint": "Adds one level-owned driveway, path or patio slab, or one Site-owned procedural lawn, in the connected Pascal scene.",
+        "destructiveHint": "Adds one slab or lawn without replacing or deleting existing scene nodes, including legacy lawn slabs and plugin ground cover.",
+        "openWorldHint": "Uses only the connected scene without network access."
+      }
+    },
+    {
+      "name": "add_steps",
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "openWorldHint": false
+      },
+      "justifications": {
+        "readOnlyHint": "Adds one short outside flight of steps to a level of the connected Pascal scene.",
+        "destructiveHint": "Adds one stair and its segment without replacing or deleting existing scene nodes.",
+        "openWorldHint": "Uses only the connected scene without network access."
+      }
+    },
+    {
+      "name": "add_tree",
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "openWorldHint": false
+      },
+      "justifications": {
+        "readOnlyHint": "Creates one to forty procedural tree nodes on the Site in the connected Pascal scene.",
+        "destructiveHint": "Adds trees without replacing or deleting existing nodes; all refusals precede writes and undo removes the trees together.",
+        "openWorldHint": "Reads only the connected scene, its Site ground and building footprints without accessing the public internet."
       }
     },
     {
@@ -332,6 +410,19 @@
       }
     },
     {
+      "name": "delete_project_file",
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": true,
+        "openWorldHint": false
+      },
+      "justifications": {
+        "readOnlyHint": "Removes a file from the project catalog and from Studio.",
+        "destructiveHint": "Deletion removes the file from the catalog.",
+        "openWorldHint": "Confined to the files of a project in the connected workspace."
+      }
+    },
+    {
       "name": "delete_scene",
       "annotations": {
         "readOnlyHint": false,
@@ -501,6 +592,19 @@
       }
     },
     {
+      "name": "generate_studio_media",
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": true,
+        "openWorldHint": true
+      },
+      "justifications": {
+        "readOnlyHint": "Submits a rendering job that persists media in the project's Studio gallery and charges Pascal credits.",
+        "destructiveHint": "Spending credits is an irreversible transaction; a call without a quote token only returns a quote.",
+        "openWorldHint": "Sends the prompt and project sources to the selected media model, which may be a third-party provider."
+      }
+    },
+    {
       "name": "generate_variants",
       "annotations": {
         "readOnlyHint": false,
@@ -537,6 +641,32 @@
         "readOnlyHint": "It reads one node from the connected Pascal scene without changing scene or project state.",
         "destructiveHint": "It does not create, update, replace, delete, load, or save Pascal scene or project state.",
         "openWorldHint": "It operates only on data supplied by or already available inside the connected Pascal service and does not access the public internet."
+      }
+    },
+    {
+      "name": "get_project_assets",
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "openWorldHint": false
+      },
+      "justifications": {
+        "readOnlyHint": "Lists the project's file catalog without changing it.",
+        "destructiveHint": "A read-only listing has no destructive effect.",
+        "openWorldHint": "Confined to the files of a project in the connected workspace."
+      }
+    },
+    {
+      "name": "get_project_file",
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "openWorldHint": false
+      },
+      "justifications": {
+        "readOnlyHint": "Returns one project file and its download URL without changing it.",
+        "destructiveHint": "A read-only lookup has no destructive effect.",
+        "openWorldHint": "Confined to the files of a project in the connected workspace and requires workspace membership."
       }
     },
     {
@@ -579,6 +709,19 @@
       }
     },
     {
+      "name": "get_site_pull",
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "openWorldHint": true
+      },
+      "justifications": {
+        "readOnlyHint": "Reading a retained operation may reconcile an interrupted run and its refund, which changes hosted state.",
+        "destructiveHint": "Reconciliation only completes or refunds an existing operation; it starts no new charge and edits no scene.",
+        "openWorldHint": "Returns site context sourced from public external data sources."
+      }
+    },
+    {
       "name": "get_source",
       "annotations": {
         "readOnlyHint": true,
@@ -589,6 +732,19 @@
         "readOnlyHint": "It only reads the script stored for an object built with add_object, with its params.",
         "destructiveHint": "It changes nothing; it returns the module text and param values.",
         "openWorldHint": "It reads from the connected Pascal service's artifact store without accessing the public internet."
+      }
+    },
+    {
+      "name": "get_studio_generation",
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "openWorldHint": true
+      },
+      "justifications": {
+        "readOnlyHint": "Reading a job may reconcile an interrupted generation and its refund, which changes hosted state.",
+        "destructiveHint": "Reconciliation only completes or refunds an existing job; it starts no new charge and edits no scene.",
+        "openWorldHint": "Reports on media produced by the selected media model, which may be a third-party provider."
       }
     },
     {
@@ -641,6 +797,19 @@
         "readOnlyHint": "It lists levels already present in the connected Pascal scene without changing scene or project state.",
         "destructiveHint": "It does not create, update, replace, delete, load, or save Pascal scene or project state.",
         "openWorldHint": "It operates only on data supplied by or already available inside the connected Pascal service and does not access the public internet."
+      }
+    },
+    {
+      "name": "list_pascal_services",
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "openWorldHint": false
+      },
+      "justifications": {
+        "readOnlyHint": "Lists the hosted services, prices, and media models available to the project without changing anything.",
+        "destructiveHint": "A read-only catalog lookup has no destructive effect.",
+        "openWorldHint": "Reads Pascal's own service catalog for the connected project rather than arbitrary external destinations."
       }
     },
     {
@@ -878,6 +1047,19 @@
       }
     },
     {
+      "name": "pull_site_data",
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": true,
+        "openWorldHint": true
+      },
+      "justifications": {
+        "readOnlyHint": "Starts a retained site-context operation and charges the project's Pascal credits.",
+        "destructiveHint": "Spending credits is an irreversible transaction, even though the operation does not edit the scene.",
+        "openWorldHint": "Retrieves parcel, terrain, flood, wetlands, and other site context from public external data sources."
+      }
+    },
+    {
       "name": "rebase_floor_reference",
       "annotations": {
         "readOnlyHint": false,
@@ -914,6 +1096,19 @@
         "readOnlyHint": "It deletes an opening intent node and reconciles the affected construction.",
         "destructiveHint": "It removes an authored opening and restores the derived floor or ceiling surface.",
         "openWorldHint": "It operates only on the connected Pascal scene."
+      }
+    },
+    {
+      "name": "rename_project_file",
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": true,
+        "openWorldHint": false
+      },
+      "justifications": {
+        "readOnlyHint": "Renames a file in the project catalog and in Studio.",
+        "destructiveHint": "Overwrites the file's existing name.",
+        "openWorldHint": "Confined to the files of a project in the connected workspace."
       }
     },
     {
@@ -1122,6 +1317,19 @@
         "readOnlyHint": "It is not read-only because reverses a recorded change and mutates the active Pascal scene and history state.",
         "destructiveHint": "Reversing history changes the active scene and can remove changes currently present in it.",
         "openWorldHint": "It operates on the connected Pascal scene or project service without accessing the public internet."
+      }
+    },
+    {
+      "name": "upload_project_file",
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "openWorldHint": false
+      },
+      "justifications": {
+        "readOnlyHint": "Uploads a file into the project's file catalog.",
+        "destructiveHint": "Adds a new catalog entry without overwriting or removing existing files.",
+        "openWorldHint": "Writes only to the file catalog of a project in the connected workspace."
       }
     },
     {

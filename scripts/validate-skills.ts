@@ -2,6 +2,7 @@ import { existsSync, lstatSync, readdirSync, readFileSync, statSync } from 'node
 import { dirname, extname, join, relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { XMLParser, XMLValidator } from 'fast-xml-parser'
+import { chatGptPackageEntries, chatGptSkillNames } from './chatgpt-plugin-package'
 import { validateClaudeMcpPolicy } from './claude-mcp-config-policy'
 import { validateClawHubIgnorePolicy } from './clawhub-ignore-policy'
 import { validateCursorPluginPackage } from './cursor-plugin-policy'
@@ -39,6 +40,7 @@ const openAiInterfaceFields = new Set([
   'category',
   'capabilities',
   'websiteURL',
+  'supportURL',
   'privacyPolicyURL',
   'termsOfServiceURL',
   'defaultPrompt',
@@ -734,6 +736,7 @@ for (const annotationFailure of validateOpenAiToolAnnotationPacket(annotationPac
 const publishing = parseJson(publishingFile) as {
   submission_route?: unknown
   status?: unknown
+  ready?: unknown
   blockers?: unknown
   tool_annotation_validation?: {
     status?: unknown
@@ -746,6 +749,7 @@ const publishing = parseJson(publishingFile) as {
     skill?: unknown
     kind?: unknown
     prompt?: unknown
+    tools_triggered?: unknown
     expected?: unknown
     expected_result_shape?: unknown
     required_fixture?: unknown
@@ -767,15 +771,22 @@ if (
 ) {
   fail('Publishing suite must name its current hosted MCP review blockers')
 }
+if (
+  !Array.isArray(publishing.ready) ||
+  publishing.ready.length === 0 ||
+  publishing.ready.some((value) => typeof value !== 'string' || !value)
+) {
+  fail('Publishing suite must list what is ready for submission')
+}
 const annotationValidation = publishing.tool_annotation_validation
 if (
   annotationValidation?.status !== 'local_pass' ||
-  annotationValidation.registered_tools !== 65 ||
+  annotationValidation.registered_tools !== 106 ||
   JSON.stringify(annotationValidation.required_hints) !==
     JSON.stringify(['readOnlyHint', 'destructiveHint', 'openWorldHint']) ||
   annotationValidation.justification_packet !== 'plugin-evals/tool-annotation-justifications.json'
 ) {
-  fail('Publishing suite must reference the locally validated exact 65-tool justification packet')
+  fail('Publishing suite must reference the locally validated exact 106-tool justification packet')
 }
 const publishingCases = publishing.cases ?? []
 let positivePublishingCases = 0
@@ -797,6 +808,9 @@ for (const item of publishingCases) {
     }
     if (typeof item.required_fixture !== 'string' || !item.required_fixture) {
       fail(`Positive publishing case ${String(item.id)} needs a reproducible fixture`)
+    }
+    if (typeof item.tools_triggered !== 'string' || !item.tools_triggered) {
+      fail(`Positive publishing case ${String(item.id)} needs the tools it is expected to trigger`)
     }
     if (
       item.reproducibility_status !== 'blocked' ||
@@ -822,8 +836,9 @@ for (const item of publishingCases) {
     fail(`Publishing case ${String(item.id)} needs an expected result`)
   }
 }
-if (positivePublishingCases < 5) fail('Publishing suite needs at least 5 positive cases')
-if (negativePublishingCases < 3) fail('Publishing suite needs at least 3 negative cases')
+// OpenAI's initial MCP review takes exactly five positive and three negative cases.
+if (positivePublishingCases !== 5) fail('Publishing suite needs exactly 5 positive cases')
+if (negativePublishingCases !== 3) fail('Publishing suite needs exactly 3 negative cases')
 
 const claudePluginRoot = join(root, 'skills')
 const claudePlugin = parseJson(join(claudePluginRoot, '.claude-plugin', 'plugin.json'))
@@ -929,11 +944,32 @@ const portableMcpServers = (portableMcpConfig.mcpServers ?? {}) as Record<string
 if (Object.keys(portableMcpServers).sort().join(',') !== 'pascal') {
   fail('Portable mcp.json must declare only the local pascal server')
 }
+// Codex Git-marketplace installs read this file, and Pascal's OAuth server does not accept the
+// Codex client, so the repository default stays the local server Claude also bundles.
 if (canonicalJson(portableMcpServers.pascal) !== canonicalJson(claudeMcpServers.pascal)) {
-  fail('Portable mcp.json and skills/.mcp.json must declare an identical pascal server')
+  fail('Portable mcp.json and skills/.mcp.json must declare an identical local pascal server')
 }
-// The hosted server reads its key through ${user_config.*}, which only Claude Code substitutes, so
-// it stays in the Claude plugin root instead of the portable Agent Plugins manifest.
+// The ChatGPT directory package replaces it: OpenAI's With MCP route connects exactly one remote
+// server and reads its OAuth settings from mcp.json, and the hosted server pins ChatGPT's CIMD client.
+const chatGptMcpConfig = parseJson(join(root, 'packaging', 'chatgpt', 'mcp.json'))
+const hostedRemote = (
+  parseJson(join(root, 'server.json')).remotes as Array<Record<string, unknown>> | undefined
+)?.find((remote) => remote.type === 'streamable-http')
+const expectedChatGptMcpConfig = {
+  $schema: portableMcpSchema,
+  mcpServers: {
+    pascal: {
+      type: 'streamable-http',
+      url: hostedRemote?.url,
+      extensions: { 'com.openai': { auth: { type: 'oauth', client: { mode: 'cimd' } } } },
+    },
+  },
+}
+if (canonicalJson(chatGptMcpConfig) !== canonicalJson(expectedChatGptMcpConfig)) {
+  fail(
+    `packaging/chatgpt/mcp.json must be exactly the server.json streamable-http remote with OpenAI OAuth (CIMD) and no headers: ${canonicalJson(expectedChatGptMcpConfig)}`,
+  )
+}
 if (Object.keys(claudeMcpServers).sort().join(',') !== 'pascal,pascal-hosted') {
   fail('skills/.mcp.json must add only the Claude-specific pascal-hosted server')
 }
@@ -950,16 +986,8 @@ if (Object.keys(cursorMcpServers).sort().join(',') !== 'pascal,pascal-hosted') {
   fail('Cursor mcp.json must declare exactly the pascal and pascal-hosted servers')
 }
 for (const failure of validateCursorPluginPackage(root)) fail(failure)
-const claudeUserConfig = (claudePlugin.userConfig ?? {}) as Record<string, unknown>
-const claudeHostedKeyOption = claudeUserConfig.pascal_api_key as Record<string, unknown> | undefined
-if (claudeHostedKeyOption?.sensitive !== true) {
-  fail('Claude plugin userConfig.pascal_api_key must set sensitive so the key never reaches a file')
-}
-if (claudeHostedKeyOption?.required !== false) {
-  fail('Claude plugin userConfig.pascal_api_key must set required to false for local-only installs')
-}
 
-const portablePascalServer = portableMcpServers.pascal as Record<string, unknown> | undefined
+const localPascalServer = claudeMcpServers.pascal as Record<string, unknown> | undefined
 if (geminiExtension.name !== 'pascal') fail('Gemini CLI extension name must be pascal')
 if (geminiExtension.version !== pluginVersion) {
   fail(`Gemini CLI extension version must match the root plugin.json version ${pluginVersion}`)
@@ -985,11 +1013,11 @@ if (!geminiServers || Object.keys(geminiServers).join(',') !== 'pascal') {
 } else if (
   // Gemini CLI's MCP server type field accepts only sse or http; stdio is inferred from command.
   'type' in (geminiPascalServer ?? {}) ||
-  geminiPascalServer?.command !== portablePascalServer?.command ||
-  canonicalJson(geminiPascalServer?.args) !== canonicalJson(portablePascalServer?.args)
+  geminiPascalServer?.command !== localPascalServer?.command ||
+  canonicalJson(geminiPascalServer?.args) !== canonicalJson(localPascalServer?.args)
 ) {
   fail(
-    'Gemini CLI extension pascal server must run the mcp.json command and args without a transport type',
+    'Gemini CLI extension pascal server must run the skills/.mcp.json local command and args without a transport type',
   )
 }
 if (
@@ -1091,7 +1119,7 @@ if (
 ) {
   fail('OpenAI category must use a supported final-directory value')
 }
-for (const field of ['websiteURL', 'privacyPolicyURL', 'termsOfServiceURL']) {
+for (const field of ['websiteURL', 'supportURL', 'privacyPolicyURL', 'termsOfServiceURL']) {
   validateHttpsUrl(portableInterface?.[field], `OpenAI ${field}`, openAiListingUrlLimit)
 }
 for (const field of Object.keys(portableInterface ?? {})) {
@@ -1114,6 +1142,72 @@ for (const field of ['composerIcon', 'logo']) {
 }
 if ('screenshots' in (portableInterface ?? {})) {
   fail('OpenAI package must not declare screenshots without a reviewed MCP custom UI')
+}
+
+// Anthropic's directory reads these from the Claude plugin manifest and takes the icon only once,
+// when the plugin is first saved or submitted in its developer portal.
+for (const [claudeField, openAiField] of [
+  ['documentationUrl', 'websiteURL'],
+  ['supportUrl', 'supportURL'],
+  ['privacyPolicyUrl', 'privacyPolicyURL'],
+  ['termsOfServiceUrl', 'termsOfServiceURL'],
+] as const) {
+  if (claudePlugin[claudeField] !== portableInterface?.[openAiField]) {
+    fail(`Claude plugin ${claudeField} must match the OpenAI ${openAiField}`)
+  }
+}
+const claudeIcon = claudePlugin.icon
+const claudeIconPath =
+  typeof claudeIcon === 'string' ? resolve(claudePluginRoot, claudeIcon) : undefined
+if (
+  !claudeIconPath ||
+  !isPathInside(claudePluginRoot, claudeIconPath) ||
+  extname(claudeIconPath) !== '.png' ||
+  !existsSync(claudeIconPath) ||
+  !lstatSync(claudeIconPath).isFile()
+) {
+  fail('Claude plugin icon must be a PNG inside the skills/ plugin root')
+}
+
+// The ChatGPT ZIP carries what OpenAI reads (plugin.json, mcp.json, skills, the listing icons) and
+// LICENSE, and leaves out the Claude, Cursor and ClawHub files and skills ChatGPT cannot use.
+const chatGptEntries = chatGptPackageEntries(root)
+const chatGptPaths = new Set(chatGptEntries.map(({ path }) => path))
+for (const { path, source } of chatGptEntries) {
+  if (!existsSync(source)) fail(`ChatGPT package entry ${path} has no source file`)
+}
+if (
+  chatGptEntries.find(({ path }) => path === 'mcp.json')?.source !==
+  join(root, 'packaging', 'chatgpt', 'mcp.json')
+) {
+  fail('ChatGPT package mcp.json must come from packaging/chatgpt/mcp.json')
+}
+const chatGptRequiredPaths = [
+  'plugin.json',
+  'mcp.json',
+  'LICENSE',
+  ...['composerIcon', 'logo'].map((field) =>
+    String(portableInterface?.[field]).replace(/^\.\//u, ''),
+  ),
+  ...chatGptSkillNames.map((name) => `skills/${name}/SKILL.md`),
+]
+for (const path of chatGptRequiredPaths) {
+  if (!chatGptPaths.has(path)) fail(`ChatGPT package must include ${path}`)
+}
+if ((chatGptSkillNames as readonly string[]).join(',') !== 'pascal-3d') {
+  fail(
+    'ChatGPT package must ship only the pascal-3d skill: architect needs a scope ChatGPT is not granted, and furniture-fit is not promoted in directory listings',
+  )
+}
+for (const path of chatGptPaths) {
+  const skill = path.startsWith('skills/') ? path.split('/')[1] : undefined
+  if (
+    path.split('/').some((part) => part.startsWith('.')) ||
+    (skill !== undefined && !(chatGptSkillNames as readonly string[]).includes(skill)) ||
+    (path.startsWith('skills/') && path.split('/').length < 3)
+  ) {
+    fail(`ChatGPT package must not include ${path}`)
+  }
 }
 
 if (codexPlugin.skills !== './skills/') fail('Codex plugin must point to canonical ./skills/')
