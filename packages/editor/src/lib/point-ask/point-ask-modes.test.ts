@@ -351,7 +351,7 @@ afterEach(() => {
   }
 })
 
-describe('point-ask 2D floorplan mode (DGS-142)', () => {
+describe('point-ask 2D floorplan mode', () => {
   test('canPoint is true in 2D-only view without ThreeContext and click opens orthographic 2D bubble', async () => {
     setEditorThreeContext(null)
     useEditor.setState({
@@ -462,7 +462,7 @@ describe('point-ask 2D floorplan mode (DGS-142)', () => {
   })
 })
 
-describe('point-ask Split 2D+3D mode (DGS-142)', () => {
+describe('point-ask Split 2D+3D mode', () => {
   test('projects worlds independently in 2D and 3D panes and routes pointer surface per pane', () => {
     useEditor.setState({
       viewLayouts: { ...useEditor.getState().viewLayouts, edit: sceneLayout('split') },
@@ -508,7 +508,7 @@ describe('point-ask Split 2D+3D mode (DGS-142)', () => {
   })
 })
 
-describe('point-ask Walkthrough mode (DGS-141)', () => {
+describe('point-ask Walkthrough mode', () => {
   test('C latches Comment mode, captures live first-person camera pose, and Escape unwinds with propagation stopped', async () => {
     const camera = new PerspectiveCamera(60, 800 / 600, 0.1, 100)
     camera.position.set(1, 1.65, 4)
