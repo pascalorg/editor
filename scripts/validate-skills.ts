@@ -1194,9 +1194,9 @@ const chatGptRequiredPaths = [
 for (const path of chatGptRequiredPaths) {
   if (!chatGptPaths.has(path)) fail(`ChatGPT package must include ${path}`)
 }
-if ((chatGptSkillNames as readonly string[]).includes('architect')) {
+if ((chatGptSkillNames as readonly string[]).join(',') !== 'pascal-3d') {
   fail(
-    'ChatGPT package must leave out the architect skill, which needs a scope ChatGPT is not granted',
+    'ChatGPT package must ship only the pascal-3d skill: architect needs a scope ChatGPT is not granted, and furniture-fit is not promoted in directory listings',
   )
 }
 for (const path of chatGptPaths) {

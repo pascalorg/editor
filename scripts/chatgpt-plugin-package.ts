@@ -1,9 +1,10 @@
 import { readdirSync, readFileSync } from 'node:fs'
 import { join, relative } from 'node:path'
 
-// Skills whose tools ChatGPT's connection can call. `architect` needs the `architect:run` scope,
-// which Pascal's OAuth server does not grant ChatGPT, so the ChatGPT package leaves it out.
-export const chatGptSkillNames = ['pascal-3d', 'furniture-fit'] as const
+// The only skill the ChatGPT directory listing ships. `architect` needs the `architect:run` scope,
+// which Pascal's OAuth server does not grant ChatGPT, and furniture fit is not promoted in
+// directory listings.
+export const chatGptSkillNames = ['pascal-3d'] as const
 
 export type PackageEntry = { path: string; source: string }
 
@@ -27,7 +28,7 @@ function skillFiles(root: string, name: string): PackageEntry[] {
 /**
  * Every file in the ChatGPT directory ZIP, by its path inside the ZIP. The repository root
  * mcp.json is the local server Codex Git-marketplace installs read, so the ZIP takes its root
- * mcp.json from packaging/chatgpt/mcp.json. Claude, Cursor and ClawHub files stay out.
+ * mcp.json from packaging/chatgpt/mcp.json. Claude, Cursor and ClawHub files and other skills stay out.
  */
 export function chatGptPackageEntries(root: string): PackageEntry[] {
   const manifest = JSON.parse(readFileSync(join(root, 'plugin.json'), 'utf8')) as {

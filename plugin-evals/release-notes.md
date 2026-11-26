@@ -6,7 +6,7 @@ First directory submission of Pascal's ChatGPT package. Pascal models buildings 
 
 This package declares that hosted server, with OAuth and CIMD client registration, as its only MCP server, adds the support URL, and rewrites the listing around these capabilities. Every tool carries a title and explicit `readOnlyHint`, `destructiveHint`, and `openWorldHint` values. Models are design aids, not measured surveys, engineering drawings, or permit documents.
 
-It contains the `pascal-3d` and `furniture-fit` skills. It leaves out the `architect` skill, because Architect's tools need the `architect:run` scope and ChatGPT's connection is not granted it.
+It contains only the `pascal-3d` skill. It leaves out the `architect` skill, because Architect's tools need the `architect:run` scope and ChatGPT's connection is not granted it, and it leaves out the `furniture-fit` skill.
 
 Codex installs from Pascal's Git marketplace are a separate channel and do not use this package: they keep the local `pascal mcp connect` server, because Pascal's hosted OAuth sign-in does not accept the Codex client, and Codex users register the hosted endpoint with an API key.
 
