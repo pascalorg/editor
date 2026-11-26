@@ -940,22 +940,33 @@ if (Object.keys(portableMcpConfig).sort().join(',') !== '$schema,mcpServers') {
 }
 const claudeMcpServers = (claudeMcpConfig.mcpServers ?? {}) as Record<string, unknown>
 const portableMcpServers = (portableMcpConfig.mcpServers ?? {}) as Record<string, unknown>
-// OpenAI's With MCP route connects exactly one remote server and reads its OAuth settings from
-// mcp.json; the hosted server registers public clients through CIMD and has no DCR endpoint.
+if (Object.keys(portableMcpServers).sort().join(',') !== 'pascal') {
+  fail('Portable mcp.json must declare only the local pascal server')
+}
+// Codex Git-marketplace installs read this file, and Pascal's OAuth server does not accept the
+// Codex client, so the repository default stays the local server Claude also bundles.
+if (canonicalJson(portableMcpServers.pascal) !== canonicalJson(claudeMcpServers.pascal)) {
+  fail('Portable mcp.json and skills/.mcp.json must declare an identical local pascal server')
+}
+// The ChatGPT directory package replaces it: OpenAI's With MCP route connects exactly one remote
+// server and reads its OAuth settings from mcp.json, and the hosted server pins ChatGPT's CIMD client.
+const chatGptMcpConfig = parseJson(join(root, 'packaging', 'chatgpt', 'mcp.json'))
 const hostedRemote = (
   parseJson(join(root, 'server.json')).remotes as Array<Record<string, unknown>> | undefined
 )?.find((remote) => remote.type === 'streamable-http')
-const expectedPortableServer = {
-  type: 'streamable-http',
-  url: hostedRemote?.url,
-  extensions: { 'com.openai': { auth: { type: 'oauth', client: { mode: 'cimd' } } } },
+const expectedChatGptMcpConfig = {
+  $schema: portableMcpSchema,
+  mcpServers: {
+    pascal: {
+      type: 'streamable-http',
+      url: hostedRemote?.url,
+      extensions: { 'com.openai': { auth: { type: 'oauth', client: { mode: 'cimd' } } } },
+    },
+  },
 }
-if (Object.keys(portableMcpServers).sort().join(',') !== 'pascal') {
-  fail('Portable mcp.json must declare only the hosted pascal server')
-}
-if (canonicalJson(portableMcpServers.pascal) !== canonicalJson(expectedPortableServer)) {
+if (canonicalJson(chatGptMcpConfig) !== canonicalJson(expectedChatGptMcpConfig)) {
   fail(
-    `Portable mcp.json pascal server must be the server.json streamable-http remote with OpenAI OAuth (CIMD) and no headers: ${canonicalJson(expectedPortableServer)}`,
+    `packaging/chatgpt/mcp.json must be exactly the server.json streamable-http remote with OpenAI OAuth (CIMD) and no headers: ${canonicalJson(expectedChatGptMcpConfig)}`,
   )
 }
 if (Object.keys(claudeMcpServers).sort().join(',') !== 'pascal,pascal-hosted') {

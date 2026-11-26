@@ -5,13 +5,13 @@
   "checked_at": "2026-11-26",
   "ready": [
     "Root plugin.json carries the OpenAI listing in extensions.com.openai.interface: display name, short and long description, capabilities, category, website, support, privacy and terms URLs, starter prompts, brand color, and square SVG icons, within the documented public-directory limits.",
-    "Root mcp.json declares exactly one server, the hosted https://editor.pascal.app/api/mcp endpoint over Streamable HTTP, with OAuth and CIMD client registration declared under extensions.com.openai.auth, and no headers or credentials.",
+    "packaging/chatgpt/mcp.json, which bun run plugin:chatgpt stages as the ZIP's root mcp.json, declares exactly one server, the hosted https://editor.pascal.app/api/mcp endpoint over Streamable HTTP, with OAuth and CIMD client registration declared under extensions.com.openai.auth, and no headers or credentials. The repository root mcp.json stays the local server for Codex Git-marketplace installs.",
     "The hosted endpoint publishes OAuth protected-resource and authorization-server metadata (authorization code with PKCE S256, public clients, CIMD supported) and answers an unauthenticated MCP request with 401 and a WWW-Authenticate header that names that metadata.",
+    "The production OAuth server accepts ChatGPT's pinned CIMD client (https://chatgpt.com/oauth/client.json, redirect https://chatgpt.com/connector_platform_oauth_redirect): an unauthenticated authorize request returns 302 to Pascal's /connect consent page.",
     "Every tool the @pascal-app/mcp package registers, including the hosted service and project file tools, has a title and explicit readOnlyHint, destructiveHint, and openWorldHint values; a regression test checks them against tools/list.",
     "The review suite below has exactly five positive cases with prompts, expected tools, and expected behavior, and three negative cases with the reason the plugin must not act."
   ],
   "blockers": [
-    "Hosted service: the production OAuth server must accept ChatGPT's connection (client registration and callback). That fix ships separately from this repository; until it is live, the portal's Connect step and tool scan cannot complete.",
     "Human (OpenAI organization owner): complete individual or business verification and select the verified developer identity that will publish Pascal.",
     "Human: serve the portal-generated token as plain text at https://editor.pascal.app/.well-known/openai-apps-challenge and pass domain verification.",
     "Human: connect the pascal server in the portal, sign in, and pass the automated tool scan, which also covers the hosted-only Capture tools.",
@@ -23,7 +23,11 @@
     "status": "local_pass",
     "checked_at": "2026-11-26",
     "registered_tools": 106,
-    "required_hints": ["readOnlyHint", "destructiveHint", "openWorldHint"],
+    "required_hints": [
+      "readOnlyHint",
+      "destructiveHint",
+      "openWorldHint"
+    ],
     "justification_packet": "plugin-evals/tool-annotation-justifications.json",
     "evidence": [
       "The machine-readable packet records exact values and non-empty per-hint justifications for all 106 tools the package registers when the host supplies its hosted service and project file executors, as the hosted server does.",
@@ -43,7 +47,7 @@
       "expected_result_shape": "A short report naming the project, the room, door, and window IDs, the verification result, the saved version, and the exact tool-returned editor URL.",
       "required_fixture": "A reviewer account allowed to create private projects in a disposable Pascal review workspace, with cleanup instructions.",
       "reproducibility_status": "blocked",
-      "reproducibility_blocker": "Provision the reviewer account and workspace after the hosted OAuth server accepts ChatGPT, then run the case and record its identifiers."
+      "reproducibility_blocker": "Provision the reviewer account and workspace, then run the case through ChatGPT and record its identifiers."
     },
     {
       "id": "edit-existing-project-positive",
