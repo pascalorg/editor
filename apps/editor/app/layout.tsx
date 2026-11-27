@@ -1,4 +1,4 @@
-import { registerBundledLocales } from '@pascal-app/editor/locales'
+import { loadBundledLocale } from '@pascal-app/editor/locales'
 import { Agentation } from 'agentation'
 import { GeistPixelSquare } from 'geist/font/pixel'
 import { Barlow } from 'next/font/google'
@@ -9,7 +9,6 @@ import { PASCAL_LOCALE_HEADER, resolveUiLocale } from '@/lib/ui-locale'
 import { ClientBootstrap } from './client-bootstrap'
 import './globals.css'
 
-registerBundledLocales()
 registerDevLocales()
 
 const geistSans = localFont({
@@ -36,6 +35,7 @@ export default async function RootLayout({
   const enableDevDiagnostics =
     process.env.NODE_ENV === 'development' && process.env.PASCAL_DEV_DIAGNOSTICS === '1'
   const locale = resolveUiLocale((await headers()).get(PASCAL_LOCALE_HEADER))
+  const initialCatalog = await loadBundledLocale(locale)
 
   return (
     <html
@@ -43,7 +43,11 @@ export default async function RootLayout({
       lang={locale}
     >
       <body className="font-sans">
-        <ClientBootstrap enableDevDiagnostics={enableDevDiagnostics} locale={locale}>
+        <ClientBootstrap
+          enableDevDiagnostics={enableDevDiagnostics}
+          initialCatalog={initialCatalog}
+          locale={locale}
+        >
           {children}
         </ClientBootstrap>
         {enableDevDiagnostics && <Agentation />}

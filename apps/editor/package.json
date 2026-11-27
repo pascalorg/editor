@@ -10,7 +10,7 @@
     "smoke": "bun scripts/smoke-production-server.ts",
     "lint": "biome lint",
     "check-types": "next typegen && tsc --noEmit",
-    "test": "bun test lib"
+    "test": "bun test lib proxy.test.ts"
   },
   "dependencies": {
     "@iconify/react": "^6.0.4",

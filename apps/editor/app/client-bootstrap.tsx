@@ -10,23 +10,91 @@
 // idempotent under HMR.
 import '../lib/bootstrap'
 import { createI18n, defaultI18n, PascalI18nProvider } from '@pascal-app/core'
-import { registerBundledLocales } from '@pascal-app/editor/locales'
-import { type ReactNode, useEffect, useMemo } from 'react'
+import {
+  isBundledLocaleLoaded,
+  type LocaleCatalog,
+  loadBundledLocale,
+  registerBundledCatalog,
+} from '@pascal-app/editor/locales'
+import { useSearchParams } from 'next/navigation'
+import { type ReactNode, Suspense, useCallback, useEffect, useMemo, useRef } from 'react'
 import { registerDevLocales } from '@/lib/dev-locales'
+import { createLocaleApplier, resolveClientLangNavigation } from '@/lib/ui-locale'
 
-registerBundledLocales()
 registerDevLocales()
+
+function LocaleQuerySync({
+  defaultLocale,
+  onLocaleChange,
+}: {
+  defaultLocale: string
+  onLocaleChange: (nextLocale: string) => void
+}) {
+  const searchParams = useSearchParams()
+  const langParam = searchParams.get('lang')
+  const previousLangRef = useRef<string | null | undefined>(undefined)
+
+  useEffect(() => {
+    const nextLocale = resolveClientLangNavigation(
+      previousLangRef.current,
+      langParam,
+      defaultLocale,
+    )
+    previousLangRef.current = langParam
+    if (nextLocale !== null) onLocaleChange(nextLocale)
+  }, [langParam, defaultLocale, onLocaleChange])
+
+  return null
+}
 
 export function ClientBootstrap({
   children,
   enableDevDiagnostics,
+  initialCatalog = null,
   locale,
 }: {
   children: ReactNode
   enableDevDiagnostics: boolean
+  initialCatalog?: LocaleCatalog | null
   locale: string
 }) {
-  const i18n = useMemo(() => createI18n({ locale }), [locale])
+  const initialCatalogRef = useRef(initialCatalog)
+  initialCatalogRef.current = initialCatalog
+
+  const i18n = useMemo(() => {
+    if (initialCatalogRef.current) registerBundledCatalog(initialCatalogRef.current)
+    return createI18n({ locale })
+  }, [locale])
+
+  const activeI18nRef = useRef<typeof i18n | null>(i18n)
+  activeI18nRef.current = i18n
+
+  useEffect(() => {
+    activeI18nRef.current = i18n
+    return () => {
+      if (activeI18nRef.current === i18n) {
+        activeI18nRef.current = null
+      }
+    }
+  }, [i18n])
+
+  const localeApplier = useMemo(
+    () =>
+      createLocaleApplier({
+        isLoaded: isBundledLocaleLoaded,
+        isActive: () => activeI18nRef.current === i18n,
+        loadLocale: loadBundledLocale,
+        setLocale: (nextLocale) => i18n.setLocale(nextLocale),
+      }),
+    [i18n],
+  )
+
+  const applyLocale = useCallback(
+    (nextLocale: string) => {
+      void localeApplier.apply(nextLocale)
+    },
+    [localeApplier],
+  )
 
   useEffect(() => {
     if (!enableDevDiagnostics) return
@@ -42,8 +110,15 @@ export function ClientBootstrap({
   }, [i18n])
 
   useEffect(() => {
-    return defaultI18n.subscribeLocale((nextLocale) => i18n.setLocale(nextLocale))
-  }, [i18n])
+    return defaultI18n.subscribeLocale((nextLocale) => applyLocale(nextLocale))
+  }, [applyLocale])
 
-  return <PascalI18nProvider i18n={i18n}>{children}</PascalI18nProvider>
+  return (
+    <PascalI18nProvider i18n={i18n}>
+      <Suspense fallback={null}>
+        <LocaleQuerySync defaultLocale={locale} onLocaleChange={applyLocale} />
+      </Suspense>
+      {children}
+    </PascalI18nProvider>
+  )
 }

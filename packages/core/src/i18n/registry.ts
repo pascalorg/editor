@@ -105,6 +105,8 @@ function warnMissing(key: string, requestedLocale: string): void {
 export class PascalI18n {
   readonly i18n: LinguiI18n
   private readonly englishI18n: LinguiI18n
+  private readonly runtimePool = new Map<string, LinguiI18n>()
+  private fallbackRuntimes: Array<{ locale: string; i18n: LinguiI18n }> = []
   private readonly listeners = new Set<() => void>()
   private readonly localeListeners = new Set<(locale: string) => void>()
   private retentionCount = 0
@@ -173,15 +175,29 @@ export class PascalI18n {
     scopes.delete(this)
     this.listeners.clear()
     this.localeListeners.clear()
+    this.runtimePool.clear()
+    this.fallbackRuntimes = []
   }
 
   _(descriptor: MessageDescriptor): string
   _(id: string, values?: Values, options?: MessageOptions): string
   _(idOrDescriptor: string | MessageDescriptor, values?: Values, options?: MessageOptions): string {
     const id = typeof idOrDescriptor === 'string' ? idOrDescriptor : idOrDescriptor.id
-    const translated = this.locale === 'en' || Object.hasOwn(this.i18n.messages, id)
-    const runtime = translated ? this.i18n : this.englishI18n
-    if (!translated) warnMissing(id, this.locale)
+    let runtime: LinguiI18n | undefined
+    if (this.locale === 'en') {
+      runtime = this.englishI18n
+    } else {
+      for (const candidate of this.fallbackRuntimes) {
+        if (Object.hasOwn(candidate.i18n.messages, id)) {
+          runtime = candidate.i18n
+          break
+        }
+      }
+    }
+    if (!runtime) {
+      warnMissing(id, this.locale)
+      runtime = this.englishI18n
+    }
     return typeof idOrDescriptor === 'string'
       ? runtime._(idOrDescriptor, values, options)
       : runtime._(idOrDescriptor)
@@ -196,6 +212,28 @@ export class PascalI18n {
       locale: 'en',
       messages: mergedMessages('en'),
     })
+    const runtimes: Array<{ locale: string; i18n: LinguiI18n }> = []
+    if (this.locale !== 'en') {
+      for (const candidate of localeFallbacks(this.locale)) {
+        if (candidate === 'en') {
+          runtimes.push({ locale: 'en', i18n: this.englishI18n })
+          continue
+        }
+        const catalog = catalogs.get(candidate)
+        if (!catalog) continue
+        let candidateI18n = this.runtimePool.get(candidate)
+        if (!candidateI18n) {
+          candidateI18n = setupI18n()
+          this.runtimePool.set(candidate, candidateI18n)
+        }
+        candidateI18n.loadAndActivate({
+          locale: candidate,
+          messages: Object.assign(emptyMessages(), catalog),
+        })
+        runtimes.push({ locale: candidate, i18n: candidateI18n })
+      }
+    }
+    this.fallbackRuntimes = runtimes
     if (!notify) return
     this.version += 1
     for (const listener of [...this.listeners]) listener()

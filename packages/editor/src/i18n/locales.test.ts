@@ -1,12 +1,51 @@
 import { afterEach, expect, test } from 'bun:test'
 import { createI18n, setLocale, translate } from '@pascal-app/core'
 import { authoredLevelName, localizedLevelName } from '@pascal-app/viewer/ui'
-import { registerBundledLocales } from './locales'
+import {
+  isBundledLocaleLoaded,
+  loadBundledLocale,
+  registerBundledLocales,
+  resolveBundledLocale,
+} from './locales'
+import { locale as frenchLocale, registerLocale as registerFrenchLocale } from './locales/fr'
 
 afterEach(() => setLocale('en'))
 
-test('bundled locale packs cover the converted viewer and editor surfaces', () => {
-  registerBundledLocales()
+test('resolveBundledLocale maps exact, script, and base locales without crossing scripts', () => {
+  expect(resolveBundledLocale('fr')).toBe('fr')
+  expect(resolveBundledLocale('fr-CA')).toBe('fr')
+  expect(resolveBundledLocale('es-MX')).toBe('es')
+  expect(resolveBundledLocale('ja-JP')).toBe('ja')
+  expect(resolveBundledLocale('zh-CN')).toBe('zh-CN')
+  expect(resolveBundledLocale('zh-Hans')).toBe('zh-CN')
+  expect(resolveBundledLocale('zh-Hans-CN')).toBe('zh-CN')
+  expect(resolveBundledLocale('zh-Hant')).toBeNull()
+  expect(resolveBundledLocale('zh-Hant-CN')).toBeNull()
+  expect(resolveBundledLocale('zh-TW')).toBeNull()
+  expect(resolveBundledLocale('en-XA')).toBeNull()
+  expect(resolveBundledLocale('de')).toBeNull()
+})
+
+test('per-locale entry point and loadBundledLocale register only the requested locale', async () => {
+  expect(frenchLocale).toBe('fr')
+  expect(isBundledLocaleLoaded('de')).toBe(true)
+  expect(isBundledLocaleLoaded('en-XA')).toBe(true)
+  expect(isBundledLocaleLoaded('ja-JP')).toBe(false)
+  registerFrenchLocale()
+  setLocale('fr')
+  expect(translate('viewer.display.title', 'Display settings')).toBe('Paramètres d’affichage')
+
+  const loadedJa = await loadBundledLocale('ja-JP')
+  expect(loadedJa?.locale).toBe('ja')
+  expect(isBundledLocaleLoaded('ja-JP')).toBe(true)
+  setLocale('ja')
+  expect(translate('viewer.display.title', 'Display settings')).toBe('表示設定')
+
+  expect(await loadBundledLocale('zh-TW')).toBeNull()
+})
+
+test('bundled locale packs cover the converted viewer and editor surfaces', async () => {
+  await registerBundledLocales()
 
   const expectations = {
     'zh-CN': ['显示设置', '房间'],
@@ -22,8 +61,8 @@ test('bundled locale packs cover the converted viewer and editor surfaces', () =
   }
 })
 
-test('Simplified Chinese aliases use zh-CN without affecting Traditional Chinese', () => {
-  registerBundledLocales()
+test('Simplified Chinese aliases use zh-CN without affecting Traditional Chinese', async () => {
+  await registerBundledLocales()
 
   setLocale('zh-Hans')
   expect(translate('viewer.display.title', 'Display settings')).toBe('显示设置')
@@ -38,8 +77,8 @@ test('Simplified Chinese aliases use zh-CN without affecting Traditional Chinese
   expect(translate('viewer.display.title', 'Display settings')).toBe('Display settings')
 })
 
-test('generated stored level names localize while authored names remain unchanged', () => {
-  registerBundledLocales()
+test('generated stored level names localize while authored names remain unchanged', async () => {
+  await registerBundledLocales()
   const french = createI18n({ locale: 'fr' })
   const japanese = createI18n({ locale: 'ja' })
   try {
