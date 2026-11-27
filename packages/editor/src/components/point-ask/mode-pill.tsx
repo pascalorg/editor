@@ -3,7 +3,8 @@
 import { usePascalI18n } from '@pascal-app/core'
 import { useEffect, useRef } from 'react'
 import { EASE_OUT, ENTER_MS } from '../../lib/point-ask/choreography'
-import { canvasRect, freeViewport } from '../../lib/point-ask/projector'
+import { canvasRect, freeViewport, stageRect } from '../../lib/point-ask/projector'
+import useEditor from '../../store/use-editor'
 import { usePointAsk } from '../../store/use-point-ask'
 import { finishOptionalAnimations, pointMotionCalm, usePointMotionCalm } from './optional-motion'
 
@@ -15,12 +16,14 @@ export function ModeVignette() {
 
 /**
  * Only when a tap latched the mode: the pill that says how to leave. It sits at the top centre of
- * the 3D view (not of the page: the panels beside it are not part of the view) and enters 8 px up.
+ * the scene stage (2D, 3D, or split) and enters 8 px up.
  */
 export function ModePill({ freeClick = false }: { freeClick?: boolean }) {
   const i18n = usePascalI18n()
   const active = usePointAsk((s) => s.active)
   const latched = usePointAsk((s) => s.latched)
+  const viewLayouts = useEditor((s) => s.viewLayouts)
+  const isFirstPersonMode = useEditor((s) => s.isFirstPersonMode)
   const el = useRef<HTMLDivElement>(null)
   const optional = useRef<Animation[]>([])
   const calm = usePointMotionCalm()
@@ -35,11 +38,20 @@ export function ModePill({ freeClick = false }: { freeClick?: boolean }) {
     const node = el.current
     if (!node) return
     const place = () => {
-      const rect = canvasRect()
+      const rect = stageRect() ?? canvasRect()
       if (rect) node.style.left = `${rect.left + rect.width / 2}px`
     }
     place()
     window.addEventListener('resize', place)
+    return () => {
+      window.removeEventListener('resize', place)
+    }
+  }, [shown, viewLayouts, isFirstPersonMode])
+
+  useEffect(() => {
+    if (!shown) return
+    const node = el.current
+    if (!node) return
     const quiet = pointMotionCalm()
     const animation = node.animate(
       quiet
@@ -52,7 +64,6 @@ export function ModePill({ freeClick = false }: { freeClick?: boolean }) {
     )
     if (!quiet) optional.current.push(animation)
     return () => {
-      window.removeEventListener('resize', place)
       animation.cancel()
       optional.current = []
     }

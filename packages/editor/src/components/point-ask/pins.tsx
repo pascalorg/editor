@@ -25,7 +25,12 @@ import { edgeMarker } from '../../lib/point-ask/edge-marker'
 import { subscribeFrame } from '../../lib/point-ask/frame-loop'
 import { spreadPinMarkers } from '../../lib/point-ask/pin-layout'
 import { alsoChangedLine, cardCarriedFromPointer, cardTitle } from '../../lib/point-ask/pin-machine'
-import { canvasRect, freeViewport, projectWorld } from '../../lib/point-ask/projector'
+import {
+  freeViewportIn,
+  preferredPointViewport,
+  projectWorldIn,
+  viewportRect,
+} from '../../lib/point-ask/projector'
 import {
   changeMore,
   endCompare,
@@ -37,8 +42,10 @@ import {
   startCompare,
   undoAsk,
 } from '../../lib/point-ask/session'
-import type { ScreenPoint } from '../../lib/point-ask/types'
+import type { PointViewport, ScreenPoint } from '../../lib/point-ask/types'
+import useEditor from '../../store/use-editor'
 import { type PinRecord, usePointAsk } from '../../store/use-point-ask'
+import { isViewVisible, VIEW_2D, VIEW_3D } from '../../store/view-layout'
 import { finishOptionalAnimations, pointMotionCalm, usePointMotionCalm } from './optional-motion'
 import { PinFootprint } from './pin-footprint'
 
@@ -66,21 +73,31 @@ function pinWorld(pin: PinRecord): [number, number, number] {
   return pin.anchor
 }
 
-let layoutFrame = -1
-let layoutPins: ReturnType<typeof usePointAsk.getState>['pins'] | null = null
-let markerPositions = new Map<string, ScreenPoint>()
-
-/** Shared by every pin and the card: only one collision layout per animation frame. */
-function persistentMarkerPositions(now: number) {
-  const state = usePointAsk.getState()
-  if (layoutFrame === now && layoutPins === state.pins) return markerPositions
-  layoutFrame = now
-  layoutPins = state.pins
-  const frame = canvasRect()
-  if (!frame) {
-    markerPositions = new Map()
-    return markerPositions
+const markerCache: Record<
+  PointViewport,
+  {
+    frame: number
+    pins: ReturnType<typeof usePointAsk.getState>['pins'] | null
+    positions: Map<string, ScreenPoint>
   }
+> = {
+  '3d': { frame: -1, pins: null, positions: new Map() },
+  '2d': { frame: -1, pins: null, positions: new Map() },
+}
+
+/** Shared by every pin and the card per viewport: only one collision layout per animation frame. */
+function persistentMarkerPositions(now: number, viewport: PointViewport) {
+  const state = usePointAsk.getState()
+  const cache = markerCache[viewport]
+  if (cache.frame === now && cache.pins === state.pins) return cache.positions
+  cache.frame = now
+  cache.pins = state.pins
+  const frame = viewportRect(viewport)
+  if (!frame) {
+    cache.positions = new Map()
+    return cache.positions
+  }
+  const wholeBuilding = useEditor.getState().isFirstPersonMode
   const levelId = useViewer.getState().selection.levelId
   const pins = state.pinOrder.flatMap((id) => {
     const pin = state.pins[id]
@@ -88,10 +105,10 @@ function persistentMarkerPositions(now: number) {
       pin?.behavior !== 'persistent' ||
       pin.supersededBy ||
       state.bubble?.changesAsk?.askId === id ||
-      (pin.levelId !== null && pin.levelId !== levelId)
+      (!wholeBuilding && pin.levelId !== null && pin.levelId !== levelId)
     )
       return []
-    const at = projectWorld(pinWorld(pin))
+    const at = projectWorldIn(pinWorld(pin), viewport)
     return at.ok &&
       at.x >= frame.left &&
       at.x <= frame.right &&
@@ -100,24 +117,24 @@ function persistentMarkerPositions(now: number) {
       ? [{ id, x: at.x, y: at.y }]
       : []
   })
-  markerPositions = spreadPinMarkers(pins, {
+  cache.positions = spreadPinMarkers(pins, {
     x0: frame.left + 18,
     y0: frame.top + 40,
     x1: Math.max(frame.left + 18, frame.right - 18),
     y1: Math.max(frame.top + 40, frame.bottom - 4),
   })
-  return markerPositions
+  return cache.positions
 }
 
-function togglePinCard(askId: string) {
+function togglePinCard(askId: string, viewport: PointViewport) {
   const state = usePointAsk.getState()
   if (state.pins[askId]?.behavior !== 'persistent') {
     emitter.emit('point-ask:pin', { askId, action: 'open' })
-    state.openCard(askId)
+    state.openCard(askId, viewport)
     return
   }
   const closing = state.cardFor === askId
-  state.openCard(closing ? null : askId)
+  state.openCard(closing ? null : askId, closing ? null : viewport)
   if (!closing) emitter.emit('point-ask:pin', { askId, action: 'open' })
 }
 
@@ -166,6 +183,12 @@ const PIN_SVG = (
 
 export function PointAskPins() {
   const order = usePointAsk((s) => s.pinOrder)
+  const show3d = useEditor((s) => isViewVisible(s, VIEW_3D))
+  const show2d = useEditor((s) => !s.isFirstPersonMode && isViewVisible(s, VIEW_2D))
+  const viewports: PointViewport[] = [
+    ...(show2d ? (['2d'] as const) : []),
+    ...(show3d ? (['3d'] as const) : []),
+  ]
   useEffect(() => {
     const dismiss = (event: globalThis.PointerEvent | KeyboardEvent) => {
       const state = usePointAsk.getState()
@@ -191,16 +214,33 @@ export function PointAskPins() {
   }, [])
   return (
     <>
-      <PinFootprint />
-      {order.map((id) => (
-        <PinView askId={id} key={id} />
+      {viewports.map((viewport) => (
+        <PinFootprint key={`fp:${viewport}`} viewport={viewport} />
       ))}
+      {viewports.map((viewport) =>
+        order.map((id) => (
+          <PinView
+            askId={id}
+            key={`${viewport}:${id}`}
+            showEdgeMarker={viewport === '3d' || !show3d}
+            viewport={viewport}
+          />
+        )),
+      )}
       <PinCard />
     </>
   )
 }
 
-function PinView({ askId }: { askId: string }) {
+function PinView({
+  askId,
+  showEdgeMarker,
+  viewport,
+}: {
+  askId: string
+  showEdgeMarker: boolean
+  viewport: PointViewport
+}) {
   const pin = usePointAsk((s) => s.pins[askId])
   // "Change more" in flight: this pin gives way to the ask that will stand where it stood.
   const gaveWay = usePointAsk(
@@ -241,11 +281,13 @@ function PinView({ askId }: { askId: string }) {
       const record = usePointAsk.getState().pins[askId]
       const node = el.current
       if (!(record && node)) return
-      const at = projectWorld(pinWorld(record))
+      const at = projectWorldIn(pinWorld(record), viewport)
       const levelHidden =
-        record.levelId !== null && useViewer.getState().selection.levelId !== record.levelId
+        !useEditor.getState().isFirstPersonMode &&
+        record.levelId !== null &&
+        useViewer.getState().selection.levelId !== record.levelId
       // Out of the view: the pin gives way to an edge marker that points at it and offers to look.
-      const frame = canvasRect()
+      const frame = viewportRect(viewport)
       const away =
         frame && !levelHidden
           ? edgeMarker(at.ok ? { x: at.x, y: at.y } : null, {
@@ -257,7 +299,8 @@ function PinView({ askId }: { askId: string }) {
           : null
       const mark = marker.current
       if (mark) {
-        const show = away !== null && !levelHidden && record.model.state !== 'queued'
+        const show =
+          showEdgeMarker && away !== null && !levelHidden && record.model.state !== 'queued'
         mark.style.display = show ? '' : 'none'
         if (show && away) {
           const width = mark.offsetWidth
@@ -270,14 +313,17 @@ function PinView({ askId }: { askId: string }) {
           if (arrow) arrow.style.transform = `rotate(${away.angle}deg)`
         }
       }
-      node.style.visibility = levelHidden || away !== null || !at.ok ? 'hidden' : ''
+      const hidden = !frame || levelHidden || away !== null || !at.ok
+      node.style.visibility = hidden ? 'hidden' : ''
       const placed =
-        record.behavior === 'persistent' ? persistentMarkerPositions(now).get(askId) : null
+        record.behavior === 'persistent'
+          ? persistentMarkerPositions(now, viewport).get(askId)
+          : null
       const display = placed ?? at
       node.style.transform = `translate3d(${display.x}px,${display.y}px,0)`
       const link = connector.current
       if (link) {
-        link.style.visibility = levelHidden || away !== null || !at.ok ? 'hidden' : ''
+        link.style.visibility = hidden ? 'hidden' : ''
         const line = link.querySelector('line')
         line?.setAttribute('x1', String(at.x))
         line?.setAttribute('y1', String(at.y))
@@ -302,7 +348,7 @@ function PinView({ askId }: { askId: string }) {
         arcs.current.setAttribute('transform', `rotate(${s.angle} 12 12)`)
       }
     })
-  }, [askId])
+  }, [askId, showEdgeMarker, viewport])
 
   // A step landing, or a new sentence, bumps the arcs.
   useEffect(() => {
@@ -403,7 +449,12 @@ function PinView({ askId }: { askId: string }) {
           s.pins[askId] &&
           s.pins[askId].behavior !== 'persistent'
         ) {
-          s.openCard(askId)
+          const sourceViewport =
+            s.pins[askId].viewport ?? s.pins[askId].submit?.context.viewport ?? null
+          s.openCard(
+            askId,
+            sourceViewport && viewportRect(sourceViewport) ? sourceViewport : viewport,
+          )
           setTimeout(() => {
             if (
               usePointAsk.getState().cardFor === askId &&
@@ -415,7 +466,7 @@ function PinView({ askId }: { askId: string }) {
         }
       }, 900)
     }
-  }, [model?.state, askId, model?.targetIds, persistent])
+  }, [model?.state, askId, model?.targetIds, persistent, viewport])
 
   const hovering = useRef(false)
 
@@ -499,19 +550,20 @@ function PinView({ askId }: { askId: string }) {
             : undefined
         }
         data-point-ask-pin={askId}
+        data-point-ask-viewport={viewport}
         onClick={() => {
           // The click that ends a hold is not a click on the pin.
           if (held.current) {
             held.current = false
             return
           }
-          togglePinCard(askId)
+          togglePinCard(askId, viewport)
         }}
         onKeyDown={(event) => {
           if (event.repeat || (event.key !== 'Enter' && event.key !== ' ')) return
           event.preventDefault()
           event.stopPropagation()
-          togglePinCard(askId)
+          togglePinCard(askId, viewport)
         }}
         onLostPointerCapture={() => endCompare()}
         onPointerCancel={() => {
@@ -545,7 +597,7 @@ function PinView({ askId }: { askId: string }) {
           if (persistent) return
           pinHover.askId = askId
           emitter.emit('point-ask:pin', { askId, action: 'hover' })
-          usePointAsk.getState().openCard(askId)
+          usePointAsk.getState().openCard(askId, viewport)
         }}
         onPointerLeave={() => {
           hovering.current = false
@@ -641,13 +693,19 @@ function PinCard() {
       const node = wrap.current
       const cardEl = card.current
       if (!(record && node && cardEl)) return
-      const at = projectWorld(pinWorld(record))
+      const sourceVp = record.viewport ?? record.submit?.context.viewport
+      const vp =
+        usePointAsk.getState().cardViewport ??
+        (sourceVp && viewportRect(sourceVp) ? sourceVp : null) ??
+        preferredPointViewport() ??
+        '3d'
+      const at = projectWorldIn(pinWorld(record), vp)
       const placed =
-        record.behavior === 'persistent' ? persistentMarkerPositions(now).get(askId) : null
+        record.behavior === 'persistent' ? persistentMarkerPositions(now, vp).get(askId) : null
       const display = placed ?? at
       node.style.visibility = at.ok ? '' : 'hidden'
       // Above the pin; below it when there is no room above (clear of the top bar and camera hints).
-      const view = freeViewport()
+      const view = freeViewportIn(vp)
       const height = cardEl.offsetHeight
       const above = display.y - 46 - height
       const y = view && above < view.y0 ? display.y + 14 : above

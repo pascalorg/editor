@@ -149,6 +149,7 @@ import { SelectionManager } from './selection-manager'
 import { SiteEdgeLabels } from './site-edge-labels'
 import { SlabHoleHighlights } from './slab-hole-highlights'
 import { SnapshotCaptureOverlay } from './snapshot-capture-overlay'
+import { EditorThreeContextBridge } from './three-context-bridge'
 import { type SnapshotCameraData, ThumbnailGenerator } from './thumbnail-generator'
 import { VectorEdgeExtractor } from './vector-edge-extractor'
 import { HostView } from './views/host-view'
@@ -1001,6 +1002,7 @@ const ViewerSceneContent = memo(function ViewerSceneContent({
       {isFirstPersonMode && <FirstPersonControls />}
       {isCaptureMode && !isXRMode && <CaptureCameraRig />}
       {!isXRMode && <CustomCameraControls sceneReady={!isLoading} />}
+      <EditorThreeContextBridge />
       {!isXRMode && <FollowPascal />}
       {!isXRMode && <ThumbnailGenerator onThumbnailCapture={onThumbnailCapture} />}
       {!isXRMode && <VectorEdgeExtractor />}
@@ -1355,6 +1357,12 @@ const ViewerCanvas = memo(function ViewerCanvas({
         {sceneDataPending ? <SceneDataPendingNotice /> : null}
         <QuickMeasurementHud />
         <DeleteConfirmationDialog />
+        {!isVersionPreviewMode && (
+          <PointAskLayer
+            enrichedRegions={pointAsk?.enrichedRegions}
+            freeClick={pointAsk?.freeClick}
+          />
+        )}
         <div
           className="absolute inset-0 grid"
           data-view-split={layout.split || undefined}
@@ -1399,12 +1407,6 @@ const ViewerCanvas = memo(function ViewerCanvas({
                 containerRef={viewer3dRef}
                 isVersionPreviewMode={isVersionPreviewMode}
               />
-              {!isVersionPreviewMode && (
-                <PointAskLayer
-                  enrichedRegions={pointAsk?.enrichedRegions}
-                  freeClick={pointAsk?.freeClick}
-                />
-              )}
               {!showLoader && isCameraControlsHintVisible && !isFirstPersonMode ? (
                 <ViewerCanvasControlsHint
                   belowTopMenu={hintBelowTopMenu}
@@ -1503,16 +1505,20 @@ const ViewerCanvas = memo(function ViewerCanvas({
 
 function PreviewStage({
   isFirstPersonMode,
+  isVersionPreviewMode = false,
   mode,
   onModeChange,
+  pointAsk,
   projectName,
   showLoader,
   loadingOverlay,
   viewerContent,
 }: {
   isFirstPersonMode: boolean
+  isVersionPreviewMode?: boolean
   mode: ViewerStageMode
   onModeChange: (mode: ViewerStageMode) => void
+  pointAsk?: EditorProps['pointAsk']
   projectName?: string | null
   showLoader: boolean
   loadingOverlay: ReactNode
@@ -1537,6 +1543,12 @@ function PreviewStage({
 
   return (
     <div className="dark relative h-full w-full overflow-hidden bg-neutral-100 text-foreground">
+      {isFirstPersonMode && !isVersionPreviewMode ? (
+        <PointAskLayer
+          enrichedRegions={pointAsk?.enrichedRegions}
+          freeClick={pointAsk?.freeClick}
+        />
+      ) : null}
       {isFirstPersonMode ? (
         <FirstPersonOverlay onExit={() => useEditor.getState().setFirstPersonMode(false)} />
       ) : (
@@ -1546,6 +1558,11 @@ function PreviewStage({
           projectName={projectName}
         />
       )}
+      {isFirstPersonMode && !isVersionPreviewMode ? (
+        <div className="pointer-events-none fixed top-6 right-6 z-40">
+          <HelperManager pointAsk={pointAsk} />
+        </div>
+      ) : null}
 
       {stageMode === '3d' && !isFirstPersonMode ? <ViewerHoverLabel /> : null}
       <ViewerStage
@@ -1937,6 +1954,7 @@ function EditorContent({
       <StairEditSystem />
       {isFirstPersonMode && <FirstPersonControls />}
       <CustomCameraControls />
+      <EditorThreeContextBridge />
       <ThumbnailGenerator onThumbnailCapture={onThumbnailCapture} />
       <VectorEdgeExtractor />
       <InteractiveSystem />
@@ -2069,9 +2087,11 @@ function EditorContent({
         {!isLoading && isPreviewMode ? (
           <PreviewStage
             isFirstPersonMode={isFirstPersonMode}
+            isVersionPreviewMode={isVersionPreviewMode}
             loadingOverlay={loadingOverlay}
             mode={previewStageMode}
             onModeChange={setPreviewStageMode}
+            pointAsk={pointAsk}
             projectName={projectName}
             showLoader={visibleLoader}
             viewerContent={previewViewerContent}
@@ -2158,9 +2178,11 @@ function EditorContent({
       {!isLoading && isPreviewMode ? (
         <PreviewStage
           isFirstPersonMode={isFirstPersonMode}
+          isVersionPreviewMode={isVersionPreviewMode}
           loadingOverlay={loadingOverlay}
           mode={previewStageMode}
           onModeChange={setPreviewStageMode}
+          pointAsk={pointAsk}
           projectName={projectName}
           showLoader={visibleLoader}
           viewerContent={previewViewerContent}

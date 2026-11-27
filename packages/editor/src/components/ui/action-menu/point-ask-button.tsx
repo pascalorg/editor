@@ -6,22 +6,23 @@ import { canPoint, enterPointMode, leavePointMode } from '../../../lib/point-ask
 import { cn } from '../../../lib/utils'
 import useEditor from '../../../store/use-editor'
 import { usePointAsk } from '../../../store/use-point-ask'
-import { isViewVisible, VIEW_3D } from '../../../store/view-layout'
+import { isViewVisible, VIEW_2D, VIEW_3D } from '../../../store/view-layout'
 import { ActionButton } from '@pascal-app/viewer/ui'
 
 /**
  * Point and ask (key C): the toolbar's way into the mode where hovering names what Pascal would
- * be told about and a click opens a bubble to ask. Offered only where a host answers asks. In
- * the 2D plan and the walkthrough it is disabled and says so (v1 works in the 3D view).
+ * be told about and a click opens a bubble to ask. Offered only where a host answers asks.
  */
 export function PointAskButton({ icon }: { icon?: ReactNode }) {
   const i18n = usePascalI18n()
   const available = useHasPointAskHandler()
   const active = usePointAsk((s) => s.active)
-  const sceneVisible = useEditor((s) => isViewVisible(s, VIEW_3D))
-  const firstPerson = useEditor((s) => s.isFirstPersonMode)
+  const sceneVisible = useEditor((s) => isViewVisible(s, VIEW_3D) || isViewVisible(s, VIEW_2D))
+  const blockedMode = useEditor(
+    (s) => s.isPreviewMode || s.isCaptureMode || s.workspaceMode !== 'edit',
+  )
   if (!(available || active)) return null
-  const unavailable = !active && (!sceneVisible || firstPerson)
+  const unavailable = !active && (!sceneVisible || blockedMode)
   return (
     <ActionButton
       className={cn(
@@ -41,7 +42,16 @@ export function PointAskButton({ icon }: { icon?: ReactNode }) {
       shortcut="C"
       size="icon"
       tooltipContent={
-        unavailable ? <p>{i18n._({ id: 'editor.actionMenu.pointAskButton.pointAndAskWorksInThe', message: 'Comment works in the 3D view' })}</p> : <p>{i18n._({ id: 'editor.actionMenu.pointAskButton.pointAndAskC', message: 'Comment (C)' })}</p>
+        unavailable ? (
+          <p>
+            {i18n._({
+              id: 'editor.actionMenu.pointAskButton.pointAndAskWorksInThe',
+              message: 'Comment works in 2D and 3D views',
+            })}
+          </p>
+        ) : (
+          <p>{i18n._({ id: 'editor.actionMenu.pointAskButton.pointAndAskC', message: 'Comment (C)' })}</p>
+        )
       }
       variant="ghost"
     >

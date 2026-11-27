@@ -1,14 +1,22 @@
 'use client'
 
-import { useScene } from '@pascal-app/core'
+import { useHasPointAskHandler, usePascalI18n, useScene } from '@pascal-app/core'
 import { LiveWalkthroughController, useFirstPersonHud, useViewer } from '@pascal-app/viewer'
 import { DroneHud, WalkthroughHud } from '@pascal-app/viewer/ui'
-import { useCallback } from 'react'
+import { useCallback, useMemo } from 'react'
+import { enterPointMode } from '../../lib/point-ask/session'
 import useEditor from '../../store/use-editor'
+import { usePointAsk } from '../../store/use-point-ask'
+
+const selectPointAskEngaged = (state: ReturnType<typeof usePointAsk.getState>) =>
+  state.active ||
+  Boolean(state.bubble) ||
+  Boolean(state.cardFor && state.pins[state.cardFor]?.behavior === 'persistent')
 
 export function FirstPersonControls() {
   const capture = useEditor((state) => state.isCaptureMode)
   const paused = useEditor((state) => state.captureShutterHold)
+  const pointAskEngaged = usePointAsk(selectPointAskEngaged)
   // Read at walkthrough start and end, as the capture rig may own the FOV by then.
   const captureOwnsFov = useCallback(() => useEditor.getState().isCaptureMode, [])
   const onExit = useCallback(() => {
@@ -20,15 +28,17 @@ export function FirstPersonControls() {
   return (
     <LiveWalkthroughController
       externalFov={captureOwnsFov}
+      externalOverlayActive={pointAskEngaged}
       onExit={onExit}
       paused={paused}
       pointerInteraction={!capture}
-      suspendOnUnlock={capture}
+      suspendOnUnlock={capture || pointAskEngaged}
     />
   )
 }
 
 export const FirstPersonOverlay = ({ onExit }: { onExit: () => void }) => {
+  const i18n = usePascalI18n()
   const hasPlacedSpawn = useScene((state) =>
     Object.values(state.nodes).some((node) => node.type === 'spawn'),
   )
@@ -37,6 +47,27 @@ export const FirstPersonOverlay = ({ onExit }: { onExit: () => void }) => {
   const interact = useFirstPersonHud((state) => state.interact)
   const suspended = useViewer((state) => state.walkthroughSuspended)
   const isDroneMode = useEditor((state) => state.firstPersonMovementMode === 'drone')
+  const isCaptureMode = useEditor((state) => state.isCaptureMode)
+  const workspaceMode = useEditor((state) => state.workspaceMode)
+  const hasPointAsk = useHasPointAskHandler()
+  const pointAskEngaged = usePointAsk(selectPointAskEngaged)
+  const canComment = hasPointAsk && !isCaptureMode && workspaceMode === 'edit'
+
+  const extraHints = useMemo(
+    () =>
+      canComment
+        ? [
+            {
+              keys: ['C'],
+              action: i18n._({ id: 'editor.walkthroughHud.comment', message: 'comment' }),
+              onClick: () => {
+                enterPointMode(true)
+              },
+            },
+          ]
+        : undefined,
+    [canComment, i18n],
+  )
 
   const handleExit = useCallback(() => {
     if (document.pointerLockElement) {
@@ -45,11 +76,24 @@ export const FirstPersonOverlay = ({ onExit }: { onExit: () => void }) => {
     onExit()
   }, [onExit])
 
-  if (isDroneMode) return <DroneHud onExit={handleExit} suspended={suspended} />
+  if (isDroneMode) {
+    return (
+      <DroneHud
+        extraHints={extraHints}
+        hideBottomHints={pointAskEngaged}
+        hideCrosshair={pointAskEngaged}
+        onExit={handleExit}
+        suspended={suspended}
+      />
+    )
+  }
 
   return (
     <WalkthroughHud
+      extraHints={extraHints}
       floorLabel={floorLabel}
+      hideBottomHints={pointAskEngaged}
+      hideCrosshair={pointAskEngaged}
       interact={interact}
       onExit={handleExit}
       suspended={suspended}

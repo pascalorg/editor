@@ -3,6 +3,7 @@ import {
   type AnyNodeId,
   beginScenePreview,
   emitter,
+  findLevelAncestorId,
   hasPointAskHandler,
   type NodeEvent,
   type PointAskStatus,
@@ -19,13 +20,22 @@ import {
 import { sceneViewBounds, sceneViewPose } from '@pascal-app/core/agent-operations'
 import { retractNodes, useViewer } from '@pascal-app/viewer'
 import { cameraPoseStore, useFollowPascal } from '@pascal-app/viewer/ui'
-import { type Camera, Matrix3, type Object3D, Raycaster, Vector2, Vector3 } from 'three'
+import {
+  type Camera,
+  Matrix3,
+  type Object3D,
+  type PerspectiveCamera,
+  Raycaster,
+  Vector2,
+  Vector3,
+} from 'three'
+import { getEditorFloorplanContext } from '../../components/editor/floorplan-context-bridge'
 import {
   resolveRoofSegmentSelectionTarget,
   roomForEvent,
 } from '../../components/editor/selection-manager'
 import { getEditorThreeContext } from '../../components/editor/three-context-bridge'
-import { resolveEditorRoomHit } from '../../hooks/use-selected-room'
+import { resolveEditorRoomHit, resolvePlanRoomHit } from '../../hooks/use-selected-room'
 import useEditor, { getActiveContinuationContext } from '../../store/use-editor'
 import useInteractionScope from '../../store/use-interaction-scope'
 import {
@@ -37,7 +47,7 @@ import {
   usePointAsk,
   type WorldBox,
 } from '../../store/use-point-ask'
-import { isViewVisible, VIEW_3D } from '../../store/view-layout'
+import { isViewVisible, VIEW_2D, VIEW_3D } from '../../store/view-layout'
 import { keyCyclableContinuationContext } from '../continuation'
 import {
   captureEnrichedRegion,
@@ -61,7 +71,13 @@ import {
 import { outlineBox } from './outline-box'
 import { resolvePointPick } from './pick'
 import { createPin } from './pin-machine'
-import { canvasRect, projectBox, unionRect } from './projector'
+import {
+  canvasRect,
+  preferredPointViewport,
+  projectBoxIn,
+  unionRect,
+  viewportRect,
+} from './projector'
 import {
   formatRegionSize,
   isRegionBigEnough,
@@ -75,7 +91,9 @@ import {
 } from './region'
 import { planRetry } from './retry'
 import { pointCommitEvent } from './scene-commit'
-import type { Rect, WorldFootprint } from './types'
+import { POINT_ASK_CURSOR, type PointViewport, type Rect, type WorldFootprint } from './types'
+
+export { POINT_ASK_CURSOR }
 
 // Point and ask's session (the owner, 8 October): the mode's entry and exit, what the pointer
 // picks, the bubble's lifecycle, the send, and the pins' link to the chat and the scene. It owns
@@ -91,6 +109,7 @@ type Down = {
   x: number
   y: number
   moved: boolean
+  surface: PointViewport
   hover: PointHover | null
   capturedAt: string
   camera: PointCamera | null
@@ -107,7 +126,8 @@ let stopSession: (() => void) | null = null
 function pickFor(event: NodeEvent, alt: boolean, selectedTargetIds: readonly string[]) {
   const editor = useEditor.getState()
   const nodes = useScene.getState().nodes as Record<string, AnyNode>
-  const levelId = useViewer.getState().selection.levelId ?? null
+  // Walkthrough and Drone show the entire building, so elements on any floor are pickable.
+  const levelId = editor.isFirstPersonMode ? null : (useViewer.getState().selection.levelId ?? null)
   return resolvePointPick({
     event,
     alt,
@@ -177,14 +197,45 @@ function hoverFromEvent(event: NodeEvent): PointHover | null {
   const point = event.position as [number, number, number]
   const normal = (event.normal ?? [0, 1, 0]) as [number, number, number]
   const hit: PointHit = { point, normal, ...(pick.face ? { face: pick.face } : {}) }
-  return { target, ambiguous: pick.ambiguous, hit }
+  return { target, ambiguous: pick.ambiguous, hit, viewport: '3d' }
 }
 
 // ─── the camera the person pointed from ─────────────────────────────────────
 
-function currentCamera(): PointCamera | null {
+function currentCamera(
+  viewport: PointViewport = preferredPointViewport() ?? '3d',
+  hitPoint?: readonly [number, number, number],
+): PointCamera | null {
+  if (viewport === '2d') {
+    return getEditorFloorplanContext()?.getCamera() ?? null
+  }
+  const editor = useEditor.getState()
+  const rect = viewportRect('3d') ?? canvasRect('3d')
+  if (editor.isFirstPersonMode) {
+    const three = getEditorThreeContext()
+    if (!(three && rect)) return null
+    three.camera.updateMatrixWorld(true)
+    const eye = three.camera.getWorldPosition(new Vector3())
+    const forward = three.camera.getWorldDirection(new Vector3())
+    const dist = hitPoint
+      ? Math.min(
+          50,
+          Math.max(0.5, eye.distanceTo(new Vector3(hitPoint[0], hitPoint[1], hitPoint[2]))),
+        )
+      : 8
+    const target = eye.clone().addScaledVector(forward, dist)
+    const fov = (three.camera as PerspectiveCamera).isPerspectiveCamera
+      ? (three.camera as PerspectiveCamera).fov
+      : 50
+    return {
+      position: [eye.x, eye.y, eye.z],
+      target: [target.x, target.y, target.z],
+      fov,
+      aspect: rect.width / Math.max(1, rect.height),
+      projection: 'perspective',
+    }
+  }
   const pose = cameraPoseStore.getState().pose
-  const rect = canvasRect()
   if (!(pose && rect)) return null
   return {
     position: pose.position,
@@ -204,14 +255,24 @@ let suspendedTool: ReturnType<typeof useEditor.getState>['toolMode'] | null = nu
 let cDown: number | null = null
 let leaveOnClose = false
 
-/** Whether the mode can start now: a host answers asks, the view is 3D, nothing else holds the pointer. */
+/** Whether the mode can start now: a host answers asks, a 2D or 3D scene view is open, nothing else holds the pointer. */
 export function canPoint(): boolean {
   if (!hasPointAskHandler()) return false
   const editor = useEditor.getState()
-  if (!isViewVisible(editor, VIEW_3D) || editor.isFirstPersonMode || editor.isPreviewMode)
+  // Preview walkthrough / drone stays commentable; non-walkthrough preview remains a clean showcase.
+  if (
+    (editor.isPreviewMode && !editor.isFirstPersonMode) ||
+    editor.isCaptureMode ||
+    editor.workspaceMode !== 'edit'
+  ) {
     return false
-  if (editor.workspaceMode !== 'edit') return false
-  return !!getEditorThreeContext()
+  }
+  const can3d = isViewVisible(editor, VIEW_3D) && Boolean(getEditorThreeContext())
+  const can2d =
+    !editor.isFirstPersonMode &&
+    isViewVisible(editor, VIEW_2D) &&
+    Boolean(getEditorFloorplanContext())
+  return can3d || can2d
 }
 
 /**
@@ -221,6 +282,9 @@ export function canPoint(): boolean {
  */
 function cIsOurs(): boolean {
   const editor = useEditor.getState()
+  if (editor.isFirstPersonMode) {
+    return useInteractionScope.getState().scope.kind === 'idle'
+  }
   if (editor.mode !== 'select' && editor.mode !== 'build') return false
   if (useInteractionScope.getState().scope.kind !== 'idle') return false
   return keyCyclableContinuationContext(getActiveContinuationContext()) === null
@@ -258,6 +322,8 @@ export function leavePointMode() {
   cDown = null
   leaveOnClose = false
   regionCandidates = null
+  lastEvent = null
+  lastPointer = null
   const viewer = useViewer.getState()
   viewer.setHoveredId(null)
   viewer.setPointedIds(null)
@@ -275,12 +341,11 @@ export function leavePointMode() {
   }
 }
 
-const CURSOR =
-  "url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='26' height='26' viewBox='0 0 26 26'><path d='M13 3C18.523 3 23 7.477 23 13C23 18.523 18.523 23 13 23H4.5C3.672 23 3 22.328 3 21.5V13C3 7.477 7.477 3 13 3Z' fill='%2318191f' stroke='%23ffffff' stroke-width='1.75' stroke-linejoin='round'/><path d='M9.5 11.25H16.5M9.5 14.75H14' stroke='%23ffffff' stroke-width='1.65' stroke-linecap='round'/></svg>\") 4 22, crosshair"
-
 function setCursor(on: boolean) {
   const canvas = getEditorThreeContext()?.domElement
-  if (canvas) canvas.style.cursor = on ? CURSOR : ''
+  if (canvas) canvas.style.cursor = on ? POINT_ASK_CURSOR : ''
+  const svg = getEditorFloorplanContext()?.svgElement
+  if (svg && !on) svg.style.cursor = ''
 }
 
 // ─── the bubble ─────────────────────────────────────────────────────────────
@@ -292,7 +357,11 @@ function openBubble(
   down: Pick<Down, 'crop' | 'cropController' | 'capturedAt' | 'camera'> | null,
   area?: PointBubble['area'],
   changesAsk?: PointBubble['changesAsk'],
-  extra?: { locationLabel?: string; region?: [number, number, number, number] },
+  extra?: {
+    locationLabel?: string
+    region?: [number, number, number, number]
+    viewport?: PointViewport
+  },
 ) {
   const state = usePointAsk.getState()
   if (state.bubble && state.bubble.capturedAt !== (down?.capturedAt ?? '')) {
@@ -304,7 +373,8 @@ function openBubble(
   const draft = changesAsk
     ? ''
     : (state.bubble?.draft ?? state.drafts[targets[0]?.id ?? area?.ids.join() ?? ''] ?? '')
-  const frame = canvasRect()
+  const surface = extra?.viewport ?? preferredPointViewport() ?? '3d'
+  const frame = viewportRect(surface) ?? canvasRect(surface)
   const crop = down?.crop
   const region = extra?.region ?? (area && frame ? regionFractions(area.rect, frame) : undefined)
   const bubble: PointBubble = {
@@ -313,10 +383,11 @@ function openBubble(
     hit,
     gesture,
     capturedAt: down?.capturedAt ?? new Date().toISOString(),
-    camera: down?.camera ?? currentCamera(),
+    camera: down?.camera ?? currentCamera(surface, hit.point),
     crop: { state: crop ? 'pending' : 'none' },
     draft,
     error: null,
+    viewport: surface,
     ...(area ? { area } : {}),
     ...(region ? { region } : {}),
     ...(extra?.locationLabel ? { locationLabel: extra.locationLabel } : {}),
@@ -468,10 +539,25 @@ export function closeBubble(kind: 'send' | 'dismiss' = 'dismiss') {
   }
 }
 
-function startCrop(hover: PointHover | null, signal?: AbortSignal): Promise<CapturedCrop | null> {
+function startCrop(
+  hover: PointHover | null,
+  surface: PointViewport,
+  signal?: AbortSignal,
+): Promise<CapturedCrop | null> {
   if (!hover?.target.box) return Promise.resolve(null)
-  const rect = projectBox(hover.target.box)
+  const rect = projectBoxIn(hover.target.box, surface)
   if (!rect) return Promise.resolve(null)
+  if (surface === '2d') {
+    const floorplan = getEditorFloorplanContext()
+    if (!floorplan) return Promise.resolve(null)
+    return floorplan.captureCrop(rect, { pad: 0.25, signal }).then(
+      (crop) => crop,
+      (error) => {
+        console.debug('[point-ask] no picture:', error instanceof Error ? error.message : error)
+        return null
+      },
+    )
+  }
   return captureViewCrop(rect, { signal }).then(
     (crop) => crop,
     (error) => {
@@ -485,6 +571,28 @@ function startCrop(hover: PointHover | null, signal?: AbortSignal): Promise<Capt
 
 let down: Down | null = null
 
+function surfaceForEventTarget(target: EventTarget | null): PointViewport | null {
+  if (!target) return null
+  const editor = useEditor.getState()
+  const three = getEditorThreeContext()
+  if (isViewVisible(editor, VIEW_3D) && three && target === three.domElement) {
+    return '3d'
+  }
+  const floorplan = getEditorFloorplanContext()
+  if (
+    !editor.isFirstPersonMode &&
+    isViewVisible(editor, VIEW_2D) &&
+    floorplan &&
+    (target === floorplan.svgElement ||
+      (typeof Node !== 'undefined' &&
+        target instanceof Node &&
+        floorplan.svgElement.contains(target)))
+  ) {
+    return '2d'
+  }
+  return null
+}
+
 /**
  * What is under a page point, found by raycasting the scene's registered nodes: the pick for a press
  * that lands before any hover was read (a fast click, a touch, which has no hover at all). The same
@@ -492,7 +600,7 @@ let down: Down | null = null
  */
 function pickAtPoint(x: number, y: number): PointHover | null {
   const three = getEditorThreeContext()
-  const rect = canvasRect()
+  const rect = canvasRect('3d')
   if (!(three && rect)) return null
   three.raycaster.setFromCamera(
     new Vector2(((x - rect.left) / rect.width) * 2 - 1, -((y - rect.top) / rect.height) * 2 + 1),
@@ -530,11 +638,90 @@ function pickAtPoint(x: number, y: number): PointHover | null {
   return null
 }
 
+/** Pick what is under a page point on the 2D floorplan using the same room-first + Alt rules. */
+function pickAt2DPoint(x: number, y: number): PointHover | null {
+  const floorplan = getEditorFloorplanContext()
+  if (!floorplan) return null
+  const hit = floorplan.pickAtScreenPoint(x, y)
+  if (!hit) return null
+  const state = usePointAsk.getState()
+  const selectedTargetIds = state.bubble?.targets.map((t) => t.id) ?? []
+  const editor = useEditor.getState()
+  const nodes = useScene.getState().nodes as Record<string, AnyNode>
+  const levelId = useViewer.getState().selection.levelId ?? null
+
+  let resolvedNode = hit.nodeId ? nodes[hit.nodeId] : undefined
+  if (resolvedNode) {
+    resolvedNode = resolveCanvasSelectionNode({
+      node: resolvedNode,
+      nodes,
+      selectedIds: useViewer.getState().selection.selectedIds,
+    })
+    if (
+      (resolvedNode.type === 'building' || resolvedNode.type === 'site') &&
+      editor.phase !== 'site'
+    ) {
+      resolvedNode = undefined
+    } else if (
+      resolvedNode.type !== 'elevator' &&
+      levelId &&
+      resolveLevelId(resolvedNode, nodes) !== levelId
+    ) {
+      resolvedNode = undefined
+    }
+  }
+
+  const roomZoneId = hit.roomZoneId && nodes[hit.roomZoneId] ? hit.roomZoneId : null
+  let pickedId: string | null = null
+  let ambiguous = false
+  let face: PointHit['face']
+
+  if (
+    resolvedNode &&
+    (resolvedNode.type === 'wall' ||
+      resolvedNode.type === 'slab' ||
+      resolvedNode.type === 'ceiling') &&
+    roomZoneId &&
+    !state.alt &&
+    !selectedTargetIds.includes(roomZoneId)
+  ) {
+    pickedId = roomZoneId
+    ambiguous = true
+    face = 'top'
+  } else if (resolvedNode && resolvedNode.type !== 'zone') {
+    pickedId = resolvedNode.id
+    if (
+      resolvedNode.type === 'wall' ||
+      resolvedNode.type === 'slab' ||
+      resolvedNode.type === 'ceiling'
+    ) {
+      face = 'top'
+    }
+  } else if (roomZoneId) {
+    pickedId = roomZoneId
+  }
+
+  if (!pickedId) return null
+  const target = cachedTarget(pickedId)
+  if (!target) return null
+  return {
+    target,
+    ambiguous,
+    hit: {
+      point: hit.point,
+      normal: hit.normal,
+      ...(face ? { face } : {}),
+    },
+    viewport: '2d',
+  }
+}
+
 function onPointerDown(event: PointerEvent) {
   const state = usePointAsk.getState()
   if (!state.active || event.button !== 0) return
-  const canvas = getEditorThreeContext()?.domElement
-  if (!canvas || event.target !== canvas) return
+  const surface = surfaceForEventTarget(event.target)
+  if (!surface) return
+  if (surface === '2d' && getEditorFloorplanContext()?.isSpacePanPressed()) return
   // This capture listener may run before the pin layer's outside-dismiss listener.
   if (state.cardFor && state.pins[state.cardFor]?.behavior === 'persistent') {
     if (document.querySelector('[role="dialog"][aria-modal="true"]')) return
@@ -547,9 +734,11 @@ function onPointerDown(event: PointerEvent) {
   event.stopImmediatePropagation()
   // A touch has no hover: its press names what it lands on, and shows the outline at once.
   const hover =
-    state.hover && event.pointerType !== 'touch'
-      ? state.hover
-      : pickAtPoint(event.clientX, event.clientY)
+    surface === '2d'
+      ? pickAt2DPoint(event.clientX, event.clientY)
+      : state.hover && state.hover.viewport !== '2d' && event.pointerType !== 'touch'
+        ? state.hover
+        : pickAtPoint(event.clientX, event.clientY)
   if (hover && hover !== state.hover) {
     state.setHover(hover)
     useViewer.getState().setHoveredId(hover.target.id as AnyNodeId)
@@ -559,10 +748,11 @@ function onPointerDown(event: PointerEvent) {
     x: event.clientX,
     y: event.clientY,
     moved: false,
+    surface,
     hover,
     capturedAt: new Date().toISOString(),
-    camera: currentCamera(),
-    crop: startCrop(hover, cropController.signal),
+    camera: currentCamera(surface, hover?.hit.point),
+    crop: startCrop(hover, surface, cropController.signal),
     cropController,
     shift: event.shiftKey,
   }
@@ -571,9 +761,12 @@ function onPointerDown(event: PointerEvent) {
 // ─── a region: a view dragged out on the canvas, not a selection ────────────
 
 /** The camera's ray through a page point, for measuring a rectangle on the ground. */
-function cameraRay(x: number, y: number) {
+function cameraRay(x: number, y: number, viewport: PointViewport = '3d') {
+  if (viewport === '2d') {
+    return getEditorFloorplanContext()?.cameraRay(x, y) ?? null
+  }
   const three = getEditorThreeContext()
-  const rect = canvasRect()
+  const rect = canvasRect('3d')
   if (!(three && rect)) return null
   three.raycaster.setFromCamera(
     new Vector2(((x - rect.left) / rect.width) * 2 - 1, -((y - rect.top) / rect.height) * 2 + 1),
@@ -601,7 +794,9 @@ let regionPreviewAt = 0
 
 function candidatesForRegion() {
   const nodes = useScene.getState().nodes as Record<string, AnyNode>
-  const levelId = useViewer.getState().selection.levelId
+  const levelId = useEditor.getState().isFirstPersonMode
+    ? null
+    : useViewer.getState().selection.levelId
   const found: { id: string; box: WorldBox }[] = []
   for (const node of Object.values(nodes)) {
     if (!REGION_KINDS.has(node.type) || node.visible === false) continue
@@ -613,26 +808,30 @@ function candidatesForRegion() {
 }
 
 /** The live preview of a region: what its rectangle would take is outlined while it is dragged. */
-function previewRegion(rect: Rect, now: number) {
+function previewRegion(rect: Rect, now: number, surface: PointViewport) {
   if (now - regionPreviewAt < 80) return
   regionPreviewAt = now
   regionCandidates ??= candidatesForRegion()
   const { ids } = rankInRegion(
-    regionCandidates.map(({ id, box }) => ({ id, rect: projectBox(box) })),
+    regionCandidates.map(({ id, box }) => ({ id, rect: projectBoxIn(box, surface) })),
     rect,
   )
   useViewer.getState().setPointedIds(ids.length ? (ids as never) : null)
 }
 
 function updateRegionDrag(press: Down, event: PointerEvent) {
-  const bounds = canvasRect()
+  const bounds = viewportRect(press.surface)
   if (!bounds) return
   const rect = rectFromDrag(
     { x: press.x, y: press.y },
     { x: event.clientX, y: event.clientY },
     { x0: bounds.left, y0: bounds.top, x1: bounds.right, y1: bounds.bottom },
   )
-  const size = regionSizeMetres(rect, cameraRay, levelFloorY())
+  const floorY =
+    press.surface === '2d'
+      ? (getEditorFloorplanContext()?.getLevelY() ?? levelFloorY())
+      : levelFloorY()
+  const size = regionSizeMetres(rect, (x, y) => cameraRay(x, y, press.surface), floorY)
   const state = usePointAsk.getState()
   state.setRegion({
     rect,
@@ -643,19 +842,21 @@ function updateRegionDrag(press: Down, event: PointerEvent) {
   // A region has no pick: the chip and the hover outline step aside while it is drawn.
   if (state.hover) state.setHover(null)
   useViewer.getState().setHoveredId(null)
-  previewRegion(rect, event.timeStamp)
+  previewRegion(rect, event.timeStamp, press.surface)
 }
 
 /** The elements of the level in view that show inside the rectangle, the biggest first. */
-function elementsInRegion(rect: Rect) {
+function elementsInRegion(rect: Rect, surface: PointViewport) {
   const nodes = useScene.getState().nodes as Record<string, AnyNode>
-  const levelId = useViewer.getState().selection.levelId
+  const levelId = useEditor.getState().isFirstPersonMode
+    ? null
+    : useViewer.getState().selection.levelId
   const candidates: { id: string; rect: Rect | null }[] = []
   for (const node of Object.values(nodes)) {
     if (!REGION_KINDS.has(node.type) || node.visible === false) continue
     if (levelId && resolveLevelId(node, nodes) !== levelId) continue
     const box = worldBoxOf(nodes, node.id)
-    candidates.push({ id: node.id, rect: box ? projectBox(box) : null })
+    candidates.push({ id: node.id, rect: box ? projectBoxIn(box, surface) : null })
   }
   return rankInRegion(candidates, rect)
 }
@@ -673,13 +874,21 @@ const REGION_KINDS = new Set([
   'shelf',
 ])
 
-function regionCenterHit(rect: Rect): PointHit {
+function regionCenterHit(rect: Rect, surface: PointViewport): PointHit {
   const center = { x: (rect.x0 + rect.x1) / 2, y: (rect.y0 + rect.y1) / 2 }
-  const surface = pickAtPoint(center.x, center.y)?.hit
-  if (surface) return surface
+  if (surface === '2d') {
+    const surfaceHit = pickAt2DPoint(center.x, center.y)?.hit
+    if (surfaceHit) return surfaceHit
+    const floorplan = getEditorFloorplanContext()
+    const world = floorplan?.screenToWorld(center.x, center.y)
+    const planeY = floorplan?.getLevelY() ?? levelFloorY()
+    return { point: world ?? [0, planeY, 0], normal: [0, 1, 0] }
+  }
+  const surfaceHit = pickAtPoint(center.x, center.y)?.hit
+  if (surfaceHit) return surfaceHit
   // Empty ground has no registered node: only then fall back to the level plane.
   const planeY = levelFloorY()
-  const ray = cameraRay(center.x, center.y)
+  const ray = cameraRay(center.x, center.y, '3d')
   const t = ray && ray.direction[1] < -1e-6 ? (planeY - ray.origin[1]) / ray.direction[1] : null
   const point: [number, number, number] =
     ray && t !== null && t >= 0
@@ -688,7 +897,16 @@ function regionCenterHit(rect: Rect): PointHit {
   return { point, normal: [0, 1, 0] }
 }
 
-function captureRegionCrop(rect: Rect, signal?: AbortSignal): Promise<SessionCrop> {
+function captureRegionCrop(
+  rect: Rect,
+  surface: PointViewport,
+  signal?: AbortSignal,
+): Promise<SessionCrop> {
+  if (surface === '2d') {
+    const floorplan = getEditorFloorplanContext()
+    if (!floorplan) return Promise.reject(new Error('The 2D plan view is not ready'))
+    return floorplan.captureCrop(rect, { pad: 0, signal })
+  }
   if (!enrichedRegions) return captureViewCrop(rect, { pad: 0, signal })
   return captureEnrichedRegion(rect, { pad: 0, signal }).then(
     (enriched) => ({ ...enriched.crop, enriched }),
@@ -714,10 +932,11 @@ function finishRegion(press: Down, event: PointerEvent) {
     return
   }
   const rect = region.rect
+  const surface = press.surface
   state.setRegion({ ...region, settled: true, flashKey: region.flashKey + 1 })
   if (state.playful) triggerSFX('sfx:snapshot-capture')
   const cropController = new AbortController()
-  const crop = captureRegionCrop(rect, cropController.signal).then(
+  const crop = captureRegionCrop(rect, surface, cropController.signal).then(
     (value) => value,
     (error) => {
       console.debug(
@@ -727,22 +946,33 @@ function finishRegion(press: Down, event: PointerEvent) {
       return null
     },
   )
-  const { ids, more } = elementsInRegion(rect)
+  const { ids, more } = elementsInRegion(rect, surface)
   const release = { x: event.clientX, y: event.clientY }
   const click = nearestEdgePoint(rect, release)
-  const hit = regionCenterHit(rect)
-  const three = getEditorThreeContext()
-  const bounds = canvasRect()
+  const hit = regionCenterHit(rect, surface)
+  const three = surface === '3d' ? getEditorThreeContext() : null
+  const bounds = viewportRect(surface)
   const rayFn =
-    three && bounds
-      ? (() => {
-          const camera = three.camera.clone()
-          camera.updateMatrixWorld(true)
-          return makeCameraRay(camera, bounds)
-        })()
-      : cameraRay
+    surface === '2d'
+      ? (x: number, y: number) => cameraRay(x, y, '2d')
+      : three && bounds
+        ? (() => {
+            const camera = three.camera.clone()
+            camera.updateMatrixWorld(true)
+            return makeCameraRay(camera, bounds)
+          })()
+        : (x: number, y: number) => cameraRay(x, y, '3d')
   const footprint = regionFootprint(rect, rayFn, hit)
-  openBubble([], hit, 'region', { ...press, crop, cropController }, { rect, click, ids, more })
+  const camera = currentCamera(surface, hit.point) ?? press.camera
+  openBubble(
+    [],
+    hit,
+    'region',
+    { ...press, camera, crop, cropController },
+    { rect, click, ids, more },
+    undefined,
+    { viewport: surface },
+  )
   const opened = usePointAsk.getState().bubble
   if (opened) {
     regionFootprintBuilders.set(opened.capturedAt, (point, normal) =>
@@ -754,15 +984,28 @@ function finishRegion(press: Down, event: PointerEvent) {
 
 function onPointerMove(event: PointerEvent) {
   const point = usePointAsk.getState()
-  // Over a pin, its card or the bubble the pointer is no longer on the scene: nothing is named.
-  if (
-    point.active &&
-    !down &&
-    point.hover &&
-    event.target !== getEditorThreeContext()?.domElement
-  ) {
-    point.setHover(null)
-    useViewer.getState().setHoveredId(null)
+  const surface = point.active ? surfaceForEventTarget(event.target) : null
+  if (point.active && !down) {
+    lastPointer = surface ? { x: event.clientX, y: event.clientY, surface } : null
+    if (!surface) {
+      if (point.hover) {
+        point.setHover(null)
+        useViewer.getState().setHoveredId(null)
+      }
+    } else if (surface === '2d') {
+      lastEvent = null
+      const hover = pickAt2DPoint(event.clientX, event.clientY)
+      point.setHover(hover)
+      useViewer.getState().setHoveredId((hover?.target.id as AnyNodeId | undefined) ?? null)
+    } else if (useEditor.getState().isFirstPersonMode) {
+      lastEvent = null
+      const hover = pickAtPoint(event.clientX, event.clientY)
+      point.setHover(hover)
+      useViewer.getState().setHoveredId((hover?.target.id as AnyNodeId | undefined) ?? null)
+    } else if (point.hover?.viewport === '2d') {
+      point.setHover(null)
+      useViewer.getState().setHoveredId(null)
+    }
   }
   if (!down) return
   if (!down.moved && Math.hypot(event.clientX - down.x, event.clientY - down.y) > CLICK_SLOP_PX) {
@@ -793,16 +1036,21 @@ function onPointerUp(event: PointerEvent) {
 /** A native click that follows a press this mode took must not reach the scene. */
 function swallowCanvasClick(event: MouseEvent) {
   if (!usePointAsk.getState().active) return
-  const canvas = getEditorThreeContext()?.domElement
-  if (canvas && event.target === canvas) {
+  if (surfaceForEventTarget(event.target) !== null) {
     event.preventDefault()
     event.stopImmediatePropagation()
   }
 }
 
-function freePointHit(x: number, y: number): PointHit {
+function freePointHit(x: number, y: number, surface: PointViewport): PointHit {
+  if (surface === '2d') {
+    const floorplan = getEditorFloorplanContext()
+    const point = floorplan?.screenToWorld(x, y)
+    const planeY = floorplan?.getLevelY() ?? levelFloorY()
+    return { point: point ?? [0, planeY, 0], normal: [0, 1, 0] }
+  }
   const three = getEditorThreeContext()
-  const rect = canvasRect()
+  const rect = canvasRect('3d')
   if (three && rect) {
     three.raycaster.setFromCamera(
       new Vector2(((x - rect.left) / rect.width) * 2 - 1, -((y - rect.top) / rect.height) * 2 + 1),
@@ -828,7 +1076,7 @@ function freePointHit(x: number, y: number): PointHit {
     }
   }
   const planeY = levelFloorY()
-  const ray = cameraRay(x, y)
+  const ray = cameraRay(x, y, '3d')
   const t = ray && ray.direction[1] < -1e-6 ? (planeY - ray.origin[1]) / ray.direction[1] : null
   const point: [number, number, number] =
     ray && t !== null && t >= 0 && t <= 200
@@ -843,8 +1091,8 @@ function freePointHit(x: number, y: number): PointHit {
   return { point, normal: [0, 1, 0] }
 }
 
-function localClickRect(x: number, y: number): Rect | null {
-  const bounds = canvasRect()
+function localClickRect(x: number, y: number, surface: PointViewport): Rect | null {
+  const bounds = viewportRect(surface) ?? canvasRect(surface)
   if (!bounds || bounds.width <= 0 || bounds.height <= 0) return null
   const w = Math.min(240, bounds.width)
   const h = Math.min(180, bounds.height)
@@ -853,11 +1101,23 @@ function localClickRect(x: number, y: number): Rect | null {
   return { x0, y0, x1: x0 + w, y1: y0 + h }
 }
 
-function freeLocationLabel(hit: PointHit): string {
+function freeLocationLabel(
+  hit: PointHit,
+  surface: PointViewport,
+  screenPoint?: { x: number; y: number },
+): string {
   const nodes = useScene.getState().nodes as Record<string, AnyNode>
   const levelId = useViewer.getState().selection.levelId
+  if (surface === '2d' && screenPoint) {
+    const planHit = getEditorFloorplanContext()?.pickAtScreenPoint(screenPoint.x, screenPoint.y)
+    const roomId = planHit?.roomZoneId
+    const roomName = roomId ? (nodes[roomId] as { name?: string } | undefined)?.name?.trim() : ''
+    if (roomName) return roomName
+  }
   if (levelId) {
-    const roomKey = resolveEditorRoomHit(null, levelId, [hit.point[0], hit.point[2]], '3d')
+    const roomKey =
+      resolveEditorRoomHit(null, levelId, [hit.point[0], hit.point[2]], '3d') ??
+      resolvePlanRoomHit(null, [hit.point[0], hit.point[2]])
     const roomNode = roomKey ? nodes[roomKey.zoneId] : undefined
     const roomName = (roomNode as { name?: string } | undefined)?.name?.trim()
     if (roomName) return roomName
@@ -872,19 +1132,20 @@ function freeLocationLabel(hit: PointHit): string {
 function handleClick(press: Down, shift: boolean) {
   const state = usePointAsk.getState()
   const hover = press.hover
+  const surface = press.surface
   if (!hover) {
     press.cropController?.abort()
     if (!freeClick) {
       if (state.bubble) closeBubble('dismiss')
       return
     }
-    const hit = freePointHit(press.x, press.y)
-    const locationLabel = freeLocationLabel(hit)
-    const frame = canvasRect()
-    const rect = localClickRect(press.x, press.y)
+    const hit = freePointHit(press.x, press.y, surface)
+    const locationLabel = freeLocationLabel(hit, surface, { x: press.x, y: press.y })
+    const frame = viewportRect(surface) ?? canvasRect(surface)
+    const rect = localClickRect(press.x, press.y, surface)
     const cropController = rect ? new AbortController() : undefined
     const capture: Promise<SessionCrop | null> = rect
-      ? captureRegionCrop(rect, cropController?.signal)
+      ? captureRegionCrop(rect, surface, cropController?.signal)
       : Promise.resolve(null)
     const crop = capture.then(
       (value) => value,
@@ -893,8 +1154,10 @@ function handleClick(press: Down, shift: boolean) {
         return null
       },
     )
-    openBubble([], hit, 'click', { ...press, crop, cropController }, undefined, undefined, {
+    const camera = currentCamera(surface, hit.point) ?? press.camera
+    openBubble([], hit, 'click', { ...press, camera, crop, cropController }, undefined, undefined, {
       locationLabel,
+      viewport: surface,
       ...(rect && frame ? { region: regionFractions(rect, frame) } : {}),
     })
     return
@@ -913,7 +1176,9 @@ function handleClick(press: Down, shift: boolean) {
     return
   }
   // A plain click on another element while composing moves the bubble there and keeps the words.
-  openBubble([hover.target], hover.hit, 'click', press)
+  openBubble([hover.target], hover.hit, 'click', press, undefined, undefined, {
+    viewport: surface,
+  })
 }
 
 // ─── hover (the node events the viewer already raises) ──────────────────────
@@ -960,11 +1225,24 @@ function onAnyEvent(type: string | symbol, event: unknown) {
 }
 
 let lastEvent: NodeEvent | null = null
+let lastPointer: { x: number; y: number; surface: PointViewport } | null = null
 
 function replayHover() {
+  const state = usePointAsk.getState()
+  if (lastPointer?.surface === '2d') {
+    const hover = pickAt2DPoint(lastPointer.x, lastPointer.y)
+    state.setHover(hover)
+    useViewer.getState().setHoveredId((hover?.target.id as AnyNodeId | undefined) ?? null)
+    return
+  }
+  if (lastPointer?.surface === '3d' && useEditor.getState().isFirstPersonMode) {
+    const hover = pickAtPoint(lastPointer.x, lastPointer.y)
+    state.setHover(hover)
+    useViewer.getState().setHoveredId((hover?.target.id as AnyNodeId | undefined) ?? null)
+    return
+  }
   if (!lastEvent) return
   const hover = hoverFromEvent(lastEvent)
-  const state = usePointAsk.getState()
   state.setHover(hover)
   useViewer.getState().setHoveredId((hover?.target.id as AnyNodeId | undefined) ?? null)
 }
@@ -1009,7 +1287,9 @@ function onKeyDown(event: KeyboardEvent) {
     if (state.hover) {
       event.preventDefault()
       event.stopImmediatePropagation()
-      openBubble([state.hover.target], state.hover.hit, 'click', null)
+      openBubble([state.hover.target], state.hover.hit, 'click', null, undefined, undefined, {
+        viewport: state.hover.viewport,
+      })
     }
     return
   }
@@ -1031,6 +1311,14 @@ function onKeyDown(event: KeyboardEvent) {
   }
   if (state.active) return
   if (!cIsOurs()) return
+  // In walkthrough, C acts as a clean latch toggle so pointer lock releases without hold-peek.
+  if (useEditor.getState().isFirstPersonMode) {
+    if (enterPointMode(true)) {
+      event.preventDefault()
+      event.stopImmediatePropagation()
+    }
+    return
+  }
   if (enterPointMode(false)) {
     cDown = event.timeStamp
     event.preventDefault()
@@ -1090,6 +1378,14 @@ const askMarks = new Map<
   { start: HistoryMark | null; end: HistoryMark | null; undoneSteps: number; undone: boolean }
 >()
 
+function resolveLevelForIds(ids: readonly string[], nodes: Record<string, AnyNode>): string | null {
+  for (const id of ids) {
+    const resolved = findLevelAncestorId(id as AnyNodeId, nodes)
+    if (resolved) return resolved
+  }
+  return null
+}
+
 /**
  * Sends the bubble's ask: the pin plants on the frame of Enter and the bubble folds into it; the
  * handoff to the chat follows (after the crop, up to 1.5 s ordinarily or 12 s for an enriched
@@ -1107,9 +1403,11 @@ export async function sendBubble(
   const nodes = useScene.getState().nodes as Record<string, AnyNode>
   const first = bubble.targets[0]
   const area = bubble.area
+  const surface = bubble.viewport ?? preferredPointViewport() ?? '3d'
+  const is2d = surface === '2d'
   // closeBubble removes downCrops[capturedAt]; retain the pending crop promise for every send.
-  const freeEnriched = !area && freeClick && bubble.targets.length === 0 && enrichedRegions
-  const waitEnriched = (Boolean(area) && enrichedRegions) || freeEnriched
+  const freeEnriched = !is2d && !area && freeClick && bubble.targets.length === 0 && enrichedRegions
+  const waitEnriched = !is2d && ((Boolean(area) && enrichedRegions) || freeEnriched)
   const pendingCrop = downCrops.get(bubble.capturedAt)
   const pendingController = cropControllers.get(bubble.capturedAt)
   const buildFootprint = regionFootprintBuilders.get(bubble.capturedAt)
@@ -1120,11 +1418,14 @@ export async function sendBubble(
     const p = object.worldToLocal(new Vector3(...bubble.anchor))
     local = { nodeId: first.id, offset: [p.x, p.y, p.z] }
   }
+  const initialTargetIds = area ? area.ids : bubble.targets.map((t) => t.id)
+  const initialLevelId =
+    resolveLevelForIds(initialTargetIds, nodes) ?? useViewer.getState().selection.levelId ?? null
   // A region has no targets: what shows inside it is what the pin watches for changes.
   const model = createPin({
     askId,
     text: words,
-    targetIds: area ? area.ids : bubble.targets.map((t) => t.id),
+    targetIds: initialTargetIds,
   })
   const label = area
     ? regionLabel(area.ids.length + area.more)
@@ -1137,7 +1438,8 @@ export async function sendBubble(
     ...(bubble.footprint ? { footprint: bubble.footprint } : {}),
     local,
     label,
-    levelId: useViewer.getState().selection.levelId ?? null,
+    levelId: initialLevelId,
+    viewport: surface,
     retireAt: null,
     createdAt: Date.now(),
     ...(bubble.crop.state === 'ready' ? { before: bubble.crop } : {}),
@@ -1182,6 +1484,7 @@ export async function sendBubble(
   const enriched = (area || freeEnriched) && crop.state === 'ready' ? crop.enriched : undefined
   if (enriched) {
     const ids = visibleNodeIds(enriched)
+    const enrichedLevelId = resolveLevelForIds(ids, nodes)
     usePointAsk.setState((state) => {
       const pin = state.pins[askId]
       if (!pin) return state
@@ -1201,6 +1504,7 @@ export async function sendBubble(
           [askId]: {
             ...pin,
             model: { ...pin.model, targetIds: ids },
+            ...(enrichedLevelId ? { levelId: enrichedLevelId } : {}),
             ...(area
               ? {
                   anchor: nextAnchor,
@@ -1214,14 +1518,19 @@ export async function sendBubble(
       }
     })
   }
-  const firstNode = first ? nodes[first.id] : undefined
+  const levelSourceIds =
+    bubble.targets.length > 0
+      ? bubble.targets.map((t) => t.id)
+      : enriched
+        ? visibleNodeIds(enriched)
+        : (area?.ids ?? [])
   const levelId =
-    useViewer.getState().selection.levelId ??
-    (firstNode ? (resolveLevelId(firstNode, nodes) ?? '') : '')
+    resolveLevelForIds(levelSourceIds, nodes) ?? useViewer.getState().selection.levelId ?? ''
   const context = buildPointContext({
     askId,
     capturedAt: bubble.capturedAt,
     gesture: bubble.gesture,
+    ...(is2d ? { viewport: '2d' as const } : {}),
     nodes: nodes as Record<string, AnyNode>,
     levelId,
     targets: bubble.targets.map((t, i) => ({ id: t.id, ...(i === 0 ? { hit: bubble.hit } : {}) })),
@@ -1240,7 +1549,7 @@ export async function sendBubble(
       : {}),
     camera: enriched?.camera ??
       bubble.camera ??
-      currentCamera() ?? {
+      currentCamera(surface, bubble.anchor) ?? {
         position: [0, 5, 5],
         target: [0, 0, 0],
         fov: 50,
@@ -1335,16 +1644,37 @@ export function lookAtAsk(askId: string) {
 async function captureAfter(askId: string) {
   const pin = usePointAsk.getState().pins[askId]
   if (!pin) return
+  const pinViewport = pin.viewport ?? pin.submit?.context.viewport
+  const surface: PointViewport =
+    pinViewport && viewportRect(pinViewport)
+      ? pinViewport
+      : viewportRect('3d')
+        ? '3d'
+        : viewportRect('2d')
+          ? '2d'
+          : '3d'
   const nodes = useScene.getState().nodes as Record<string, AnyNode>
   const boxes = pin.model.targetIds.flatMap((id) => {
     const box = worldBoxOf(nodes, id)
-    const rect = box ? projectBox(box) : null
+    const rect = box ? projectBoxIn(box, surface) : null
     return rect ? [rect] : []
   })
-  const rect = unionRect(boxes)
+  const rect =
+    boxes.length > 0
+      ? boxes.reduce((all, r) => ({
+          x0: Math.min(all.x0, r.x0),
+          y0: Math.min(all.y0, r.y0),
+          x1: Math.max(all.x1, r.x1),
+          y1: Math.max(all.y1, r.y1),
+        }))
+      : null
   if (!rect) return
   try {
-    const crop = await captureViewCrop(rect)
+    const crop =
+      surface === '2d'
+        ? await getEditorFloorplanContext()?.captureCrop(rect)
+        : await captureViewCrop(rect)
+    if (!crop) return
     usePointAsk.getState().patchPin(askId, {
       after: {
         state: 'ready',
@@ -1416,15 +1746,34 @@ export function changeMore(askId: string): boolean {
   if (!state.active && !enterPointMode(true)) return false
   endCompare()
   if (usePointAsk.getState().bubble) closeBubble('dismiss')
+  const pinViewport = pin.viewport ?? pin.submit?.context.viewport
+  const surface =
+    usePointAsk.getState().cardViewport ??
+    (pinViewport && viewportRect(pinViewport) ? pinViewport : null) ??
+    preferredPointViewport() ??
+    '3d'
   state.openCard(null)
-  const rect = unionRect(
-    targets.flatMap((target) => {
-      const projected = target.box ? projectBox(target.box) : null
-      return projected ? [projected] : []
-    }),
-  )
-  const crop = rect
-    ? captureViewCrop(rect).then(
+  const boxes = targets.flatMap((target) => {
+    const projected = target.box ? projectBoxIn(target.box, surface) : null
+    return projected ? [projected] : []
+  })
+  const rect =
+    boxes.length > 0
+      ? boxes.reduce((all, r) => ({
+          x0: Math.min(all.x0, r.x0),
+          y0: Math.min(all.y0, r.y0),
+          x1: Math.max(all.x1, r.x1),
+          y1: Math.max(all.y1, r.y1),
+        }))
+      : null
+  const cropPromise =
+    rect && surface === '2d'
+      ? getEditorFloorplanContext()?.captureCrop(rect)
+      : rect
+        ? captureViewCrop(rect)
+        : null
+  const crop = cropPromise
+    ? cropPromise.then(
         (value) => value,
         () => null,
       )
@@ -1433,9 +1782,10 @@ export function changeMore(askId: string): boolean {
     targets,
     { point: pin.anchor, normal: [0, 1, 0] },
     targets.length > 1 ? 'multi' : 'click',
-    { crop, capturedAt: new Date().toISOString(), camera: currentCamera() },
+    { crop, capturedAt: new Date().toISOString(), camera: currentCamera(surface, pin.anchor) },
     undefined,
     { askId, after: pin.model.text },
+    { viewport: surface },
   )
   return true
 }
@@ -1716,8 +2066,25 @@ export function startPointAskSession(
   offs.push(
     useEditor.subscribe((state, prev) => {
       if (!usePointAsk.getState().active) return
-      if (!isViewVisible(state, VIEW_3D)) leavePointMode()
-      if (state.isFirstPersonMode && !prev.isFirstPersonMode) leavePointMode()
+      const hasScene = isViewVisible(state, VIEW_3D) || isViewVisible(state, VIEW_2D)
+      if (
+        !hasScene ||
+        (state.isPreviewMode && !state.isFirstPersonMode) ||
+        state.isCaptureMode ||
+        state.workspaceMode !== 'edit'
+      ) {
+        leavePointMode()
+        return
+      }
+      if (state.isFirstPersonMode && !prev.isFirstPersonMode) {
+        leavePointMode()
+        return
+      }
+      const point = usePointAsk.getState()
+      if (point.hover?.viewport && !viewportRect(point.hover.viewport)) {
+        point.setHover(null)
+        useViewer.getState().setHoveredId(null)
+      }
     }),
   )
   offs.push(

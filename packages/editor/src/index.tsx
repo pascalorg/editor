@@ -221,6 +221,7 @@ export { ConstructionRevealAudio } from './components/editor/construction-reveal
 export { copyCollectionIds, duplicateNodeAndPickUp } from './components/editor/duplicate-node'
 export { FirstPersonControls } from './components/editor/first-person-controls'
 export { FloatingActionMenu as FloatingMenu } from './components/editor/floating-action-menu'
+export { applyFloorplanCameraPose } from './components/editor/floorplan-context-bridge'
 // Embed surface — the editor's real in-canvas affordances, so a host can mount
 // authentic selection handles, interactive build tools, and the mover on top
 // of a bare `<Viewer>` without the full `<Editor>` shell.

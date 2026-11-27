@@ -648,7 +648,7 @@ export const CustomCameraControls = ({
 
   useEffect(() => {
     const handleAppliedPose = (pose: CameraPose) => {
-      if (isFirstPersonMode) return
+      if (isFirstPersonMode || planOwnsNavigation()) return
       settleOpening()
 
       const plan = planCameraPoseApplication(pose)
@@ -961,7 +961,13 @@ export const CustomCameraControls = ({
   )
 
   const publishCurrentPose = useCallback(() => {
-    if (isFirstPersonMode || suppressPoseEvents.current || !controls.current) return
+    if (
+      isFirstPersonMode ||
+      suppressPoseEvents.current ||
+      !controls.current ||
+      (isRestoringFirstPersonPose() && planOwnsNavigation())
+    )
+      return
 
     controls.current.getPosition(tempPosition, false)
     controls.current.getTarget(tempTarget, false)
@@ -983,7 +989,7 @@ export const CustomCameraControls = ({
     if (pose) {
       publishCameraPose(pose)
     }
-  }, [camera, isFirstPersonMode, viewportSize])
+  }, [camera, isFirstPersonMode, isRestoringFirstPersonPose, viewportSize])
 
   const handleCameraUpdate = useCallback(() => {
     const control = controls.current

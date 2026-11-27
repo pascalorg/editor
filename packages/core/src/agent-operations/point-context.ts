@@ -14,6 +14,8 @@ export type PointContext = {
   /** ISO time of the moment of pointing (pointer-down), not of sending. */
   capturedAt: string
   source: 'editor' | 'mcp'
+  /** Editor viewport where the person pointed; omitted on legacy or default 3D captures. */
+  viewport?: '2d' | '3d'
   gesture: 'click' | 'multi' | 'region'
   /** The level in view. */
   level: { id: string; name: string }

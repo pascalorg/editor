@@ -92,6 +92,8 @@ function ViewerOutlineSync() {
   const selectedIds = useViewer((s) => s.selection.selectedIds)
   const externalSelectedIds = useViewer((s) => s.externalSelectedIds)
   const hoveredId = useViewer((s) => s.hoveredId)
+  const pointedIds = useViewer((s) => s.pointedIds)
+  const hoverHighlightMode = useViewer((s) => s.hoverHighlightMode)
   const outliner = useViewer((s) => s.outliner)
   const geometryRevision = useViewer((s) => s.geometryRevision)
   const walkthrough = useViewer((s) => s.walkthroughMode)
@@ -101,7 +103,17 @@ function ViewerOutlineSync() {
     void geometryRevision
     outliner.selectedObjects.length = 0
     outliner.hoveredObjects.length = 0
-    if (walkthrough) return
+    if (walkthrough) {
+      if (hoverHighlightMode !== 'point') return
+      const highlighted = new Set<string>(pointedIds)
+      const hovered = hoveredId ? nodes[hoveredId as AnyNodeId] : undefined
+      if (hovered && hovered.type !== 'zone') highlighted.add(hovered.id)
+      for (const id of highlighted) {
+        const object = sceneRegistry.nodes.get(id)
+        if (object) outliner.hoveredObjects.push(object)
+      }
+      return
+    }
     for (const id of new Set([...selectedIds, ...externalSelectedIds])) {
       const object = sceneRegistry.nodes.get(id)
       if (object) outliner.selectedObjects.push(object)
@@ -111,7 +123,17 @@ function ViewerOutlineSync() {
       const object = sceneRegistry.nodes.get(hovered.id)
       if (object) outliner.hoveredObjects.push(object)
     }
-  }, [selectedIds, externalSelectedIds, hoveredId, outliner, nodes, geometryRevision, walkthrough])
+  }, [
+    selectedIds,
+    externalSelectedIds,
+    hoveredId,
+    pointedIds,
+    hoverHighlightMode,
+    outliner,
+    nodes,
+    geometryRevision,
+    walkthrough,
+  ])
 
   useEffect(
     () => () => {

@@ -996,7 +996,7 @@ msgstr "Comment (C)"
 
 #: packages/editor/src/components/ui/action-menu/point-ask-button.tsx
 msgid "editor.actionMenu.pointAskButton.pointAndAskWorksInThe"
-msgstr "Comment works in the 3D view"
+msgstr "Comment works in 2D and 3D views"
 
 #: packages/editor/src/components/ui/action-menu/structure-tools.tsx
 msgid "editor.actionMenu.structureTools.beam"
@@ -7554,6 +7554,10 @@ msgstr "Veil the ground over a level below grade"
 #: packages/editor/src/components/editor/views/view-bar.tsx
 msgid "editor.views.viewBar.views"
 msgstr "Views"
+
+#: packages/editor/src/components/editor/first-person-controls.tsx
+msgid "editor.walkthroughHud.comment"
+msgstr "comment"
 
 #: packages/viewer/src/ui/components/walkthrough-hud.tsx
 msgid "editor.walkthroughHud.drone.boost"

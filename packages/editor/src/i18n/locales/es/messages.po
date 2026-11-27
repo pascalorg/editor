@@ -2465,15 +2465,15 @@ msgstr "Comentar"
 msgid "editor.actionMenu.pointAskButton.pointAndAskC"
 msgstr "Comentar (C)"
 
-# Source-Hash: 0eba830970fafe39
-# Review: required
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Comment works in the 3D view"
+# English: "Comment works in 2D and 3D views"
+# Source-Hash: 89c8b644c569d305
+# Review: required
 #: packages/editor/src/components/ui/action-menu/point-ask-button.tsx
 #, fuzzy
 msgid "editor.actionMenu.pointAskButton.pointAndAskWorksInThe"
-msgstr "Comentar funciona en la vista 3D"
+msgstr "Comentar funciona en las vistas 2D y 3D"
 
 # Source-Hash: e14858b33b6e2623
 # Review: required
@@ -18816,6 +18816,14 @@ msgstr "Velar el terreno sobre una planta bajo rasante"
 #, fuzzy
 msgid "editor.views.viewBar.views"
 msgstr "Vistas"
+
+# Source-Hash: 1ac494e5da5f59df
+# Review: required
+# English: "comment"
+#: packages/editor/src/components/editor/first-person-controls.tsx
+#, fuzzy
+msgid "editor.walkthroughHud.comment"
+msgstr "comentar"
 
 # Source-Hash: e33e472c5ffcf14d
 # Review: required

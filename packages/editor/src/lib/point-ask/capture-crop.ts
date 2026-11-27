@@ -108,7 +108,7 @@ function captureOnce(
   options: { pad?: number; idPass?: boolean; signal?: AbortSignal },
 ): Promise<CapturedCrop> {
   if (options.signal?.aborted) return Promise.reject(new Error('Capture cancelled'))
-  const rect = canvasRect()
+  const rect = canvasRect('3d')
   const projectId = useViewer.getState().projectId
   if (!rect || !projectId) return Promise.reject(new Error('The 3D view is not ready'))
   const local: Rect = {

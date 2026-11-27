@@ -27,6 +27,7 @@ export type BuildPointContextInput = {
   region?: PointContext['region']
   image?: PointContext['image']
   suggestion?: string
+  viewport?: PointContext['viewport']
 }
 
 type Box = PointContextTarget['box']
@@ -90,5 +91,6 @@ export function buildPointContext(input: BuildPointContextInput): PointContext {
     ...(input.region ? { region: input.region } : {}),
     ...(input.image ? { image: input.image } : {}),
     ...(input.suggestion ? { suggestion: input.suggestion } : {}),
+    ...(input.viewport ? { viewport: input.viewport } : {}),
   }
 }
