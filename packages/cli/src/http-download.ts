@@ -114,15 +114,29 @@ async function requestOnce(
     },
     ...(agent ? { agent } : {}),
   })
+  // Node's request.setTimeout only starts once the socket connects, so a connection that is
+  // dropped (rather than refused) would hang until the OS gives up. Arm an explicit
+  // connect-phase timer and clear it once the socket connects.
+  const connectTimer = setTimeout(
+    () => request.destroy(new Error(`no response from ${target.host} within ${timeoutMs}ms`)),
+    timeoutMs,
+  )
+  const clearConnectTimer = () => clearTimeout(connectTimer)
+
   request.setTimeout(timeoutMs, () =>
     request.destroy(new Error(`no response from ${target.host} within ${timeoutMs}ms`)),
   )
+  request.once('socket', (socket) => socket.once('connect', clearConnectTimer))
   request.end()
   return new Promise<http.IncomingMessage>((resolve, reject) => {
-    request.once('response', resolve)
-    request.once('error', (error) =>
-      reject(new CliError('download_failed', `Unable to reach ${target.href}: ${error.message}`)),
-    )
+    request.once('response', (response) => {
+      clearConnectTimer()
+      resolve(response)
+    })
+    request.once('error', (error) => {
+      clearConnectTimer()
+      reject(new CliError('download_failed', `Unable to reach ${target.href}: ${error.message}`))
+    })
   })
 }
 

@@ -10,6 +10,7 @@ import {
   SdkErrorCode,
 } from '@modelcontextprotocol/client'
 import { getDefaultEnvironment, StdioClientTransport } from '@modelcontextprotocol/client/stdio'
+import { liveSceneRuntime } from '@pascal-app/core/runtime'
 import { type AnyNode, WallNode } from '@pascal-app/core/schema'
 import { SceneBridge } from '../bridge/scene-bridge'
 import { createPascalMcpServer } from '../server'
@@ -24,6 +25,11 @@ const clients: Record<string, ClientOptions> = {
 }
 
 function createServer() {
+  // The live scene store is a module singleton shared across the whole test run, and
+  // `loadScene()` skips when a scene is already loaded — another file can leave one
+  // behind, leaving this connection with no default Site → Building → Level. Reset so
+  // every connection starts from the default scene.
+  liveSceneRuntime.store.getState().unloadScene()
   const bridge = new SceneBridge()
   bridge.setScene({}, [])
   bridge.loadDefault()
