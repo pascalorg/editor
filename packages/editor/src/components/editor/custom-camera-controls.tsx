@@ -24,6 +24,7 @@ import {
 import {
   type CameraPoseApplicationPlan,
   frameViewerCamera,
+  framingAnimates,
   normalizeCameraPose,
   planCameraPoseApplication,
   publishCameraPose,
@@ -87,6 +88,13 @@ import {
 } from './fit-scene-framing'
 import { FloorAwareCameraControls } from './floor-aware-camera-controls'
 import { FloorSurface } from './floor-surface'
+import {
+  applySavedCameraView,
+  captureSavedCameraView,
+  readSavedCameraView,
+  type SavedCameraView,
+  savedCameraMatchesInstance,
+} from './saved-camera-view'
 
 const currentTarget = new Vector3()
 const tempBox = new Box3()
@@ -96,19 +104,7 @@ const openingSphere = new Sphere()
 const openingObjectBox = new Box3()
 
 /** A view saved on a node (`node.camera`), when it is complete. */
-function savedView(
-  node: AnyNode,
-): { position: [number, number, number]; target: [number, number, number] } | null {
-  const position = node.camera?.position
-  const target = node.camera?.target
-  if (!(position && target) || position.length < 3 || target.length < 3) return null
-  const values = [...position.slice(0, 3), ...target.slice(0, 3)]
-  if (!values.every((v) => typeof v === 'number' && Number.isFinite(v))) return null
-  return {
-    position: [position[0], position[1], position[2]] as [number, number, number],
-    target: [target[0], target[1], target[2]] as [number, number, number],
-  }
-}
+const savedView = (node: AnyNode): SavedCameraView | null => readSavedCameraView(node.camera)
 
 /**
  * `Box3.expandByObject` without what is hidden: it walks invisible objects too,
@@ -540,6 +536,7 @@ export const CustomCameraControls = ({
   const gl = useThree((state) => state.gl)
   const raycaster = useThree((state) => state.raycaster)
   const viewportSize = useThree((state) => state.size)
+  const invalidate = useThree((state) => state.invalidate)
   const cameraDraggingLifecycle = useMemo(
     () =>
       createCameraDraggingLifecycle({
@@ -563,14 +560,39 @@ export const CustomCameraControls = ({
     freezeCameraControlTransition(active.control)
   }, [])
 
+  const pendingSavedViewRef = useRef<{ view: SavedCameraView; enableTransition: boolean } | null>(
+    null,
+  )
+
   const cancelPoseApplication = useCallback(() => {
     pendingAppliedPose.current = null
+    pendingSavedViewRef.current = null
     try {
       freezeActivePoseInterpolation()
     } finally {
       suppressPoseEvents.current = false
     }
   }, [freezeActivePoseInterpolation])
+
+  const applyOrDeferSavedView = useCallback(
+    (view: SavedCameraView, enableTransition: boolean) => {
+      cancelPoseApplication()
+      const desiredMode = view.mode ?? useViewer.getState().cameraMode
+      if (useViewer.getState().cameraMode !== desiredMode) {
+        pendingSavedViewRef.current = { view, enableTransition: false }
+        useViewer.getState().setCameraMode(desiredMode)
+        return
+      }
+      const control = controls.current
+      if (!(control && savedCameraMatchesInstance(control.camera, desiredMode))) {
+        pendingSavedViewRef.current = { view, enableTransition: false }
+        return
+      }
+      applySavedCameraView(control, control.camera, view, enableTransition)
+      invalidate()
+    },
+    [cancelPoseApplication, invalidate],
+  )
 
   const beginLocalCameraInteraction = useCallback(
     ({ dragging = true }: { dragging?: boolean } = {}) => {
@@ -654,6 +676,7 @@ export const CustomCameraControls = ({
       const plan = planCameraPoseApplication(pose)
       if (!plan) return
 
+      pendingSavedViewRef.current = null
       pendingAppliedPose.current = plan
       suppressPoseEvents.current = true
 
@@ -726,13 +749,41 @@ export const CustomCameraControls = ({
   // `camera` too: drei builds a fresh controls instance (pivot at the origin)
   // when the default camera mounts or changes; it is rested on the floor too.
   useEffect(() => {
-    if (isPreviewMode || isFirstPersonMode || isRestoringFirstPersonPose()) return
+    if (isFirstPersonMode || isRestoringFirstPersonPose()) return
+    if (!controls.current) return
+    const pendingSaved = pendingSavedViewRef.current
+    if (pendingSaved) {
+      const desiredMode = pendingSaved.view.mode ?? useViewer.getState().cameraMode
+      firstLoad.current = false
+      previousLevelIdRef.current = currentLevelId
+      previousLevelModeRef.current = levelMode
+      previousCameraRef.current = camera
+      if (savedCameraMatchesInstance(controls.current.camera, desiredMode)) {
+        pendingSavedViewRef.current = null
+        applySavedCameraView(
+          controls.current,
+          controls.current.camera,
+          pendingSaved.view,
+          pendingSaved.enableTransition,
+        )
+        invalidate()
+      }
+      return
+    }
+    if (pendingAppliedPose.current || activePoseInterpolation.current) {
+      firstLoad.current = false
+      previousLevelIdRef.current = currentLevelId
+      previousLevelModeRef.current = levelMode
+      previousCameraRef.current = camera
+      return
+    }
+    if (isPreviewMode) return
     // Analytic destination, not `sceneRegistry` mesh position: a level created
     // this frame still sits at y=0 (LevelSystem lerps it later), and a mode
     // switch leaves every level mid-lerp - the camera must pan to where the
     // level will settle, in the CURRENT presentation mode.
     const targetY = orbitGroundY(currentLevelId, levelMode)
-    if (!controls.current) return
+    const hadPreviousLevel = previousLevelIdRef.current !== null
     const levelChanged = previousLevelIdRef.current !== currentLevelId
     const modeChanged = previousLevelModeRef.current !== levelMode
     const plan = planLevelFollow({
@@ -749,7 +800,7 @@ export const CustomCameraControls = ({
     if (plan === 'none') return
     // A floor or level mode picked while the project opens ends the opening (below, once the
     // camera actually moves); fresh controls alone (drei swapping the camera) keep it.
-    const floorPicked = levelChanged || modeChanged
+    const floorPicked = (levelChanged && hadPreviousLevel) || modeChanged
     if (openingFrame.current === 'framing' && !floorPicked && reframeOpening.current?.()) return
     if (plan === 'default-pose') {
       controls.current.setLookAt(
@@ -792,6 +843,7 @@ export const CustomCameraControls = ({
   }, [
     camera,
     currentLevelId,
+    invalidate,
     levelMode,
     isPreviewMode,
     isFirstPersonMode,
@@ -822,6 +874,7 @@ export const CustomCameraControls = ({
     openingFrame.current = 'framing'
     let framed: Box3 | null = null
     let framedView = false
+    let swappedProjection = false
     // True when the opening holds the camera: its saved view, or what it framed.
     const frame = (forced = false): boolean => {
       const control = controls.current
@@ -834,9 +887,21 @@ export const CustomCameraControls = ({
       const view = saved ? savedView(saved) : null
       if (view) {
         // The saved view is the opening: the follow leaves it, and a load fit puts it back.
+        const desiredMode = view.mode ?? useViewer.getState().cameraMode
+        if (useViewer.getState().cameraMode !== desiredMode) {
+          cancelPoseApplication()
+          swappedProjection = true
+          useViewer.getState().setCameraMode(desiredMode)
+          return true
+        }
+        if (!savedCameraMatchesInstance(control.camera, desiredMode)) return true
         if (framedView && !forced) return true
         framedView = true
-        control.setLookAt(...view.position, ...view.target, true)
+        cancelPoseApplication()
+        const animate = !swappedProjection
+        swappedProjection = false
+        applySavedCameraView(control, control.camera, view, animate)
+        invalidate()
         return true
       }
       const bounds = openingBounds(nodes)
@@ -875,7 +940,14 @@ export const CustomCameraControls = ({
       if (isFirstPersonMode || isPreviewMode) settleOpening()
       else openingFrame.current = 'waiting'
     }
-  }, [sceneReady, isPreviewMode, isFirstPersonMode, settleOpening])
+  }, [
+    cancelPoseApplication,
+    invalidate,
+    sceneReady,
+    isPreviewMode,
+    isFirstPersonMode,
+    settleOpening,
+  ])
 
   useEffect(() => {
     if (isFirstPersonMode || !controls.current) return
@@ -1368,31 +1440,15 @@ export const CustomCameraControls = ({
     if (!node) return
 
     // Check if node has a saved camera
-    if (node.camera) {
-      const { position, target } = node.camera
-      if (
-        position &&
-        target &&
-        position.length >= 3 &&
-        target.length >= 3 &&
-        position.every((v) => v !== null && v !== undefined) &&
-        target.every((v) => v !== null && v !== undefined)
-      ) {
-        requestAnimationFrame(() => {
-          if (!controls.current) return
-          controls.current.setLookAt(
-            position[0],
-            position[1],
-            position[2],
-            target[0],
-            target[1],
-            target[2],
-            true,
-          )
-        })
-      }
-      return
+    const previewView = savedView(node)
+    if (previewView) {
+      const frame = requestAnimationFrame(() => {
+        if (isFirstPersonMode) return
+        applyOrDeferSavedView(previewView, true)
+      })
+      return () => cancelAnimationFrame(frame)
     }
+    if (node.camera) return
 
     if (!openingNodeId) return
 
@@ -1416,7 +1472,7 @@ export const CustomCameraControls = ({
       tempCenter.z,
       true,
     )
-  }, [isPreviewMode, isFirstPersonMode])
+  }, [applyOrDeferSavedView, isPreviewMode, isFirstPersonMode])
 
   // Preset capture auto-framing — when `setCaptureMode({ mode: 'preset',
   // isolated })` fires, fly the camera to a pose that fits the union
@@ -1532,38 +1588,21 @@ export const CustomCameraControls = ({
   useEffect(() => {
     const handleNodeCapture = ({ nodeId }: CameraControlEvent) => {
       if (isFirstPersonMode || !controls.current) return
-
-      const position = new Vector3()
-      const target = new Vector3()
-      controls.current.getPosition(position)
-      controls.current.getTarget(target)
-
       const state = useScene.getState()
-
       state.updateNode(nodeId, {
-        camera: {
-          position: [position.x, position.y, position.z],
-          target: [target.x, target.y, target.z],
-          mode: useViewer.getState().cameraMode,
-        },
+        camera: captureSavedCameraView(
+          controls.current,
+          controls.current.camera,
+          useViewer.getState().cameraMode,
+        ),
       })
     }
     const handleNodeView = ({ nodeId }: CameraControlEvent) => {
-      if (isFirstPersonMode || !controls.current) return
-
+      if (isFirstPersonMode) return
       const node = useScene.getState().nodes[nodeId]
-      if (!node?.camera) return
-      const { position, target } = node.camera
-
-      controls.current.setLookAt(
-        position[0],
-        position[1],
-        position[2],
-        target[0],
-        target[1],
-        target[2],
-        true,
-      )
+      const view = node ? savedView(node) : null
+      if (!view) return
+      applyOrDeferSavedView(view, true)
     }
 
     const handleTopView = () => {
@@ -1607,9 +1646,15 @@ export const CustomCameraControls = ({
     }
 
     const handleFrame = (event: CameraControlFrameEvent) => {
-      if (isFirstPersonMode || !controls.current) return
+      if (isFirstPersonMode) return
+      const view = event.pose ? readSavedCameraView(event.pose) : null
+      if (view) {
+        applyOrDeferSavedView(view, framingAnimates())
+        return
+      }
+      if (!controls.current) return
       cancelPoseApplication()
-      frameViewerCamera(controls.current, camera, event)
+      frameViewerCamera(controls.current, controls.current.camera, event)
     }
 
     const handleFitScene = ({ bounds }: CameraControlFitSceneEvent) => {
@@ -1671,7 +1716,7 @@ export const CustomCameraControls = ({
       emitter.off('camera-controls:fit-scene', handleFitScene)
     }
   }, [
-    camera,
+    applyOrDeferSavedView,
     cancelPoseApplication,
     flushPendingFitScene,
     focusNode,

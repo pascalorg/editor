@@ -10,6 +10,7 @@ import { useSceneGroundReplacement } from './scene-ground-replacement'
 
 /** Far plane of the daylight look (its ground fades into the sky by 2.6 km). */
 const DAYLIGHT_FAR = 6000
+const DEFAULT_CAMERA_POSITION: [number, number, number] = [10, 10, 10]
 
 const IMMERSIVE_XR_VISIBLE_LAYERS = [OVERLAY_LAYER, ZONE_LAYER, GRID_LAYER] as const
 
@@ -90,10 +91,16 @@ export const ViewerCamera = ({ immersiveXR = false }: { immersiveXR?: boolean })
           fov={50}
           makeDefault
           near={clipping.near}
-          position={[10, 10, 10]}
+          position={DEFAULT_CAMERA_POSITION}
         />
       ) : (
-        <OrthographicCamera far={1000} makeDefault near={-1000} position={[10, 10, 10]} zoom={20} />
+        <OrthographicCamera
+          far={1000}
+          makeDefault
+          near={-1000}
+          position={DEFAULT_CAMERA_POSITION}
+          zoom={20}
+        />
       )}
       <ImmersiveXRViewLayers enabled={immersiveXR} />
     </>

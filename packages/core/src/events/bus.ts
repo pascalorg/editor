@@ -311,7 +311,13 @@ export interface CameraControlFitSceneEvent {
  */
 export interface CameraControlFrameEvent {
   bounds: { min: [number, number, number]; max: [number, number, number] } | null
-  pose?: { position: [number, number, number]; target: [number, number, number] }
+  pose?: {
+    position: [number, number, number]
+    target: [number, number, number]
+    mode?: 'perspective' | 'orthographic'
+    fov?: number
+    zoom?: number
+  }
 }
 
 export interface CameraPose {
