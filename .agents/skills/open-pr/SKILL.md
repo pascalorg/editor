@@ -26,7 +26,7 @@ Run relevant local checks; reuse checks that already cover the change. CI runs t
 
 `.github/pull_request_template.md` is the source of truth for headings and checklist. Fill it from §1, not from memory:
 
-- **What does this PR do?** — the result, one paragraph or a short list; `Fixes #123` when applicable.
+- **What does this PR do?** — the result, one paragraph or a short list; `Fixes #123` when applicable. Name any one-way change (migration, schema or contract change, production data, publish path), and keep it in its own small PR.
 - **How to test** — numbered, concrete reviewer steps with the expected outcome. Automated commands only if you ran them.
 - **Screenshots / screen recording** — link, `Not added yet.` for a visual change without media, or `N/A — non-visual change`.
 - **Checklist** — copy verbatim; tick only what was verified (`bun dev` only after a real local run).
