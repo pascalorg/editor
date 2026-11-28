@@ -226,8 +226,6 @@ function buildFloorItemSession(
   const levelRotation: [number, number, number] = [...node.rotation]
   if (hosted) {
     if ((node as AnyNode).type === 'procedural-item') {
-      // Generated footprints use the query frame; catalog footprints keep their legacy plan mapping.
-      planTransform.point = [levelFrame!.position[0], levelFrame!.position[2]]
       const hostFrame = restingNodePlanFrame(host, (id) => nodes[id])
       const headingPose = surfaceFramePose(
         node.parentId,
@@ -372,15 +370,6 @@ function buildFloorItemSession(
           .surfaces?.(host, { scene })
           .find((s) => s.id === retainedSurfaceId)
         const hostFrame = restingNodePlanFrame(host, (id) => useScene.getState().nodes[id])
-        if (host.type === 'item') {
-          const plan = resolveItemTransform(host, {
-            resolve: (id: AnyNodeId) => useScene.getState().nodes[id],
-          } as never)
-          if (plan) {
-            hostFrame.position[0] = plan.x
-            hostFrame.position[2] = plan.y
-          }
-        }
         const surfaceFrame = composeFrames(
           hostFrame,
           frame(

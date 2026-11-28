@@ -19,7 +19,7 @@ import { resolveCeilingHeight } from '../services/level-height'
 import { getStoredLevelHeight } from '../services/storey'
 import { surfaceRegionContainsPoint } from '../services/surface-region'
 import { computeWallSlabSupport } from '../systems/slab/slab-support'
-import { getWallLocalFaceZ } from '../systems/wall/wall-frame'
+import { getWallBodyCenterOffset, getWallLocalFaceZ } from '../systems/wall/wall-frame'
 import type { ProceduralItemNode } from './node'
 import { evaluateRecipe, type Surface, type Vec3 } from './recipe'
 import {
@@ -170,6 +170,25 @@ function nodeParentFrame(
   }
   return parentFrame
 }
+// The depth `ItemSystem` gives a wall-mounted item in its host's frame: a
+// wall item sits on the wall body's centre, a wall-side item on the chosen
+// face. Its stored `position[2]` is not what the viewer renders.
+function wallMountedItemZ(
+  item: ItemNode,
+  host: AnyNode | ProceduralItemNode | undefined,
+  z: number,
+) {
+  if (item.asset.attachTo === 'wall' && host?.type === 'wall') {
+    return z + getWallBodyCenterOffset(host)
+  }
+  if (item.asset.attachTo !== 'wall-side') return z
+  const face = item.side === 'front' ? 'a' : 'b'
+  if (host?.type === 'wall') return getWallLocalFaceZ(host, face)
+  if (host?.type === 'roof-segment') {
+    return getWallLocalFaceZ({ thickness: host.wallThickness ?? 0.1 }, face)
+  }
+  return z
+}
 export type LevelFrameOptions = {
   /**
    * Frames already resolved over the same unchanged `nodes` record, filled as
@@ -277,6 +296,7 @@ function resolveNodeLevelFrame(
       }
   const parent = node.parentId ? nodes[node.parentId] : undefined
   if (!node.parentId) return frame(pose.position, pose.rotation)
+  if (node.type === 'item') pose.position[2] = wallMountedItemZ(node, parent, pose.position[2])
   if (node.type === 'item' && parent?.type === 'roof-segment' && node.roofFace) {
     const face = getRoofWallFaceFrame(parent, node.roofFace)
     const local = frame(roofFacePointToSegment(parent, node.roofFace, pose.position), pose.rotation)
