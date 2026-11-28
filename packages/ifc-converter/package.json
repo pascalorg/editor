@@ -23,12 +23,13 @@
     "README.md"
   ],
   "scripts": {
-    "build": "tsc --build",
+    "build": "tsc --build && bun ../../scripts/fix-node-esm-imports.ts dist",
     "check-types": "tsc -p tsconfig.bench.json --pretty false",
     "dev": "tsc --build --watch",
     "test": "bun test tests",
     "bench:normals": "bun run src/__bench__/normal-recompute.bench.ts",
-    "prepublishOnly": "npm run build"
+    "smoke:node": "node --input-type=module -e \"await import('./dist/index.js'); await import('./dist/export/index.js')\"",
+    "prepublishOnly": "npm run build && npm run smoke:node"
   },
   "dependencies": {
     "@pascal-app/core": "^1.1.6",
