@@ -13,6 +13,7 @@ test('bundled locale packs cover the converted viewer and editor surfaces', () =
     fr: ['Paramètres d’affichage', 'Pièces'],
     es: ['Ajustes de visualización', 'Estancias'],
     ja: ['表示設定', '部屋'],
+    ru: ['Настройки отображения', 'Комнаты'],
   } as const
 
   for (const [locale, [display, rooms]] of Object.entries(expectations)) {
