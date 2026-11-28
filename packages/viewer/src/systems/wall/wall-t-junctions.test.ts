@@ -3,7 +3,7 @@
 import { describe, expect, test } from 'bun:test'
 import { calculateLevelMiters, sceneRegistry, WallNode, WindowNode } from '@pascal-app/core'
 import * as THREE from 'three'
-import { generateExtrudedWall } from './wall-system'
+import { generateExtrudedWall, repairDeferredWallTJunctions } from './wall-system'
 import { repairWallTJunctions } from './wall-t-junctions'
 
 function triangles(geometry: THREE.BufferGeometry): THREE.Vector3[][] {
@@ -94,7 +94,68 @@ describe('wall T-junctions', () => {
     try {
       const geometry = generateExtrudedWall(wall, [window], calculateLevelMiters([wall]))
       expect(countTJunctions(geometry)).toBe(0)
+      expect(geometry.userData.wallTJunctions).toBeUndefined()
     } finally {
+      sceneRegistry.nodes.delete(wall.id)
+    }
+  })
+
+  test('deferred mode skips repair and marks geometry; repairDeferredWallTJunctions finishes it on demand', () => {
+    const wall = WallNode.parse({
+      id: 'wall_t-junction-deferred',
+      start: [1, 2],
+      end: [6, 2],
+      height: 2.5,
+      thickness: 0.2,
+    })
+    const window = WindowNode.parse({
+      id: 'window_t-junction-deferred',
+      wallId: wall.id,
+      position: [2.5, 1.4, 0],
+      width: 1.2,
+      height: 1.2,
+    })
+    const mesh = new THREE.Mesh()
+    mesh.position.set(wall.start[0], 0, wall.start[1])
+    sceneRegistry.nodes.set(wall.id, mesh)
+    try {
+      const deferred = generateExtrudedWall(
+        wall,
+        [window],
+        calculateLevelMiters([wall]),
+        0,
+        0,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        'deferred',
+      )
+      deferred.userData.built = true
+      expect(deferred.userData.wallTJunctions).toBe('deferred')
+      expect(countTJunctions(deferred)).toBeGreaterThan(0)
+      const areaBefore = area(deferred)
+      const groupsBefore = deferred.groups.map((g) => g.materialIndex)
+
+      mesh.geometry = deferred
+      const didRepair = repairDeferredWallTJunctions(mesh)
+
+      expect(didRepair).toBe(true)
+      expect(mesh.geometry.userData.wallTJunctions).toBeUndefined()
+      expect(mesh.geometry.userData.built).toBe(true)
+      expect(countTJunctions(mesh.geometry)).toBe(0)
+      expect(area(mesh.geometry)).toBeCloseTo(areaBefore, 6)
+      expect(mesh.geometry.groups.map((g) => g.materialIndex)).toEqual(groupsBefore)
+      expect(mesh.geometry.getAttribute('normal')).toBeDefined()
+      expect(mesh.geometry.getAttribute('uv')).toBeDefined()
+      expect(mesh.geometry.getAttribute('uv2')).toBeDefined()
+
+      // Calling a second time is a no-op once the deferred marker is cleared.
+      expect(repairDeferredWallTJunctions(mesh)).toBe(false)
+    } finally {
+      mesh.geometry.dispose()
       sceneRegistry.nodes.delete(wall.id)
     }
   })

@@ -28,6 +28,7 @@ import {
   isViewerPresentationTextureBorrowed,
   poseDoorMovingParts,
   poseWindowMovingParts,
+  repairDeferredWallTJunctions,
   restoreWindowRollerShutter,
   SCENE_LAYER,
   snapLevelsToTruePositions,
@@ -596,6 +597,27 @@ async function completeSceneExportPreparation(
   }
 }
 
+function repairDeferredWallMeshesInScene(scene: THREE.Object3D): void {
+  const deferredWallMeshes: THREE.Mesh[] = []
+  const geometryRefCounts = new Map<THREE.BufferGeometry, number>()
+  scene.traverse((object) => {
+    const mesh = object as THREE.Mesh
+    if (mesh.isMesh !== true || !mesh.geometry) return
+    geometryRefCounts.set(mesh.geometry, (geometryRefCounts.get(mesh.geometry) ?? 0) + 1)
+    if (mesh.geometry.userData.wallTJunctions === 'deferred') {
+      deferredWallMeshes.push(mesh)
+    }
+  })
+  for (const mesh of deferredWallMeshes) {
+    const sharedCount = geometryRefCounts.get(mesh.geometry) ?? 1
+    if (sharedCount > 1) {
+      geometryRefCounts.set(mesh.geometry, sharedCount - 1)
+      mesh.geometry = mesh.geometry.clone()
+    }
+    repairDeferredWallTJunctions(mesh)
+  }
+}
+
 function finishSceneExportPreparation(preparation: SceneExportPreparation): GlbExport {
   const { scene, cloneByOriginal, nodes, options, registryEntries } = preparation
   const identityNodes = new Set<THREE.Object3D>()
@@ -605,6 +627,7 @@ function finishSceneExportPreparation(preparation: SceneExportPreparation): GlbE
   }
 
   const warnings = pruneNonRenderableMeshes(scene, identityNodes)
+  repairDeferredWallMeshesInScene(scene)
   sanitizeMaterialGroups(scene, identityNodes)
   convertMaterials(scene, options.textures ?? 'embed', options.purpose ?? 'viewer')
 

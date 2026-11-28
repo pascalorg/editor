@@ -1199,6 +1199,8 @@ function updateWallGeometry(
     terrainBottomAt,
     slabSupport.faceDatum,
     buildWallFinishLayout(node, getCachedLevelZones(node, nodes)),
+    nodes,
+    'deferred',
   )
   const wallAngle = Math.atan2(node.end[1] - node.start[1], node.end[0] - node.start[0])
   // World transform the render mesh will apply (position + Y-rotation below).
@@ -1232,6 +1234,9 @@ function updateWallGeometry(
       planeTop,
       terrainBottomAt,
       slabSupport.faceDatum,
+      undefined,
+      nodes,
+      'deferred',
     )
     collisionMesh.geometry.dispose()
     collisionMesh.geometry = collisionGeo
@@ -1508,12 +1513,16 @@ function mergeWallTerrainFill(
   wall: WallNode,
   boundaryEdges: TaggedWallBoundaryEdge[],
   finish: WallFinishContext,
+  tJunctions: WallTJunctionMode = 'repaired',
 ): THREE.BufferGeometry {
   const present = fills.filter((fill): fill is THREE.BufferGeometry => fill !== null)
   if (present.length === 0) return body
 
   const bodyGeometry = body.index ? body.toNonIndexed() : body
-  if (bodyGeometry !== body) body.dispose()
+  if (bodyGeometry !== body) {
+    bodyGeometry.userData = { ...body.userData }
+    body.dispose()
+  }
   // The fill is part of each face below the base: it splits at the same finish bounds.
   const planes = getWallFinishSplitPlanes(finish)
   const splitFills = present.map((fill) => splitGeometryAtPlanes(fill, planes.y, planes.x))
@@ -1527,7 +1536,47 @@ function mergeWallTerrainFill(
 
   bodyGeometry.dispose()
   for (const fill of splitFills) fill.dispose()
-  return finishWallFaces(merged, wall, boundaryEdges, finish)
+  return finishWallFaces(merged, wall, boundaryEdges, finish, tJunctions)
+}
+
+/**
+ * `repaired` (default) removes T-junctions on every wall build. `deferred`
+ * skips the repair during live editing and stamps `userData.wallTJunctions =
+ * 'deferred'` so export preparation can run it on demand on cloned meshes.
+ */
+export type WallTJunctionMode = 'repaired' | 'deferred'
+
+/**
+ * Runs deferred T-junction repair on a wall mesh marked by
+ * {@link generateExtrudedWall} with `tJunctions = 'deferred'`, recomputing
+ * vertex normals and the same level-relative planar UVs as the live build, and
+ * clears the deferred marker. Returns `true` when triangles were split.
+ */
+export function repairDeferredWallTJunctions(mesh: THREE.Mesh): boolean {
+  const geometry = mesh.geometry
+  if (geometry?.userData.wallTJunctions !== 'deferred') return false
+
+  const { wallTJunctions: _deferred, ...preservedUserData } = geometry.userData
+  const hadUV = geometry.hasAttribute('uv')
+  const repaired = repairWallTJunctions(geometry)
+  if (repaired === geometry) {
+    delete geometry.userData.wallTJunctions
+    return false
+  }
+
+  repaired.computeVertexNormals()
+  ensureRenderableGeometryAttributes(repaired)
+  repaired.userData = preservedUserData
+
+  let finalGeometry = repaired
+  if (hadUV) {
+    mesh.updateMatrix()
+    finalGeometry = applyWorldPlanarWallUVs(repaired, mesh.matrix)
+  }
+  finalGeometry.computeBoundingBox()
+  finalGeometry.computeBoundingSphere()
+  mesh.geometry = finalGeometry
+  return true
 }
 
 /**
@@ -1541,9 +1590,15 @@ function finishWallFaces(
   wall: WallNode,
   boundaryEdges: TaggedWallBoundaryEdge[],
   finish: WallFinishContext,
+  tJunctions: WallTJunctionMode = 'repaired',
 ): THREE.BufferGeometry {
   geometry.computeVertexNormals()
   assignWallMaterialGroups(geometry, wall, boundaryEdges, finish)
+  if (tJunctions === 'deferred') {
+    geometry.userData.wallTJunctions = 'deferred'
+    ensureRenderableGeometryAttributes(geometry)
+    return geometry
+  }
   const repaired = repairWallTJunctions(geometry)
   if (repaired !== geometry) repaired.computeVertexNormals()
   ensureRenderableGeometryAttributes(repaired)
@@ -1638,6 +1693,7 @@ export function generateExtrudedWall(
   faceBase?: { a: readonly WallSlabSupportSegment[]; b: readonly WallSlabSupportSegment[] },
   finishLayout: WallFinishLayout = buildWallFinishLayout(wallNode, []),
   sceneNodes: Readonly<Record<string, AnyNode>> = useScene.getState().nodes,
+  tJunctions: WallTJunctionMode = 'repaired',
 ): THREE.BufferGeometry {
   const wallStart: Point2D = { x: wallNode.start[0], y: wallNode.start[1] }
   const wallEnd: Point2D = { x: wallNode.end[0], y: wallNode.end[1] }
@@ -1906,9 +1962,17 @@ export function generateExtrudedWall(
       wallNode,
       boundaryEdges,
       finish,
+      tJunctions,
     )
     return withWallFinishData(
-      mergeWallTerrainFill(splitGeometry, belowBaseFills, wallNode, boundaryEdges, finish),
+      mergeWallTerrainFill(
+        splitGeometry,
+        belowBaseFills,
+        wallNode,
+        boundaryEdges,
+        finish,
+        tJunctions,
+      ),
       finish,
     )
   }
@@ -1960,10 +2024,18 @@ export function generateExtrudedWall(
     wallNode,
     boundaryEdges,
     finish,
+    tJunctions,
   )
 
   return withWallFinishData(
-    mergeWallTerrainFill(splitResultGeometry, belowBaseFills, wallNode, boundaryEdges, finish),
+    mergeWallTerrainFill(
+      splitResultGeometry,
+      belowBaseFills,
+      wallNode,
+      boundaryEdges,
+      finish,
+      tJunctions,
+    ),
     finish,
   )
 }
