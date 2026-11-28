@@ -21,7 +21,6 @@ const GROUND: Floor = {
 /** A view and a record of every write made to it. */
 function view(initial: Partial<ViewPresentation> = {}) {
   const state: ViewPresentation = {
-    wall: 'up',
     levels: 'stacked',
     hideAbove: false,
     floor: { ...GROUND },
@@ -30,10 +29,6 @@ function view(initial: Partial<ViewPresentation> = {}) {
   const writes: string[] = []
   const port: PresentationPort = {
     read: () => ({ ...state, floor: { ...state.floor } }),
-    setWall: (mode) => {
-      writes.push(`wall:${mode}`)
-      state.wall = mode
-    },
     setLevels: (mode) => {
       writes.push(`levels:${mode}`)
       state.levels = mode
@@ -62,15 +57,6 @@ function view(initial: Partial<ViewPresentation> = {}) {
 }
 
 describe('what Follow changes, it puts back', () => {
-  test('the cutaway it switched to', () => {
-    const { state, port } = view({ wall: 'up' })
-    const follow = new FollowPresentation(port)
-    follow.wall('cutaway')
-    expect(state.wall).toBe('cutaway')
-    follow.restore()
-    expect(state.wall).toBe('up')
-  })
-
   test('the floor it selected, with the room and the picks the person had', () => {
     const had: Floor = {
       buildingId: 'b',
@@ -103,17 +89,16 @@ describe('what Follow changes, it puts back', () => {
     const follow = new FollowPresentation(port)
     follow.floor({ buildingId: 'b', levelId: 'upper' })
     follow.floor({ buildingId: 'b', levelId: 'roof' })
-    follow.wall('cutaway')
-    follow.wall('cutaway')
+    follow.hideAbove(true)
+    follow.hideAbove(true)
     follow.restore()
     expect(state.floor.levelId).toBe('ground')
-    expect(state.wall).toBe('up')
+    expect(state.hideAbove).toBe(false)
   })
 
   test('nothing it did not change: a setting already as Follow wants it is not written', () => {
-    const { writes, port } = view({ wall: 'cutaway', hideAbove: true, levels: 'stacked' })
+    const { writes, port } = view({ hideAbove: true, levels: 'stacked' })
     const follow = new FollowPresentation(port)
-    follow.wall('cutaway')
     follow.hideAbove(true)
     follow.levels('stacked')
     follow.floor({ buildingId: 'b', levelId: 'ground' })
@@ -124,7 +109,7 @@ describe('what Follow changes, it puts back', () => {
   test('once: ending again, with nothing held, writes nothing', () => {
     const { writes, port } = view()
     const follow = new FollowPresentation(port)
-    follow.wall('cutaway')
+    follow.hideAbove(true)
     follow.restore()
     const count = writes.length
     follow.restore()
@@ -134,26 +119,26 @@ describe('what Follow changes, it puts back', () => {
   test('a later session starts from what the person has then', () => {
     const { state, port } = view()
     const follow = new FollowPresentation(port)
-    follow.wall('cutaway')
+    follow.levels('exploded')
     follow.restore()
-    state.wall = 'down'
-    follow.wall('cutaway')
+    state.levels = 'solo'
+    follow.levels('stacked')
     follow.restore()
-    expect(state.wall).toBe('down')
+    expect(state.levels).toBe('solo')
   })
 })
 
 describe("the person's own choices stand", () => {
-  test('a wall mode picked while Follow is on is kept, and Follow does not take it back', () => {
-    const { state, writes, port } = view({ wall: 'up' })
+  test('a level display picked while Follow is on is kept, and Follow does not take it back', () => {
+    const { state, writes, port } = view({ levels: 'solo' })
     const follow = new FollowPresentation(port)
-    follow.wall('cutaway')
-    state.wall = 'translucent'
-    follow.wall('cutaway')
-    expect(state.wall).toBe('translucent')
+    follow.levels('stacked')
+    state.levels = 'exploded'
+    follow.levels('stacked')
+    expect(state.levels).toBe('exploded')
     follow.restore()
-    expect(state.wall).toBe('translucent')
-    expect(writes).toEqual(['wall:cutaway'])
+    expect(state.levels).toBe('exploded')
+    expect(writes).toEqual(['levels:stacked'])
   })
 
   test('a floor picked while Follow is on is kept, and Follow does not select over it', () => {
@@ -178,26 +163,26 @@ describe("the person's own choices stand", () => {
     expect(writes).toEqual(['floor:upper'])
   })
 
-  test('the settings are independent: a wall mode of their own, the floor still goes back', () => {
-    const { state, port } = view()
+  test('the settings are independent: a level display of their own, the floor still goes back', () => {
+    const { state, port } = view({ levels: 'solo' })
     const follow = new FollowPresentation(port)
-    follow.wall('cutaway')
+    follow.levels('stacked')
     follow.floor({ buildingId: 'b', levelId: 'upper' })
-    state.wall = 'down'
+    state.levels = 'exploded'
     follow.restore()
-    expect(state.wall).toBe('down')
+    expect(state.levels).toBe('exploded')
     expect(state.floor.levelId).toBe('ground')
   })
 
   test("the person's choice is theirs for the session, then Follow may change it again", () => {
-    const { state, port } = view()
+    const { state, port } = view({ levels: 'solo' })
     const follow = new FollowPresentation(port)
-    follow.wall('cutaway')
-    state.wall = 'down'
+    follow.levels('stacked')
+    state.levels = 'exploded'
     follow.restore()
-    follow.wall('cutaway')
-    expect(port.read().wall).toBe('cutaway')
+    follow.levels('stacked')
+    expect(port.read().levels).toBe('stacked')
     follow.restore()
-    expect(port.read().wall).toBe('down')
+    expect(port.read().levels).toBe('exploded')
   })
 })

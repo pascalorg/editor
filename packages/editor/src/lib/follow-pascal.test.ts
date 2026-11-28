@@ -74,6 +74,24 @@ describe('what the camera looks at next', () => {
     expect(follower.due(2)?.levelId).toBe('level_upper')
   })
 
+  test('interleaved multi-subagent wants coalesce per floor instead of ping-ponging', () => {
+    const follower = new Follower()
+    follower.want({ ...want('furnish', box([0, 0, 0], [1, 1, 1]), 0), levelId: 'level_lower' })
+    follower.want({ ...want('furnish', box([0, 3, 0], [1, 4, 1]), 0.05), levelId: 'level_upper' })
+    follower.want({ ...want('furnish', box([4, 0, 2], [5, 1, 3]), 0.1), levelId: 'level_lower' })
+    follower.want({ ...want('furnish', box([4, 3, 2], [5, 4, 3]), 0.15), levelId: 'level_upper' })
+
+    const first = follower.due(0.5)
+    expect(first?.levelId).toBe('level_lower')
+    expect(first?.box).toEqual(box([0, 0, 0], [5, 1, 3]))
+
+    const second = follower.due(0.5 + FOLLOW_DWELL_S + 0.01)
+    expect(second?.levelId).toBe('level_upper')
+    expect(second?.box).toEqual(box([0, 3, 0], [5, 4, 3]))
+
+    expect(follower.due(5)).toBeNull()
+  })
+
   test('a shared direction survives the merge; a mixed one does not', () => {
     const facing = mergeWants([
       want('detail', box([0, 0, 0], [1, 1, 1]), 0, [0, 1]),

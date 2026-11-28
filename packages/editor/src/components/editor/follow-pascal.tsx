@@ -14,7 +14,6 @@ import {
 import {
   groundVeiled,
   type RevealEvent,
-  revealChangedNodeIds,
   subscribeRevealEvents,
   useViewer,
 } from '@pascal-app/viewer'
@@ -30,7 +29,6 @@ import {
   OrbitSpring,
   type OrbitValue,
 } from '../../lib/follow-pascal'
-import { anyExterior } from '../../lib/follow-pascal-exterior'
 import { FollowPresentation, type PresentationPort } from '../../lib/follow-pascal-presentation'
 import { FollowSight } from '../../lib/follow-pascal-sight'
 import { stayOnLevel, wantFromEvent } from '../../lib/follow-pascal-targets'
@@ -41,16 +39,13 @@ import { usePointAsk } from '../../store/use-point-ask'
  * Follow Pascal: while a build plays, the camera eases to what the current step is working on, framed
  * at the distance its scale needs. It listens to the reveal's own words (`subscribeRevealEvents`), so
  * a step and the camera share one rhythm, and moves like a critically damped spring on an orbit about
- * what it looks at, so the horizon stays level. Touching the camera, or choosing a view, pauses it; the
- * person resumes it from the pill, or the next build takes it again. Under reduced motion it cuts.
+ * what it looks at, so the horizon stays level. Touching the camera, focusing a comment pin, or
+ * choosing a view pauses it — and stays paused across multi-agent gaps within the same turn — until
+ * resumed from the pill or the next turn begins. Under reduced motion it cuts.
  *
- * To see a build it changes the presentation: it cuts the walls away when no eye sees the target,
- * selects the floor being built and hides the floors above it. An edit or a move seen from outside
- * (an exterior wall bent, a window moved on one, a roof, the ground) is looked at from outdoors with
- * the walls up instead: a cutaway would hide the very wall that moves. A commit with one such change
- * in it takes the outside view for all of it. A build is followed as it always was. When Follow ends (switched off, the person takes the
- * camera, the build is over and no turn is running) it puts back what it changed, and leaves what
- * the person changed since (`FollowPresentation`).
+ * Follow never alters the person's wall display mode (`wallMode`). To keep multi-floor builds legible
+ * it selects the floor being built and hides the floors above it, putting back what it changed (and
+ * leaving anything the person changed since) when Follow ends (`FollowPresentation`).
  */
 
 /** A build is over this long after its last word; the pill goes with it. */
@@ -75,7 +70,6 @@ const viewPort: PresentationPort = {
     const viewer = useViewer.getState()
     const { selection } = viewer
     return {
-      wall: viewer.wallMode,
       levels: viewer.levelMode,
       hideAbove: viewer.hideLevelsAboveSelection,
       floor: {
@@ -87,7 +81,6 @@ const viewPort: PresentationPort = {
       },
     }
   },
-  setWall: (mode) => useViewer.getState().setWallMode(mode),
   setLevels: (mode) => useViewer.getState().setLevelMode(mode),
   setHideAbove: (hide) => useViewer.setState({ hideLevelsAboveSelection: hide }),
   setFloor: ({ buildingId, levelId }) => {
@@ -149,6 +142,7 @@ export function FollowPascal() {
   const synced = useRef(false)
   const last = useRef<FollowWant | null>(null)
   const resuming = useRef(false)
+  const userPausedTurn = useRef(false)
   const over = useRef<ReturnType<typeof setTimeout> | null>(null)
   const scratch = useRef(new Vector3())
   const nextSightCheck = useRef(0)
@@ -163,22 +157,9 @@ export function FollowPascal() {
     }
   }
 
-  /** The build in hand has a change seen from outside in it: all of it is looked at from outdoors. */
-  const outsideBuild = useRef(false)
-  /** The last word was that the play is over: the next edit is another commit's. */
-  const played = useRef(false)
-
   const unobstructed = (want: FollowWant, goal: OrbitValue): OrbitValue => {
     sight.refresh(want)
-    const clear = clearFrame(goal, (pose) => sight.clear(pose))
-    if (clear) return clear
-    // Seen from outside the walls stay up: a cutaway would take the wall that changes away.
-    if (want.exterior || outsideBuild.current) {
-      presentation.wall('up')
-      return goal
-    }
-    presentation.wall('cutaway')
-    return goal
+    return clearFrame(goal, (pose) => sight.clear(pose)) ?? goal
   }
 
   const moveTo = (goal: OrbitValue) => {
@@ -221,8 +202,6 @@ export function FollowPascal() {
       presentation.levels('stacked')
       presentation.hideAbove(false)
     }
-    // A change seen from outside: the walls up for it, even if an earlier step cut them away.
-    if (want.exterior || outsideBuild.current) presentation.wall('up')
     if (!spring.current) {
       spring.current = new OrbitSpring({ x: 0, y: 1, z: 0, r: 20, az: 0.6, el: 0.5 })
       synced.current = false
@@ -247,23 +226,15 @@ export function FollowPascal() {
       const store = useFollowPascal.getState()
       if (over.current) clearTimeout(over.current)
       if (!store.building) {
-        store.beginBuild()
+        if (userPausedTurn.current && usePointAsk.getState().busy) {
+          useFollowPascal.setState({ building: true })
+        } else {
+          userPausedTurn.current = false
+          store.beginBuild()
+        }
         follower.current.reset()
         synced.current = false
-        outsideBuild.current = false
       }
-      // An edit or a move is read before its first piece plays: one change seen from outside takes the
-      // whole commit outdoors, until the play is over. What is waiting in the queue belongs to a later
-      // commit, so a build, a deletion, or the edit that follows a finished play never inherits it.
-      const edit = 'changed' in event && event.changed === true
-      if (!edit) outsideBuild.current = false
-      else {
-        if (played.current) outsideBuild.current = false
-        const changed = outsideBuild.current ? [] : revealChangedNodeIds()
-        if (changed.length && anyExterior(useScene.getState().nodes, changed))
-          outsideBuild.current = true
-      }
-      played.current = event.type === 'complete'
       over.current = setTimeout(() => useFollowPascal.getState().endBuild(), BUILD_OVER_MS)
       if (event.type === 'complete') return
       const want = wantFromEvent(event, useScene.getState().nodes, clock.current)
@@ -296,12 +267,23 @@ export function FollowPascal() {
   useEffect(
     () =>
       useFollowPascal.subscribe((state, before) => {
-        if (before.paused && !state.paused && state.on) resuming.current = true
-        if (before.on && !state.on) flying.current = false
-        if ((before.on && !state.on) || (!before.paused && state.paused)) presentation.restore()
-        // The build is over: that ends it when no turn is running to build more.
-        if (before.building && !state.building && !usePointAsk.getState().busy)
+        if (before.paused && !state.paused && state.on) {
+          userPausedTurn.current = false
+          resuming.current = true
+        }
+        if (!before.paused && state.paused && usePointAsk.getState().busy) {
+          userPausedTurn.current = true
+        }
+        if ((before.on && !state.on) || (!before.paused && state.paused)) {
+          flying.current = false
+          synced.current = false
           presentation.restore()
+        }
+        // The build is over: that ends it when no turn is running to build more.
+        if (before.building && !state.building && !usePointAsk.getState().busy) {
+          userPausedTurn.current = false
+          presentation.restore()
+        }
       }),
     [presentation],
   )
@@ -311,8 +293,10 @@ export function FollowPascal() {
   useEffect(
     () =>
       usePointAsk.subscribe((state, before) => {
-        if (before.busy && !state.busy && !useFollowPascal.getState().building)
-          presentation.restore()
+        if (before.busy && !state.busy) {
+          userPausedTurn.current = false
+          if (!useFollowPascal.getState().building) presentation.restore()
+        }
       }),
     [presentation],
   )
