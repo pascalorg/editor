@@ -1,0 +1,64 @@
+// E-004: Shift never bypasses snapping. Flags a Shift read that chooses between a snapped
+// (`Math.round` or a `*snap*` / `*quantize*` call) and a raw value — as a ternary, an if/else, or
+// an early `return <raw value>` (not a literal) in a function that snaps — and a `bypassSnap`-style flag read from Shift.
+// Shift for multi-select, rotation direction or sounds chooses no snapped value and is not flagged.
+language js
+
+pattern shift_read() {
+  or {
+    JsStaticMemberExpression(member = r"^shiftKey$"),
+    JsIdentifierExpression(name = r"^shiftKey$"),
+    JsShorthandPropertyObjectMember(name = r"^shiftKey$")
+  }
+}
+
+pattern snapped() {
+  JsCallExpression(callee = $callee) where {
+    $callee <: r"^Math\.round$|(?i)(?:^|\.)\w*(?:snap|quantize)\w*$",
+    not $callee <: r"(?:^|\.)is\w*Snap\w*Active$"
+  }
+}
+
+or {
+  JsConditionalExpression(test = $test, consequent = $a, alternate = $b) as $site where {
+    $test <: contains shift_read(),
+    or {
+      and { $a <: contains snapped(), not $b <: contains snapped() },
+      and { $b <: contains snapped(), not $a <: contains snapped() }
+    }
+  },
+  JsIfStatement(test = $test, consequent = $a, else_clause = JsElseClause(alternate = $b)) as $site where {
+    $test <: contains shift_read(),
+    or {
+      and { $a <: contains snapped(), not $b <: contains snapped() },
+      and { $b <: contains snapped(), not $a <: contains snapped() }
+    }
+  },
+  JsIfStatement(test = $test, consequent = $a, else_clause = .) as $site where {
+    $test <: contains shift_read(),
+    $a <: or {
+      JsReturnStatement(argument = $raw),
+      JsBlockStatement(statements = [JsReturnStatement(argument = $raw)])
+    },
+    $raw <: not or {
+      .,
+      JsBooleanLiteralExpression(),
+      JsNullLiteralExpression(),
+      JsNumberLiteralExpression(),
+      JsUnaryExpression(),
+      JsIdentifierExpression(name = r"^undefined$")
+    },
+    not $raw <: contains snapped(),
+    $site <: within JsFunctionBody() as $function where { $function <: contains snapped() }
+  },
+  JsVariableDeclarator(id = $id, initializer = $init) as $site where {
+    $id <: r"(?i)(?:bypass|skip|disable|ignore|no)_?snap",
+    $init <: contains shift_read()
+  }
+} where {
+  register_diagnostic(
+    span = $site,
+    message = "Shift does not bypass snapping: a Shift tap cycles the snap mode and a held Alt forces the raw cursor. Drop the shiftKey read and gate on the mode instead, e.g. `const step = isGridSnapActive() ? useEditor.getState().gridSnapStep : 0`, or isMagneticSnapActive() / isAngleSnapActive(). See DECISIONS.md E-004.",
+    severity = "error"
+  )
+}

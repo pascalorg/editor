@@ -309,6 +309,43 @@
       ],
       "plugins": ["./scripts/biome/raw-scene-enumeration.grit"]
     },
+    // E-002 / E-007 / E-004 review-architecture blockers. A `!` file entry is a legacy site
+    // (migrate on touch); the list only shrinks: `scripts/biome-architecture-plugins.test.ts`
+    // fails once a listed file no longer violates.
+    {
+      "includes": [
+        "packages/viewer/src/**",
+        "packages/editor/src/**",
+        "!**/*.test.ts",
+        "!**/*.test.tsx",
+        "!packages/editor/src/lib/geometry-script/author.ts",
+        "!packages/editor/src/lib/point-ask/suggestions.ts",
+        "!packages/editor/src/lib/print-feature-thickness.ts",
+        "!packages/viewer/src/ui/lib/node-display-label.ts"
+      ],
+      "plugins": ["./scripts/biome/kind-switch.grit"]
+    },
+    {
+      "includes": [
+        "packages/nodes/src/**",
+        "!**/*.test.ts",
+        "!**/*.test.tsx",
+        "!packages/nodes/src/door/tool.tsx"
+      ],
+      "plugins": ["./scripts/biome/move-handler-scene-write.grit"]
+    },
+    {
+      "includes": [
+        "packages/nodes/src/**",
+        "packages/editor/src/**",
+        "!**/*.test.ts",
+        "!**/*.test.tsx",
+        "!packages/editor/src/components/editor/floorplan-panel.tsx",
+        "!packages/nodes/src/building/move-tool.tsx",
+        "!packages/nodes/src/shared/polygon-centroid-move.ts"
+      ],
+      "plugins": ["./scripts/biome/shift-snap-bypass.grit"]
+    },
     // T-001: tests go through package exports. `warn` while ~50 existing tests still reach into
     // another package's src/ (mostly nodes tests driving editor internals, and shared core
     // fixtures); becomes an error once that count reaches zero. The two mounted-scene fixtures are

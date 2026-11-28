@@ -19,7 +19,7 @@
     "i18n:literals": "bun scripts/i18n-literals.ts",
     "i18n:pseudo-audit": "bun scripts/i18n-pseudo-audit.ts",
     "i18n:translate": "bun scripts/i18n.ts translate",
-    "test": "turbo run test && bun test scripts/i18n.test.ts scripts/i18n-provider.test.ts scripts/i18n-literals.test.ts apps/editor/proxy.test.ts",
+    "test": "turbo run test && bun test scripts/i18n.test.ts scripts/i18n-provider.test.ts scripts/i18n-literals.test.ts apps/editor/proxy.test.ts scripts/biome-architecture-plugins.test.ts",
     "ci": "bun run check && bun run i18n:check && bun run skills:validate && bun run check-types && bun run test && bun run build && bun run check:render-bundle && bun run --cwd apps/editor smoke",
     "postinstall": "([ -n \"$CI\" ] || [ ! -e .git ] || git config core.hooksPath .githooks)",
     "plugin:chatgpt": "bun scripts/stage-chatgpt-plugin.ts",

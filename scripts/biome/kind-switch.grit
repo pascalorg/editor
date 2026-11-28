@@ -1,0 +1,17 @@
+// E-002: viewer and editor dispatch through nodeRegistry, not a switch on the node kind. A switch
+// counts when its discriminant is `<expr>.type` or `nodeType` (through parentheses, `!`, `as` and
+// `satisfies`) and an arm of that switch, not of a nested one, names a node kind. The kind list
+// must name every built-in kind; `packages/nodes/src/index.test.ts` fails when one is missing.
+language js
+
+JsSwitchStatement(discriminant = $discriminant, cases = $cases) where {
+  $discriminant <: r"^[\s(]*(?:[\s\S]*\.type|nodeType)[\s)!]*(?:\s(?:as|satisfies)\s[\s\S]+)?$",
+  $cases <: contains bubble JsCaseClause(test = $label) where {
+    $label <: r"^['\"](?:beam|block|box-vent|building|cabinet|cabinet-module|ceiling|chimney|column|construction-dimension|cupola|door|dormer|downspout|duct-fitting|duct-segment|duct-terminal|elevator|eyebrow-vent|fence|fence-gate|fence-opening|floor-opening|guide|gutter|hedge|hvac-equipment|imported-mesh|item|lawn|lean-to-extension|level|lineset|liquid-line|measurement|pipe-fitting|pipe-segment|pipe-trap|planting|procedural-item|ridge-vent|rock|roof|roof-segment|scan|separator|shelf|site|skylight|slab|solar-panel|spawn|stair|stair-segment|structural-grid|tree|turbine-vent|unit|wall|window|zone)['\"]$",
+    register_diagnostic(
+      span = $label,
+      message = "A `case '<kind>'` arm on a node's type puts per-kind behaviour in framework code. Put it on the kind's NodeDefinition in packages/nodes/src/<kind>/ (a definition field or capability) and read it through nodeRegistry.get(node.type). See DECISIONS.md E-002.",
+      severity = "error"
+    )
+  } until JsSwitchStatement()
+}

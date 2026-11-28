@@ -1,4 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import {
   AnyNode,
   DoorNode,
@@ -106,6 +108,17 @@ describe('builtinPlugin', () => {
       expect(Object.keys(render.extensions ?? {})).toEqual(['pascal:viewer'])
     }
   })
+})
+
+test('the kind-switch Biome rule names every built-in kind', () => {
+  const rule = readFileSync(
+    resolve(import.meta.dir, '../../../scripts/biome/kind-switch.grit'),
+    'utf8',
+  )
+  const listed = new Set(/\(\?:([a-z|-]+)\)\['\\"\]\$/.exec(rule)?.[1]?.split('|'))
+  expect(
+    builtinPlugin.nodes.map((definition) => definition.kind).filter((kind) => !listed.has(kind)),
+  ).toEqual([])
 })
 
 test('the render entry alone draws the read-only plan of built-in kinds', async () => {
