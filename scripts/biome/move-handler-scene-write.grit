@@ -1,0 +1,28 @@
+// E-007: a `:move` handler runs on every pointer move, so it must not write useScene. The handler
+// is inline, or a variable or function of the same file; a variable's whole initializer is
+// searched, so `useCallback(…)` / `useMemo(…)` wrappers are covered.
+language js
+
+pattern scene_write() {
+  JsCallExpression(callee = $callee) where { $callee <: r"^(?:[\s\S]*\.)?updateNodes?$" }
+}
+
+`$emitter.on($event, $handler)` as $call where {
+  $event <: r"^['\"][\w-]+:move['\"]$",
+  or {
+    $handler <: contains scene_write(),
+    $program <: contains JsVariableDeclarator(id = $id, initializer = $init) where {
+      $id <: $handler,
+      $init <: contains scene_write()
+    },
+    $program <: contains JsFunctionDeclaration(id = $id, body = $body) where {
+      $id <: $handler,
+      $body <: contains scene_write()
+    }
+  },
+  register_diagnostic(
+    span = $call,
+    message = "This `:move` handler calls updateNode/updateNodes, which swaps the scene's nodes map and re-renders every useScene(s => s.nodes) subscriber on each pointer move. Preview through useLiveNodeOverrides / useLiveTransforms (or the registered mesh) and write useScene once on commit. See DECISIONS.md E-007 and wiki/architecture/tools.md § \"Data-driven live drag\".",
+    severity = "error"
+  )
+}
