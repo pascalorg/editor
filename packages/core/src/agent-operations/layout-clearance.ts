@@ -12,6 +12,9 @@ import { floorConstructionLift, liftedManualSlab } from '../lib/floor-constructi
 import { selectSlabSupportForItem } from '../lib/item-slab-support'
 import { getRenderableSlabPolygon } from '../lib/slab-polygon'
 import { levelBaseElevationAt } from '../lib/terrain-support-query'
+import type { ProceduralItemNode } from '../procedural-items/node'
+import { proceduralFootprint } from '../procedural-items/query'
+import { evaluateRecipe } from '../procedural-items/recipe'
 import {
   type Bounds,
   boundsOf,
@@ -34,11 +37,19 @@ import {
   itemNodePlanCorners,
   itemPlanAabb,
   type PlanAabb,
+  proceduralNodePlanAabb,
   resolveNodeLevelId,
 } from './door-clearance'
 import { designedTogether, isFloorUnderlay, isWallDressing, wallBoundWord } from './furniture-kind'
 import { type ItemSolid, manifestSolids, relateSolids, type ToLevel } from './item-solids'
-import { itemLevelHeightRange, itemLevelPose, itemPlanAabbInLevel } from './item-space'
+import {
+  itemLevelHeightRange,
+  itemLevelPose,
+  itemPlanAabbInLevel,
+  proceduralItemLevelPose,
+  proceduralPlanAabbInLevel,
+  proceduralPlanCornersInLevel,
+} from './item-space'
 import {
   axisOverlap,
   type ClearMove,
@@ -53,9 +64,11 @@ import { distanceToSegment, pointInPolygon, type Vec2 } from './plan-geometry'
 export {
   aabbsOverlap,
   collectDoorKeepouts,
+  inspectProceduralItemPlanFootprint,
   itemNodePlanAabb,
   itemPlanAabb,
   type PlanAabb,
+  proceduralNodePlanAabb,
   resolveNodeLevelId,
 } from './door-clearance'
 
@@ -137,7 +150,26 @@ function collisionMessage(
 }
 
 export function nodeItemAabb(node: AnyNode): PlanAabb | null {
-  return itemNodePlanAabb(node)
+  return node.type === 'procedural-item' ? proceduralNodePlanAabb(node) : itemNodePlanAabb(node)
+}
+
+function hasNonFloorHost(node: AnyNode, byId: Map<string, AnyNode>): boolean {
+  let current: AnyNode | undefined = node
+  const seen = new Set<string>()
+  while (current && current.type !== 'level') {
+    if (seen.has(current.id)) return true
+    seen.add(current.id)
+    if (current.type === 'ceiling' || current.type === 'wall') return true
+    if (current.type === 'procedural-item') {
+      const attach = current.recipe?.mounting?.attachTo
+      if (current.wallId || attach === 'wall-side' || attach === 'ceiling') return true
+    } else if (current.type === 'item') {
+      const attach = current.asset?.attachTo
+      if (attach === 'wall' || attach === 'wall-side' || attach === 'ceiling') return true
+    }
+    current = current.parentId ? byId.get(current.parentId) : undefined
+  }
+  return false
 }
 
 export function collectOccupiedFootprints(
@@ -148,13 +180,23 @@ export function collectOccupiedFootprints(
   const byId = new Map<string, AnyNode>(list.map((n) => [n.id, n]))
   const out: OccupiedFootprint[] = []
   for (const node of list) {
-    if (node.type !== 'item') continue
+    if (node.type !== 'item' && node.type !== 'procedural-item') continue
     if (options?.excludeIds?.has(node.id)) continue
-    const attach = node.asset?.attachTo
-    if (
-      options?.floorOnly &&
-      (attach === 'wall' || attach === 'wall-side' || attach === 'ceiling')
-    ) {
+    if (options?.floorOnly && hasNonFloorHost(node, byId)) continue
+    if (node.type === 'procedural-item') {
+      const levelId = resolveNodeLevelId(node.id, byId)
+      if (options?.levelId && levelId !== options.levelId) continue
+      if (levelId && node.parentId === levelId && isFloorUnderlay(node)) continue
+      if (node.wallId || (node.parentId && byId.get(node.parentId)?.type === 'wall')) continue
+      const aabb = proceduralPlanAabbInLevel(node, byId)
+      if (!aabb) continue
+      const name = node.name ?? node.recipe?.name
+      out.push({
+        id: node.id,
+        name: typeof name === 'string' ? name : undefined,
+        levelId,
+        aabb,
+      })
       continue
     }
     const levelId = resolveNodeLevelId(node.id, byId)
@@ -162,10 +204,6 @@ export function collectOccupiedFootprints(
     if (levelId && node.parentId === levelId && isFloorUnderlay(node)) continue
     // A wall's children keep wall-local coordinates and are read by the wall observations.
     if (node.parentId && byId.get(node.parentId)?.type === 'wall') continue
-    // Floor packing: prefer level-parented items (not ceiling-hosted children).
-    if (options?.floorOnly && node.parentId && levelId && node.parentId !== levelId) {
-      if (attach === 'wall' || attach === 'wall-side' || attach === 'ceiling') continue
-    }
     const aabb = itemPlanAabbInLevel(node, byId)
     if (!aabb) continue
     const name = node.name ?? node.asset?.name
@@ -200,13 +238,18 @@ function finiteNumbers(value: unknown): boolean {
   return true
 }
 
-/** Snapshot counterpart of the item floorPlaced support election; never reads the live grid. */
-function itemFloorLift(node: ItemNode, nodes: Record<string, AnyNode>): number {
-  // The renderer's item floorPlaced.applies skips corrective surface attachments.
-  if (node.asset.attachTo) return 0
+function electFloorPlacedLift(
+  node: (ItemNode | ProceduralItemNode) & { supportSlabId?: string },
+  footprint: {
+    position: [number, number, number]
+    dimensions: [number, number, number]
+    rotation: [number, number, number]
+  },
+  nodes: Record<string, AnyNode>,
+): number {
   const levelId = node.parentId!
   const ground = () =>
-    levelBaseElevationAt(nodes, levelId, node.position[0], node.position[2]) +
+    levelBaseElevationAt(nodes, levelId, footprint.position[0], footprint.position[2]) +
     floorConstructionLift(nodes, node)
   if (node.supportSlabId === 'ground') return ground()
   const list = queryNodes(nodes, { type: ['slab', 'wall'] })
@@ -226,7 +269,7 @@ function itemFloorLift(node: ItemNode, nodes: Record<string, AnyNode>): number {
   })
   const support = selectSlabSupportForItem(
     slabs,
-    { position: node.position, dimensions: getScaledDimensions(node), rotation: node.rotation },
+    footprint,
     (slab) =>
       getRenderableSlabPolygon(slab, {
         walls,
@@ -235,6 +278,64 @@ function itemFloorLift(node: ItemNode, nodes: Record<string, AnyNode>): number {
     { preferredSlabId: node.supportSlabId },
   )
   return support ? support.elevation : ground()
+}
+
+/** Snapshot counterpart of the item floorPlaced support election; never reads the live grid. */
+function itemFloorLift(node: ItemNode, nodes: Record<string, AnyNode>): number {
+  // The renderer's item floorPlaced.applies skips corrective surface attachments.
+  if (node.asset.attachTo) return 0
+  return electFloorPlacedLift(
+    node,
+    { position: node.position, dimensions: getScaledDimensions(node), rotation: node.rotation },
+    nodes,
+  )
+}
+
+function proceduralFloorLift(node: ProceduralItemNode, nodes: Record<string, AnyNode>): number {
+  if (node.recipe?.mounting || node.wallId) return 0
+  const fp = proceduralFootprint(node)
+  return electFloorPlacedLift(node, fp, nodes)
+}
+
+function resolveHostChainBaseElevation(
+  root: ItemNode | ProceduralItemNode,
+  nodes: Record<string, AnyNode>,
+): { levelId: string; baseY: number } | undefined {
+  const rootParent = root.parentId ? nodes[root.parentId] : undefined
+  if (rootParent?.type === 'level' && finiteNumbers(rootParent)) {
+    if (root.type === 'procedural-item' && (root.wallId || root.recipe?.mounting)) {
+      return undefined
+    }
+    try {
+      const baseY =
+        root.type === 'procedural-item'
+          ? proceduralFloorLift(root, nodes)
+          : itemFloorLift(root, nodes)
+      return Number.isFinite(baseY) ? { levelId: rootParent.id, baseY } : undefined
+    } catch {
+      return undefined
+    }
+  }
+  if (
+    root.type === 'procedural-item' &&
+    !root.wallId &&
+    root.recipe?.mounting?.attachTo === 'ceiling' &&
+    rootParent?.type === 'ceiling' &&
+    rootParent.parentId
+  ) {
+    const level = nodes[rootParent.parentId]
+    if (level?.type !== 'level' || !finiteNumbers(level) || !finiteNumbers(rootParent)) {
+      return undefined
+    }
+    try {
+      evaluateRecipe(root.recipe, root.parameters)
+      const baseY = resolveCeilingHeight(rootParent, nodes) - CEILING_DRAW_OFFSET
+      return Number.isFinite(baseY) ? { levelId: level.id, baseY } : undefined
+    } catch {
+      return undefined
+    }
+  }
+  return undefined
 }
 
 /**
@@ -402,15 +503,15 @@ function hostedToLevel(node: ItemNode, nodes: Record<string, AnyNode>): ToLevel 
     !(node.asset.scale ?? [1, 1, 1]).every((value) => value > 0)
   )
     return
-  let root: ItemNode = node
+  let root: ItemNode | ProceduralItemNode = node
   for (let depth = 0; depth < 16; depth++) {
-    const parent = root.parentId ? nodes[root.parentId] : undefined
-    if (parent?.type !== 'item') break
+    const parent: AnyNode | undefined = root.parentId ? nodes[root.parentId] : undefined
+    if (parent?.type !== 'item' && parent?.type !== 'procedural-item') break
     root = parent
   }
-  const rootParent = root.parentId ? nodes[root.parentId] : undefined
-  if (rootParent?.type !== 'level') return
-  const lift = itemFloorLift(root, nodes)
+  const resolvedRoot = resolveHostChainBaseElevation(root, nodes)
+  if (!resolvedRoot) return
+  const lift = resolvedRoot.baseY
   if (!Number.isFinite(lift)) return
   const assetScale = node.asset.scale ?? [1, 1, 1]
   const turn: [number, number, number] = [node.rotation[0], pose.yawDeg, node.rotation[2]]
@@ -445,7 +546,9 @@ export function findBlockedDoors(
   const list = [...args.nodes]
   const nodes = Object.fromEntries(list.map((node) => [node.id, node]))
   const byId = new Map(list.map((node) => [node.id, node]))
-  const finite = list.every((node) => node.type === 'item' || finiteNumbers(node))
+  const finite = list.every(
+    (node) => node.type === 'item' || node.type === 'procedural-item' || finiteNumbers(node),
+  )
   return findBlockedDoorsByBox({
     ...args,
     nodes: list,
@@ -472,19 +575,86 @@ export function itemHeightsInLevel(
   const measured = finiteContext ? itemVerticalInterval(node, nodes) : undefined
   if (measured) return measured
   const range = itemLevelHeightRange(node, byId)
-  let root: ItemNode = node
+  let root: ItemNode | ProceduralItemNode = node
   for (let depth = 0; depth < 16; depth++) {
-    const parent = root.parentId ? nodes[root.parentId] : undefined
-    if (parent?.type !== 'item') break
+    const parent: AnyNode | undefined = root.parentId ? nodes[root.parentId] : undefined
+    if (parent?.type !== 'item' && parent?.type !== 'procedural-item') break
     root = parent
   }
-  const rootParent = root.parentId ? nodes[root.parentId] : undefined
   const levelId = resolveNodeLevelId(node.id, byId)
-  if (!(range && levelId && finiteContext && rootParent?.type === 'level')) return undefined
-  const lift = itemFloorLift(root, nodes)
-  return Number.isFinite(lift)
-    ? { levelId, min: range.min + lift, max: range.max + lift }
-    : undefined
+  if (!(range && levelId && finiteContext)) return undefined
+  const resolvedRoot = resolveHostChainBaseElevation(root, nodes)
+  if (!resolvedRoot || resolvedRoot.levelId !== levelId) return undefined
+  return { levelId, min: range.min + resolvedRoot.baseY, max: range.max + resolvedRoot.baseY }
+}
+
+function proceduralHeightsInLevel(
+  node: ProceduralItemNode,
+  nodes: Record<string, AnyNode>,
+  byId: Map<string, AnyNode>,
+  finiteContext = true,
+): ItemVerticalInterval | undefined {
+  if (
+    !finiteContext ||
+    node.wallId ||
+    !Array.isArray(node.recipe?.parts) ||
+    !finiteVec3(node.position) ||
+    !planarRotation(node.rotation)
+  ) {
+    return undefined
+  }
+  let evaluated: ReturnType<typeof evaluateRecipe>
+  try {
+    evaluated = evaluateRecipe(node.recipe, node.parameters)
+  } catch {
+    return undefined
+  }
+  const extent = evaluated.reach ?? evaluated
+  if (
+    !finiteVec3(extent.min) ||
+    !finiteVec3(extent.max) ||
+    !finiteVec3(evaluated.dimensions) ||
+    evaluated.dimensions.some((size) => !(size > 0)) ||
+    extent.min.some((min, axis) => min > extent.max[axis]!)
+  ) {
+    return undefined
+  }
+  const parent = node.parentId ? nodes[node.parentId] : undefined
+  if (node.recipe.mounting?.attachTo === 'ceiling') {
+    if (parent?.type !== 'ceiling' || !parent.parentId) return undefined
+    const level = nodes[parent.parentId]
+    if (level?.type !== 'level' || !finiteNumbers(level) || !finiteNumbers(parent)) return undefined
+    const reference = evaluated.surfaces.find((s) => s.id === node.recipe.mounting?.reference)
+    if (!reference) return undefined
+    try {
+      const hostY = resolveCeilingHeight(parent, nodes) - CEILING_DRAW_OFFSET
+      const offset = rotateVector(reference.position, node.rotation)
+      const baseY = hostY + node.position[1] - offset[1]
+      const min = baseY + extent.min[1]
+      const max = baseY + extent.max[1]
+      return Number.isFinite(min) && Number.isFinite(max)
+        ? { levelId: level.id, min, max }
+        : undefined
+    } catch {
+      return undefined
+    }
+  }
+  if (node.recipe.mounting) return undefined
+  const pose = proceduralItemLevelPose(node, byId)
+  if (!pose) return undefined
+  let root: ItemNode | ProceduralItemNode = node
+  for (let depth = 0; depth < 16; depth++) {
+    const nextParent: AnyNode | undefined = root.parentId ? nodes[root.parentId] : undefined
+    if (nextParent?.type !== 'item' && nextParent?.type !== 'procedural-item') break
+    root = nextParent
+  }
+  const levelId = resolveNodeLevelId(node.id, byId)
+  if (!levelId) return undefined
+  const resolvedRoot = resolveHostChainBaseElevation(root, nodes)
+  if (!resolvedRoot || resolvedRoot.levelId !== levelId) return undefined
+  const min = resolvedRoot.baseY + pose.position[1] + extent.min[1]
+  const max = resolvedRoot.baseY + pose.position[1] + extent.max[1]
+  return Number.isFinite(min) && Number.isFinite(max) ? { levelId, min, max } : undefined
 }
 
 /** How far an item may sink into what it stands on and still be resting on it, in metres. */
@@ -500,28 +670,49 @@ export function findItemItemCollisions(args: {
   const nodes = Object.fromEntries(list.map((node) => [node.id, node]))
   const footprints = collectOccupiedFootprints(list, { levelId: args.levelId })
   // Drawing fallbacks on invalid support heights cannot prove collision separation.
-  const finiteContext = list.every((node) => node.type === 'item' || finiteNumbers(node))
+  const finiteContext = list.every(
+    (node) => node.type === 'item' || node.type === 'procedural-item' || finiteNumbers(node),
+  )
   const byId = new Map(list.map((node) => [node.id, node]))
   const heights = new Map<string, ItemVerticalInterval | undefined>()
-  for (const { id } of footprints)
-    heights.set(id, itemHeightsInLevel(nodes[id] as ItemNode, nodes, byId, finiteContext))
+  for (const { id } of footprints) {
+    const target = nodes[id]
+    heights.set(
+      id,
+      target?.type === 'procedural-item'
+        ? proceduralHeightsInLevel(target, nodes, byId, finiteContext)
+        : target?.type === 'item'
+          ? itemHeightsInLevel(target, nodes, byId, finiteContext)
+          : undefined,
+    )
+  }
   // A box is as tall as its heights say; a real shape is read for wall panelling only.
   const solids = new Map<string, readonly ItemSolid[] | null>()
   const solidsOf = (id: string): readonly ItemSolid[] | null => {
-    if (!solids.has(id))
-      solids.set(id, finiteContext ? itemSolidsInLevel(nodes[id] as ItemNode, nodes) : null)
+    if (!solids.has(id)) {
+      const target = nodes[id]
+      solids.set(
+        id,
+        finiteContext && target?.type === 'item' ? itemSolidsInLevel(target, nodes) : null,
+      )
+    }
     return solids.get(id) ?? null
   }
   const boxSolid = (id: string): readonly ItemSolid[] | null => {
-    const node = nodes[id] as ItemNode
-    const pose = itemLevelPose(node, byId)
-    if (!pose) return null
-    const corners = itemNodePlanCorners({
-      ...node,
-      position: pose.position,
-      rotation: [node.rotation[0], pose.yawDeg, node.rotation[2]],
-    })
-    if (!corners.every((corner) => corner.every(Number.isFinite))) return null
+    const node = nodes[id]
+    let corners: Vec2[] | null = null
+    if (node?.type === 'procedural-item') {
+      corners = proceduralPlanCornersInLevel(node, byId)
+    } else if (node?.type === 'item') {
+      const pose = itemLevelPose(node, byId)
+      if (!pose) return null
+      corners = itemNodePlanCorners({
+        ...node,
+        position: pose.position,
+        rotation: [node.rotation[0], pose.yawDeg, node.rotation[2]],
+      })
+    }
+    if (!corners?.every((corner) => corner.every(Number.isFinite))) return null
     const interval = heights.get(id)
     return [
       {
@@ -531,18 +722,33 @@ export function findItemItemCollisions(args: {
       },
     ]
   }
+  const isWallDressingNode = (id: string): boolean => {
+    const target = nodes[id]
+    return target?.type === 'item' && isWallDressing(target)
+  }
   const collisions: ItemCollision[] = []
   for (let i = 0; i < footprints.length; i++) {
     for (let j = i + 1; j < footprints.length; j++) {
       const a = footprints[i]!
       const b = footprints[j]!
       if (a.levelId && b.levelId && a.levelId !== b.levelId) continue
+      const [nodeA, nodeB] = [nodes[a.id], nodes[b.id]]
+      if (
+        (nodeA?.type === 'procedural-item' &&
+          nodeB?.parentId === nodeA.id &&
+          nodeA.attachments?.[nodeB.id] !== undefined) ||
+        (nodeB?.type === 'procedural-item' &&
+          nodeA?.parentId === nodeB.id &&
+          nodeB.attachments?.[nodeA.id] !== undefined)
+      ) {
+        continue
+      }
       if (!aabbsOverlap(a.aabb, b.aabb, gap)) continue
       const aY = heights.get(a.id)
       const bY = heights.get(b.id)
       let violation: ItemCollision['violation']
       let reading: ItemPairReading
-      if (isWallDressing(nodes[a.id] as ItemNode) || isWallDressing(nodes[b.id] as ItemNode)) {
+      if (isWallDressingNode(a.id) || isWallDressingNode(b.id)) {
         // Wall panelling is thin strips along the walls, and its box is the room's: it is read by its
         // strips, a piece beside it by its footprint. Nothing else is: a script's horizontal faces leave
         // out its rails, backs and foliage, so the box stays the shape of the rest.
@@ -938,8 +1144,8 @@ export function layoutIssuesFromScene(nodes: Iterable<AnyNode>): LayoutIssue[] {
       const [a, b] = [itemById.get(c.aId), itemById.get(c.bId)]
       if (
         c.violation === 'clearance' &&
-        a?.type === 'item' &&
-        b?.type === 'item' &&
+        (a?.type === 'item' || a?.type === 'procedural-item') &&
+        (b?.type === 'item' || b?.type === 'procedural-item') &&
         designedTogether(a, b)
       )
         continue

@@ -1,4 +1,6 @@
 import { foldRoomName } from '../building/room-use'
+import type { ProceduralItemNode } from '../procedural-items/node'
+import { evaluateRecipe } from '../procedural-items/recipe'
 import { getScaledDimensions, type ItemNode, LOW_PROFILE_ITEM_SURFACE_MAX_HEIGHT } from '../schema'
 
 /** How a piece of furniture stands in a room, read from what the catalog calls it. */
@@ -45,31 +47,65 @@ export function isVehicle(item: ItemNode): boolean {
  * a rug by what it is filed under (its category: "rug", "rugs", "tapis"), else by what it is called
  * in English or French, and in both cases it must lie flat on the floor.
  */
-export function isFloorUnderlay(item: ItemNode): boolean {
-  const category = foldRoomName(item.asset.category ?? '')
+export function isFloorUnderlay(node: ItemNode | ProceduralItemNode): boolean {
+  if (node.type === 'procedural-item') {
+    if (node.recipe?.mounting || node.wallId || !Array.isArray(node.recipe?.parts)) return false
+    const category = foldRoomName(node.recipe.classification?.category ?? '').replace(/[-_]+/g, ' ')
+    const filedAsRug = RUG_CATEGORY.test(category)
+    const text = foldRoomName(
+      read({ id: node.recipe.name ?? node.id, name: node.name ?? node.recipe.name }),
+    )
+    if (
+      !(filedAsRug || RUG_WORD.test(text)) ||
+      (!filedAsRug &&
+        (WALL.test(text) || CHAIR.test(text) || /table|desk|ottoman|pouf/.test(text))) ||
+      !Array.isArray(node.position) ||
+      !Array.isArray(node.rotation) ||
+      ![...node.position, ...node.rotation].every(Number.isFinite) ||
+      Math.abs(node.position[1]) > 1e-6 ||
+      Math.abs(node.rotation[0]) > 1e-6 ||
+      Math.abs(node.rotation[2]) > 1e-6
+    )
+      return false
+    try {
+      const evaluated = evaluateRecipe(node.recipe, node.parameters)
+      return (
+        evaluated.dimensions[0] > 0 &&
+        evaluated.dimensions[2] > 0 &&
+        Number.isFinite(evaluated.min[1]) &&
+        Number.isFinite(evaluated.max[1]) &&
+        evaluated.min[1] >= -1e-6 &&
+        evaluated.max[1] >= evaluated.min[1] &&
+        evaluated.max[1] <= LOW_PROFILE_ITEM_SURFACE_MAX_HEIGHT
+      )
+    } catch {
+      return false
+    }
+  }
+  const category = foldRoomName(node.asset.category ?? '').replace(/[-_]+/g, ' ')
   const filedAsRug = RUG_CATEGORY.test(category)
-  const text = foldRoomName(read(item.asset))
+  const text = foldRoomName(read(node.asset))
   if (
     !(filedAsRug || RUG_WORD.test(text)) ||
     (!filedAsRug &&
       (WALL.test(text) || CHAIR.test(text) || /table|desk|ottoman|pouf/.test(text))) ||
-    item.asset.attachTo
+    node.asset.attachTo
   )
     return false
-  const dims = getScaledDimensions(item)
+  const dims = getScaledDimensions(node)
   if (
-    ![...item.position, ...item.rotation, ...item.scale, ...dims].every(Number.isFinite) ||
-    !item.scale.every((value) => value > 0) ||
+    ![...node.position, ...node.rotation, ...node.scale, ...dims].every(Number.isFinite) ||
+    !node.scale.every((value) => value > 0) ||
     dims[0] <= 0 ||
     dims[2] <= 0 ||
-    Math.abs(item.position[1]) > 1e-6 ||
-    Math.abs(item.rotation[0]) > 1e-6 ||
-    Math.abs(item.rotation[2]) > 1e-6
+    Math.abs(node.position[1]) > 1e-6 ||
+    Math.abs(node.rotation[0]) > 1e-6 ||
+    Math.abs(node.rotation[2]) > 1e-6
   )
     return false
-  const bounds = item.source?.manifest.bounds
-  const bottom = bounds ? bounds.min[1] * item.scale[1] : 0
-  const top = bounds ? bounds.max[1] * item.scale[1] : dims[1]
+  const bounds = node.source?.manifest.bounds
+  const bottom = bounds ? bounds.min[1] * node.scale[1] : 0
+  const top = bounds ? bounds.max[1] * node.scale[1] : dims[1]
   return (
     Number.isFinite(bottom) &&
     Number.isFinite(top) &&
@@ -126,12 +162,20 @@ const ROLE_NOT: Partial<Record<PairRole, RegExp>> = {
 }
 const PAIR_ROLES: PairRole[] = ['bedside', 'bed', 'seat', 'sidetable', 'sofa', 'worktop']
 
-function pairRole(item: ItemNode): PairRole | null {
-  const category = foldRoomName(item.asset.category ?? '').replace(/[-_]+/g, ' ')
+function pairRole(node: ItemNode | ProceduralItemNode): PairRole | null {
+  const rawCategory =
+    node.type === 'procedural-item'
+      ? (node.recipe?.classification?.category ?? '')
+      : (node.asset.category ?? '')
+  const named: Named =
+    node.type === 'procedural-item'
+      ? { id: node.recipe?.name ?? node.id, name: node.name ?? node.recipe?.name }
+      : { id: node.asset.id, name: node.name ?? node.asset.name }
+  const category = foldRoomName(rawCategory).replace(/[-_]+/g, ' ')
   const filed = PAIR_ROLES.find((role) => ROLE_CATEGORY[role].test(category))
   if (filed) return filed
   if (!GENERIC_CATEGORY.test(category)) return null
-  const text = foldRoomName(read(item.asset))
+  const text = foldRoomName(read(named))
   if (ARMCHAIR.test(text)) return null
   return (
     PAIR_ROLES.find((role) => ROLE_WORDS[role].test(text) && !ROLE_NOT[role]?.test(text)) ?? null
@@ -150,7 +194,10 @@ const DESIGNED_PAIRS: readonly [PairRole, PairRole][] = [
  * the design, not a finding; two of them overlapping is still one. Read from what each is filed
  * under (its category), by its words only where the category says nothing.
  */
-export function designedTogether(a: ItemNode, b: ItemNode): boolean {
+export function designedTogether(
+  a: ItemNode | ProceduralItemNode,
+  b: ItemNode | ProceduralItemNode,
+): boolean {
   const roles = [pairRole(a), pairRole(b)]
   return DESIGNED_PAIRS.some(
     ([first, second]) =>

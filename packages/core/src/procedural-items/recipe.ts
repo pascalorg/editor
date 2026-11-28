@@ -406,7 +406,7 @@ export type Evaluation = {
   dimensions: Vec3
   parameters: Record<string, number>
   triangles: number
-  /** Recessed ceiling designs with motion: the rest bounds grown by every motion sample. */
+  /** Ceiling designs with motion: the rest bounds grown by every motion sample. */
   reach?: { min: Vec3; max: Vec3 }
 }
 
@@ -1280,7 +1280,10 @@ export function evaluateRecipe(recipe: Recipe, values: Record<string, number> = 
       throw new Error('Wall-side mounting reference must face local -Z')
   }
   const reference = recipe.mounting && surfaces.find((s) => s.id === recipe.mounting!.reference)
-  const reach = insideCut ? { min: [...min] as Vec3, max: [...max] as Vec3 } : undefined
+  const reach =
+    recipe.mounting?.attachTo === 'ceiling'
+      ? { min: [...min] as Vec3, max: [...max] as Vec3 }
+      : undefined
   for (const { motion, bounds } of jointReach(
     motions.filter((m) => jointGroups.has(m.id)),
     shapes,
@@ -1367,6 +1370,10 @@ export function evaluateRecipe(recipe: Recipe, values: Record<string, number> = 
     for (const motion of motions) if (motion.kind !== 'slide') motion.pivot = lower(motion.pivot)
     min[1] -= base
     max[1] -= base
+    if (reach) {
+      reach.min[1] -= base
+      reach.max[1] -= base
+    }
   }
   const dimensions = max.map((x, i) => x - min[i]!) as Vec3
   if (dimensions.some((x) => x > 30) || [...min, ...max].some((x) => Math.abs(x) > 30))
